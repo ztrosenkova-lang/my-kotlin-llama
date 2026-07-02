@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">KotlinLlamaCpp</string>
+    <string name="title_activity_main">GGUF Inference</string>
+</resources>
