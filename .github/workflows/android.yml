@@ -20,7 +20,11 @@ jobs:
         distribution: 'temurin'
         cache: 'gradle'
 
-    # Устанавливаем утилиту конвертации и принудительно очищаем файлы от Windows-символов
+    # НОВЫЙ ШАГ: Автоматически принимаем все лицензии Android SDK и NDK
+    - name: Accept Android SDK Licenses
+      run: |
+        yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
     - name: Fix Line Endings (CRLF to LF)
       run: |
         sudo apt-get update && sudo apt-get install -y dos2unix
