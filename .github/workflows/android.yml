@@ -3,7 +3,7 @@ name: Build Android APK
 on:
   push:
     branches: [ "main" ]
-  workflow_dispatch: # Позволяет запускать сборку вручную кнопкой
+  workflow_dispatch:
 
 jobs:
   build:
@@ -19,6 +19,13 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
         cache: 'gradle'
+
+    # Устанавливаем утилиту конвертации и принудительно очищаем файлы от Windows-символов
+    - name: Fix Line Endings (CRLF to LF)
+      run: |
+        sudo apt-get update && sudo apt-get install -y dos2unix
+        dos2unix gradlew
+        dos2unix gradle/wrapper/gradle-wrapper.properties
 
     - name: Grant Execute Permission for Gradlew
       run: chmod +x gradlew
