@@ -45,22 +45,15 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
         _state.value = GenerationState.LoadingModel
         scope.launch {
             try {
-                val uri = Uri.parse(path)
-                // Открываем File Descriptor
-                val pfd = contentResolver.openFileDescriptor(uri, "r")
-                if (pfd != null) {
-                    // Вызываем метод load по правилам версии 0.4.0
-                    llamaHelper.load(
-                        pfd = pfd,
-                        contextLength = 2048,
-                        onModelLoaded = { id ->
-                            _state.value = GenerationState.ModelLoaded(path)
-                            Log.d("MainViewModel", "Gemma 4 успешно инициализирована с ID: $id")
-                        }
-                    )
-                } else {
-                    _state.value = GenerationState.Error("Не удалось открыть файл модели")
-                }
+                // Передаем параметры именно так, как требует компилятор библиотеки версии 0.4.0
+                llamaHelper.load(
+                    path = path,
+                    contextLength = 2048,
+                    loaded = { id ->
+                        _state.value = GenerationState.ModelLoaded(path)
+                        Log.d("MainViewModel", "Gemma 4 успешно инициализирована с ID: $id")
+                    }
+                )
             } catch (e: Exception) {
                 Log.e("MainViewModel", "Ошибка загрузки: ${e.message}")
                 _state.value = GenerationState.Error(e.message ?: "Unknown error")
