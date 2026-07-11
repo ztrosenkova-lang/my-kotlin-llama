@@ -46,16 +46,18 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
         scope.launch {
             try {
                 val uri = Uri.parse(path)
-                // Безопасно открываем файл модели для обхода ограничений Android 11+
+                // Открываем File Descriptor
                 val pfd = contentResolver.openFileDescriptor(uri, "r")
                 if (pfd != null) {
-                    // Загружаем обновленный движок 0.4.0 с лимитом памяти под Gemma 4
+                    // Вызываем метод load по правилам версии 0.4.0
                     llamaHelper.load(
-                        fd = pfd.detachFd(),
-                        contextLength = 2048
+                        pfd = pfd,
+                        contextLength = 2048,
+                        onModelLoaded = { id ->
+                            _state.value = GenerationState.ModelLoaded(path)
+                            Log.d("MainViewModel", "Gemma 4 успешно инициализирована с ID: $id")
+                        }
                     )
-                    _state.value = GenerationState.ModelLoaded(path)
-                    Log.d("MainViewModel", "Gemma 4 успешно инициализирована!")
                 } else {
                     _state.value = GenerationState.Error("Не удалось открыть файл модели")
                 }
