@@ -501,7 +501,7 @@ fun ChatScreen(
             },
             onPickImage = onPickImage,
             enabled = state.canGenerate(),
-            isGenerating = state.isGenerating(),
+            isGenerating = state is GenerationState.Generating,
             focusRequester = focusRequester,
             modifier = Modifier.padding(16.dp)
         )
