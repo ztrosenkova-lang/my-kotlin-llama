@@ -27,12 +27,13 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compute.material3.CardColors
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compute.material3.IconButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -59,6 +60,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
+// Кастомные цвета для темной темы "Меч Правды v2.0"
+private val DarkBackground = Color(0xFF121417)
+private val DarkSurface = Color(0xFF1E222A)
+private val DarkBorder = Color(0xFF2F3542)
+private val NeonCyan = Color(0xFF00D2C4)
+private val UserMessageBg = Color(0xFF1B3B6F)
+private val AIMessageBg = Color(0xFF222730)
+private val AIMessageText = Color(0xFFE2E8F0)
+private val PureWhite = Color(0xFFFFFFFF)
+private val ErrorRed = Color(0xFFBA1A1A)
 
 @Composable
 fun ChatScreen(
@@ -133,7 +145,8 @@ fun ChatScreen(
             title = {
                 Text(
                     text = "🛡️ Меч Правды v2.0 — Руководство",
-                    style = MaterialTheme.typography.titleLarge
+                    style = MaterialTheme.typography.titleLarge,
+                    color = NeonCyan
                 )
             },
             text = {
@@ -144,32 +157,36 @@ fun ChatScreen(
                 ) {
                     Text(
                         text = "Добро пожаловать в твой полностью локальный ИИ-ассистент! Приложение работает на 100% без интернета и защищено в песочнице устройства.",
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = PureWhite
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    Text(text = "🧠 1. Долговременная память", fontWeight = FontWeight.Bold)
-                    Text(text = "• Чтобы ИИ что-то зафиксировал в защищённый файл, начни фразу со слова 'запомни' (например: 'запомни, моя любимая реакция — это реакция Кучерова'). Модель мгновенно запишет это в песочницу.")
-                    Text(text = "• Чтобы извлечь данные, используй в запросе слово 'вспомни' (например: 'вспомни мою любимую реакцию и распиши её'). ИИ вычитает архив и ответит на основе твоих заметок.")
+                    Text(text = "🧠 1. Долговременная память", fontWeight = FontWeight.Bold, color = NeonCyan)
+                    Text(text = "• Чтобы ИИ что-то зафиксировал в защищённый файл, начни фразу со слова 'запомни' (например: 'запомни, моя любимая реакция — это реакция Кучерова'). Модель мгновенно запишет это в песочницу.", color = AIMessageText)
+                    Text(text = "• Чтобы извлечь данные, используй в запросе слово 'вспомни' (например: 'вспомни мою любимую реакцию и распиши её'). ИИ вычитает архив и ответит на основе твоих заметок.", color = AIMessageText)
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    Text(text = "💬 2. Сплошной чат с контекстом", fontWeight = FontWeight.Bold)
-                    Text(text = "• Приложение сохраняет историю текущего разговора. Ты можешь задавать уточняющие вопросы, ИИ помнит начало беседы.")
-                    Text(text = "• Чтобы полностью очистить ОЗУ и начать диалог с чистого листа, нажми красную кнопку 'Очистить чат' в самом низу.")
+                    Text(text = "💬 2. Сплошной чат с контекстом", fontWeight = FontWeight.Bold, color = NeonCyan)
+                    Text(text = "• Приложение сохраняет историю текущего разговора. Ты можешь задавать уточняющие вопросы, ИИ помнит начало беседы.", color = AIMessageText)
+                    Text(text = "• Чтобы полностью очистить ОЗУ и начать диалог с чистого листа, нажми красную кнопку 'Очистить чат' в самом низу.", color = AIMessageText)
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    Text(text = "📷 3. Зрение и работа с камерой", fontWeight = FontWeight.Bold)
-                    Text(text = "• Для анализа изображений загрузи мультимодальный файл проектора зрения (.gguf) в стартовом меню.")
-                    Text(text = "• Нажми на скрепку, сделай фото задачи или формулы, напиши текстовый вопрос (например, 'Реши это уравнение') и отправь. Приложение автоматически склеит нужные теги зрения.")
+                    Text(text = "📷 3. Зрение и работа с камерой", fontWeight = FontWeight.Bold, color = NeonCyan)
+                    Text(text = "• Для анализа изображений загрузи мультимодальный файл проектора зрения (.gguf) в стартовом меню.", color = AIMessageText)
+                    Text(text = "• Нажми на скрепку, сделай фото задачи или формулы, напиши текстовый вопрос (например, 'Реши это уравнение') и отправь. Приложение автоматически склеит нужные теги зрения.", color = AIMessageText)
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    Text(text = "⚙️ 4. Динамическая смена роли ИИ", fontWeight = FontWeight.Bold)
-                    Text(text = "• Нажми на Шестерёнку в шапке. В поле 'Системный промпт' ты можешь на ходу переписать инструкцию (например, превратить ИИ в строгого химика), нажми 'Сохранить', и модель мгновенно перестроится.")
+                    Text(text = "⚙️ 4. Динамическая смена роли ИИ", fontWeight = FontWeight.Bold, color = NeonCyan)
+                    Text(text = "• Нажми на Шестерёнку в шапке. В поле 'Системный промпт' ты можешь на ходу переписать инструкцию (например, превратить ИИ в строгого химика), нажми 'Сохранить', и модель мгновенно перестроится.", color = AIMessageText)
                 }
             },
             confirmButton = {
-                Button(onClick = { showHelpDialog = false }) {
-                    Text("Понятно")
+                Button(
+                    onClick = { showHelpDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan)
+                ) {
+                    Text("Понятно", color = DarkBackground)
                 }
             }
         )
@@ -181,19 +198,29 @@ fun ChatScreen(
             title = {
                 Text(
                     text = "🧠 База Знаний ИИ (Прайс-листы и заметки)",
-                    style = MaterialTheme.typography.titleLarge
+                    style = MaterialTheme.typography.titleLarge,
+                    color = NeonCyan
                 )
             },
             text = {
                 OutlinedTextField(
                     value = memoryEditText,
                     onValueChange = { memoryEditText = it },
-                    placeholder = { Text("Скопируй и вставь сюда свой прайс-лист или любые важные данные...") },
+                    placeholder = { Text("Скопируй и вставь сюда свой прайс-лист или любые важные данные...", color = AIMessageText) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(400.dp),
                     maxLines = 100,
-                    singleLine = false
+                    singleLine = false,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = PureWhite,
+                        unfocusedTextColor = PureWhite,
+                        focusedContainerColor = DarkSurface,
+                        unfocusedContainerColor = DarkSurface,
+                        focusedBorderColor = NeonCyan,
+                        unfocusedBorderColor = DarkBorder,
+                        cursorColor = NeonCyan
+                    )
                 )
             },
             confirmButton = {
@@ -201,14 +228,15 @@ fun ChatScreen(
                     onClick = {
                         viewModel.overwriteLongTermMemory(memoryEditText)
                         showMemoryEditor = false
-                    }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan)
                 ) {
-                    Text("Сохранить")
+                    Text("Сохранить", color = DarkBackground)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showMemoryEditor = false }) {
-                    Text("Закрыть")
+                    Text("Закрыть", color = AIMessageText)
                 }
             }
         )
@@ -217,7 +245,8 @@ fun ChatScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .imePadding() // This ensures content resizes with keyboard
+            .background(DarkBackground)
+            .imePadding()
     ) {
         // Верхняя брендированная панель с логотипом и кнопками управления в Card
         Card(
@@ -225,12 +254,9 @@ fun ChatScreen(
                 .fillMaxWidth()
                 .padding(8.dp),
             shape = MaterialTheme.shapes.medium,
-            border = androidx.compose.foundation.BorderStroke(
-                1.dp,
-                MaterialTheme.colorScheme.outlineVariant
-            ),
+            border = BorderStroke(1.dp, DarkBorder),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                containerColor = DarkSurface
             )
         ) {
             Row(
@@ -256,7 +282,7 @@ fun ChatScreen(
                         text = "Меч Правды v2.0",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                        color = PureWhite
                     )
                 }
 
@@ -274,7 +300,8 @@ fun ChatScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Edit,
-                            contentDescription = "Редактировать Базу Знаний"
+                            contentDescription = "Редактировать Базу Знаний",
+                            tint = NeonCyan
                         )
                     }
 
@@ -282,7 +309,8 @@ fun ChatScreen(
                     IconButton(onClick = { showHelpDialog = true }) {
                         Icon(
                             imageVector = Icons.Default.Info,
-                            contentDescription = "Справка"
+                            contentDescription = "Справка",
+                            tint = NeonCyan
                         )
                     }
 
@@ -290,7 +318,8 @@ fun ChatScreen(
                     IconButton(onClick = { showSettings = !showSettings }) {
                         Icon(
                             imageVector = Icons.Default.Settings,
-                            contentDescription = "Настройки"
+                            contentDescription = "Настройки",
+                            tint = NeonCyan
                         )
                     }
                 }
@@ -302,16 +331,26 @@ fun ChatScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .background(DarkBackground)
                     .padding(horizontal = 16.dp, vertical = 4.dp)
             ) {
                 // Поле системного промпта
                 OutlinedTextField(
                     value = tempPromptText,
                     onValueChange = { tempPromptText = it },
-                    label = { Text("Системный промпт (Роль ИИ)") },
+                    label = { Text("Системный промпт (Роль ИИ)", color = AIMessageText) },
                     modifier = Modifier.fillMaxWidth(),
                     maxLines = 3,
-                    singleLine = false
+                    singleLine = false,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = PureWhite,
+                        unfocusedTextColor = PureWhite,
+                        focusedContainerColor = DarkSurface,
+                        unfocusedContainerColor = DarkSurface,
+                        focusedBorderColor = NeonCyan,
+                        unfocusedBorderColor = DarkBorder,
+                        cursorColor = NeonCyan
+                    )
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -319,14 +358,20 @@ fun ChatScreen(
                 // Ползунок температуры
                 Text(
                     text = "Температура (креативность): ${String.format("%.1f", tempTemperature)}",
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = PureWhite
                 )
                 Slider(
                     value = tempTemperature,
                     onValueChange = { tempTemperature = it },
                     valueRange = 0.1f..1.0f,
                     steps = 9,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = SliderDefaults.colors(
+                        thumbColor = NeonCyan,
+                        activeTrackColor = NeonCyan,
+                        inactiveTrackColor = DarkBorder
+                    )
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -334,9 +379,10 @@ fun ChatScreen(
                 // Кнопка смены модели
                 Button(
                     onClick = { showModelDialog = true },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = DarkSurface)
                 ) {
-                    Text("Сменить модель")
+                    Text("Сменить модель", color = NeonCyan)
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -350,9 +396,10 @@ fun ChatScreen(
                     },
                     modifier = Modifier
                         .align(Alignment.End)
-                        .fillMaxWidth(0.5f)
+                        .fillMaxWidth(0.5f),
+                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan)
                 ) {
-                    Text("Сохранить")
+                    Text("Сохранить", color = DarkBackground)
                 }
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -379,11 +426,7 @@ fun ChatScreen(
                 val isUser = message.role == "user"
                 Card(
                     colors = CardDefaults.cardColors(
-                        containerColor = if (isUser) {
-                            MaterialTheme.colorScheme.primaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.secondaryContainer
-                        }
+                        containerColor = if (isUser) UserMessageBg else AIMessageBg
                     ),
                     modifier = Modifier
                         .padding(vertical = 4.dp)
@@ -391,6 +434,7 @@ fun ChatScreen(
                 ) {
                     Text(
                         text = message.text,
+                        color = if (isUser) PureWhite else AIMessageText,
                         modifier = Modifier
                             .padding(8.dp)
                             .align(if (isUser) Alignment.End else Alignment.Start)
@@ -403,7 +447,7 @@ fun ChatScreen(
                 item {
                     Card(
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                            containerColor = AIMessageBg
                         ),
                         modifier = Modifier
                             .padding(vertical = 4.dp)
@@ -411,6 +455,7 @@ fun ChatScreen(
                     ) {
                         Text(
                             text = generatedText,
+                            color = AIMessageText,
                             modifier = Modifier
                                 .padding(8.dp)
                                 .align(Alignment.Start)
@@ -424,14 +469,14 @@ fun ChatScreen(
         imagePath?.let {
             Card(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                colors = CardDefaults.cardColors(containerColor = DarkSurface)
             ) {
                 Row(
                     modifier = Modifier.padding(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("[Изображение]", style = MaterialTheme.typography.bodySmall)
+                    Text("[Изображение]", style = MaterialTheme.typography.bodySmall, color = AIMessageText)
                 }
             }
         }
@@ -463,13 +508,13 @@ fun ChatScreen(
         Button(
             onClick = { viewModel.clearChat() },
             colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.error
+                containerColor = ErrorRed
             ),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            Text("Очистить чат")
+            Text("Очистить чат", color = PureWhite)
         }
     }
 }
@@ -486,26 +531,33 @@ private fun ModelPickerDialog(
     Dialog(
         onDismissRequest = { onDismiss?.invoke() }
     ) {
-        Card {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = DarkSurface)
+        ) {
             Column(
                 modifier = Modifier.padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
                     "Настройка ИИ",
-                    style = MaterialTheme.typography.headlineSmall
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = PureWhite
                 )
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Языковая модель")
+                    Text("Языковая модель", color = AIMessageText)
                     if (currentModelPath != null) Text(
                         text = "[Файл модели]",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = AIMessageText
                     )
 
-                    Button(onClick = onPickModel, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (currentModelPath == null) "Выбрать модель" else "Изменить модель")
+                    Button(
+                        onClick = onPickModel,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = DarkBorder)
+                    ) {
+                        Text(if (currentModelPath == null) "Выбрать модель" else "Изменить модель", color = NeonCyan)
                     }
                 }
 
@@ -516,17 +568,21 @@ private fun ModelPickerDialog(
                     Text(
                         "(опционально)",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = AIMessageText
                     )
-                    Text("Мультимодальный проектор (mmproj)")
+                    Text("Мультимодальный проектор (mmproj)", color = AIMessageText)
                     if (mmprojPath != null) Text(
                         text = "[Файл проектора]",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = AIMessageText
                     )
 
-                    Button(onClick = onPickMmproj, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (mmprojPath == null) "Выбрать проектор" else "Изменить проектор")
+                    Button(
+                        onClick = onPickMmproj,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = DarkBorder)
+                    ) {
+                        Text(if (mmprojPath == null) "Выбрать проектор" else "Изменить проектор", color = NeonCyan)
                     }
                 }
 
@@ -535,10 +591,10 @@ private fun ModelPickerDialog(
                     enabled = currentModelPath != null,
                     modifier = Modifier.fillMaxWidth().padding(top=8.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = colorResource(R.color.teal_700)
+                        containerColor = NeonCyan
                     )
                 ) {
-                    Text("Запустить нейросеть")
+                    Text("Запустить нейросеть", color = DarkBackground)
                 }
 
                 if (onDismiss != null) {
@@ -546,7 +602,7 @@ private fun ModelPickerDialog(
                         onClick = onDismiss,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text("Отмена")
+                        Text("Отмена", color = AIMessageText)
                     }
                 }
             }
@@ -565,12 +621,13 @@ private fun StatusBar(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = when (state) {
-                is GenerationState.Error -> MaterialTheme.colorScheme.errorContainer
-                is GenerationState.Generating -> MaterialTheme.colorScheme.primaryContainer
-                is GenerationState.LoadingModel -> MaterialTheme.colorScheme.secondaryContainer
-                else -> MaterialTheme.colorScheme.surfaceVariant
+                is GenerationState.Error -> ErrorRed.copy(alpha = 0.2f)
+                is GenerationState.Generating -> NeonCyan.copy(alpha = 0.2f)
+                is GenerationState.LoadingModel -> DarkBorder.copy(alpha = 0.5f)
+                else -> DarkSurface
             }
-        )
+        ),
+        border = BorderStroke(1.dp, DarkBorder)
     ) {
         Row(
             modifier = Modifier
@@ -586,35 +643,35 @@ private fun StatusBar(
             ) {
                 when (state) {
                     is GenerationState.Idle -> {
-                        Text(if (currentModel == null) "Выберите модель" else "ИИ Готов")
+                        Text(if (currentModel == null) "Выберите модель" else "ИИ Готов", color = if (currentModel == null) AIMessageText else NeonCyan)
                     }
                     is GenerationState.LoadingModel -> {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp))
-                        Text("Загрузка модели...")
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = NeonCyan)
+                        Text("Загрузка модели...", color = PureWhite)
                     }
                     is GenerationState.ModelLoaded -> {
-                        Text("✓ ИИ Готов", color = MaterialTheme.colorScheme.primary)
+                        Text("✓ ИИ Готов", color = NeonCyan)
                     }
                     is GenerationState.Generating -> {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp))
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = NeonCyan)
                         val label = if (state.tokensGenerated == 0) "Думаю..." else "Думаю... (${state.tokensGenerated} токенов)"
-                        Text(label)
+                        Text(label, color = PureWhite)
                     }
                     is GenerationState.Completed -> {
                         Text(
                             "✓ Ответ готов (${state.tokenCount} токенов, ${state.durationMs}мс)",
-                            color = MaterialTheme.colorScheme.primary
+                            color = NeonCyan
                         )
                     }
                     is GenerationState.Error -> {
-                        Text("⚠ ${state.message}", color = MaterialTheme.colorScheme.error)
+                        Text("⚠ ${state.message}", color = ErrorRed)
                     }
                 }
             }
 
             if (!state.isActive()) {
                 TextButton(onClick = onChangeModel) {
-                    Text("Настроить")
+                    Text("Настроить", color = NeonCyan)
                 }
             }
         }
@@ -638,8 +695,15 @@ private fun PromptInput(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(onClick = onPickImage, enabled = enabled && !isGenerating) {
-            Icon(Icons.Default.Add, contentDescription = "Добавить изображение")
+        IconButton(
+            onClick = onPickImage,
+            enabled = enabled && !isGenerating
+        ) {
+            Icon(
+                Icons.Default.Add,
+                contentDescription = "Добавить изображение",
+                tint = if (enabled && !isGenerating) NeonCyan else DarkBorder
+            )
         }
 
         TextField(
@@ -649,24 +713,40 @@ private fun PromptInput(
                 .weight(1f)
                 .focusRequester(focusRequester),
             enabled = enabled && !isGenerating,
-            placeholder = { Text("Введите запрос...") },
+            placeholder = { Text("Введите запрос...", color = AIMessageText) },
             maxLines = 3,
-            singleLine = false
+            singleLine = false,
+            colors = TextFieldDefaults.colors(
+                focusedTextColor = PureWhite,
+                unfocusedTextColor = PureWhite,
+                focusedContainerColor = DarkSurface,
+                unfocusedContainerColor = DarkSurface,
+                focusedIndicatorColor = NeonCyan,
+                unfocusedIndicatorColor = DarkBorder,
+                cursorColor = NeonCyan
+            )
         )
 
         if (isGenerating) {
             Button(
                 onClick = onAbort,
-                enabled = true
+                enabled = true,
+                colors = ButtonDefaults.buttonColors(containerColor = ErrorRed)
             ) {
-                Text("Стоп")
+                Text("Стоп", color = PureWhite)
             }
         } else {
             Button(
                 onClick = onGenerate,
-                enabled = enabled && prompt.isNotBlank()
+                enabled = enabled && prompt.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (enabled && prompt.isNotBlank()) NeonCyan else DarkBorder
+                )
             ) {
-                Text("Отправить")
+                Text(
+                    "Отправить",
+                    color = if (enabled && prompt.isNotBlank()) DarkBackground else AIMessageText
+                )
             }
         }
     }
