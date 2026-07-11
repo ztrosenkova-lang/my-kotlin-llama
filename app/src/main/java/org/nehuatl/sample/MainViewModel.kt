@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.nehuatl.llamacpp.LlamaHelper
+import java.io.File
 
 // Структура данных для сообщений чата
 data class ChatMessage(val role: String, val text: String) // role: "user" или "assistant"
@@ -45,6 +46,12 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
     // История чата
     private val _chatHistory = MutableStateFlow<List<ChatMessage>>(emptyList())
     val chatHistory = _chatHistory.asStateFlow()
+
+    // Файл долговременной памяти
+    private val memoryFile: File by lazy {
+        val context = androidx.core.app.CoreComponentFactory().createContextForApplication(androidx.core.app.CoreComponentFactory())
+        File(context.filesDir, "memory.txt")
+    }
 
     private val llamaHelper by lazy {
         LlamaHelper(
@@ -84,9 +91,50 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
         _generatedText.value = ""
     }
 
+    // Функция записи новой заметки в файл долговременной памяти
+    private fun saveToLongTermMemory(text: String) {
+        try {
+            if (!memoryFile.exists()) {
+                memoryFile.createNewFile()
+            }
+            memoryFile.appendText("$text\n")
+            Log.d("MainViewModel", "Записано в долговременную память: $text")
+        } catch (e: Exception) {
+            Log.e("MainViewModel", "Ошибка записи памяти: ${e.message}")
+        }
+    }
+
+    // Функция чтения всех сохраненных заметок из файла долговременной памяти
+    private fun readFromLongTermMemory(): String {
+        return try {
+            if (memoryFile.exists()) {
+                memoryFile.readText().trim()
+            } else {
+                ""
+            }
+        } catch (e: Exception) {
+            Log.e("MainViewModel", "Ошибка чтения памяти: ${e.message}")
+            ""
+        }
+    }
+
     fun generate(prompt: String, imagePath: String? = null) {
         if (!_state.value.canGenerate()) return
         scope.launch {
+            val cleanPrompt = prompt.trim()
+            val lowerPrompt = cleanPrompt.lowercase()
+
+            // Перехват команды ЗАПОМНИ
+            if (lowerPrompt.startsWith("запомни")) {
+                val textToRemember = cleanPrompt.substringAfter("запомни").trim()
+                if (textToRemember.isNotEmpty()) {
+                    saveToLongTermMemory(textToRemember)
+                    _chatHistory.value = _chatHistory.value + ChatMessage("user", prompt)
+                    _chatHistory.value = _chatHistory.value + ChatMessage("assistant", "Я успешно записал это в свою долговременную память! Теперь я буду это знать.")
+                }
+                return@launch
+            }
+
             // Добавляем сообщение пользователя в историю
             val newUserMessage = ChatMessage("user", prompt)
             _chatHistory.value = _chatHistory.value + newUserMessage
@@ -94,11 +142,19 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
             val currentSystemPrompt = _systemPrompt.value
             val history = _chatHistory.value
 
-            // Формируем промпт на основе всей истории
+            // Проверяем, есть ли команда "вспомни" для подмешивания долговременной памяти
+            val longTermMemoryData = if (lowerPrompt.contains("вспомни")) {
+                readFromLongTermMemory()
+            } else ""
+
+            // Формируем промпт на основе всей истории с подмешиванием памяти
             val formattedPrompt = when {
                 currentModelName.contains("qwen") -> {
                     val sb = StringBuilder()
                     sb.append("<|im_start|>system\n$currentSystemPrompt<|im_end|>\n")
+                    if (longTermMemoryData.isNotEmpty()) {
+                        sb.append("<|im_start|>system\nДополнительные сохраненные факты из памяти пользователя:\n$longTermMemoryData\nИспользуй эти факты для ответа на текущий вопрос.<|im_end|>\n")
+                    }
                     history.forEach { msg ->
                         when (msg.role) {
                             "user" -> sb.append("<|im_start|>user\n${msg.text}<|im_end|>\n")
@@ -111,6 +167,9 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
                 currentModelName.contains("moondream") -> {
                     val sb = StringBuilder()
                     sb.append("$currentSystemPrompt\n\n")
+                    if (longTermMemoryData.isNotEmpty()) {
+                        sb.append("Дополнительные сохраненные факты из памяти пользователя:\n$longTermMemoryData\n\nИспользуй эти факты для ответа на текущий вопрос.\n\n")
+                    }
                     history.forEach { msg ->
                         when (msg.role) {
                             "user" -> sb.append("Question: ${msg.text}\n\n")
@@ -123,6 +182,9 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
                 currentModelName.contains("llama") -> {
                     val sb = StringBuilder()
                     sb.append("<|start_header_id|>system<|end_header_id|>\n\n$currentSystemPrompt<|eot_id|>")
+                    if (longTermMemoryData.isNotEmpty()) {
+                        sb.append("<|start_header_id|>system<|end_header_id|>\n\nДополнительные сохраненные факты из памяти пользователя:\n$longTermMemoryData\nИспользуй эти факты для ответа на текущий вопрос.<|eot_id|>")
+                    }
                     history.forEach { msg ->
                         when (msg.role) {
                             "user" -> sb.append("<|start_header_id|>user<|end_header_id|>\n\n${msg.text}<|eot_id|>")
@@ -135,6 +197,9 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
                 else -> {
                     val sb = StringBuilder()
                     sb.append("<|system|>\n$currentSystemPrompt\n")
+                    if (longTermMemoryData.isNotEmpty()) {
+                        sb.append("<|system|>\nДополнительные сохраненные факты из памяти пользователя:\n$longTermMemoryData\nИспользуй эти факты для ответа на текущий вопрос.\n")
+                    }
                     history.forEach { msg ->
                         when (msg.role) {
                             "user" -> sb.append("<|user|>\n${msg.text}\n")
