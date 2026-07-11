@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -69,6 +71,7 @@ fun ChatScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val generatedText by viewModel.generatedText.collectAsStateWithLifecycle()
     val systemPromptText by viewModel.systemPrompt.collectAsStateWithLifecycle()
+    val chatMessages by viewModel.chatHistory.collectAsStateWithLifecycle()
 
     var promptInput by remember { mutableStateOf("") }
     var showModelDialog by remember { mutableStateOf(currentModelPath == null) }
@@ -193,7 +196,7 @@ fun ChatScreen(
             }
         }
 
-        // Status bar stays at top
+        // Status bar
         StatusBar(
             state = state,
             currentModel = currentModelPath,
@@ -201,14 +204,58 @@ fun ChatScreen(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
         )
 
-        // Text display takes remaining space with weight(1f) to compress properly
-        TextDisplay(
-            text = generatedText,
+        // Chat messages list with LazyColumn
+        LazyColumn(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-        )
+                .padding(horizontal = 8.dp),
+            reverseLayout = false
+        ) {
+            items(chatMessages) { message ->
+                val isUser = message.role == "user"
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isUser) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.secondaryContainer
+                        }
+                    ),
+                    modifier = Modifier
+                        .padding(vertical = 4.dp)
+                        .fillMaxWidth()
+                ) {
+                    Text(
+                        text = message.text,
+                        modifier = Modifier
+                            .padding(8.dp)
+                            .align(if (isUser) Alignment.End else Alignment.Start)
+                    )
+                }
+            }
+
+            // Текущий генерируемый текст
+            if (generatedText.isNotEmpty() && state is GenerationState.Generating) {
+                item {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                        ),
+                        modifier = Modifier
+                            .padding(vertical = 4.dp)
+                            .fillMaxWidth()
+                    ) {
+                        Text(
+                            text = generatedText,
+                            modifier = Modifier
+                                .padding(8.dp)
+                                .align(Alignment.Start)
+                        )
+                    }
+                }
+            }
+        }
 
         // Image indicator if selected
         imagePath?.let {
@@ -226,7 +273,7 @@ fun ChatScreen(
             }
         }
 
-        // Prompt input stays at bottom
+        // Prompt input
         PromptInput(
             prompt = promptInput,
             onPromptChange = { promptInput = it },
@@ -248,6 +295,19 @@ fun ChatScreen(
             focusRequester = focusRequester,
             modifier = Modifier.padding(16.dp)
         )
+
+        // Кнопка очистки чата
+        Button(
+            onClick = { viewModel.clearChat() },
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.error
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            Text("Очистить чат")
+        }
     }
 }
 
@@ -393,44 +453,6 @@ private fun StatusBar(
                 TextButton(onClick = onChangeModel) {
                     Text("Настроить")
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun TextDisplay(
-    text: String,
-    modifier: Modifier = Modifier
-) {
-    val scrollState = rememberScrollState()
-
-    // Auto-scroll to bottom when new text arrives
-    LaunchedEffect(text) {
-        if (text.isNotEmpty()) {
-            scrollState.animateScrollTo(scrollState.maxValue)
-        }
-    }
-
-    Card(modifier = modifier) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
-        ) {
-            if (text.isEmpty()) {
-                Text(
-                    "Ответ появится здесь...",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.align(Alignment.Center)
-                )
-            } else {
-                Text(
-                    text = text,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(scrollState)
-                )
             }
         }
     }
