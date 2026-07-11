@@ -1,11 +1,11 @@
 package org.nehuatl.sample
 
+import android.app.Application
 import android.content.ContentResolver
-import android.content.Context
 import android.net.Uri
 import android.speech.tts.TextToSpeech
 import android.util.Log
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -23,7 +23,7 @@ import java.util.Locale
 // Структура данных для сообщений чата
 data class ChatMessage(val role: String, val text: String) // role: "user" или "assistant"
 
-class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
+class MainViewModel(application: Application, val contentResolver: ContentResolver): AndroidViewModel(application) {
 
     private val viewModelJob = SupervisorJob()
     private val scope = CoroutineScope(Dispatchers.IO + viewModelJob)
@@ -56,28 +56,21 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
 
     // Файл долговременной памяти
     private val memoryFile: File by lazy {
-        // Получаем контекст приложения через contentResolver
-        val context = contentResolver.context?.applicationContext
-        File(context?.filesDir ?: throw IllegalStateException("Application context is null"), "memory.txt")
+        File(getApplication<Application>().filesDir, "memory.txt")
     }
 
     // TTS движок для озвучки ответов
     private var tts: TextToSpeech? = null
 
     init {
-        val context = contentResolver.context?.applicationContext
-        if (context != null) {
-            tts = TextToSpeech(context) { status ->
-                if (status == TextToSpeech.SUCCESS) {
-                    // Устанавливаем системный язык по умолчанию
-                    tts?.language = Locale.getDefault()
-                    Log.d("MainViewModel", "TTS инициализирован успешно")
-                } else {
-                    Log.e("MainViewModel", "Ошибка инициализации TTS")
-                }
+        tts = TextToSpeech(getApplication()) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                // Устанавливаем системный язык по умолчанию
+                tts?.language = Locale.getDefault()
+                Log.d("MainViewModel", "TTS инициализирован успешно")
+            } else {
+                Log.e("MainViewModel", "Ошибка инициализации TTS")
             }
-        } else {
-            Log.e("MainViewModel", "Не удалось получить контекст для TTS")
         }
     }
 
