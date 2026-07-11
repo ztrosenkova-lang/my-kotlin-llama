@@ -1,6 +1,7 @@
 package org.nehuatl.sample
 
 import android.content.ContentResolver
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
@@ -106,11 +107,11 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
 
             // КОНВЕРТАЦИЯ: Передаем байты вместо пути
             val imageBytes = if (!imagePath.isNullOrEmpty()) {
-                uriToByteArray(Uri.parse(imagePath))
+                uriToByteArray(contentResolver, Uri.parse(imagePath))
             } else null
 
-            // Чистый вызов predict с байтами изображения
-            llamaHelper.predict(prompt = formattedPrompt, imageBytes = imageBytes)
+            // Чистый вызов predict с байтами изображения (параметр image в версии 0.4.0)
+            llamaHelper.predict(prompt = formattedPrompt, image = imageBytes)
 
             llmFlow.collect { event ->
                 when (event) {
@@ -179,7 +180,7 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
     }
 
     // НОВАЯ ФУНКЦИЯ для конвертации изображения
-    private fun uriToByteArray(uri: Uri): ByteArray? {
+    private fun uriToByteArray(contentResolver: ContentResolver, uri: Uri): ByteArray? {
         return try {
             val inputStream = contentResolver.openInputStream(uri)
             val bitmap = BitmapFactory.decodeStream(inputStream)
