@@ -99,6 +99,9 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
             )
             _generatedText.value = ""
 
+            // Принудительно очищаем буфер перед новым вопросом
+            llamaHelper.abort()
+
             // Чистый вызов predict без недоступных параметров
             llamaHelper.predict(prompt = formattedPrompt, imagePath = imagePath)
 
