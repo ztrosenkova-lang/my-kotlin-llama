@@ -85,18 +85,20 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
             _generatedText.value = ""
 
             llamaHelper.predict(formattedPrompt, imagePath)
+
             llmFlow.collect { event ->
                 when (event) {
                     is LlamaHelper.LLMEvent.Started -> {
-                        _state.value = GenerationState.Generating(
-                            prompt = prompt,
-                            startTime = System.currentTimeMillis()
-                        )
-                        _generatedText.value = ""
+                        // Убираем очистку текста отсюда, чтобы не ломать поток букв
                         Log.i("MainViewModel", "Generation started")
                     }
                     is LlamaHelper.LLMEvent.Ongoing -> {
-                        _generatedText.value += event.word
+                        // Проверяем, что пришедший кусочек текста не равен служебным тегам модели
+                        val word = event.word
+                        if (!word.contains("<|") && !word.contains("|>")) {
+                            _generatedText.value += word
+                        }
+                        
                         val currentState = _state.value
                         if (currentState is GenerationState.Generating) {
                             _state.value = currentState.copy(tokensGenerated = event.tokenCount)
@@ -109,14 +111,12 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
                             durationMs = event.duration
                         )
                         Log.i("MainViewModel", "Generation completed")
-                        llamaHelper.stopPrediction()
+                        // В версии 0.4.0 метод stopPrediction вызывать не нужно, библиотека делает это сама
                     }
                     is LlamaHelper.LLMEvent.Error -> {
-                        _state.value = GenerationState.Error("Generation interrupted")
+                        _state.value = GenerationState.Error("Generation interrupted: ${event.message}")
                         Log.e("MainViewModel", "Generation interrupted ${event.message}")
-                        llamaHelper.stopPrediction()
                     }
-
                     else -> {}
                 }
             }
