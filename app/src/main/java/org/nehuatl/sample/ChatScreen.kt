@@ -15,6 +15,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
@@ -24,6 +27,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -41,7 +45,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -59,9 +65,11 @@ fun ChatScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val generatedText by viewModel.generatedText.collectAsStateWithLifecycle()
+    val systemPromptText by viewModel.systemPrompt.collectAsStateWithLifecycle()
 
     var promptInput by remember { mutableStateOf("") }
     var showModelDialog by remember { mutableStateOf(currentModelPath == null) }
+    var showSettings by remember { mutableStateOf(false) }
 
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -101,15 +109,78 @@ fun ChatScreen(
             .fillMaxSize()
             .imePadding() // This ensures content resizes with keyboard
     ) {
+        // Верхняя брендированная панель с логотипом и кнопками управления
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Левая часть: логотип и название
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Face,
+                    contentDescription = "Лого",
+                    modifier = Modifier.padding(end = 4.dp)
+                )
+                Text(
+                    text = "Мой Карманный ИИ",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            // Правая часть: кнопки управления
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Кнопка «Сброс/Корзина» — открывает диалог выбора модели
+                IconButton(onClick = { showModelDialog = true }) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Сменить модель"
+                    )
+                }
+
+                // Кнопка «Шестеренка» — открывает/закрывает панель системного промпта
+                IconButton(onClick = { showSettings = !showSettings }) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Настройки промпта"
+                    )
+                }
+            }
+        }
+
+        // Выезжающее поле для редактирования системного промпта
+        if (showSettings) {
+            OutlinedTextField(
+                value = systemPromptText,
+                onValueChange = { viewModel.updateSystemPrompt(it) },
+                label = { Text("Системный промпт (Роль ИИ)") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                maxLines = 3,
+                singleLine = false
+            )
+        }
+
         // Status bar stays at top
         StatusBar(
             state = state,
             currentModel = currentModelPath,
             onChangeModel = { showModelDialog = true },
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
         )
 
-        // Text display takes remaining space
+        // Text display takes remaining space with weight(1f) to compress properly
         TextDisplay(
             text = generatedText,
             modifier = Modifier
