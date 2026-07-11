@@ -1,6 +1,7 @@
 package org.nehuatl.sample
 
 import android.content.ContentResolver
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.nehuatl.llamacpp.LlamaHelper
+import java.io.ByteArrayOutputStream
 
 class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
 
@@ -102,8 +104,13 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
             // Принудительно очищаем буфер перед новым вопросом
             llamaHelper.abort()
 
-            // Чистый вызов predict без недоступных параметров
-            llamaHelper.predict(prompt = formattedPrompt, imagePath = imagePath)
+            // КОНВЕРТАЦИЯ: Передаем байты вместо пути
+            val imageBytes = if (!imagePath.isNullOrEmpty()) {
+                uriToByteArray(Uri.parse(imagePath))
+            } else null
+
+            // Чистый вызов predict с байтами изображения
+            llamaHelper.predict(prompt = formattedPrompt, imageBytes = imageBytes)
 
             llmFlow.collect { event ->
                 when (event) {
@@ -169,6 +176,20 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
         llamaHelper.abort()
         llamaHelper.release()
         viewModelJob.cancel()
+    }
+
+    // НОВАЯ ФУНКЦИЯ для конвертации изображения
+    private fun uriToByteArray(uri: Uri): ByteArray? {
+        return try {
+            val inputStream = contentResolver.openInputStream(uri)
+            val bitmap = BitmapFactory.decodeStream(inputStream)
+            val outputStream = ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
+            outputStream.toByteArray()
+        } catch (e: Exception) {
+            Log.e("MainViewModel", "Ошибка конвертации: ${e.message}")
+            null
+        }
     }
 }
 
