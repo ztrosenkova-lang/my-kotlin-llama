@@ -34,6 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -73,11 +74,13 @@ fun ChatScreen(
     val generatedText by viewModel.generatedText.collectAsStateWithLifecycle()
     val systemPromptText by viewModel.systemPrompt.collectAsStateWithLifecycle()
     val chatMessages by viewModel.chatHistory.collectAsStateWithLifecycle()
+    val temperature by viewModel.temperature.collectAsStateWithLifecycle()
 
     var promptInput by remember { mutableStateOf("") }
     var showModelDialog by remember { mutableStateOf(currentModelPath == null) }
     var showSettings by remember { mutableStateOf(false) }
     var tempPromptText by remember(systemPromptText) { mutableStateOf(systemPromptText) }
+    var tempTemperature by remember(temperature) { mutableStateOf(temperature) }
     var showHelpDialog by remember { mutableStateOf(false) }
 
     val focusRequester = remember { FocusRequester() }
@@ -92,6 +95,13 @@ fun ChatScreen(
             } catch (e: Exception) {
                 // Focus request might fail if UI isn't ready yet
             }
+        }
+    }
+
+    // Синхронизируем локальную температуру с глобальной при открытии настроек
+    LaunchedEffect(showSettings) {
+        if (showSettings) {
+            tempTemperature = temperature
         }
     }
 
@@ -211,19 +221,20 @@ fun ChatScreen(
                 IconButton(onClick = { showSettings = !showSettings }) {
                     Icon(
                         imageVector = Icons.Default.Settings,
-                        contentDescription = "Настройки промпта"
+                        contentDescription = "Настройки"
                     )
                 }
             }
         }
 
-        // Выезжающее поле для редактирования системного промпта с кнопкой "Сохранить"
+        // Выезжающее меню настроек
         if (showSettings) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 4.dp)
             ) {
+                // Поле системного промпта
                 OutlinedTextField(
                     value = tempPromptText,
                     onValueChange = { tempPromptText = it },
@@ -232,16 +243,48 @@ fun ChatScreen(
                     maxLines = 3,
                     singleLine = false
                 )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Ползунок температуры
+                Text(
+                    text = "Температура (креативность): ${String.format("%.1f", tempTemperature)}",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Slider(
+                    value = tempTemperature,
+                    onValueChange = { tempTemperature = it },
+                    valueRange = 0.1f..1.0f,
+                    steps = 9,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Кнопка смены модели
+                Button(
+                    onClick = { showModelDialog = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Сменить модель")
+                }
+
                 Spacer(modifier = Modifier.height(8.dp))
+
+                // Кнопка сохранения
                 Button(
                     onClick = {
                         viewModel.updateSystemPrompt(tempPromptText)
-                        showSettings = false // Скрываем окно после сохранения
+                        viewModel.updateTemperature(tempTemperature)
+                        showSettings = false
                     },
-                    modifier = Modifier.align(Alignment.End)
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .fillMaxWidth(0.5f)
                 ) {
                     Text("Сохранить")
                 }
+
                 Spacer(modifier = Modifier.height(4.dp))
             }
         }
@@ -544,7 +587,7 @@ private fun PromptInput(
         if (isGenerating) {
             Button(
                 onClick = onAbort,
-                enabled = true  // Always enabled when generating
+                enabled = true
             ) {
                 Text("Стоп")
             }
