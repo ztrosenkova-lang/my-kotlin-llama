@@ -87,7 +87,7 @@ fun ChatScreen(
             onLoad = {
                 showModelDialog = false
                 if (currentModelPath != null) {
-                    viewModel.loadModel(currentModelPath)
+                    viewModel.loadModel(currentModelPath, mmprojPath)
                 }
             },
             onDismiss = if (currentModelPath != null) {
