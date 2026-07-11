@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compute.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -38,6 +39,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
+import androidx.compute.material3.SliderColors
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -320,7 +322,7 @@ fun ChatScreen(
                     IconButton(onClick = { showSettings = !showSettings }) {
                         Icon(
                             imageVector = Icons.Default.Settings,
-                            contentDescription = "Настройки",
+                            contentDescription = "Настройки токенов",
                             tint = NeonCyan
                         )
                     }
@@ -328,83 +330,85 @@ fun ChatScreen(
             }
         }
 
-        // Выезжающее меню настроек
+        // Выезжающая панель настроек токенов
         if (showSettings) {
-            Column(
+            Card(
+                colors = CardDefaults.cardColors(containerColor = DarkSurface),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(DarkBackground)
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .padding(8.dp),
+                border = BorderStroke(1.dp, DarkBorder)
             ) {
-                // Поле системного промпта
-                OutlinedTextField(
-                    value = tempPromptText,
-                    onValueChange = { tempPromptText = it },
-                    label = { Text("Системный промпт (Роль ИИ)", color = AIMessageText) },
-                    modifier = Modifier.fillMaxWidth(),
-                    maxLines = 3,
-                    singleLine = false,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = PureWhite,
-                        unfocusedTextColor = PureWhite,
-                        focusedContainerColor = DarkSurface,
-                        unfocusedContainerColor = DarkSurface,
-                        focusedBorderColor = NeonCyan,
-                        unfocusedBorderColor = DarkBorder,
-                        cursorColor = NeonCyan
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        "⚙️ Настройки движка ИИ",
+                        color = PureWhite,
+                        style = MaterialTheme.typography.titleMedium
                     )
-                )
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Ползунок температуры
-                Text(
-                    text = "Температура (креативность): ${String.format("%.1f", tempTemperature)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = PureWhite
-                )
-                Slider(
-                    value = tempTemperature,
-                    onValueChange = { tempTemperature = it },
-                    valueRange = 0.1f..1.0f,
-                    steps = 9,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = SliderDefaults.colors(
-                        thumbColor = NeonCyan,
-                        activeTrackColor = NeonCyan,
-                        inactiveTrackColor = DarkBorder
+                    // Поле системного промпта
+                    OutlinedTextField(
+                        value = tempPromptText,
+                        onValueChange = { tempPromptText = it },
+                        label = { Text("Системный промпт (Роль ИИ)", color = NeonCyan) },
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 3,
+                        singleLine = false,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = PureWhite,
+                            unfocusedTextColor = PureWhite,
+                            focusedContainerColor = DarkSurface,
+                            unfocusedContainerColor = DarkSurface,
+                            focusedBorderColor = NeonCyan,
+                            unfocusedBorderColor = DarkBorder,
+                            cursorColor = NeonCyan
+                        )
                     )
-                )
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                Spacer(modifier = Modifier.height(12.dp))
+                    // Ползунок температуры (креативности)
+                    Text(
+                        text = "Креативность (Температура): ${String.format("%.1f", tempTemperature)}",
+                        color = PureWhite
+                    )
+                    Slider(
+                        value = tempTemperature,
+                        onValueChange = { tempTemperature = it },
+                        valueRange = 0.1f..1.0f,
+                        steps = 9,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = SliderDefaults.colors(
+                            thumbColor = NeonCyan,
+                            activeTrackColor = NeonCyan,
+                            inactiveTrackColor = DarkBorder
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                // Кнопка смены модели
-                Button(
-                    onClick = { showModelDialog = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = DarkSurface)
-                ) {
-                    Text("Сменить модель", color = NeonCyan)
+                    // Кнопка смены/сброса модели
+                    Button(
+                        onClick = { showModelDialog = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = DarkBorder),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Сменить или перезагрузить модель", color = PureWhite)
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Кнопка Сохранить и Закрыть
+                    Button(
+                        onClick = {
+                            viewModel.updateSystemPrompt(tempPromptText)
+                            viewModel.updateTemperature(tempTemperature)
+                            showSettings = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonCyan),
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Text("Сохранить и Закрыть", color = DarkBackground)
+                    }
                 }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Кнопка сохранения
-                Button(
-                    onClick = {
-                        viewModel.updateSystemPrompt(tempPromptText)
-                        viewModel.updateTemperature(tempTemperature)
-                        showSettings = false
-                    },
-                    modifier = Modifier
-                        .align(Alignment.End)
-                        .fillMaxWidth(0.5f),
-                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan)
-                ) {
-                    Text("Сохранить", color = DarkBackground)
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
             }
         }
 
