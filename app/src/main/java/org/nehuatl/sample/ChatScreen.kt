@@ -1,5 +1,6 @@
 package org.nehuatl.sample
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,7 +18,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
@@ -46,6 +46,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -125,14 +126,16 @@ fun ChatScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Face,
-                    contentDescription = "Лого",
-                    modifier = Modifier.padding(end = 4.dp)
+                Image(
+                    painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                    contentDescription = "Логотип приложения",
+                    modifier = Modifier
+                        .size(40.dp)
+                        .padding(end = 4.dp)
                 )
                 Text(
-                    text = "Мой Карманный ИИ",
-                    fontSize = 20.sp,
+                    text = "Меч Правды v2.0",
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
