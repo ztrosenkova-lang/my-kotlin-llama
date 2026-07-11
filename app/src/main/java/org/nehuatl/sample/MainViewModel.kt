@@ -35,6 +35,10 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
     // Переменная для хранения имени файла текущей модели
     private var currentModelName: String = ""
 
+    // Динамический системный промпт (доступен для изменения из UI)
+    private val _systemPrompt = MutableStateFlow("Ты — полезный, умный и лаконичный ИИ-ассистент. Отвечай строго на русском языке.")
+    val systemPrompt = _systemPrompt.asStateFlow()
+
     private val llamaHelper by lazy {
         LlamaHelper(
             contentResolver = contentResolver,
@@ -65,10 +69,15 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
         }
     }
 
+    fun updateSystemPrompt(newPrompt: String) {
+        _systemPrompt.value = newPrompt
+    }
+
     fun generate(prompt: String, imagePath: String? = null) {
         if (!_state.value.canGenerate()) return
         scope.launch {
-            val systemPrompt = "Ты — полезный, умный и лаконичный ИИ-ассистент."
+            // Читаем актуальное значение системного промпта
+            val currentSystemPrompt = _systemPrompt.value
             
             // Визуальный маркер для мультимодальных моделей
             val visualPrompt = if (!imagePath.isNullOrEmpty()) {
@@ -80,13 +89,13 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
             // Динамический выбор промпта и стоп-токенов
             val (formattedPrompt, stopTokensList) = when {
                 currentModelName.contains("qwen") -> {
-                    "<|im_start|>system\n$systemPrompt<|im_end|>\n<|im_start|>user\n$visualPrompt<|im_end|>\n<|im_start|>assistant\n" to listOf("<|im_end|>", "<|im_start|>")
+                    "<|im_start|>system\n$currentSystemPrompt<|im_end|>\n<|im_start|>user\n$visualPrompt<|im_end|>\n<|im_start|>assistant\n" to listOf("<|im_end|>", "<|im_start|>")
                 }
                 currentModelName.contains("llama") -> {
-                    "<|start_header_id|>system<|end_header_id|>\n\n$systemPrompt<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n$visualPrompt<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n" to listOf("<|eot_id|>", "<|start_header_id|>")
+                    "<|start_header_id|>system<|end_header_id|>\n\n$currentSystemPrompt<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n$visualPrompt<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n" to listOf("<|eot_id|>", "<|start_header_id|>")
                 }
                 else -> {
-                    "<|system|>\n$systemPrompt\n<|user|>\n$visualPrompt\n<|assistant|>\n" to listOf("<|user|>", "<|eot_id|>")
+                    "<|system|>\n$currentSystemPrompt\n<|user|>\n$visualPrompt\n<|assistant|>\n" to listOf("<|user|>", "<|eot_id|>")
                 }
             }
 
@@ -110,18 +119,25 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
                     }
                     is LlamaHelper.LLMEvent.Ongoing -> {
                         val word = event.word
-                        
-                        // ПРОВЕРКА НА СТОП-ТОКЕНЫ: Если модель пытается напечатать тег, 
-                        // или начинает говорить сама с собой через маркеры ролей — мы её обрываем.
-                        if (word.contains("<|") || word.contains("|>") || word.contains("User:") || word.contains("Assistant:")) {
-                            Log.i("MainViewModel", "Stop token detected in text stream. Stopping.")
-                            // Имитируем завершение для интерфейса
+
+                        // 1. Мгновенная проверка на стоп-токены ролей (убраны все пробелы)
+                        if (word.contains("<|") || word.contains("|>") || 
+                            word.contains("User:") || word.contains("Assistant:") ||
+                            word.contains("Question:") || word.contains("Answer:")) {
+                            Log.i("MainViewModel", "Стоп-токен обнаружен. Остановка.")
                             _state.value = GenerationState.Completed(prompt, event.tokenCount, 0)
-                            return@collect 
+                            return@collect
                         }
 
-                        _generatedText.value += word
+                        // 2. Накапливаем и склеиваем поток букв, убирая микро-двоение
+                        val currentText = _generatedText.value
                         
+                        // Фильтруем системные маркеры, которые модель пытается выдать в текст
+                        if (!word.startsWith("<|") && !word.endsWith("|>")) {
+                            _generatedText.value = currentText + word
+                        }
+
+                        // Обновляем счетчик токенов в состоянии
                         val currentState = _state.value
                         if (currentState is GenerationState.Generating) {
                             _state.value = currentState.copy(tokensGenerated = event.tokenCount)
