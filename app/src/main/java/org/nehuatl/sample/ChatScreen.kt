@@ -2,6 +2,7 @@ package org.nehuatl.sample
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -218,66 +219,80 @@ fun ChatScreen(
             .fillMaxSize()
             .imePadding() // This ensures content resizes with keyboard
     ) {
-        // Верхняя брендированная панель с логотипом и кнопками управления
-        Row(
+        // Верхняя брендированная панель с логотипом и кнопками управления в Card
+        Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .padding(8.dp),
+            shape = MaterialTheme.shapes.medium,
+            border = androidx.compose.foundation.BorderStroke(
+                1.dp,
+                MaterialTheme.colorScheme.outlineVariant
+            ),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            )
         ) {
-            // Левая часть: логотип и название
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Image(
-                    painter = painterResource(id = R.drawable.ic_launcher_foreground),
-                    contentDescription = "Логотип приложения",
-                    modifier = Modifier
-                        .size(40.dp)
-                        .padding(end = 4.dp)
-                )
-                Text(
-                    text = "Меч Правды v2.0",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            // Правая часть: кнопки управления
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Кнопка редактирования базы знаний
-                IconButton(
-                    onClick = {
-                        memoryEditText = viewModel.readFromLongTermMemory()
-                        showMemoryEditor = true
-                    }
+                // Левая часть: логотип и название
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = "Редактировать Базу Знаний"
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                        contentDescription = "Логотип приложения",
+                        modifier = Modifier
+                            .size(40.dp)
+                            .padding(end = 4.dp)
+                    )
+                    Text(
+                        text = "Меч Правды v2.0",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
 
-                // Кнопка справки
-                IconButton(onClick = { showHelpDialog = true }) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = "Справка"
-                    )
-                }
+                // Правая часть: кнопки управления
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Кнопка редактирования базы знаний
+                    IconButton(
+                        onClick = {
+                            memoryEditText = viewModel.readFromLongTermMemory()
+                            showMemoryEditor = true
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Редактировать Базу Знаний"
+                        )
+                    }
 
-                // Кнопка «Шестеренка» — открывает/закрывает панель системного промпта
-                IconButton(onClick = { showSettings = !showSettings }) {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "Настройки"
-                    )
+                    // Кнопка справки
+                    IconButton(onClick = { showHelpDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "Справка"
+                        )
+                    }
+
+                    // Кнопка «Шестеренка» — открывает/закрывает панель системного промпта
+                    IconButton(onClick = { showSettings = !showSettings }) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Настройки"
+                        )
+                    }
                 }
             }
         }
