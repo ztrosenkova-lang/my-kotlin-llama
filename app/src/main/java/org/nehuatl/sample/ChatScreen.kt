@@ -129,7 +129,7 @@ fun ChatScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("[Image]", style = MaterialTheme.typography.bodySmall)
+                    Text("[Изображение]", style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
@@ -177,20 +177,20 @@ private fun ModelPickerDialog(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    "Select Model",
+                    "Настройка ИИ",
                     style = MaterialTheme.typography.headlineSmall
                 )
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("GGUF Model")
+                    Text("Языковая модель")
                     if (currentModelPath != null) Text(
-                        text = "[Model File]",
+                        text = "[Файл модели]",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
                     Button(onClick = onPickModel, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (currentModelPath ==  null) "Pick A Model" else "Change Model")
+                        Text(if (currentModelPath == null) "Выбрать модель" else "Изменить модель")
                     }
                 }
 
@@ -199,19 +199,19 @@ private fun ModelPickerDialog(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text(
-                        "(optional)",
+                        "(опционально)",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Text("Multimodal projector (mmproj)")
+                    Text("Мультимодальный проектор (mmproj)")
                     if (mmprojPath != null) Text(
-                        text = "[Projector File]",
+                        text = "[Файл проектора]",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
                     Button(onClick = onPickMmproj, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (mmprojPath == null) "Pick Projector" else "Change Projector")
+                        Text(if (mmprojPath == null) "Выбрать проектор" else "Изменить проектор")
                     }
                 }
 
@@ -223,7 +223,7 @@ private fun ModelPickerDialog(
                         containerColor = colorResource(R.color.teal_700)
                     )
                 ) {
-                    Text("Load Model")
+                    Text("Запустить нейросеть")
                 }
 
                 if (onDismiss != null) {
@@ -231,7 +231,7 @@ private fun ModelPickerDialog(
                         onClick = onDismiss,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text("Cancel")
+                        Text("Отмена")
                     }
                 }
             }
@@ -271,23 +271,23 @@ private fun StatusBar(
             ) {
                 when (state) {
                     is GenerationState.Idle -> {
-                        Text(if (currentModel == null) "Select a model" else "Ready")
+                        Text(if (currentModel == null) "Выберите модель" else "ИИ Готов")
                     }
                     is GenerationState.LoadingModel -> {
                         CircularProgressIndicator(modifier = Modifier.size(16.dp))
-                        Text("Loading model...")
+                        Text("Загрузка модели...")
                     }
                     is GenerationState.ModelLoaded -> {
-                        Text("✓ Ready", color = MaterialTheme.colorScheme.primary)
+                        Text("✓ ИИ Готов", color = MaterialTheme.colorScheme.primary)
                     }
                     is GenerationState.Generating -> {
                         CircularProgressIndicator(modifier = Modifier.size(16.dp))
-                        val label = if (state.tokensGenerated == 0) "Processing (this may take a while)..." else "Generating... (${state.tokensGenerated} tokens)"
+                        val label = if (state.tokensGenerated == 0) "Думаю..." else "Думаю... (${state.tokensGenerated} токенов)"
                         Text(label)
                     }
                     is GenerationState.Completed -> {
                         Text(
-                            "✓ Done (${state.tokenCount} tokens, ${state.durationMs}ms)",
+                            "✓ Ответ готов (${state.tokenCount} токенов, ${state.durationMs}мс)",
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -299,7 +299,7 @@ private fun StatusBar(
 
             if (!state.isActive()) {
                 TextButton(onClick = onChangeModel) {
-                    Text("Configure")
+                    Text("Настроить")
                 }
             }
         }
@@ -328,7 +328,7 @@ private fun TextDisplay(
         ) {
             if (text.isEmpty()) {
                 Text(
-                    "Generated text will appear here...",
+                    "Ответ появится здесь...",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.align(Alignment.Center)
                 )
@@ -362,7 +362,7 @@ private fun PromptInput(
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onPickImage, enabled = enabled && !isGenerating) {
-            Icon(Icons.Default.Add, contentDescription = "Add image")
+            Icon(Icons.Default.Add, contentDescription = "Добавить изображение")
         }
 
         TextField(
@@ -372,7 +372,7 @@ private fun PromptInput(
                 .weight(1f)
                 .focusRequester(focusRequester),
             enabled = enabled && !isGenerating,
-            placeholder = { Text("Enter your prompt...") },
+            placeholder = { Text("Введите запрос...") },
             maxLines = 3,
             singleLine = false
         )
@@ -382,14 +382,14 @@ private fun PromptInput(
                 onClick = onAbort,
                 enabled = true  // Always enabled when generating
             ) {
-                Text("Stop")
+                Text("Стоп")
             }
         } else {
             Button(
                 onClick = onGenerate,
                 enabled = enabled && prompt.isNotBlank()
             ) {
-                Text("Send")
+                Text("Отправить")
             }
         }
     }
