@@ -91,25 +91,27 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
             )
             _generatedText.value = ""
 
-            // Используем стоп-токены
-            llamaHelper.predict(
-                prompt = formattedPrompt,
-                imagePath = imagePath,
-                stopTokens = stopTokensList
-            )
+            // Чистый вызов predict без недоступных параметров
+            llamaHelper.predict(prompt = formattedPrompt, imagePath = imagePath)
 
             llmFlow.collect { event ->
                 when (event) {
                     is LlamaHelper.LLMEvent.Started -> {
-                        // Убираем очистку текста отсюда, чтобы не ломать поток букв
                         Log.i("MainViewModel", "Generation started")
                     }
                     is LlamaHelper.LLMEvent.Ongoing -> {
-                        // Проверяем, что пришедший кусочек текста не равен служебным тегам модели
                         val word = event.word
-                        if (!word.contains("<|") && !word.contains("|>")) {
-                            _generatedText.value += word
+                        
+                        // ПРОВЕРКА НА СТОП-ТОКЕНЫ: Если модель пытается напечатать тег, 
+                        // или начинает говорить сама с собой через маркеры ролей — мы её обрываем.
+                        if (word.contains("<|") || word.contains("|>") || word.contains("User:") || word.contains("Assistant:")) {
+                            Log.i("MainViewModel", "Stop token detected in text stream. Stopping.")
+                            // Имитируем завершение для интерфейса
+                            _state.value = GenerationState.Completed(prompt, event.tokenCount, 0)
+                            return@collect 
                         }
+
+                        _generatedText.value += word
                         
                         val currentState = _state.value
                         if (currentState is GenerationState.Generating) {
@@ -123,7 +125,6 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
                             durationMs = event.duration
                         )
                         Log.i("MainViewModel", "Generation completed")
-                        // В версии 0.4.0 метод stopPrediction вызывать не нужно, библиотека делает это сама
                     }
                     is LlamaHelper.LLMEvent.Error -> {
                         _state.value = GenerationState.Error("Generation interrupted: ${event.message}")
