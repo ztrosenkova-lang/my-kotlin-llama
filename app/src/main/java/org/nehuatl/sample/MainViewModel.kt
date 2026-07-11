@@ -48,15 +48,18 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
         _state.value = GenerationState.LoadingModel
         scope.launch {
             try {
-                // Передаем параметры именно так, как требует компилятор библиотеки версии 0.4.0
+                val uri = Uri.parse(path)
+                // Загружаем обновленный движок 0.4.0
                 llamaHelper.load(
                     path = path,
                     contextLength = 2048,
                     loaded = { id ->
                         _state.value = GenerationState.ModelLoaded(path)
-                        // Сохраняем имя файла (переводим в нижний регистр для удобства поиска)
-                        currentModelName = path.substringAfterLast("/").lowercase()
-                        Log.d("MainViewModel", "Модель $currentModelName загружена с ID: $id")
+                        
+                        // ПРАВИЛЬНОЕ ОПРЕДЕЛЕНИЕ ИМЕНИ ФАЙЛА ЧЕРЕЗ URI
+                        currentModelName = getFileNameFromUri(contentResolver, uri)
+                        
+                        Log.d("MainViewModel", "Модель определена как: $currentModelName с ID: $id")
                     }
                 )
             } catch (e: Exception) {
@@ -159,4 +162,25 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
         llamaHelper.release()
         viewModelJob.cancel()
     }
+}
+
+// Вспомогательная функция для получения реального имени файла из URI Android
+private fun getFileNameFromUri(contentResolver: ContentResolver, uri: Uri): String {
+    var name = ""
+    try {
+        val cursor = contentResolver.query(uri, null, null, null, null)
+        cursor?.use {
+            if (it.moveToFirst()) {
+                val index = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (index != -1) name = it.getString(index)
+            }
+        }
+    } catch (e: Exception) {
+        Log.e("MainViewModel", "Ошибка чтения имени файла: ${e.message}")
+    }
+    // Если через cursor не нашлось, берем последний сегмент ссылки
+    if (name.isEmpty()) {
+        name = uri.lastPathSegment ?: ""
+    }
+    return name.lowercase()
 }
