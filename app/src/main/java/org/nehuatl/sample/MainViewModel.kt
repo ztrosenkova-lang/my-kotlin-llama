@@ -1,5 +1,6 @@
 package org.nehuatl.sample
 
+import android.app.Application
 import android.content.ContentResolver
 import android.net.Uri
 import android.speech.tts.TextToSpeech
@@ -55,16 +56,16 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
 
     // Файл долговременной памяти
     private val memoryFile: File by lazy {
-        val context = androidx.core.app.CoreComponentFactory().createContextForApplication(androidx.core.app.CoreComponentFactory())
-        File(context.filesDir, "memory.txt")
+        val app = getApplication<Application>()
+        File(app.filesDir, "memory.txt")
     }
 
     // TTS движок для озвучки ответов
     private var tts: TextToSpeech? = null
 
     init {
-        val context = androidx.core.app.CoreComponentFactory().createContextForApplication(androidx.core.app.CoreComponentFactory())
-        tts = TextToSpeech(context) { status ->
+        val app = getApplication<Application>()
+        tts = TextToSpeech(app) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 // Устанавливаем системный язык по умолчанию
                 tts?.language = Locale.getDefault()
@@ -149,7 +150,7 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
     }
 
     // Функция чтения всех сохраненных заметок из файла долговременной памяти
-    private fun readFromLongTermMemory(): String {
+    fun readFromLongTermMemory(): String {
         return try {
             if (memoryFile.exists()) {
                 memoryFile.readText().trim()
@@ -282,11 +283,10 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
             llamaHelper.abort()
             tts?.stop() // Останавливаем озвучку при новом запросе
             
-            // Передаем температуру в предсказание
+            // Чистый вызов predict без параметра temperature
             llamaHelper.predict(
                 prompt = formattedPrompt,
-                imagePath = imagePath,
-                temperature = temperature.value
+                imagePath = imagePath
             )
 
             llmFlow.collect { event ->
