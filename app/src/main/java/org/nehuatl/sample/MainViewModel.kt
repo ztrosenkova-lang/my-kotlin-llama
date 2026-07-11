@@ -47,6 +47,10 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
     private val _chatHistory = MutableStateFlow<List<ChatMessage>>(emptyList())
     val chatHistory = _chatHistory.asStateFlow()
 
+    // Настройки сэмплинга
+    val temperature = MutableStateFlow(0.3f) // По умолчанию 0.3 для точных наук (химия)
+    val contextSize = MutableStateFlow(2048) // Базовый размер контекста для Honor X8a
+
     // Файл долговременной памяти
     private val memoryFile: File by lazy {
         val context = androidx.core.app.CoreComponentFactory().createContextForApplication(androidx.core.app.CoreComponentFactory())
@@ -68,7 +72,7 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
             try {
                 llamaHelper.load(
                     path = path,
-                    contextLength = 2048,
+                    contextLength = contextSize.value,
                     mmprojPath = if (mmprojPath.isNullOrEmpty()) null else mmprojPath,
                     loaded = { id ->
                         _state.value = GenerationState.ModelLoaded(path)
@@ -89,6 +93,14 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
     fun clearChat() {
         _chatHistory.value = emptyList()
         _generatedText.value = ""
+    }
+
+    fun updateTemperature(temp: Float) {
+        temperature.value = temp.coerceIn(0.0f, 1.0f)
+    }
+
+    fun updateContextSize(size: Int) {
+        contextSize.value = size.coerceAtLeast(512)
     }
 
     // Функция записи новой заметки в файл долговременной памяти
@@ -227,7 +239,13 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
             _generatedText.value = ""
 
             llamaHelper.abort()
-            llamaHelper.predict(prompt = formattedPrompt, imagePath = imagePath)
+            
+            // Передаем температуру в предсказание
+            llamaHelper.predict(
+                prompt = formattedPrompt,
+                imagePath = imagePath,
+                temperature = temperature.value
+            )
 
             llmFlow.collect { event ->
                 when (event) {
@@ -250,9 +268,9 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
                             return@collect
                         }
 
-                        val currentText = _generatedText.value
-                        if (!word.startsWith("<|") && !word.endsWith("|>")) {
-                            _generatedText.value = currentText + word
+                        // Накапливаем и склеиваем поток букв, убирая микро-двоение
+                        if (!word.startsWith("<|") && !word.endsWith("|>") && word.isNotEmpty()) {
+                            _generatedText.value = _generatedText.value + word
                         }
 
                         val currentState = _state.value
