@@ -20,8 +20,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
@@ -49,7 +51,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -77,6 +78,7 @@ fun ChatScreen(
     var showModelDialog by remember { mutableStateOf(currentModelPath == null) }
     var showSettings by remember { mutableStateOf(false) }
     var tempPromptText by remember(systemPromptText) { mutableStateOf(systemPromptText) }
+    var showHelpDialog by remember { mutableStateOf(false) }
 
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -108,6 +110,54 @@ fun ChatScreen(
             onDismiss = if (currentModelPath != null) {
                 { showModelDialog = false }
             } else null
+        )
+    }
+
+    if (showHelpDialog) {
+        AlertDialog(
+            onDismissRequest = { showHelpDialog = false },
+            title = {
+                Text(
+                    text = "🛡️ Меч Правды v2.0 — Руководство",
+                    style = MaterialTheme.typography.titleLarge
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(
+                        text = "Добро пожаловать в твой полностью локальный ИИ-ассистент! Приложение работает на 100% без интернета и защищено в песочнице устройства.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(text = "🧠 1. Долговременная память", fontWeight = FontWeight.Bold)
+                    Text(text = "• Чтобы ИИ что-то зафиксировал в защищённый файл, начни фразу со слова 'запомни' (например: 'запомни, моя любимая реакция — это реакция Кучерова'). Модель мгновенно запишет это в песочницу.")
+                    Text(text = "• Чтобы извлечь данные, используй в запросе слово 'вспомни' (например: 'вспомни мою любимую реакцию и распиши её'). ИИ вычитает архив и ответит на основе твоих заметок.")
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(text = "💬 2. Сплошной чат с контекстом", fontWeight = FontWeight.Bold)
+                    Text(text = "• Приложение сохраняет историю текущего разговора. Ты можешь задавать уточняющие вопросы, ИИ помнит начало беседы.")
+                    Text(text = "• Чтобы полностью очистить ОЗУ и начать диалог с чистого листа, нажми красную кнопку 'Очистить чат' в самом низу.")
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(text = "📷 3. Зрение и работа с камерой", fontWeight = FontWeight.Bold)
+                    Text(text = "• Для анализа изображений загрузи мультимодальный файл проектора зрения (.gguf) в стартовом меню.")
+                    Text(text = "• Нажми на скрепку, сделай фото задачи или формулы, напиши текстовый вопрос (например, 'Реши это уравнение') и отправь. Приложение автоматически склеит нужные теги зрения.")
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(text = "⚙️ 4. Динамическая смена роли ИИ", fontWeight = FontWeight.Bold)
+                    Text(text = "• Нажми на Шестерёнку в шапке. В поле 'Системный промпт' ты можешь на ходу переписать инструкцию (например, превратить ИИ в строгого химика), нажми 'Сохранить', и модель мгновенно перестроится.")
+                }
+            },
+            confirmButton = {
+                Button(onClick = { showHelpDialog = false }) {
+                    Text("Понятно")
+                }
+            }
         )
     }
 
@@ -149,11 +199,11 @@ fun ChatScreen(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Кнопка «Сброс/Корзина» — открывает диалог выбора модели
-                IconButton(onClick = { showModelDialog = true }) {
+                // Кнопка справки
+                IconButton(onClick = { showHelpDialog = true }) {
                     Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Сменить модель"
+                        imageVector = Icons.Default.Info,
+                        contentDescription = "Справка"
                     )
                 }
 
