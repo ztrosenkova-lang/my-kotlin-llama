@@ -1,7 +1,7 @@
 package org.nehuatl.sample
 
-import android.app.Application
 import android.content.ContentResolver
+import android.content.Context
 import android.net.Uri
 import android.speech.tts.TextToSpeech
 import android.util.Log
@@ -56,23 +56,28 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
 
     // Файл долговременной памяти
     private val memoryFile: File by lazy {
-        val app = getApplication<Application>()
-        File(app.filesDir, "memory.txt")
+        // Получаем контекст приложения через contentResolver
+        val context = contentResolver.context?.applicationContext
+        File(context?.filesDir ?: throw IllegalStateException("Application context is null"), "memory.txt")
     }
 
     // TTS движок для озвучки ответов
     private var tts: TextToSpeech? = null
 
     init {
-        val app = getApplication<Application>()
-        tts = TextToSpeech(app) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                // Устанавливаем системный язык по умолчанию
-                tts?.language = Locale.getDefault()
-                Log.d("MainViewModel", "TTS инициализирован успешно")
-            } else {
-                Log.e("MainViewModel", "Ошибка инициализации TTS")
+        val context = contentResolver.context?.applicationContext
+        if (context != null) {
+            tts = TextToSpeech(context) { status ->
+                if (status == TextToSpeech.SUCCESS) {
+                    // Устанавливаем системный язык по умолчанию
+                    tts?.language = Locale.getDefault()
+                    Log.d("MainViewModel", "TTS инициализирован успешно")
+                } else {
+                    Log.e("MainViewModel", "Ошибка инициализации TTS")
+                }
             }
+        } else {
+            Log.e("MainViewModel", "Не удалось получить контекст для TTS")
         }
     }
 
