@@ -1,6 +1,7 @@
 package org.nehuatl.sample
 
 import android.content.ContentResolver
+import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -39,24 +40,29 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
         )
     }
 
-    fun loadModel(path: String, mmprojPath: String? = null) {
-        if (_state.value is GenerationState.Generating) {
-            Log.w("MainViewModel", "Cannot load model while generating")
-            return
-        }
+    fun loadModel(path: String) {
+        if (path.isEmpty()) return
         _state.value = GenerationState.LoadingModel
-        try {
-            llamaHelper.load(
-                path = path,
-                contextLength = 2048,
-                mmprojPath = mmprojPath
-            ) {
-                Log.i("MainViewModel", "Model loaded successfully")
-                _state.value = GenerationState.ModelLoaded(path)
+        scope.launch {
+            try {
+                val uri = Uri.parse(path)
+                // Безопасно открываем файл модели для обхода ограничений Android 11+
+                val pfd = contentResolver.openFileDescriptor(uri, "r")
+                if (pfd != null) {
+                    // Загружаем обновленный движок 0.4.0 с лимитом памяти под Gemma 4
+                    llamaHelper.load(
+                        fd = pfd.detachFd(),
+                        contextLength = 2048
+                    )
+                    _state.value = GenerationState.ModelLoaded(path)
+                    Log.d("MainViewModel", "Gemma 4 успешно инициализирована!")
+                } else {
+                    _state.value = GenerationState.Error("Не удалось открыть файл модели")
+                }
+            } catch (e: Exception) {
+                Log.e("MainViewModel", "Ошибка загрузки: ${e.message}")
+                _state.value = GenerationState.Error(e.message ?: "Unknown error")
             }
-        } catch (e: Exception) {
-            _state.value = GenerationState.Error("Failed to load model: ${e.message}", e)
-            Log.e(">>> ERR ", "Model load failed", e)
         }
     }
 
@@ -69,6 +75,12 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
         scope.launch {
             Log.d("MainViewModel", "Generating with image: $imagePath")
             
+            // Системный промпт для настройки поведения ИИ
+            val systemPrompt = "Ты — полезный, умный и лаконичный ИИ-ассистент. Отвечай всегда строго на русском языке."
+            
+            // Обертывание промпта для соответствия Chat Template
+            val formattedPrompt = "<|system|>\n$systemPrompt\n<|user|>\n$prompt\n<|assistant|>\n"
+            
             // Set initial generating state immediately
             _state.value = GenerationState.Generating(
                 prompt = prompt,
@@ -77,7 +89,7 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
             )
             _generatedText.value = ""
 
-            llamaHelper.predict(prompt, imagePath)
+            llamaHelper.predict(formattedPrompt, imagePath)
             llmFlow.collect { event ->
                 when (event) {
                     is LlamaHelper.LLMEvent.Started -> {
