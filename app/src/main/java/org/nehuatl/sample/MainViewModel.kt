@@ -31,6 +31,9 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
     val state = _state.asStateFlow()
     private val _generatedText = MutableStateFlow("")
     val generatedText = _generatedText.asStateFlow()
+    
+    // Переменная для хранения имени файла текущей модели
+    private var currentModelName: String = ""
 
     private val llamaHelper by lazy {
         LlamaHelper(
@@ -51,7 +54,9 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
                     contextLength = 2048,
                     loaded = { id ->
                         _state.value = GenerationState.ModelLoaded(path)
-                        Log.d("MainViewModel", "Gemma 4 успешно инициализирована с ID: $id")
+                        // Сохраняем имя файла (переводим в нижний регистр для удобства поиска)
+                        currentModelName = path.substringAfterLast("/").lowercase()
+                        Log.d("MainViewModel", "Модель $currentModelName загружена с ID: $id")
                     }
                 )
             } catch (e: Exception) {
@@ -62,21 +67,23 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
     }
 
     fun generate(prompt: String, imagePath: String? = null) {
-        if (!_state.value.canGenerate()) {
-            Log.w("MainViewModel", "Cannot generate in current state: ${_state.value}")
-            return
-        }
-
+        if (!_state.value.canGenerate()) return
         scope.launch {
-            Log.d("MainViewModel", "Generating with image: $imagePath")
+            val systemPrompt = "Ты — полезный, умный и лаконичный ИИ-ассистент."
             
-            // Системный промпт для настройки поведения ИИ
-            val systemPrompt = "Ты — полезный, умный и лаконичный ИИ-ассистент. Отвечай всегда строго на русском языке."
-            
-            // Обертывание промпта для соответствия Chat Template
-            val formattedPrompt = "<|system|>\n$systemPrompt\n<|user|>\n$prompt\n<|assistant|>\n"
-            
-            // Set initial generating state immediately
+            // Динамический выбор промпта и стоп-токенов
+            val (formattedPrompt, stopTokensList) = when {
+                currentModelName.contains("qwen") -> {
+                    "<|im_start|>system\n$systemPrompt<|im_end|>\n<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n" to listOf("<|im_end|>", "<|im_start|>")
+                }
+                currentModelName.contains("llama") -> {
+                    "<|start_header_id|>system<|end_header_id|>\n\n$systemPrompt<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n$prompt<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n" to listOf("<|eot_id|>", "<|start_header_id|>")
+                }
+                else -> {
+                    "<|system|>\n$systemPrompt\n<|user|>\n$prompt\n<|assistant|>\n" to listOf("<|user|>", "<|eot_id|>")
+                }
+            }
+
             _state.value = GenerationState.Generating(
                 prompt = prompt,
                 startTime = System.currentTimeMillis(),
@@ -84,7 +91,12 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
             )
             _generatedText.value = ""
 
-            llamaHelper.predict(formattedPrompt, imagePath)
+            // Используем стоп-токены
+            llamaHelper.predict(
+                prompt = formattedPrompt,
+                imagePath = imagePath,
+                stopTokens = stopTokensList
+            )
 
             llmFlow.collect { event ->
                 when (event) {
