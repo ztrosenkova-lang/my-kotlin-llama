@@ -276,8 +276,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 startTime = System.currentTimeMillis(),
                 tokensGenerated = 0
             )
+            
+            // ПРИНУДИТЕЛЬНАЯ ОЧИСТКА БУФЕРА ДВИЖКА ПЕРЕД НОВЫМ ВОПРОСОМ
             _generatedText.value = ""
-
             llamaHelper.abort()
             tts?.stop() // Останавливаем озвучку при новом запросе
             
