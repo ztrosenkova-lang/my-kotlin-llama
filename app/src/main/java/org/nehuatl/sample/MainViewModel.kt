@@ -1,8 +1,6 @@
 package org.nehuatl.sample
 
 import android.content.ContentResolver
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -17,8 +15,6 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.nehuatl.llamacpp.LlamaHelper
-import java.io.ByteArrayOutputStream
-import java.io.File
 
 class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
 
@@ -52,20 +48,15 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
         _state.value = GenerationState.LoadingModel
         scope.launch {
             try {
-                val uri = Uri.parse(path)
-                // ПРИНУДИТЕЛЬНО передаем путь к проектору (mmprojPath)
                 llamaHelper.load(
                     path = path,
                     contextLength = 2048,
-                    mmprojPath = if (mmprojPath.isNullOrEmpty()) null else mmprojPath,
-                    loaded = { id ->
-                        _state.value = GenerationState.ModelLoaded(path)
-                        currentModelName = getFileNameFromUri(contentResolver, uri)
-                        Log.d("MainViewModel", "Модель определена как: $currentModelName с ID: $id")
-                    }
+                    mmprojPath = if (mmprojPath.isNullOrEmpty()) null else mmprojPath
                 )
+                _state.value = GenerationState.ModelLoaded(path)
+                val uri = Uri.parse(path)
+                currentModelName = getFileNameFromUri(contentResolver, uri)
             } catch (e: Exception) {
-                Log.e("MainViewModel", "Ошибка загрузки: ${e.message}")
                 _state.value = GenerationState.Error(e.message ?: "Unknown error")
             }
         }
@@ -106,19 +97,8 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
             // Принудительно очищаем буфер перед новым вопросом
             llamaHelper.abort()
 
-            // КОНВЕРТАЦИЯ: Безопасно определяем URI из любого типа ссылки
-            val imageUri = if (imagePath != null && (imagePath.startsWith("content://") || imagePath.startsWith("file://"))) {
-                Uri.parse(imagePath)
-            } else if (imagePath != null) {
-                Uri.fromFile(File(imagePath))
-            } else {
-                null
-            }
-            
-            val imageBytes = imageUri?.let { uriToByteArray(contentResolver, it) }
-
-            // Чистый вызов predict с байтами изображения (параметр image в версии 0.4.0)
-            llamaHelper.predict(prompt = formattedPrompt, image = imageBytes)
+            // Оригинальный мультимодальный вызов predict через строковый путь к изображению
+            llamaHelper.predict(prompt = formattedPrompt, imagePath = imagePath)
 
             llmFlow.collect { event ->
                 when (event) {
@@ -184,20 +164,6 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
         llamaHelper.abort()
         llamaHelper.release()
         viewModelJob.cancel()
-    }
-
-    // НОВАЯ ФУНКЦИЯ для конвертации изображения
-    private fun uriToByteArray(contentResolver: ContentResolver, uri: Uri): ByteArray? {
-        return try {
-            val inputStream = contentResolver.openInputStream(uri)
-            val bitmap = BitmapFactory.decodeStream(inputStream)
-            val outputStream = ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
-            outputStream.toByteArray()
-        } catch (e: Exception) {
-            Log.e("MainViewModel", "Ошибка конвертации: ${e.message}")
-            null
-        }
     }
 }
 
