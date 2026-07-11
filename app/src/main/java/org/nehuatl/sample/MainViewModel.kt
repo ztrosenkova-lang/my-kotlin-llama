@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.nehuatl.llamacpp.LlamaHelper
 import java.io.ByteArrayOutputStream
+import java.io.File
 
 class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
 
@@ -105,10 +106,16 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
             // Принудительно очищаем буфер перед новым вопросом
             llamaHelper.abort()
 
-            // КОНВЕРТАЦИЯ: Передаем байты вместо пути
-            val imageBytes = if (!imagePath.isNullOrEmpty()) {
-                uriToByteArray(contentResolver, Uri.parse(imagePath))
-            } else null
+            // КОНВЕРТАЦИЯ: Безопасно определяем URI из любого типа ссылки
+            val imageUri = if (imagePath != null && (imagePath.startsWith("content://") || imagePath.startsWith("file://"))) {
+                Uri.parse(imagePath)
+            } else if (imagePath != null) {
+                Uri.fromFile(File(imagePath))
+            } else {
+                null
+            }
+            
+            val imageBytes = imageUri?.let { uriToByteArray(contentResolver, it) }
 
             // Чистый вызов predict с байтами изображения (параметр image в версии 0.4.0)
             llamaHelper.predict(prompt = formattedPrompt, image = imageBytes)
