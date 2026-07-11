@@ -2,6 +2,7 @@ package org.nehuatl.sample
 
 import android.content.ContentResolver
 import android.net.Uri
+import android.speech.tts.TextToSpeech
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.nehuatl.llamacpp.LlamaHelper
 import java.io.File
+import java.util.Locale
 
 // Структура данных для сообщений чата
 data class ChatMessage(val role: String, val text: String) // role: "user" или "assistant"
@@ -57,6 +59,22 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
         File(context.filesDir, "memory.txt")
     }
 
+    // TTS движок для озвучки ответов
+    private var tts: TextToSpeech? = null
+
+    init {
+        val context = androidx.core.app.CoreComponentFactory().createContextForApplication(androidx.core.app.CoreComponentFactory())
+        tts = TextToSpeech(context) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                // Устанавливаем системный язык по умолчанию
+                tts?.language = Locale.getDefault()
+                Log.d("MainViewModel", "TTS инициализирован успешно")
+            } else {
+                Log.e("MainViewModel", "Ошибка инициализации TTS")
+            }
+        }
+    }
+
     private val llamaHelper by lazy {
         LlamaHelper(
             contentResolver = contentResolver,
@@ -93,6 +111,7 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
     fun clearChat() {
         _chatHistory.value = emptyList()
         _generatedText.value = ""
+        tts?.stop() // Останавливаем озвучку при очистке чата
     }
 
     fun updateTemperature(temp: Float) {
@@ -141,6 +160,14 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
             Log.e("MainViewModel", "Ошибка чтения памяти: ${e.message}")
             ""
         }
+    }
+
+    // Функция озвучки текста через TTS
+    private fun speakText(text: String) {
+        // Очищаем текст от markdown-разметки (звездочек, решеток) для чистого чтения
+        val cleanText = text.replace(Regex("[*#`_]"), "")
+        tts?.speak(cleanText, TextToSpeech.QUEUE_FLUSH, null, null)
+        Log.d("MainViewModel", "Озвучка запущена: ${cleanText.take(50)}...")
     }
 
     fun generate(prompt: String, imagePath: String? = null) {
@@ -253,6 +280,7 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
             _generatedText.value = ""
 
             llamaHelper.abort()
+            tts?.stop() // Останавливаем озвучку при новом запросе
             
             // Передаем температуру в предсказание
             llamaHelper.predict(
@@ -277,6 +305,7 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
                             val aiResponse = _generatedText.value
                             if (aiResponse.isNotEmpty()) {
                                 _chatHistory.value = _chatHistory.value + ChatMessage("assistant", aiResponse)
+                                speakText(aiResponse) // Озвучиваем ответ при стоп-токене
                             }
                             _state.value = GenerationState.Completed(prompt, event.tokenCount, 0)
                             return@collect
@@ -296,6 +325,7 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
                         val aiResponse = _generatedText.value
                         if (aiResponse.isNotEmpty()) {
                             _chatHistory.value = _chatHistory.value + ChatMessage("assistant", aiResponse)
+                            speakText(aiResponse) // Озвучиваем готовый ответ
                         }
                         _state.value = GenerationState.Completed(
                             prompt = prompt,
@@ -317,6 +347,7 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
     fun abort() {
         if (_state.value.isActive()) {
             Log.i("MainViewModel", "Aborting generation")
+            tts?.stop() // Останавливаем озвучку при прерывании
             llamaHelper.abort()
 
             val currentState = _state.value
@@ -333,6 +364,8 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
 
     override fun onCleared() {
         super.onCleared()
+        tts?.stop()
+        tts?.shutdown()
         llamaHelper.abort()
         llamaHelper.release()
         viewModelJob.cancel()
