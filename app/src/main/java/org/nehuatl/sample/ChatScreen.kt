@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
@@ -82,6 +83,8 @@ fun ChatScreen(
     var tempPromptText by remember(systemPromptText) { mutableStateOf(systemPromptText) }
     var tempTemperature by remember(temperature) { mutableStateOf(temperature) }
     var showHelpDialog by remember { mutableStateOf(false) }
+    var showMemoryEditor by remember { mutableStateOf(false) }
+    var memoryEditText by remember { mutableStateOf("") }
 
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -171,6 +174,45 @@ fun ChatScreen(
         )
     }
 
+    if (showMemoryEditor) {
+        AlertDialog(
+            onDismissRequest = { showMemoryEditor = false },
+            title = {
+                Text(
+                    text = "🧠 База Знаний ИИ (Прайс-листы и заметки)",
+                    style = MaterialTheme.typography.titleLarge
+                )
+            },
+            text = {
+                OutlinedTextField(
+                    value = memoryEditText,
+                    onValueChange = { memoryEditText = it },
+                    placeholder = { Text("Скопируй и вставь сюда свой прайс-лист или любые важные данные...") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(400.dp),
+                    maxLines = 100,
+                    singleLine = false
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.overwriteLongTermMemory(memoryEditText)
+                        showMemoryEditor = false
+                    }
+                ) {
+                    Text("Сохранить")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showMemoryEditor = false }) {
+                    Text("Закрыть")
+                }
+            }
+        )
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -209,6 +251,19 @@ fun ChatScreen(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Кнопка редактирования базы знаний
+                IconButton(
+                    onClick = {
+                        memoryEditText = viewModel.readFromLongTermMemory()
+                        showMemoryEditor = true
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Редактировать Базу Знаний"
+                    )
+                }
+
                 // Кнопка справки
                 IconButton(onClick = { showHelpDialog = true }) {
                     Icon(
