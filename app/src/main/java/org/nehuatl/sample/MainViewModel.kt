@@ -103,6 +103,19 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
         contextSize.value = size.coerceAtLeast(512)
     }
 
+    // Функция прямой перезаписи долговременной памяти
+    fun overwriteLongTermMemory(newFullText: String) {
+        try {
+            if (!memoryFile.exists()) {
+                memoryFile.createNewFile()
+            }
+            memoryFile.writeText(newFullText)
+            Log.d("MainViewModel", "База знаний успешно обновлена")
+        } catch (e: Exception) {
+            Log.e("MainViewModel", "Ошибка перезаписи базы знаний: ${e.message}")
+        }
+    }
+
     // Функция записи новой заметки в файл долговременной памяти
     private fun saveToLongTermMemory(text: String) {
         try {
@@ -154,9 +167,10 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
             val currentSystemPrompt = _systemPrompt.value
             val history = _chatHistory.value
 
-            // Проверяем, есть ли команда "вспомни" для подмешивания долговременной памяти
-            val longTermMemoryData = if (lowerPrompt.contains("вспомни")) {
-                readFromLongTermMemory()
+            // ВСЕГДА читаем содержимое файла памяти для автоматического подмешивания базы знаний
+            val memoryData = readFromLongTermMemory()
+            val memoryContext = if (memoryData.isNotEmpty()) {
+                "Дополнительная локальная база знаний и факты от пользователя:\n$memoryData\nИспользуй эти данные и прайс-листы для точных ответов на вопросы пользователя."
             } else ""
 
             // Формируем промпт на основе всей истории с подмешиванием памяти
@@ -164,8 +178,8 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
                 currentModelName.contains("qwen") -> {
                     val sb = StringBuilder()
                     sb.append("<|im_start|>system\n$currentSystemPrompt<|im_end|>\n")
-                    if (longTermMemoryData.isNotEmpty()) {
-                        sb.append("<|im_start|>system\nДополнительные сохраненные факты из памяти пользователя:\n$longTermMemoryData\nИспользуй эти факты для ответа на текущий вопрос.<|im_end|>\n")
+                    if (memoryContext.isNotEmpty()) {
+                        sb.append("<|im_start|>system\n$memoryContext<|im_end|>\n")
                     }
                     history.forEach { msg ->
                         when (msg.role) {
@@ -179,8 +193,8 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
                 currentModelName.contains("moondream") -> {
                     val sb = StringBuilder()
                     sb.append("$currentSystemPrompt\n\n")
-                    if (longTermMemoryData.isNotEmpty()) {
-                        sb.append("Дополнительные сохраненные факты из памяти пользователя:\n$longTermMemoryData\n\nИспользуй эти факты для ответа на текущий вопрос.\n\n")
+                    if (memoryContext.isNotEmpty()) {
+                        sb.append("$memoryContext\n\n")
                     }
                     history.forEach { msg ->
                         when (msg.role) {
@@ -194,8 +208,8 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
                 currentModelName.contains("llama") -> {
                     val sb = StringBuilder()
                     sb.append("<|start_header_id|>system<|end_header_id|>\n\n$currentSystemPrompt<|eot_id|>")
-                    if (longTermMemoryData.isNotEmpty()) {
-                        sb.append("<|start_header_id|>system<|end_header_id|>\n\nДополнительные сохраненные факты из памяти пользователя:\n$longTermMemoryData\nИспользуй эти факты для ответа на текущий вопрос.<|eot_id|>")
+                    if (memoryContext.isNotEmpty()) {
+                        sb.append("<|start_header_id|>system<|end_header_id|>\n\n$memoryContext<|eot_id|>")
                     }
                     history.forEach { msg ->
                         when (msg.role) {
@@ -209,8 +223,8 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
                 else -> {
                     val sb = StringBuilder()
                     sb.append("<|system|>\n$currentSystemPrompt\n")
-                    if (longTermMemoryData.isNotEmpty()) {
-                        sb.append("<|system|>\nДополнительные сохраненные факты из памяти пользователя:\n$longTermMemoryData\nИспользуй эти факты для ответа на текущий вопрос.\n")
+                    if (memoryContext.isNotEmpty()) {
+                        sb.append("<|system|>\n$memoryContext\n")
                     }
                     history.forEach { msg ->
                         when (msg.role) {
