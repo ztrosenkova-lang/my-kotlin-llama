@@ -48,14 +48,17 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
         _state.value = GenerationState.LoadingModel
         scope.launch {
             try {
+                // Передаем параметры по правилам локального модуля с обязательной лямбдой loaded
                 llamaHelper.load(
                     path = path,
                     contextLength = 2048,
-                    mmprojPath = if (mmprojPath.isNullOrEmpty()) null else mmprojPath
+                    mmprojPath = if (mmprojPath.isNullOrEmpty()) null else mmprojPath,
+                    loaded = { id ->
+                        _state.value = GenerationState.ModelLoaded(path)
+                        val uri = Uri.parse(path)
+                        currentModelName = getFileNameFromUri(contentResolver, uri)
+                    }
                 )
-                _state.value = GenerationState.ModelLoaded(path)
-                val uri = Uri.parse(path)
-                currentModelName = getFileNameFromUri(contentResolver, uri)
             } catch (e: Exception) {
                 _state.value = GenerationState.Error(e.message ?: "Unknown error")
             }
