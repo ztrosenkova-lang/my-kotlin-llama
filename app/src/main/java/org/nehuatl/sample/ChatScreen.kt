@@ -5,8 +5,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -70,6 +72,7 @@ fun ChatScreen(
     var promptInput by remember { mutableStateOf("") }
     var showModelDialog by remember { mutableStateOf(currentModelPath == null) }
     var showSettings by remember { mutableStateOf(false) }
+    var tempPromptText by remember(systemPromptText) { mutableStateOf(systemPromptText) }
 
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -158,18 +161,33 @@ fun ChatScreen(
             }
         }
 
-        // Выезжающее поле для редактирования системного промпта
+        // Выезжающее поле для редактирования системного промпта с кнопкой "Сохранить"
         if (showSettings) {
-            OutlinedTextField(
-                value = systemPromptText,
-                onValueChange = { viewModel.updateSystemPrompt(it) },
-                label = { Text("Системный промпт (Роль ИИ)") },
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                maxLines = 3,
-                singleLine = false
-            )
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+            ) {
+                OutlinedTextField(
+                    value = tempPromptText,
+                    onValueChange = { tempPromptText = it },
+                    label = { Text("Системный промпт (Роль ИИ)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 3,
+                    singleLine = false
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = {
+                        viewModel.updateSystemPrompt(tempPromptText)
+                        showSettings = false // Скрываем окно после сохранения
+                    },
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text("Сохранить")
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+            }
         }
 
         // Status bar stays at top
