@@ -43,22 +43,20 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
         )
     }
 
-    fun loadModel(path: String) {
+    fun loadModel(path: String, mmprojPath: String? = null) {
         if (path.isEmpty()) return
         _state.value = GenerationState.LoadingModel
         scope.launch {
             try {
                 val uri = Uri.parse(path)
-                // Загружаем обновленный движок 0.4.0
+                // ПРИНУДИТЕЛЬНО передаем путь к проектору (mmprojPath)
                 llamaHelper.load(
                     path = path,
                     contextLength = 2048,
+                    mmprojPath = if (mmprojPath.isNullOrEmpty()) null else mmprojPath,
                     loaded = { id ->
                         _state.value = GenerationState.ModelLoaded(path)
-                        
-                        // ПРАВИЛЬНОЕ ОПРЕДЕЛЕНИЕ ИМЕНИ ФАЙЛА ЧЕРЕЗ URI
                         currentModelName = getFileNameFromUri(contentResolver, uri)
-                        
                         Log.d("MainViewModel", "Модель определена как: $currentModelName с ID: $id")
                     }
                 )
@@ -74,16 +72,23 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
         scope.launch {
             val systemPrompt = "Ты — полезный, умный и лаконичный ИИ-ассистент."
             
+            // Визуальный маркер для мультимодальных моделей
+            val visualPrompt = if (!imagePath.isNullOrEmpty()) {
+                "<|vision_start|><|image_pad|><|vision_end|>$prompt"
+            } else {
+                prompt
+            }
+            
             // Динамический выбор промпта и стоп-токенов
             val (formattedPrompt, stopTokensList) = when {
                 currentModelName.contains("qwen") -> {
-                    "<|im_start|>system\n$systemPrompt<|im_end|>\n<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n" to listOf("<|im_end|>", "<|im_start|>")
+                    "<|im_start|>system\n$systemPrompt<|im_end|>\n<|im_start|>user\n$visualPrompt<|im_end|>\n<|im_start|>assistant\n" to listOf("<|im_end|>", "<|im_start|>")
                 }
                 currentModelName.contains("llama") -> {
-                    "<|start_header_id|>system<|end_header_id|>\n\n$systemPrompt<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n$prompt<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n" to listOf("<|eot_id|>", "<|start_header_id|>")
+                    "<|start_header_id|>system<|end_header_id|>\n\n$systemPrompt<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n$visualPrompt<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n" to listOf("<|eot_id|>", "<|start_header_id|>")
                 }
                 else -> {
-                    "<|system|>\n$systemPrompt\n<|user|>\n$prompt\n<|assistant|>\n" to listOf("<|user|>", "<|eot_id|>")
+                    "<|system|>\n$systemPrompt\n<|user|>\n$visualPrompt\n<|assistant|>\n" to listOf("<|user|>", "<|eot_id|>")
                 }
             }
 
