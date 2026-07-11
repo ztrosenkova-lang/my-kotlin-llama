@@ -21,4 +21,3 @@ dependencyResolutionManagement {
 
 rootProject.name = "KotlinLlamaCpp"
 include(":app")
-include(":llamaCpp")
