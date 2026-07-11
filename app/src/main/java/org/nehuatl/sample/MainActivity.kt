@@ -8,6 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -15,7 +16,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import org.nehuatl.sample.ui.theme.KotlinLlamaCppTheme
 
 class MainActivity : ComponentActivity() {
@@ -66,8 +68,12 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             KotlinLlamaCppTheme {
-                val viewModel: MainViewModel = viewModel {
-                    MainViewModel(contentResolver)
+                val viewModel: MainViewModel by viewModels {
+                    object : ViewModelProvider.Factory {
+                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                            return MainViewModel(application, contentResolver) as T
+                        }
+                    }
                 }
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     ChatScreen(
