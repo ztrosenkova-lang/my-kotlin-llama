@@ -16,6 +16,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.nehuatl.llamacpp.LlamaHelper
 
+// Структура данных для сообщений чата
+data class ChatMessage(val role: String, val text: String) // role: "user" или "assistant"
+
 class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
 
     private val viewModelJob = SupervisorJob()
@@ -39,6 +42,10 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
     private val _systemPrompt = MutableStateFlow("Ты — полезный, умный и лаконичный ИИ-ассистент. Отвечай строго на русском языке.")
     val systemPrompt = _systemPrompt.asStateFlow()
 
+    // История чата
+    private val _chatHistory = MutableStateFlow<List<ChatMessage>>(emptyList())
+    val chatHistory = _chatHistory.asStateFlow()
+
     private val llamaHelper by lazy {
         LlamaHelper(
             contentResolver = contentResolver,
@@ -52,7 +59,6 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
         _state.value = GenerationState.LoadingModel
         scope.launch {
             try {
-                // Передаем параметры по правилам локального модуля с обязательной лямбдой loaded
                 llamaHelper.load(
                     path = path,
                     contextLength = 2048,
@@ -73,33 +79,79 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
         _systemPrompt.value = newPrompt
     }
 
+    fun clearChat() {
+        _chatHistory.value = emptyList()
+        _generatedText.value = ""
+    }
+
     fun generate(prompt: String, imagePath: String? = null) {
         if (!_state.value.canGenerate()) return
         scope.launch {
-            // Читаем актуальное значение системного промпта
+            // Добавляем сообщение пользователя в историю
+            val newUserMessage = ChatMessage("user", prompt)
+            _chatHistory.value = _chatHistory.value + newUserMessage
+
             val currentSystemPrompt = _systemPrompt.value
-            
-            // Визуальный маркер для мультимодальных моделей
-            val visualPrompt = if (!imagePath.isNullOrEmpty()) {
-                "<|vision_start|><|image_pad|><|vision_end|>$prompt"
-            } else {
-                prompt
-            }
-            
-            // Динамический выбор промпта и стоп-токенов
-            val (formattedPrompt, stopTokensList) = when {
-                currentModelName.contains("moondream") -> {
-                    "$currentSystemPrompt\n\nQuestion: $prompt\n\nAnswer:" to listOf("Question:", "Answer:", "<|end|>", "<|user|>")
-                }
+            val history = _chatHistory.value
+
+            // Формируем промпт на основе всей истории
+            val formattedPrompt = when {
                 currentModelName.contains("qwen") -> {
-                    "<|im_start|>system\n$currentSystemPrompt<|im_end|>\n<|im_start|>user\n$visualPrompt<|im_end|>\n<|im_start|>assistant\n" to listOf("<|im_end|>", "<|im_start|>")
+                    val sb = StringBuilder()
+                    sb.append("<|im_start|>system\n$currentSystemPrompt<|im_end|>\n")
+                    history.forEach { msg ->
+                        when (msg.role) {
+                            "user" -> sb.append("<|im_start|>user\n${msg.text}<|im_end|>\n")
+                            "assistant" -> sb.append("<|im_start|>assistant\n${msg.text}<|im_end|>\n")
+                        }
+                    }
+                    sb.append("<|im_start|>assistant\n")
+                    sb.toString()
+                }
+                currentModelName.contains("moondream") -> {
+                    val sb = StringBuilder()
+                    sb.append("$currentSystemPrompt\n\n")
+                    history.forEach { msg ->
+                        when (msg.role) {
+                            "user" -> sb.append("Question: ${msg.text}\n\n")
+                            "assistant" -> sb.append("Answer: ${msg.text}\n\n")
+                        }
+                    }
+                    sb.append("Answer:")
+                    sb.toString()
                 }
                 currentModelName.contains("llama") -> {
-                    "<|start_header_id|>system<|end_header_id|>\n\n$currentSystemPrompt<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n$visualPrompt<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n" to listOf("<|eot_id|>", "<|start_header_id|>")
+                    val sb = StringBuilder()
+                    sb.append("<|start_header_id|>system<|end_header_id|>\n\n$currentSystemPrompt<|eot_id|>")
+                    history.forEach { msg ->
+                        when (msg.role) {
+                            "user" -> sb.append("<|start_header_id|>user<|end_header_id|>\n\n${msg.text}<|eot_id|>")
+                            "assistant" -> sb.append("<|start_header_id|>assistant<|end_header_id|>\n\n${msg.text}<|eot_id|>")
+                        }
+                    }
+                    sb.append("<|start_header_id|>assistant<|end_header_id|>\n\n")
+                    sb.toString()
                 }
                 else -> {
-                    "<|system|>\n$currentSystemPrompt\n<|user|>\n$visualPrompt\n<|assistant|>\n" to listOf("<|user|>", "<|eot_id|>")
+                    val sb = StringBuilder()
+                    sb.append("<|system|>\n$currentSystemPrompt\n")
+                    history.forEach { msg ->
+                        when (msg.role) {
+                            "user" -> sb.append("<|user|>\n${msg.text}\n")
+                            "assistant" -> sb.append("<|assistant|>\n${msg.text}\n")
+                        }
+                    }
+                    sb.append("<|assistant|>\n")
+                    sb.toString()
                 }
+            }
+
+            // Стоп-токены для каждой модели
+            val stopTokensList = when {
+                currentModelName.contains("moondream") -> listOf("Question:", "Answer:", "<|end|>", "<|user|>")
+                currentModelName.contains("qwen") -> listOf("<|im_end|>", "<|im_start|>")
+                currentModelName.contains("llama") -> listOf("<|eot_id|>", "<|start_header_id|>")
+                else -> listOf("<|user|>", "<|eot_id|>")
             }
 
             _state.value = GenerationState.Generating(
@@ -109,10 +161,7 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
             )
             _generatedText.value = ""
 
-            // Принудительно очищаем буфер перед новым вопросом
             llamaHelper.abort()
-
-            // Оригинальный мультимодальный вызов predict через строковый путь к изображению
             llamaHelper.predict(prompt = formattedPrompt, imagePath = imagePath)
 
             llmFlow.collect { event ->
@@ -123,30 +172,34 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
                     is LlamaHelper.LLMEvent.Ongoing -> {
                         val word = event.word
 
-                        // 1. Мгновенная проверка на стоп-токены ролей (убраны все пробелы)
+                        // Проверка на стоп-токены ролей
                         if (word.contains("<|") || word.contains("|>") || 
                             word.contains("User:") || word.contains("Assistant:") ||
                             word.contains("Question:") || word.contains("Answer:")) {
                             Log.i("MainViewModel", "Стоп-токен обнаружен. Остановка.")
+                            val aiResponse = _generatedText.value
+                            if (aiResponse.isNotEmpty()) {
+                                _chatHistory.value = _chatHistory.value + ChatMessage("assistant", aiResponse)
+                            }
                             _state.value = GenerationState.Completed(prompt, event.tokenCount, 0)
                             return@collect
                         }
 
-                        // 2. Накапливаем и склеиваем поток букв, убирая микро-двоение
                         val currentText = _generatedText.value
-                        
-                        // Фильтруем системные маркеры, которые модель пытается выдать в текст
                         if (!word.startsWith("<|") && !word.endsWith("|>")) {
                             _generatedText.value = currentText + word
                         }
 
-                        // Обновляем счетчик токенов в состоянии
                         val currentState = _state.value
                         if (currentState is GenerationState.Generating) {
                             _state.value = currentState.copy(tokensGenerated = event.tokenCount)
                         }
                     }
                     is LlamaHelper.LLMEvent.Done -> {
+                        val aiResponse = _generatedText.value
+                        if (aiResponse.isNotEmpty()) {
+                            _chatHistory.value = _chatHistory.value + ChatMessage("assistant", aiResponse)
+                        }
                         _state.value = GenerationState.Completed(
                             prompt = prompt,
                             tokenCount = event.tokenCount,
