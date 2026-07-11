@@ -88,6 +88,9 @@ class MainViewModel(val contentResolver: ContentResolver): ViewModel() {
             
             // Динамический выбор промпта и стоп-токенов
             val (formattedPrompt, stopTokensList) = when {
+                currentModelName.contains("moondream") -> {
+                    "$currentSystemPrompt\n\nQuestion: $prompt\n\nAnswer:" to listOf("Question:", "Answer:", "<|end|>", "<|user|>")
+                }
                 currentModelName.contains("qwen") -> {
                     "<|im_start|>system\n$currentSystemPrompt<|im_end|>\n<|im_start|>user\n$visualPrompt<|im_end|>\n<|im_start|>assistant\n" to listOf("<|im_end|>", "<|im_start|>")
                 }
