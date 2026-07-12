@@ -35,7 +35,7 @@ data class ChatMessage(val role: String, val text: String) // role: "user" ил�
 class MainViewModel(application: Application, val contentResolver: ContentResolver): AndroidViewModel(application) {
 
     companion object {
-        @volatile var instance: MainViewModel? = null
+        @Volatile var instance: MainViewModel? = null
     }
 
     private val viewModelJob = SupervisorJob()
