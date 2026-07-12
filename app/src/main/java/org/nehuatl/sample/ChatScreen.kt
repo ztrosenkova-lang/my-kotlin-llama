@@ -5,7 +5,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -26,11 +24,9 @@ import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -48,8 +44,6 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -64,7 +58,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -74,13 +67,12 @@ import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 // Светлая воздушная палитра
-private val AppBackground = Color(0xFFFFFFFF)  // Главный фон экрана - строго чисто БЕЛЫЙ
-private val SurfaceGray = Color(0xFFF1F3F5)    // Шапка приложения, рамки и окна настроек - СВЕТЛО-СЕРЫЙ
-private val BorderGray = Color(0xFFCED4DA)     // Контуры полей и рамочек - НЕЙТРАЛЬНЫЙ СЕРЫЙ
-private val AccentColor = Color(0xFF74C0FC)    // Кнопки управления и акценты - МЯГКИЙ СВЕТЛО-ГОЛУБОЙ
-private val DarkText = Color(0xFF212529)       // Цвет текста в чате и полях - ЧЕТКИЙ ТЕМНО-СЕРЫЙ
+private val AppBackground = Color(0xFFFFFFFF)
+private val SurfaceGray = Color(0xFFF1F3F5)
+private val BorderGray = Color(0xFFCED4DA)
+private val AccentColor = Color(0xFF74C0FC)
+private val DarkText = Color(0xFF212529)
 
-// Прикольный, стильный шрифт для чата (Благородный моноширинный JetBrains Mono)
 private val ChatFontFamily = FontFamily.Monospace
 
 @Composable
@@ -93,7 +85,7 @@ fun ChatScreen(
     onPickMmproj: () -> Unit,
     onPickImage: () -> Unit,
     onImageUsed: () -> Unit,
-    imagePath: String? = null // Passed from MainActivity
+    imagePath: String? = null
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val generatedText by viewModel.generatedText.collectAsStateWithLifecycle()
@@ -116,24 +108,21 @@ fun ChatScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val scrollState = rememberScrollState()
 
-    // Мгновенный прыжок вниз по буквам (без анимации для слабого процессора)
     LaunchedEffect(chatMessages.size, generatedText.length) {
         scrollState.scrollTo(scrollState.maxValue)
     }
 
-    // Show keyboard only when model is fully loaded and ready
     LaunchedEffect(state) {
         if (state is GenerationState.ModelLoaded) {
             try {
                 focusRequester.requestFocus()
                 keyboardController?.show()
             } catch (e: Exception) {
-                // Focus request might fail if UI isn't ready yet
+                // Ignore
             }
         }
     }
 
-    // Синхронизируем локальную температуру с глобальной при открытии настроек
     LaunchedEffect(showSettings) {
         if (showSettings) {
             tempTemperature = temperature
@@ -175,29 +164,29 @@ fun ChatScreen(
                         .verticalScroll(rememberScrollState())
                 ) {
                     Text(
-                        text = "Добро пожаловать в твой полностью локальный ИИ-ассистент! Приложение работает на 100% без интернета и защищено в песочнице устройства.",
+                        text = "Добро пожаловать в твой полностью локальный ИИ-ассистент!",
                         style = MaterialTheme.typography.bodyMedium,
                         color = DarkText
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Text(text = "🧠 1. Долговременная память", fontWeight = FontWeight.Bold, color = AccentColor)
-                    Text(text = "• Чтобы ИИ что-то зафиксировал в защищённый файл, начни фразу со слова 'запомни' (например: 'запомни, моя любимая реакция — это реакция Кучерова'). Модель мгновенно запишет это в песочницу.", color = DarkText)
-                    Text(text = "• Чтобы извлечь данные, используй в запросе слово 'вспомни' (например: 'вспомни мою любимую реакцию и распиши её'). ИИ вычитает архив и ответит на основе твоих заметок.", color = DarkText)
+                    Text(text = "• Чтобы ИИ что-то зафиксировал, начни фразу со слова 'запомни'.", color = DarkText)
+                    Text(text = "• Чтобы извлечь данные, используй слово 'вспомни'.", color = DarkText)
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(text = "💬 2. Сплошной чат с контекстом", fontWeight = FontWeight.Bold, color = AccentColor)
-                    Text(text = "• Приложение сохраняет историю текущего разговора. Ты можешь задавать уточняющие вопросы, ИИ помнит начало беседы.", color = DarkText)
-                    Text(text = "• Чтобы полностью очистить ОЗУ и начать диалог с чистого листа, нажми кнопку 'Очистить' в нижней панели.", color = DarkText)
+                    Text(text = "• Приложение сохраняет историю текущего разговора.", color = DarkText)
+                    Text(text = "• Чтобы очистить ОЗУ, нажми кнопку 'Очистить'.", color = DarkText)
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(text = "📷 3. Зрение и работа с камерой", fontWeight = FontWeight.Bold, color = AccentColor)
-                    Text(text = "• Для анализа изображений загрузи мультимодальный файл проектора зрения (.gguf) в стартовом меню.", color = DarkText)
-                    Text(text = "• Нажми на скрепку, сделай фото задачи или формулы, напиши текстовый вопрос (например, 'Реши это уравнение') и отправь. Приложение автоматически склеит нужные теги зрения.", color = DarkText)
+                    Text(text = "• Загрузи мультимодальный файл проектора зрения (.gguf).", color = DarkText)
+                    Text(text = "• Нажми на скрепку, сделай фото и отправь.", color = DarkText)
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(text = "⚙️ 4. Динамическая смена роли ИИ", fontWeight = FontWeight.Bold, color = AccentColor)
-                    Text(text = "• Нажми на Шестерёнку в шапке. В поле 'Системный промпт' ты можешь на ходу переписать инструкцию (например, превратить ИИ в строгого химика), нажми 'Сохранить', и модель мгновенно перестроится.", color = DarkText)
+                    Text(text = "• Нажми на Шестерёнку и измени системный промпт.", color = DarkText)
                 }
             },
             confirmButton = {
@@ -216,7 +205,7 @@ fun ChatScreen(
             onDismissRequest = { showMemoryEditor = false },
             title = {
                 Text(
-                    text = "🧠 База Знаний ИИ (Прайс-листы и заметки)",
+                    text = "🧠 База Знаний ИИ",
                     style = MaterialTheme.typography.titleLarge,
                     color = DarkText
                 )
@@ -225,7 +214,7 @@ fun ChatScreen(
                 OutlinedTextField(
                     value = memoryEditText,
                     onValueChange = { memoryEditText = it },
-                    placeholder = { Text("Скопируй и вставь сюда свой прайс-лист или любые важные данные...", color = DarkText.copy(alpha = 0.5f)) },
+                    placeholder = { Text("Вставь сюда свой прайс-лист или данные...", color = DarkText.copy(alpha = 0.5f)) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(400.dp),
@@ -273,7 +262,7 @@ fun ChatScreen(
             },
             text = {
                 Text(
-                    text = "Модуль подключения внешних облачных моделей находится в разработке и будет добавлен в версии v3.0.",
+                    text = "Модуль подключения внешних облачных моделей находится в разработке.",
                     color = DarkText
                 )
             },
@@ -294,7 +283,7 @@ fun ChatScreen(
             .background(AppBackground)
             .imePadding()
     ) {
-        // Верхняя брендированная панель с логотипом и названием (без кнопок)
+        // Верхняя панель с логотипом
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -312,7 +301,6 @@ fun ChatScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Левая часть: скругленный логотип и название
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -335,7 +323,7 @@ fun ChatScreen(
             }
         }
 
-        // Отдельная панель для пяти кнопок под шапкой с подписями
+        // Панель с пятью кнопками и подписями
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -480,7 +468,6 @@ fun ChatScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Ползунок температуры (креативности)
                     Text(
                         text = "Креативность (Температура): ${String.format("%.1f", tempTemperature)}",
                         color = DarkText
@@ -499,7 +486,6 @@ fun ChatScreen(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Кнопка смены/сброса модели
                     Button(
                         onClick = { showModelDialog = true },
                         colors = ButtonDefaults.buttonColors(containerColor = BorderGray),
@@ -509,10 +495,10 @@ fun ChatScreen(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Кнопка Закрыть - ИСПРАВЛЕНО: теперь сохраняет температуру
+                    // ⭐ ИСПРАВЛЕНО: теперь сохраняет температуру
                     Button(
                         onClick = {
-                            viewModel.updateTemperature(tempTemperature) // Фиксируем изменения ползунка в ОЗУ!
+                            viewModel.updateTemperature(tempTemperature) // Фиксируем изменения в ОЗУ!
                             showSettings = false
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
@@ -524,7 +510,7 @@ fun ChatScreen(
             }
         }
 
-        // Выезжающая панель системного промпта (Роль ИИ)
+        // Выезжающая панель системного промпта
         if (showPromptSettings) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = SurfaceGray),
@@ -541,7 +527,6 @@ fun ChatScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Поле системного промпта
                     OutlinedTextField(
                         value = tempPromptText,
                         onValueChange = { tempPromptText = it },
@@ -561,7 +546,6 @@ fun ChatScreen(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Кнопка Сохранить и Закрыть
                     Button(
                         onClick = {
                             viewModel.updateSystemPrompt(tempPromptText)
@@ -576,14 +560,14 @@ fun ChatScreen(
             }
         }
 
-        // Status bar (без кнопки "Настроить")
+        // StatusBar (без кнопки "настроить")
         StatusBar(
             state = state,
             currentModel = currentModelPath,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
         )
 
-        // Единое текстовое поле в рамке
+        // Текстовое поле чата
         Card(
             modifier = Modifier
                 .weight(1f)
@@ -600,7 +584,6 @@ fun ChatScreen(
                         .padding(16.dp)
                         .verticalScroll(scrollState)
                 ) {
-                    // Прогоняем всю историю сообщений и выводим сплошным текстом
                     chatMessages.forEach { message ->
                         val prefix = if (message.role == "user") "Вы: " else "ИИ: "
                         Text(
@@ -612,7 +595,6 @@ fun ChatScreen(
                         )
                     }
 
-                    // Отображаем плавно печатающийся в реальном времени ответ
                     if (generatedText.isNotEmpty() && state is GenerationState.Generating) {
                         Text(
                             text = "ИИ: $generatedText",
@@ -626,7 +608,6 @@ fun ChatScreen(
             }
         }
 
-        // Image indicator if selected
         imagePath?.let {
             Card(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -642,7 +623,6 @@ fun ChatScreen(
             }
         }
 
-        // Prompt input с вертикальными кнопками-иконками
         PromptInput(
             prompt = promptInput,
             onPromptChange = { promptInput = it },
@@ -868,17 +848,16 @@ private fun PromptInput(
             )
         )
 
-        // Вертикальный контейнер с двумя кнопками-иконками
+        // Вертикальный контейнер с двумя кнопками
         Column(
             verticalArrangement = Arrangement.spacedBy(4.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Верхняя кнопка: Отправить / Стоп
             if (isGenerating) {
+                // Кнопка "Стоп" - фон SurfaceGray
                 IconButton(
                     onClick = onAbort,
-                    modifier = Modifier
-                        .size(48.dp),
+                    modifier = Modifier.size(48.dp),
                     colors = IconButtonDefaults.iconButtonColors(
                         containerColor = SurfaceGray
                     )
@@ -890,11 +869,11 @@ private fun PromptInput(
                     )
                 }
             } else {
+                // Кнопка "Отправить" - фон SurfaceGray
                 IconButton(
                     onClick = onGenerate,
                     enabled = enabled && prompt.isNotBlank(),
-                    modifier = Modifier
-                        .size(48.dp),
+                    modifier = Modifier.size(48.dp),
                     colors = IconButtonDefaults.iconButtonColors(
                         containerColor = if (enabled && prompt.isNotBlank()) SurfaceGray else BorderGray
                     )
@@ -907,12 +886,11 @@ private fun PromptInput(
                 }
             }
 
-            // Нижняя кнопка: Очистить чат
+            // Кнопка "Очистить чат" - фон SurfaceGray
             IconButton(
                 onClick = onClearChat,
                 enabled = true,
-                modifier = Modifier
-                    .size(48.dp),
+                modifier = Modifier.size(48.dp),
                 colors = IconButtonDefaults.iconButtonColors(
                     containerColor = SurfaceGray
                 )
