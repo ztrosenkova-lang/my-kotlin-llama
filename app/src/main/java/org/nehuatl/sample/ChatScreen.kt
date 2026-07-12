@@ -20,6 +20,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -32,6 +34,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compute.material3.CardColors
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -40,6 +43,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
+import androidx.compute.material3.SliderColors
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -52,7 +56,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compute.ui.Modifier
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -264,7 +270,7 @@ fun ChatScreen(
             .background(AppBackground)
             .imePadding()
     ) {
-        // Верхняя брендированная панель с логотипом и кнопками управления в Card
+        // Верхняя брендированная панель с логотипом и названием (без кнопок)
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -282,17 +288,18 @@ fun ChatScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Левая часть: логотип и название
+                // Левая часть: скругленный логотип и название
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Image(
                         painter = painterResource(id = R.mipmap.ic_launcher),
-                        contentDescription = "Логотип приложения",
+                        contentDescription = "Лого",
                         contentScale = ContentScale.FillBounds,
                         modifier = Modifier
                             .size(72.dp)
+                            .clip(RoundedCornerShape(16.dp))
                     )
                     Text(
                         text = "Меч Правды v2.0",
@@ -301,47 +308,61 @@ fun ChatScreen(
                         color = DarkText
                     )
                 }
+            }
+        }
 
-                // Правая часть: три одинаковые кнопки в ряд
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(0.dp),
-                    verticalAlignment = Alignment.CenterVertically
+        // Отдельная панель для трех кнопок под шапкой
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(1.dp, BorderGray),
+            colors = CardDefaults.cardColors(
+                containerColor = SurfaceGray
+            )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Кнопка Блокнота Базы Знаний
+                IconButton(
+                    onClick = {
+                        memoryEditText = viewModel.readFromLongTermMemory()
+                        showMemoryEditor = true
+                    }
                 ) {
-                    // Кнопка Блокнота Базы Знаний
-                    IconButton(
-                        onClick = {
-                            memoryEditText = viewModel.readFromLongTermMemory()
-                            showMemoryEditor = true
-                        }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "База Знаний",
-                            tint = AccentColor
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "База Знаний",
+                        tint = AccentColor
+                    )
+                }
 
-                    // Кнопка Меню Настроек
-                    IconButton(
-                        onClick = { showSettings = !showSettings }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Настройки",
-                            tint = AccentColor
-                        )
-                    }
+                // Кнопка Меню Настроек
+                IconButton(
+                    onClick = { showSettings = !showSettings }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Настройки",
+                        tint = AccentColor
+                    )
+                }
 
-                    // Кнопка Справки-Гайда
-                    IconButton(
-                        onClick = { showHelpDialog = true }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = "Справка",
-                            tint = AccentColor
-                        )
-                    }
+                // Кнопка Справки-Гайда
+                IconButton(
+                    onClick = { showHelpDialog = true }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = "Справка",
+                        tint = AccentColor
+                    )
                 }
             }
         }
@@ -436,7 +457,7 @@ fun ChatScreen(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
         )
 
-        // Chat messages list with LazyColumn
+        // Chat messages list with LazyColumn и SelectionContainer для выделения текста
         LazyColumn(
             modifier = Modifier
                 .weight(1f)
@@ -455,13 +476,15 @@ fun ChatScreen(
                         .padding(vertical = 4.dp)
                         .fillMaxWidth()
                 ) {
-                    Text(
-                        text = message.text,
-                        color = DarkText,
-                        modifier = Modifier
-                            .padding(8.dp)
-                            .align(if (isUser) Alignment.End else Alignment.Start)
-                    )
+                    SelectionContainer {
+                        Text(
+                            text = message.text,
+                            color = DarkText,
+                            modifier = Modifier
+                                .padding(8.dp)
+                                .align(if (isUser) Alignment.End else Alignment.Start)
+                        )
+                    }
                 }
             }
 
@@ -476,13 +499,15 @@ fun ChatScreen(
                             .padding(vertical = 4.dp)
                             .fillMaxWidth()
                     ) {
-                        Text(
-                            text = generatedText,
-                            color = DarkText,
-                            modifier = Modifier
-                                .padding(8.dp)
-                                .align(Alignment.Start)
-                        )
+                        SelectionContainer {
+                            Text(
+                                text = generatedText,
+                                color = DarkText,
+                                modifier = Modifier
+                                    .padding(8.dp)
+                                    .align(Alignment.Start)
+                            )
+                        }
                     }
                 }
             }
@@ -751,7 +776,11 @@ private fun PromptInput(
                         .width(80.dp)
                         .height(48.dp)
                 ) {
-                    Text("Стоп", color = DarkText)
+                    Text(
+                        "Стоп",
+                        color = DarkText,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp)
+                    )
                 }
             } else {
                 Button(
@@ -764,7 +793,11 @@ private fun PromptInput(
                         .width(80.dp)
                         .height(48.dp)
                 ) {
-                    Text("Отправить", color = if (enabled && prompt.isNotBlank()) DarkText else DarkText.copy(alpha = 0.4f))
+                    Text(
+                        "Отправить",
+                        color = if (enabled && prompt.isNotBlank()) DarkText else DarkText.copy(alpha = 0.4f),
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp)
+                    )
                 }
             }
 
@@ -776,7 +809,11 @@ private fun PromptInput(
                     .width(80.dp)
                     .height(48.dp)
             ) {
-                Text("Очистить", color = DarkText)
+                Text(
+                    "Очистить",
+                    color = DarkText,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp)
+                )
             }
         }
     }
