@@ -122,9 +122,18 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     fun clearChat() {
+        llamaHelper.abort()
         _chatHistory.value = emptyList()
         _generatedText.value = ""
-        tts?.stop() // Останавливаем озвучку при очистке чата
+        tts?.stop()
+
+        try {
+            llamaHelper.reset() // Жесткое обнуление KV-кэша ОЗУ в llama.cpp
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        
+        Log.d("MainViewModel", "Чат и оперативная память движка успешно очищены")
     }
 
     fun updateTemperature(temp: Float) {
