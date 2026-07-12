@@ -25,49 +25,91 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compute.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
+import androidx.compute.material.icons.filled.List
+import androidx.compose.material.icons.filled.List
+import androidx.compute.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
+import androidx.compute.material3.Button
 import androidx.compose.material3.Button
+import androidx.compute.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
+import androidx.compute.material3.Card
 import androidx.compose.material3.Card
+import androidx.compute.material3.CardColors
 import androidx.compose.material3.CardDefaults
+import androidx.compute.material3.CircularProgressIndicator
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compute.material3.Icon
 import androidx.compose.material3.Icon
+import androidx.compute.material3.IconButton
 import androidx.compose.material3.IconButton
+import androidx.compute.material3.IconButtonColors
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compute.material3.MaterialTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compute.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextField
+import androidx.compute.material3.OutlinedTextFieldColors
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compute.material3.Slider
 import androidx.compose.material3.Slider
+import androidx.compute.material3.SliderColors
 import androidx.compose.material3.SliderDefaults
+import androidx.compute.material3.Text
 import androidx.compose.material3.Text
+import androidx.compute.material3.TextButton
 import androidx.compose.material3.TextButton
+import androidx.compute.material3.TextField
 import androidx.compose.material3.TextField
+import androidx.compute.material3.TextFieldColors
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compute.runtime.Composable
 import androidx.compose.runtime.Composable
+import androidx.compute.runtime.LaunchedEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compute.runtime.getValue
 import androidx.compose.runtime.getValue
+import androidx.compute.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compute.runtime.remember
 import androidx.compose.runtime.remember
+import androidx.compute.runtime.setValue
 import androidx.compose.runtime.setValue
+import androidx.compute.ui.Alignment
 import androidx.compose.ui.Alignment
+import androidx.compute.ui.Modifier
 import androidx.compose.ui.Modifier
+import androidx.compute.ui.draw.clip
 import androidx.compose.ui.draw.clip
+import androidx.compute.ui.focus.FocusRequester
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compute.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compute.ui.graphics.Color
 import androidx.compose.ui.graphics.Color
+import androidx.compute.ui.layout.ContentScale
 import androidx.compose.ui.layout.ContentScale
+import androidx.compute.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compute.ui.res.colorResource
 import androidx.compose.ui.res.colorResource
+import androidx.compute.ui.res.painterResource
 import androidx.compose.ui.res.painterResource
+import androidx.compute.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compute.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compute.ui.unit.dp
 import androidx.compose.ui.unit.dp
+import androidx.compute.ui.unit.sp
 import androidx.compose.ui.unit.sp
+import androidx.compute.ui.window.Dialog
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -333,7 +375,7 @@ fun ChatScreen(
             }
         }
 
-        // Отдельная панель для пяти кнопок под шапкой
+        // Отдельная панель для пяти кнопок под шапкой с подписями
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -352,60 +394,110 @@ fun ChatScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Кнопка 1: Блокнот Базы Знаний
-                IconButton(
-                    onClick = {
-                        memoryEditText = viewModel.readFromLongTermMemory()
-                        showMemoryEditor = true
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    IconButton(
+                        onClick = {
+                            memoryEditText = viewModel.readFromLongTermMemory()
+                            showMemoryEditor = true
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.List,
+                            contentDescription = "База Знаний",
+                            tint = AccentColor
+                        )
                     }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = "База Знаний",
-                        tint = AccentColor
+                    Text(
+                        text = "мозг",
+                        color = DarkText,
+                        fontSize = 8.sp
                     )
                 }
 
-                // Кнопка 2: Настройки движка (температура)
-                IconButton(
-                    onClick = { showSettings = !showSettings }
+                // Кнопка 2: Настройки движка
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "Настройки движка",
-                        tint = AccentColor
+                    IconButton(
+                        onClick = { showSettings = !showSettings }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Настройки движка",
+                            tint = AccentColor
+                        )
+                    }
+                    Text(
+                        text = "движок",
+                        color = DarkText,
+                        fontSize = 8.sp
                     )
                 }
 
-                // Кнопка 3: Роль ИИ / Системный промпт
-                IconButton(
-                    onClick = { showPromptSettings = !showPromptSettings }
+                // Кнопка 3: Роль ИИ
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Build,
-                        contentDescription = "Роль ИИ",
-                        tint = AccentColor
+                    IconButton(
+                        onClick = { showPromptSettings = !showPromptSettings }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Build,
+                            contentDescription = "Роль ИИ",
+                            tint = AccentColor
+                        )
+                    }
+                    Text(
+                        text = "характер",
+                        color = DarkText,
+                        fontSize = 8.sp
                     )
                 }
 
                 // Кнопка 4: Облачный ИИ
-                IconButton(
-                    onClick = { showCloudDialog = true }
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Share,
-                        contentDescription = "Облачный ИИ",
-                        tint = AccentColor
+                    IconButton(
+                        onClick = { showCloudDialog = true }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Build,
+                            contentDescription = "Облачный ИИ",
+                            tint = AccentColor
+                        )
+                    }
+                    Text(
+                        text = "облачный ии",
+                        color = DarkText,
+                        fontSize = 8.sp
                     )
                 }
 
                 // Кнопка 5: Справка
-                IconButton(
-                    onClick = { showHelpDialog = true }
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = "Справка",
-                        tint = AccentColor
+                    IconButton(
+                        onClick = { showHelpDialog = true }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "Справка",
+                            tint = AccentColor
+                        )
+                    }
+                    Text(
+                        text = "справка",
+                        color = DarkText,
+                        fontSize = 8.sp
                     )
                 }
             }
@@ -523,11 +615,10 @@ fun ChatScreen(
             }
         }
 
-        // Status bar
+        // Status bar (без кнопки "Настроить")
         StatusBar(
             state = state,
             currentModel = currentModelPath,
-            onChangeModel = { showModelDialog = true },
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
         )
 
@@ -711,7 +802,6 @@ private fun ModelPickerDialog(
 private fun StatusBar(
     state: GenerationState,
     currentModel: String?,
-    onChangeModel: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -763,12 +853,6 @@ private fun StatusBar(
                     is GenerationState.Error -> {
                         Text("⚠ ${state.message}", color = AccentColor)
                     }
-                }
-            }
-
-            if (!state.isActive()) {
-                TextButton(onClick = onChangeModel) {
-                    Text("Настроить", color = AccentColor)
                 }
             }
         }
@@ -835,7 +919,7 @@ private fun PromptInput(
                     modifier = Modifier
                         .size(48.dp),
                     colors = IconButtonDefaults.iconButtonColors(
-                        containerColor = AccentColor
+                        containerColor = SurfaceGray
                     )
                 ) {
                     Icon(
@@ -851,11 +935,11 @@ private fun PromptInput(
                     modifier = Modifier
                         .size(48.dp),
                     colors = IconButtonDefaults.iconButtonColors(
-                        containerColor = if (enabled && prompt.isNotBlank()) AccentColor else BorderGray
+                        containerColor = if (enabled && prompt.isNotBlank()) SurfaceGray else BorderGray
                     )
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Refresh,
+                        imageVector = Icons.Default.PlayArrow,
                         contentDescription = "Отправить",
                         tint = if (enabled && prompt.isNotBlank()) DarkText else DarkText.copy(alpha = 0.4f)
                     )
