@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compute.foundation.layout.size
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -23,87 +22,53 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compute.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Build
-import androidx.compute.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Close
-import androidx.compute.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
-import androidx.compute.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compute.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compute.material3.CardColors
 import androidx.compose.material3.CardDefaults
-import androidx.compute.material3.CircularProgressIndicator
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compute.material3.IconButton
 import androidx.compose.material3.IconButton
-import androidx.compute.material3.MaterialTheme
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compute.material3.OutlinedTextFieldColors
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compute.material3.Slider
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
-import androidx.compute.material3.Text
 import androidx.compose.material3.Text
-import androidx.compute.material3.TextButton
 import androidx.compose.material3.TextButton
-import androidx.compute.material3.TextField
 import androidx.compose.material3.TextField
-import androidx.compute.material3.TextFieldColors
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
-import androidx.compute.runtime.LaunchedEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compute.runtime.getValue
 import androidx.compose.runtime.getValue
-import androidx.compute.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compute.runtime.remember
 import androidx.compose.runtime.remember
-import androidx.compute.runtime.setValue
 import androidx.compose.runtime.setValue
-import androidx.compute.ui.Alignment
 import androidx.compose.ui.Alignment
-import androidx.compute.ui.Modifier
 import androidx.compose.ui.Modifier
-import androidx.compute.ui.draw.clip
 import androidx.compose.ui.draw.clip
-import androidx.compute.ui.focus.FocusRequester
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compute.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compute.ui.graphics.Color
 import androidx.compose.ui.graphics.Color
-import androidx.compute.ui.layout.ContentScale
 import androidx.compose.ui.layout.ContentScale
-import androidx.compute.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compute.ui.res.colorResource
 import androidx.compose.ui.res.colorResource
-import androidx.compute.ui.res.painterResource
 import androidx.compose.ui.res.painterResource
-import androidx.compute.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compute.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compute.ui.unit.dp
 import androidx.compose.ui.unit.dp
-import androidx.compute.ui.unit.sp
 import androidx.compose.ui.unit.sp
-import androidx.compute.ui.window.Dialog
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -150,9 +115,9 @@ fun ChatScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val scrollState = rememberScrollState()
 
-    // Синхронная плавная прокрутка по буквам
+    // Мгновенный прыжок вниз по буквам (без анимации для слабого процессора)
     LaunchedEffect(chatMessages.size, generatedText.length) {
-        scrollState.animateScrollTo(scrollState.maxValue)
+        scrollState.scrollTo(scrollState.maxValue)
     }
 
     // Show keyboard only when model is fully loaded and ready
@@ -423,7 +388,7 @@ fun ChatScreen(
                     )
                 }
 
-                // Кнопка 4: Облачный ИИ (используем Share вместо Cloud)
+                // Кнопка 4: Облачный ИИ
                 IconButton(
                     onClick = { showCloudDialog = true }
                 ) {
