@@ -288,10 +288,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             llamaHelper.abort()
             tts?.stop() // Останавливаем озвучку при новом запросе
             
-            // Чистый вызов predict без параметра temperature
+            // Передаем температуру в предсказание
             llamaHelper.predict(
                 prompt = formattedPrompt,
-                imagePath = imagePath
+                imagePath = imagePath,
+                temperature = temperature.value
             )
 
             llmFlow.collect { event ->
