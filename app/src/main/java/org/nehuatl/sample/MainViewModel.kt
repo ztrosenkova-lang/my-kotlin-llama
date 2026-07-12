@@ -290,17 +290,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             llamaHelper.abort()
             tts?.stop() // Останавливаем озвучку при новом запросе
             
-            // Устанавливаем температуру
-            llamaHelper.setTemperature(temperature.value)
-            
-            // ИСПРАВЛЕНО: передаем параметры сэмплинга напрямую в predict
+            // ИСПРАВЛЕНО: вызываем predict без лишних параметров
             llamaHelper.predict(
                 prompt = formattedPrompt,
-                imagePath = imagePath,
-                temperature = temperature.value,
-                repetitionPenalty = 1.15f,
-                topK = 40,
-                topP = 0.9f
+                imagePath = imagePath
             )
 
             // БАЙТОВЫЙ БУФЕР ДЛЯ ЧИСТОЙ СКЛЕЙКИ КИРИЛЛИЦЫ (PocketPal algorithm)
@@ -334,7 +327,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             val bytes = word.toByteArray(StandardCharsets.UTF_8)
                             byteBuffer.write(bytes)
                             
-                            // ИСПРАВЛЕНО: убран лишний пробел в "UTF-8"
+                            // Обновляем экран только чистой, правильно собранной строкой
                             _generatedText.value = byteBuffer.toString("UTF-8")
                         }
 
