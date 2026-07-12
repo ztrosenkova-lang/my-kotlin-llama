@@ -186,6 +186,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 return@launch
             }
 
+            // ОГРАНИЧЕНИЕ ИСТОРИИ ЧАТА: Защита от затупления модели при росте истории
+            if (_chatHistory.value.size > 10) {
+                // Оставляем только последние 8 сообщений, чтобы модель не тупела при пересчете KV-кэша
+                _chatHistory.value = _chatHistory.value.takeLast(8)
+            }
+
             // Добавляем сообщение пользователя в историю
             val newUserMessage = ChatMessage("user", prompt)
             _chatHistory.value = _chatHistory.value + newUserMessage
