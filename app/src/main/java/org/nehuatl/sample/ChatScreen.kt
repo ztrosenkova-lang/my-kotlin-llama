@@ -19,13 +19,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
@@ -341,7 +341,7 @@ fun ChatScreen(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Кнопка 1: Блокнот Базы Знаний
+                // Кнопка 1: Редактор мозга - иконка Icons.Default.AccountBox
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -353,8 +353,8 @@ fun ChatScreen(
                         }
                     ) {
                         Icon(
-                            imageVector = Icons.Default.List,
-                            contentDescription = "База Знаний",
+                            imageVector = Icons.Default.AccountBox,
+                            contentDescription = "Редактор мозга",
                             tint = AccentColor
                         )
                     }
@@ -407,7 +407,7 @@ fun ChatScreen(
                     )
                 }
 
-                // Кнопка 4: Облачный ИИ
+                // Кнопка 4: Облачный ИИ - иконка Icons.Default.Computer
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -495,10 +495,9 @@ fun ChatScreen(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // ⭐ ИСПРАВЛЕНО: теперь сохраняет температуру
                     Button(
                         onClick = {
-                            viewModel.updateTemperature(tempTemperature) // Фиксируем изменения в ОЗУ!
+                            viewModel.updateTemperature(tempTemperature)
                             showSettings = false
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
@@ -854,7 +853,6 @@ private fun PromptInput(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (isGenerating) {
-                // Кнопка "Стоп" - фон SurfaceGray
                 IconButton(
                     onClick = onAbort,
                     modifier = Modifier.size(48.dp),
@@ -869,7 +867,6 @@ private fun PromptInput(
                     )
                 }
             } else {
-                // Кнопка "Отправить" - фон SurfaceGray
                 IconButton(
                     onClick = onGenerate,
                     enabled = enabled && prompt.isNotBlank(),
@@ -886,7 +883,6 @@ private fun PromptInput(
                 }
             }
 
-            // Кнопка "Очистить чат" - фон SurfaceGray
             IconButton(
                 onClick = onClearChat,
                 enabled = true,
