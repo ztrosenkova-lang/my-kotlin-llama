@@ -34,6 +34,10 @@ data class ChatMessage(val role: String, val text: String) // role: "user" ил�
 
 class MainViewModel(application: Application, val contentResolver: ContentResolver): AndroidViewModel(application) {
 
+    companion object {
+        @volatile var instance: MainViewModel? = null
+    }
+
     private val viewModelJob = SupervisorJob()
     private val scope = CoroutineScope(Dispatchers.IO + viewModelJob)
 
@@ -72,6 +76,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private var tts: TextToSpeech? = null
 
     init {
+        instance = this
         tts = TextToSpeech(getApplication()) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 // Устанавливаем системный язык по умолчанию
@@ -493,6 +498,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     override fun onCleared() {
         super.onCleared()
+        instance = null
         tts?.stop()
         tts?.shutdown()
         llamaHelper.abort()
@@ -528,11 +534,11 @@ private fun getFileNameFromUri(contentResolver: ContentResolver, uri: Uri): Stri
 class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val message = intent.getStringExtra("reminder_message") ?: "Пора по делам!"
-        Log.d("AlarmReceiver", "Сработал будильник: $message")
+        Log.d("AlarmReceiver", "Сработал фоновый будильник: $message")
         
-        // Запускаем ViewModel через синглтон или другой механизм
-        // Для простоты используем статический вызов через Application
-        val app = context.applicationContext as? MyApplication
-        app?.viewModel?.triggerVoiceAlarm(message)
+        // Вызываем 5-кратное повторение голосом и вывод текста в наш светлый чат!
+        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+            MainViewModel.instance?.triggerVoiceAlarm(message)
+        }
     }
 }
