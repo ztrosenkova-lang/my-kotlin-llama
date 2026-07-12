@@ -22,97 +22,54 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compute.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Close
-import androidx.compute.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Delete
-import androidx.compute.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
-import androidx.compute.material.icons.filled.List
 import androidx.compose.material.icons.filled.List
-import androidx.compute.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
-import androidx.compute.material3.Button
 import androidx.compose.material3.Button
-import androidx.compute.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
-import androidx.compute.material3.Card
 import androidx.compose.material3.Card
-import androidx.compute.material3.CardColors
 import androidx.compose.material3.CardDefaults
-import androidx.compute.material3.CircularProgressIndicator
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compute.material3.Icon
 import androidx.compose.material3.Icon
-import androidx.compute.material3.IconButton
 import androidx.compose.material3.IconButton
-import androidx.compute.material3.IconButtonColors
 import androidx.compose.material3.IconButtonDefaults
-import androidx.compute.material3.MaterialTheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compute.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextField
-import androidx.compute.material3.OutlinedTextFieldColors
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compute.material3.Slider
 import androidx.compose.material3.Slider
-import androidx.compute.material3.SliderColors
 import androidx.compose.material3.SliderDefaults
-import androidx.compute.material3.Text
 import androidx.compose.material3.Text
-import androidx.compute.material3.TextButton
 import androidx.compose.material3.TextButton
-import androidx.compute.material3.TextField
 import androidx.compose.material3.TextField
-import androidx.compute.material3.TextFieldColors
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compute.runtime.Composable
 import androidx.compose.runtime.Composable
-import androidx.compute.runtime.LaunchedEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compute.runtime.getValue
 import androidx.compose.runtime.getValue
-import androidx.compute.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compute.runtime.remember
 import androidx.compose.runtime.remember
-import androidx.compute.runtime.setValue
 import androidx.compose.runtime.setValue
-import androidx.compute.ui.Alignment
 import androidx.compose.ui.Alignment
-import androidx.compute.ui.Modifier
 import androidx.compose.ui.Modifier
-import androidx.compute.ui.draw.clip
 import androidx.compose.ui.draw.clip
-import androidx.compute.ui.focus.FocusRequester
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compute.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compute.ui.graphics.Color
 import androidx.compose.ui.graphics.Color
-import androidx.compute.ui.layout.ContentScale
 import androidx.compose.ui.layout.ContentScale
-import androidx.compute.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compute.ui.res.colorResource
 import androidx.compose.ui.res.colorResource
-import androidx.compute.ui.res.painterResource
 import androidx.compose.ui.res.painterResource
-import androidx.compute.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compute.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compute.ui.unit.dp
 import androidx.compose.ui.unit.dp
-import androidx.compute.ui.unit.sp
 import androidx.compose.ui.unit.sp
-import androidx.compute.ui.window.Dialog
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -552,9 +509,10 @@ fun ChatScreen(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Кнопка Закрыть
+                    // Кнопка Закрыть - ИСПРАВЛЕНО: теперь сохраняет температуру
                     Button(
                         onClick = {
+                            viewModel.updateTemperature(tempTemperature) // Фиксируем изменения ползунка в ОЗУ!
                             showSettings = false
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
