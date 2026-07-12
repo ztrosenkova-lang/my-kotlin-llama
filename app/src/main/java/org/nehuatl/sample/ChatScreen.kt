@@ -19,14 +19,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.extended.Brain
-import androidx.compose.material.icons.extended.Cloud
-import androidx.compose.material.icons.extended.Psychology
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -323,7 +323,7 @@ fun ChatScreen(
             }
         }
 
-        // Панель с пятью кнопками и подписями (обновленные иконки)
+        // Панель с пятью кнопками и подписями (ВСЕ иконки из расширенной библиотеки)
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -341,7 +341,7 @@ fun ChatScreen(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Кнопка 1: Редактор мозга - иконка Brain
+                // Кнопка 1: Редактор мозга - Memory
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -353,7 +353,7 @@ fun ChatScreen(
                         }
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Brain,
+                            imageVector = Icons.Default.Memory,
                             contentDescription = "Редактор мозга",
                             tint = AccentColor
                         )
@@ -365,7 +365,7 @@ fun ChatScreen(
                     )
                 }
 
-                // Кнопка 2: Настройки движка
+                // Кнопка 2: Настройки движка - Settings
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -386,7 +386,7 @@ fun ChatScreen(
                     )
                 }
 
-                // Кнопка 3: Роль ИИ - иконка Psychology
+                // Кнопка 3: Роль ИИ - Psychology
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -407,7 +407,7 @@ fun ChatScreen(
                     )
                 }
 
-                // Кнопка 4: Облачный ИИ - иконка Cloud
+                // Кнопка 4: Облачный ИИ - Cloud
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -428,7 +428,7 @@ fun ChatScreen(
                     )
                 }
 
-                // Кнопка 5: Справка
+                // Кнопка 5: Справка - Info
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -822,7 +822,7 @@ private fun PromptInput(
             enabled = enabled && !isGenerating
         ) {
             Icon(
-                Icons.Default.Add,
+                imageVector = Icons.Default.Add,
                 contentDescription = "Добавить изображение",
                 tint = if (enabled && !isGenerating) AccentColor else BorderGray
             )
@@ -847,13 +847,13 @@ private fun PromptInput(
             )
         )
 
-        // Вертикальный контейнер с двумя кнопками (обновленные иконки)
+        // Вертикальный контейнер с двумя кнопками (ВСЕ иконки из расширенной библиотеки)
         Column(
             verticalArrangement = Arrangement.spacedBy(4.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (isGenerating) {
-                // Кнопка "Стоп" - иконка Close
+                // Кнопка "Стоп" - Close (из расширенной)
                 IconButton(
                     onClick = onAbort,
                     modifier = Modifier.size(48.dp),
@@ -868,7 +868,7 @@ private fun PromptInput(
                     )
                 }
             } else {
-                // Кнопка "Отправить" - иконка ArrowUpward
+                // Кнопка "Отправить" - ArrowUpward (из расширенной)
                 IconButton(
                     onClick = onGenerate,
                     enabled = enabled && prompt.isNotBlank(),
@@ -885,7 +885,7 @@ private fun PromptInput(
                 }
             }
 
-            // Кнопка "Очистить чат" - иконка Delete
+            // Кнопка "Очистить чат" - Delete (из расширенной)
             IconButton(
                 onClick = onClearChat,
                 enabled = true,
