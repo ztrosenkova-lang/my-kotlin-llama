@@ -22,8 +22,11 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compute.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Close
+import androidx.compute.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Delete
 import androidx.compute.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Edit
@@ -468,7 +471,7 @@ fun ChatScreen(
                         onClick = { showCloudDialog = true }
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Build,
+                            imageVector = Icons.Default.Computer,
                             contentDescription = "Облачный ИИ",
                             tint = AccentColor
                         )
