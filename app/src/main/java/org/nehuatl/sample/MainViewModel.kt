@@ -286,13 +286,55 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
+    /**
+     * Поиск по всей истории чата
+     * @param query Ключевое слово для поиска
+     * @return Форматированная строка с топ-5 совпадениями
+     */
+    fun searchInFullChatHistory(query: String): String {
+        if (query.isEmpty()) return "Введите ключевое слово для поиска."
+        
+        val results = _chatHistory.value
+            .filter { message -> message.text.contains(query, ignoreCase = true) }
+            .take(5)
+            .mapIndexed { index, message ->
+                val prefix = if (message.role == "user") "👤 Вы" else "🤖 ИИ"
+                "${index + 1}. $prefix: ${message.text.trim()}"
+            }
+            .joinToString("\n")
+        
+        return if (results.isNotEmpty()) {
+            "🔍 **Найдены совпадения по запросу \"$query\":**\n$results\n\n_Показаны первые 5 результатов._"
+        } else {
+            "😔 По вашему запросу \"$query\" ничего не найдено в истории чата."
+        }
+    }
+
     fun generate(prompt: String, imagePath: String? = null) {
         if (!_state.value.canGenerate()) return
         scope.launch {
             val cleanPrompt = prompt.trim()
             val lowerPrompt = cleanPrompt.lowercase()
 
-            // 🔔 НОВОЕ: Проверка на команду напоминания (время + действие)
+            // 🔍 НОВОЕ: Проверка на команду поиска "найди:"
+            if (lowerPrompt.startsWith("найди:")) {
+                val query = cleanPrompt.substringAfter("найди:").trim()
+                if (query.isNotEmpty()) {
+                    val searchResults = searchInFullChatHistory(query)
+                    _chatHistory.value = _chatHistory.value + ChatMessage("user", prompt)
+                    _chatHistory.value = _chatHistory.value + ChatMessage("assistant", searchResults)
+                    // Озвучиваем результат поиска
+                    speakText(searchResults.replace(Regex("[*#`_🔍]"), ""))
+                } else {
+                    val errorMsg = "Пожалуйста, укажите ключевое слово для поиска. Например: найди: рецепт"
+                    _chatHistory.value = _chatHistory.value + ChatMessage("user", prompt)
+                    _chatHistory.value = _chatHistory.value + ChatMessage("assistant", errorMsg)
+                    speakText(errorMsg)
+                }
+                return@launch
+            }
+
+            // 🔔 Проверка на команду напоминания (время + действие)
             if (lowerPrompt.contains("в ") && (lowerPrompt.contains("напомни") || lowerPrompt.contains("напомнить"))) {
                 scheduleInternalReminder(cleanPrompt)
                 return@launch
