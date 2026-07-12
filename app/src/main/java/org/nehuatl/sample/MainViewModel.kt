@@ -303,7 +303,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     is LlamaHelper.LLMEvent.Ongoing -> {
                         val word = event.word
 
-                        // Проверка стоп-токенов ролей (строго без пробелов)
+                        // 1. Мгновенная проверка и отсечение стоп-токенов ролей (без пробелов)
                         if (word.contains("<|") || word.contains("|>") || 
                             word.contains("User:") || word.contains("Assistant:") ||
                             word.contains("Question:") || word.contains("Answer:")) {
@@ -317,10 +317,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             return@collect
                         }
 
+                        // 2. Склеиваем слова С ПРЕДВАРИТЕЛЬНЫМ СОХРАНЕНИЕМ ОРИГИНАЛЬНЫХ ПРОБЕЛОВ
+                        // КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО использовать .trim() или .trimIndent() для event.word!
                         if (!word.startsWith("<|") && !word.endsWith("|>")) {
-                            // Очищаем токен от скрытых мусорных байтов перед склейкой
-                            val cleanWord = word.trimIndent()
-                            _generatedText.value = _generatedText.value + cleanWord
+                            // Используем прямое сложение строк, сохраняя внутреннюю структуру токенов движка
+                            _generatedText.value = _generatedText.value + word
                         }
 
                         val currentState = _state.value
