@@ -16,19 +16,13 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compute.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Clear
-import androidx.compute.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
@@ -37,15 +31,14 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compute.material3.Card
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compute.material3.CircularProgressIndicator
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compute.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -63,12 +56,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compute.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -79,10 +74,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 private val AppBackground = Color(0xFFFFFFFF)  // Главный фон экрана - строго чисто БЕЛЫЙ
 private val SurfaceGray = Color(0xFFF1F3F5)    // Шапка приложения, рамки и окна настроек - СВЕТЛО-СЕРЫЙ
 private val BorderGray = Color(0xFFCED4DA)     // Контуры полей и рамочек - НЕЙТРАЛЬНЫЙ СЕРЫЙ
-private val UserBubble = Color(0xFFD0EBFF)     // Пузыри сообщений пользователя - СВЕТЛО-ГОЛУБОЙ
-private val AIBubble = Color(0xFFFFF3BF)       // Пузыри ответов ИИ - СВЕТЛО-ЖЕЛТЫЙ
 private val AccentColor = Color(0xFF74C0FC)    // Кнопки управления и акценты - МЯГКИЙ СВЕТЛО-ГОЛУБОЙ
 private val DarkText = Color(0xFF212529)       // Цвет текста в чате и полях - ЧЕТКИЙ ТЕМНО-СЕРЫЙ
+
+// Прикольный, стильный шрифт для чата (Благородный моноширинный JetBrains Mono)
+private val ChatFontFamily = FontFamily.Monospace
 
 @Composable
 fun ChatScreen(
@@ -115,18 +111,11 @@ fun ChatScreen(
 
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
-    val listState = rememberLazyListState()
+    val scrollState = rememberScrollState()
 
-    // Непрерывная автопрокрутка за каждым символом
+    // Синхронная плавная прокрутка по буквам
     LaunchedEffect(chatMessages.size, generatedText.length) {
-        if (chatMessages.isNotEmpty() || generatedText.isNotEmpty()) {
-            val targetIndex = if (generatedText.isNotEmpty()) {
-                chatMessages.size
-            } else {
-                (chatMessages.size - 1).coerceAtLeast(0)
-            }
-            listState.animateScrollToItem(targetIndex)
-        }
+        scrollState.animateScrollTo(scrollState.maxValue)
     }
 
     // Show keyboard only when model is fully loaded and ready
@@ -541,57 +530,44 @@ fun ChatScreen(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
         )
 
-        // Chat messages list with LazyColumn и SelectionContainer для выделения текста
-        LazyColumn(
+        // Единое текстовое поле в рамке
+        Card(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp),
-            state = listState,
-            reverseLayout = false
+                .padding(8.dp),
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, BorderGray),
+            colors = CardDefaults.cardColors(containerColor = AppBackground)
         ) {
-            items(chatMessages) { message ->
-                val isUser = message.role == "user"
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (isUser) UserBubble else AIBubble
-                    ),
+            SelectionContainer {
+                Column(
                     modifier = Modifier
-                        .padding(vertical = 4.dp)
-                        .fillMaxWidth()
+                        .fillMaxSize()
+                        .padding(16.dp)
+                        .verticalScroll(scrollState)
                 ) {
-                    SelectionContainer {
+                    // Прогоняем всю историю сообщений и выводим сплошным текстом
+                    chatMessages.forEach { message ->
+                        val prefix = if (message.role == "user") "Вы: " else "ИИ: "
                         Text(
-                            text = message.text,
+                            text = prefix + message.text,
                             color = DarkText,
-                            modifier = Modifier
-                                .padding(8.dp)
-                                .align(if (isUser) Alignment.End else Alignment.Start)
+                            fontFamily = ChatFontFamily,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(vertical = 2.dp)
                         )
                     }
-                }
-            }
 
-            // Текущий генерируемый текст
-            if (generatedText.isNotEmpty() && state is GenerationState.Generating) {
-                item {
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = AIBubble
-                        ),
-                        modifier = Modifier
-                            .padding(vertical = 4.dp)
-                            .fillMaxWidth()
-                    ) {
-                        SelectionContainer {
-                            Text(
-                                text = generatedText,
-                                color = DarkText,
-                                modifier = Modifier
-                                    .padding(8.dp)
-                                    .align(Alignment.Start)
-                            )
-                        }
+                    // Отображаем плавно печатающийся в реальном времени ответ
+                    if (generatedText.isNotEmpty() && state is GenerationState.Generating) {
+                        Text(
+                            text = "ИИ: $generatedText",
+                            color = DarkText,
+                            fontFamily = ChatFontFamily,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(vertical = 2.dp)
+                        )
                     }
                 }
             }
