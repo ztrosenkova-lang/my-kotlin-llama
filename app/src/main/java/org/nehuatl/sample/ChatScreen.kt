@@ -22,7 +22,6 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -856,7 +855,7 @@ private fun PromptInput(
                     )
                 ) {
                     Icon(
-                        imageVector = Icons.Default.ArrowUpward,
+                        imageVector = Icons.Default.Refresh,
                         contentDescription = "Отправить",
                         tint = if (enabled && prompt.isNotBlank()) DarkText else DarkText.copy(alpha = 0.4f)
                     )
