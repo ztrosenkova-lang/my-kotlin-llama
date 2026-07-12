@@ -126,13 +126,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _chatHistory.value = emptyList()
         _generatedText.value = ""
         tts?.stop()
-
-        try {
-            llamaHelper.reset() // Жесткое обнуление KV-кэша ОЗУ в llama.cpp
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        
         Log.d("MainViewModel", "Чат и оперативная память движка успешно очищены")
     }
 
