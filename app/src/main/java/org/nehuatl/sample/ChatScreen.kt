@@ -23,9 +23,9 @@ import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Monitor
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
@@ -407,7 +407,7 @@ fun ChatScreen(
                     )
                 }
 
-                // Кнопка 4: Облачный ИИ - иконка Icons.Default.Computer
+                // Кнопка 4: Облачный ИИ - иконка Icons.Default.Monitor
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -416,7 +416,7 @@ fun ChatScreen(
                         onClick = { showCloudDialog = true }
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Computer,
+                            imageVector = Icons.Default.Monitor,
                             contentDescription = "Облачный ИИ",
                             tint = AccentColor
                         )
