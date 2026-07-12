@@ -296,7 +296,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     is LlamaHelper.LLMEvent.Ongoing -> {
                         val word = event.word
 
-                        // Мгновенная проверка и отсечение стоп-токенов ролей (строго без пробелов)
+                        // Проверка стоп-токенов ролей (строго без пробелов)
                         if (word.contains("<|") || word.contains("|>") || 
                             word.contains("User:") || word.contains("Assistant:") ||
                             word.contains("Question:") || word.contains("Answer:")) {
@@ -310,9 +310,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             return@collect
                         }
 
-                        // Склеиваем слова напрямую в поток без микро-задержек перерисовки интерфейса Android
                         if (!word.startsWith("<|") && !word.endsWith("|>")) {
-                            _generatedText.value = _generatedText.value + word
+                            // Очищаем токен от скрытых мусорных байтов перед склейкой
+                            val cleanWord = word.trimIndent()
+                            _generatedText.value = _generatedText.value + cleanWord
                         }
 
                         val currentState = _state.value
@@ -324,7 +325,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         val aiResponse = _generatedText.value
                         if (aiResponse.isNotEmpty()) {
                             _chatHistory.value = _chatHistory.value + ChatMessage("assistant", aiResponse)
-                            speakText(aiResponse) // Озвучиваем готовый ответ
+                            speakText(aiResponse)
                         }
                         _state.value = GenerationState.Completed(
                             prompt = prompt,
