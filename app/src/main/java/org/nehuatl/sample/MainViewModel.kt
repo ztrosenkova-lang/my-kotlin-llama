@@ -1,6 +1,11 @@
 package org.nehuatl.sample
 
+import android.app.AlarmManager
 import android.app.Application
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
 import android.content.ContentResolver
 import android.net.Uri
 import android.speech.tts.TextToSpeech
@@ -10,6 +15,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -20,6 +26,7 @@ import org.nehuatl.llamacpp.LlamaHelper
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.charset.StandardCharsets
+import java.util.Calendar
 import java.util.Locale
 
 // Структура данных для сообщений чата
@@ -171,11 +178,118 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         Log.d("MainViewModel", "Озвучка запущена: ${cleanText.take(50)}...")
     }
 
+    /**
+     * Метод для 5-кратного голосового повторения напоминания
+     * @param message Текст напоминания
+     */
+    fun triggerVoiceAlarm(message: String) {
+        scope.launch {
+            val alarmText = "Внимание! Напоминание: $message"
+
+            // 1. Добавляем фразу в историю чата, чтобы она отобразилась на экране
+            val updatedHistory = _chatHistory.value.toMutableList().apply {
+                add(ChatMessage(role = "assistant", text = alarmText))
+            }
+            _chatHistory.value = updatedHistory
+
+            // 2. Логика 5-кратного повторения голосом (TTS) с паузами
+            repeat(5) {
+                tts?.speak(alarmText, TextToSpeech.QUEUE_FLUSH, null, null)
+                delay(4000) // Пауза 4 секунды между повторениями
+            }
+        }
+    }
+
+    /**
+     * Парсинг времени и планирование напоминания
+     * @param userText Текст пользователя с указанием времени
+     */
+    private fun scheduleInternalReminder(userText: String) {
+        try {
+            // Регулярное выражение для поиска времени в форматах: 18.00, 18:00, 18.30, 9.15 и т.д.
+            val timeRegex = Regex("(\\d{1,2})[:.](\\d{2})")
+            val matchResult = timeRegex.find(userText)
+
+            if (matchResult != null) {
+                val hour = matchResult.groupValues[1].toInt()
+                val minute = matchResult.groupValues[2].toInt()
+
+                // Проверка корректности времени
+                if (hour !in 0..23 || minute !in 0..59) {
+                    Log.e("MainViewModel", "Некорректное время: $hour:$minute")
+                    return
+                }
+
+                // Извлекаем текст напоминания (удаляем время и предлог "в")
+                val reminderMessage = userText
+                    .replace(timeRegex, "")
+                    .replace("в ", "")
+                    .replace("В ", "")
+                    .trim()
+                    .ifBlank { "Пора по делам!" }
+
+                // Устанавливаем календарь на указанное время
+                val calendar = Calendar.getInstance().apply {
+                    set(Calendar.HOUR_OF_DAY, hour)
+                    set(Calendar.MINUTE, minute)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+
+                    // Если время уже прошло сегодня, переносим на завтра
+                    if (before(Calendar.getInstance())) {
+                        add(Calendar.DATE, 1)
+                    }
+                }
+
+                // Запускаем AlarmManager
+                val context = getApplication<Application>()
+                val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+                
+                // Создаем Intent для BroadcastReceiver
+                val intent = Intent(context, AlarmReceiver::class.java).apply {
+                    putExtra("reminder_message", reminderMessage)
+                }
+                
+                val pendingIntent = PendingIntent.getBroadcast(
+                    context,
+                    System.currentTimeMillis().toInt(),
+                    intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+
+                // Устанавливаем будильник (используем точное время)
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    calendar.timeInMillis,
+                    pendingIntent
+                )
+
+                // Добавляем подтверждение в чат
+                val confirmMessage = "⏰ Напоминание установлено на ${String.format("%02d:%02d", hour, minute)}: \"$reminderMessage\""
+                _chatHistory.value = _chatHistory.value + ChatMessage("assistant", confirmMessage)
+                speakText(confirmMessage)
+
+                Log.d("MainViewModel", "Напоминание запланировано на ${calendar.time}")
+            } else {
+                Log.d("MainViewModel", "Время не найдено в тексте: $userText")
+            }
+        } catch (e: Exception) {
+            Log.e("MainViewModel", "Ошибка планирования напоминания: ${e.message}")
+            e.printStackTrace()
+        }
+    }
+
     fun generate(prompt: String, imagePath: String? = null) {
         if (!_state.value.canGenerate()) return
         scope.launch {
             val cleanPrompt = prompt.trim()
             val lowerPrompt = cleanPrompt.lowercase()
+
+            // 🔔 НОВОЕ: Проверка на команду напоминания (время + действие)
+            if (lowerPrompt.contains("в ") && (lowerPrompt.contains("напомни") || lowerPrompt.contains("напомнить"))) {
+                scheduleInternalReminder(cleanPrompt)
+                return@launch
+            }
 
             // Перехват команды ЗАПОМНИ
             if (lowerPrompt.startsWith("запомни")) {
@@ -406,4 +520,19 @@ private fun getFileNameFromUri(contentResolver: ContentResolver, uri: Uri): Stri
         name = uri.lastPathSegment ?: ""
     }
     return name.lowercase()
+}
+
+/**
+ * BroadcastReceiver для приема сигналов от AlarmManager
+ */
+class AlarmReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val message = intent.getStringExtra("reminder_message") ?: "Пора по делам!"
+        Log.d("AlarmReceiver", "Сработал будильник: $message")
+        
+        // Запускаем ViewModel через синглтон или другой механизм
+        // Для простоты используем статический вызов через Application
+        val app = context.applicationContext as? MyApplication
+        app?.viewModel?.triggerVoiceAlarm(message)
+    }
 }
