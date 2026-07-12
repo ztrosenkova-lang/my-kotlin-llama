@@ -25,7 +25,11 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compute.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Clear
+import androidx.compute.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
@@ -33,9 +37,10 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compute.material3.Card
 import androidx.compose.material3.Card
-import androidx.compute.material3.CardColors
 import androidx.compose.material3.CardDefaults
+import androidx.compute.material3.CircularProgressIndicator
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -43,7 +48,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
-import androidx.compute.material3.SliderColors
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -56,7 +60,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compute.ui.Modifier
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
@@ -102,6 +105,8 @@ fun ChatScreen(
     var promptInput by remember { mutableStateOf("") }
     var showModelDialog by remember { mutableStateOf(currentModelPath == null) }
     var showSettings by remember { mutableStateOf(false) }
+    var showPromptSettings by remember { mutableStateOf(false) }
+    var showCloudDialog by remember { mutableStateOf(false) }
     var tempPromptText by remember(systemPromptText) { mutableStateOf(systemPromptText) }
     var tempTemperature by remember(temperature) { mutableStateOf(temperature) }
     var showHelpDialog by remember { mutableStateOf(false) }
@@ -264,6 +269,33 @@ fun ChatScreen(
         )
     }
 
+    if (showCloudDialog) {
+        AlertDialog(
+            onDismissRequest = { showCloudDialog = false },
+            title = {
+                Text(
+                    text = "☁️ Облачный ИИ",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = DarkText
+                )
+            },
+            text = {
+                Text(
+                    text = "Модуль подключения внешних облачных моделей находится в разработке и будет добавлен в версии v3.0.",
+                    color = DarkText
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showCloudDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentColor)
+                ) {
+                    Text("ОК", color = DarkText)
+                }
+            }
+        )
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -311,7 +343,7 @@ fun ChatScreen(
             }
         }
 
-        // Отдельная панель для трех кнопок под шапкой
+        // Отдельная панель для пяти кнопок под шапкой
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -325,11 +357,11 @@ fun ChatScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(8.dp),
+                    .padding(4.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Кнопка Блокнота Базы Знаний
+                // Кнопка 1: Блокнот Базы Знаний
                 IconButton(
                     onClick = {
                         memoryEditText = viewModel.readFromLongTermMemory()
@@ -343,18 +375,40 @@ fun ChatScreen(
                     )
                 }
 
-                // Кнопка Меню Настроек
+                // Кнопка 2: Настройки движка (температура)
                 IconButton(
                     onClick = { showSettings = !showSettings }
                 ) {
                     Icon(
                         imageVector = Icons.Default.Settings,
-                        contentDescription = "Настройки",
+                        contentDescription = "Настройки движка",
                         tint = AccentColor
                     )
                 }
 
-                // Кнопка Справки-Гайда
+                // Кнопка 3: Роль ИИ / Системный промпт
+                IconButton(
+                    onClick = { showPromptSettings = !showPromptSettings }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Build,
+                        contentDescription = "Роль ИИ",
+                        tint = AccentColor
+                    )
+                }
+
+                // Кнопка 4: Облачный ИИ
+                IconButton(
+                    onClick = { showCloudDialog = true }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Cloud,
+                        contentDescription = "Облачный ИИ",
+                        tint = AccentColor
+                    )
+                }
+
+                // Кнопка 5: Справка
                 IconButton(
                     onClick = { showHelpDialog = true }
                 ) {
@@ -367,7 +421,7 @@ fun ChatScreen(
             }
         }
 
-        // Выезжающая панель настроек токенов
+        // Выезжающая панель настроек температуры
         if (showSettings) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = SurfaceGray),
@@ -378,31 +432,11 @@ fun ChatScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        "⚙️ Настройки движка ИИ",
+                        "🌡️ Настройки движка ИИ",
                         color = DarkText,
                         style = MaterialTheme.typography.titleMedium
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-
-                    // Поле системного промпта
-                    OutlinedTextField(
-                        value = tempPromptText,
-                        onValueChange = { tempPromptText = it },
-                        label = { Text("Системный промпт (Роль ИИ)", color = DarkText) },
-                        modifier = Modifier.fillMaxWidth(),
-                        maxLines = 3,
-                        singleLine = false,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = DarkText,
-                            unfocusedTextColor = DarkText,
-                            focusedContainerColor = AppBackground,
-                            unfocusedContainerColor = AppBackground,
-                            focusedBorderColor = AccentColor,
-                            unfocusedBorderColor = BorderGray,
-                            cursorColor = AccentColor
-                        )
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
 
                     // Ползунок температуры (креативности)
                     Text(
@@ -433,12 +467,62 @@ fun ChatScreen(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
 
+                    // Кнопка Закрыть
+                    Button(
+                        onClick = {
+                            showSettings = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Text("Закрыть", color = DarkText)
+                    }
+                }
+            }
+        }
+
+        // Выезжающая панель системного промпта (Роль ИИ)
+        if (showPromptSettings) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SurfaceGray),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                border = BorderStroke(1.dp, BorderGray)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        "🧠 Роль ИИ (Системный промпт)",
+                        color = DarkText,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Поле системного промпта
+                    OutlinedTextField(
+                        value = tempPromptText,
+                        onValueChange = { tempPromptText = it },
+                        label = { Text("Инструкция для ИИ", color = DarkText) },
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 3,
+                        singleLine = false,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = DarkText,
+                            unfocusedTextColor = DarkText,
+                            focusedContainerColor = AppBackground,
+                            unfocusedContainerColor = AppBackground,
+                            focusedBorderColor = AccentColor,
+                            unfocusedBorderColor = BorderGray,
+                            cursorColor = AccentColor
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
                     // Кнопка Сохранить и Закрыть
                     Button(
                         onClick = {
                             viewModel.updateSystemPrompt(tempPromptText)
-                            viewModel.updateTemperature(tempTemperature)
-                            showSettings = false
+                            showPromptSettings = false
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
                         modifier = Modifier.align(Alignment.End)
