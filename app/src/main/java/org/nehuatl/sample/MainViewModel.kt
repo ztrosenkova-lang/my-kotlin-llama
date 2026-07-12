@@ -315,7 +315,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         val word = event.word
 
                         // 1. Мгновенная проверка и отсечение стоп-токенов ролей (без пробелов)
-                        if (word.contains("<|") || word.contains("|>") || 
+                        if (word.contains("<|") || word.contains("|>") ||
                             word.contains("User:") || word.contains("Assistant:") ||
                             word.contains("Question:") || word.contains("Answer:")) {
                             Log.i("MainViewModel", "Стоп-токен обнаружен. Остановка.")
