@@ -117,7 +117,7 @@ fun ChatScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val listState = rememberLazyListState()
 
-    // Непрерывная автопрокрутка длинных ответов
+    // Непрерывная автопрокрутка за каждым символом
     LaunchedEffect(chatMessages.size, generatedText.length) {
         if (chatMessages.isNotEmpty() || generatedText.isNotEmpty()) {
             val targetIndex = if (generatedText.isNotEmpty()) {
