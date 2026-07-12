@@ -17,7 +17,9 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.nehuatl.llamacpp.LlamaHelper
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.nio.charset.StandardCharsets
 import java.util.Locale
 
 // Структура данных для сообщений чата
@@ -50,7 +52,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _chatHistory = MutableStateFlow<List<ChatMessage>>(emptyList())
     val chatHistory = _chatHistory.asStateFlow()
 
-    // Настройки сэмплинга
+    // Настройки сэмплинга (PocketPal style)
     val temperature = MutableStateFlow(0.3f) // По умолчанию 0.3 для точных наук (химия)
     val contextSize = MutableStateFlow(2048) // Базовый размер контекста для Honor X8a
 
@@ -288,14 +290,20 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             llamaHelper.abort()
             tts?.stop() // Останавливаем озвучку при новом запросе
             
-            // Устанавливаем температуру через внутреннюю конфигурацию движка
+            // НАСТРОЙКА REPETITION PENALTY ДЛЯ КАТЕГОРИЧЕСКОГО ЗАПРЕТА ЗАИКАНИЙ (PocketPal style)
             llamaHelper.setTemperature(temperature.value)
+            llamaHelper.setRepetitionPenalty(1.15f)   // Штрафует модель за повторы букв и слогов
+            llamaHelper.setTopK(40)                   // Ограничивает выбор только самыми логичными буквами
+            llamaHelper.setTopP(0.9f)                 // Отсекает случайный мусор и бред
             
             // Чистый вызов predict без параметра temperature
             llamaHelper.predict(
                 prompt = formattedPrompt,
                 imagePath = imagePath
             )
+
+            // БАЙТОВЫЙ БУФЕР ДЛЯ ЧИСТОЙ СКЛЕЙКИ КИРИЛЛИЦЫ (PocketPal algorithm)
+            val byteBuffer = ByteArrayOutputStream()
 
             llmFlow.collect { event ->
                 when (event) {
@@ -319,11 +327,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             return@collect
                         }
 
-                        // 2. Склеиваем слова С ПРЕДВАРИТЕЛЬНЫМ СОХРАНЕНИЕМ ОРИГИНАЛЬНЫХ ПРОБЕЛОВ
-                        // КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО использовать .trim() или .trimIndent() для event.word!
+                        // 2. Логика PocketPal: копим сырые данные и декодируем UTF-8 только целиком!
                         if (!word.startsWith("<|") && !word.endsWith("|>")) {
-                            // Используем прямое сложение строк, сохраняя внутреннюю структуру токенов движка
-                            _generatedText.value = _generatedText.value + word
+                            // Переводим прилетевший токен в сырые байты и кладем в буфер
+                            val bytes = word.toByteArray(StandardCharsets.UTF_8)
+                            byteBuffer.write(bytes)
+                            
+                            // Обновляем экран только чистой, правильно собранной строкой
+                            _generatedText.value = byteBuffer.toString("UTF-8")
                         }
 
                         val currentState = _state.value
