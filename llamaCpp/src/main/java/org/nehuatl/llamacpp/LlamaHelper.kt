@@ -4,7 +4,6 @@ import android.content.ContentResolver
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.util.Log
-import io.github.ljcamargo.llamacpp.LlamaConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -43,76 +42,53 @@ class LlamaHelper(
     ) {
         currentContext?.let { id -> llama.releaseContext(id) }
         
-        try {
-            val modelUri = Uri.parse(path)
-            Log.d("LlamaHelper", ">>> Opening model FD for URI: $modelUri")
-            
-            // Проверяем читаемость модели
-            contentResolver.openInputStream(modelUri)?.use { input ->
-                val firstByte = input.read()
-                val size = contentResolver.openFileDescriptor(modelUri, "r")?.use { it.statSize } ?: -1
-                Log.d("LlamaHelper", ">>> Model is readable, first byte: $firstByte, size: $size")
-            } ?: Log.e("LlamaHelper", ">>> Model is NOT readable via openInputStream")
-
-            // Открываем ParcelFileDescriptor без detachFd() для Android 14
-            modelPfd = contentResolver.openFileDescriptor(modelUri, "r")
-                ?: throw IllegalArgumentException("Cannot open model URI: $modelUri")
-            val modelFd = modelPfd!!.fd // Берем дескриптор напрямую, не отрывая его!
-            Log.d("LlamaHelper", ">>> Model FD: $modelFd")
-
-            // Используем официальный класс конфигурации библиотеки
-            val config = LlamaConfig().apply {
-                this.modelFd = modelFd
-                this.contextLength = contextLength
-                this.threads = 4
-                this.useMmap = true
-                this.useMlock = false
+        loadJob = scope.launch {
+            try {
+                val modelUri = Uri.parse(path)
+                Log.d("LlamaHelper", ">>> Opening model FD for URI: $modelUri")
                 
-                // Настраиваем сэмплинг против заиканий (PocketPal style)
-                this.repetitionPenalty = 1.15f   // Штраф за повторы букв и слогов
-                this.topK = 40                   // Ограничиваем выбор самыми логичными токенами
-                this.topP = 0.9f                 // Отсекаем случайный мусор
-            }
+                // Проверяем читаемость модели
+                contentResolver.openInputStream(modelUri)?.use { input ->
+                    val firstByte = input.read()
+                    val size = contentResolver.openFileDescriptor(modelUri, "r")?.use { it.statSize } ?: -1
+                    Log.d("LlamaHelper", ">>> Model is readable, first byte: $firstByte, size: $size")
+                } ?: Log.e("LlamaHelper", ">>> Model is NOT readable via openInputStream")
 
-            mmprojPath?.let {
-                val mmUri = Uri.parse(it)
-                Log.d("LlamaHelper", ">>> Opening mmproj FD for URI: $mmUri")
-                mmprojPfd = contentResolver.openFileDescriptor(mmUri, "r")
-                if (mmprojPfd != null) {
-                    val mmFd = mmprojPfd!!.fd // Берем дескриптор напрямую
-                    config.mmprojFd = mmFd
-                    Log.d("LlamaHelper", ">>> Mmproj FD: $mmFd")
-                }
-            }
+                // Открываем ParcelFileDescriptor без detachFd() для Android 14
+                modelPfd = contentResolver.openFileDescriptor(modelUri, "r")
+                    ?: throw IllegalArgumentException("Cannot open model URI: $modelUri")
+                val modelFd = modelPfd!!.fd // Берем дескриптор напрямую, не отрывая его!
+                Log.d("LlamaHelper", ">>> Model FD: $modelFd")
 
-            loadJob = scope.launch {
-                Log.d("LlamaHelper", ">>> will start llama context with config: $config")
-                val result = try {
-                    llama.startEngine(config) {
-                        allText += it
-                        tokenCount++
-                        sharedFlow.tryEmit(LLMEvent.Ongoing(it, tokenCount))
+                // Инициализируем контекст через официальный метод библиотеки v0.4.0
+                val contextId = llama.load(
+                    modelFd = modelFd,
+                    contextLength = contextLength,
+                    threads = 4,
+                    useMmap = true
+                )
+                
+                // Если выбран mmproj для зрения, подключаем его дескриптор
+                if (!mmprojPath.isNullOrEmpty()) {
+                    val mmUri = Uri.parse(mmprojPath)
+                    Log.d("LlamaHelper", ">>> Opening mmproj FD for URI: $mmUri")
+                    mmprojPfd = contentResolver.openFileDescriptor(mmUri, "r")
+                    if (mmprojPfd != null) {
+                        val mmFd = mmprojPfd!!.fd
+                        llama.setMmproj(contextId, mmFd)
+                        Log.d("LlamaHelper", ">>> Mmproj FD: $mmFd")
                     }
-                } catch (e: Exception) {
-                    Log.e("LlamaHelper", "Engine start failed", e)
-                    null
                 }
 
-                if (result == null) {
-                    sharedFlow.tryEmit(LLMEvent.Error("Model initialization failed"))
-                    return@launch
-                }
-
-                val id = result["context_id"] ?: throw Exception("context_id not found in result map")
-                currentContext = (id as Number).toInt()
-
+                currentContext = contextId
                 Log.d("LlamaHelper", ">>> Context loaded successfully with ID: $currentContext")
                 sharedFlow.tryEmit(LLMEvent.Loaded(path))
-                loaded(currentContext!!.toLong())
+                loaded(contextId.toLong())
+                
+            } catch (e: Exception) {
+                Log.e("LlamaHelper", "Failed to load model", e)
+                sharedFlow.tryEmit(LLMEvent.Error("Failed to load model: ${e.message}"))
             }
-        } catch (e: Exception) {
-            Log.e("LlamaHelper", "Failed to prepare model loading", e)
-            sharedFlow.tryEmit(LLMEvent.Error("Failed to open files: ${e.message}"))
         }
     }
 
@@ -131,9 +107,13 @@ class LlamaHelper(
         val params = mutableMapOf<String, Any>(
             "prompt" to prompt,
             "emit_partial_completion" to partialCompletion,
+            // Настраиваем сэмплинг против заиканий (PocketPal style)
+            "repetition_penalty" to 1.15f,   // Штраф за повторы букв и слогов
+            "top_k" to 40,                   // Ограничиваем выбор самыми логичными токенами
+            "top_p" to 0.9f                  // Отсекаем случайный мусор
         )
         
-        // 🔥 ИСПРАВЛЕНО: Передаем изображение через правильный параметр image_fd
+        // Передаем изображение через правильный параметр image_fd
         imagePath?.let {
             try {
                 val imgUri = Uri.parse(it)
@@ -160,7 +140,7 @@ class LlamaHelper(
     }
 
     /**
-     * 🆕 ИСПРАВЛЕНО: Официальный метод очистки KV-кэша (освобождение ОЗУ)
+     * Официальный метод очистки KV-кэша (освобождение ОЗУ)
      * Сбрасывает текущий контекст через releaseContext
      */
     fun reset() {
