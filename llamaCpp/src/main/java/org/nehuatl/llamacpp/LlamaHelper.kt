@@ -18,7 +18,7 @@ class LlamaHelper(
     private val llama by lazy { LlamaAndroid(contentResolver) }
     private var loadJob: Job? = null
     private var completionJob: Job? = null
-    private var currentContext: Int? = null
+    private var currentContext: Long? = null
     private var tokenCount = 0
     private var allText = ""
 
@@ -104,12 +104,12 @@ class LlamaHelper(
                     return@launch
                 }
 
-                val id = result["contextId"] ?: throw Exception("contextId not found in result map")
-                currentContext = (id as Number).toInt()
+                val id = result["context_id"] ?: throw Exception("context_id not found in result map")
+                currentContext = (id as Number).toLong()
 
                 Log.d("LlamaHelper", ">>> Context loaded successfully with ID: $currentContext")
                 sharedFlow.tryEmit(LLMEvent.Loaded(path))
-                loaded(currentContext!!.toLong())
+                loaded(currentContext!!)
             }
         } catch (e: Exception) {
             Log.e("LlamaHelper", "Failed to prepare model loading", e)
