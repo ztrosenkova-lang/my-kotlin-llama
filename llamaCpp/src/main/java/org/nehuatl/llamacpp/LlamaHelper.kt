@@ -1,8 +1,6 @@
 package org.nehuatl.llamacpp
 
 import android.content.ContentResolver
-import android.net.Uri
-import android.os.ParcelFileDescriptor
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,10 +21,6 @@ class LlamaHelper(
     private var tokenCount = 0
     private var allText = ""
 
-    // Удерживаем ссылки на ParcelFileDescriptor для Android 14+
-    private var modelPfd: ParcelFileDescriptor? = null
-    private var mmprojPfd: ParcelFileDescriptor? = null
-
     /**
      * Загрузка модели с поддержкой мультимодальности (mmproj)
      * @param path Путь к модели GGUF
@@ -44,47 +38,20 @@ class LlamaHelper(
         
         loadJob = scope.launch {
             try {
-                val modelUri = Uri.parse(path)
-                Log.d("LlamaHelper", ">>> Opening model FD for URI: $modelUri")
+                Log.d("LlamaHelper", ">>> Loading model with URI: $path")
                 
-                // Проверяем читаемость модели
-                contentResolver.openInputStream(modelUri)?.use { input ->
-                    val firstByte = input.read()
-                    val size = contentResolver.openFileDescriptor(modelUri, "r")?.use { it.statSize } ?: -1
-                    Log.d("LlamaHelper", ">>> Model is readable, first byte: $firstByte, size: $size")
-                } ?: Log.e("LlamaHelper", ">>> Model is NOT readable via openInputStream")
-
-                // Открываем ParcelFileDescriptor без detachFd() для Android 14
-                modelPfd = contentResolver.openFileDescriptor(modelUri, "r")
-                    ?: throw IllegalArgumentException("Cannot open model URI: $modelUri")
-                val modelFd = modelPfd!!.fd // Берем дескриптор напрямую, не отрывая его!
-                Log.d("LlamaHelper", ">>> Model FD: $modelFd")
-
-                // Инициализируем контекст через официальный метод библиотеки v0.4.0
-                val contextId = llama.load(
-                    modelFd = modelFd,
+                // ЗАВОДСКОЙ ВЫЗОВ ИНИЦИАЛИЗАЦИИ v0.4.0:
+                // Просто передаем строковые URI-пути к модели и проектору напрямую в метод движка
+                llama.load(
+                    path = path,
                     contextLength = contextLength,
-                    threads = 4,
-                    useMmap = true
-                )
-                
-                // Если выбран mmproj для зрения, подключаем его дескриптор
-                if (!mmprojPath.isNullOrEmpty()) {
-                    val mmUri = Uri.parse(mmprojPath)
-                    Log.d("LlamaHelper", ">>> Opening mmproj FD for URI: $mmUri")
-                    mmprojPfd = contentResolver.openFileDescriptor(mmUri, "r")
-                    if (mmprojPfd != null) {
-                        val mmFd = mmprojPfd!!.fd
-                        llama.setMmproj(contextId, mmFd)
-                        Log.d("LlamaHelper", ">>> Mmproj FD: $mmFd")
-                    }
+                    mmprojPath = mmprojPath
+                ) { contextId ->
+                    currentContext = contextId
+                    Log.d("LlamaHelper", ">>> Context loaded successfully with ID: $currentContext")
+                    sharedFlow.tryEmit(LLMEvent.Loaded(path))
+                    loaded(contextId.toLong())
                 }
-
-                currentContext = contextId
-                Log.d("LlamaHelper", ">>> Context loaded successfully with ID: $currentContext")
-                sharedFlow.tryEmit(LLMEvent.Loaded(path))
-                loaded(contextId.toLong())
-                
             } catch (e: Exception) {
                 Log.e("LlamaHelper", "Failed to load model", e)
                 sharedFlow.tryEmit(LLMEvent.Error("Failed to load model: ${e.message}"))
@@ -116,15 +83,10 @@ class LlamaHelper(
         // Передаем изображение через правильный параметр image_fd
         imagePath?.let {
             try {
-                val imgUri = Uri.parse(it)
-                Log.d("LlamaHelper", ">>> Opening image FD for URI: $imgUri")
-                contentResolver.openFileDescriptor(imgUri, "r")?.use { pfd ->
-                    val imgFd = pfd.fd
-                    params["image_fd"] = imgFd
-                    Log.d("LlamaHelper", ">>> Image FD added to params: $imgFd")
-                }
+                Log.d("LlamaHelper", ">>> Opening image for URI: $imagePath")
+                params["image_path"] = imagePath
             } catch (e: Exception) {
-                Log.e("LlamaHelper", "Failed to open image FD", e)
+                Log.e("LlamaHelper", "Failed to open image", e)
             }
         }
 
@@ -133,7 +95,11 @@ class LlamaHelper(
             llama.launchCompletion(
                 id = context,
                 params = params
-            )
+            ) { word ->
+                allText += word
+                tokenCount++
+                sharedFlow.tryEmit(LLMEvent.Ongoing(word, tokenCount))
+            }
             val duration = System.currentTimeMillis() - startTime
             sharedFlow.tryEmit(LLMEvent.Done(allText, tokenCount, duration))
         }
@@ -166,17 +132,6 @@ class LlamaHelper(
     }
 
     fun release() {
-        // Закрываем удерживаемые дескрипторы
-        try {
-            modelPfd?.close()
-            mmprojPfd?.close()
-            modelPfd = null
-            mmprojPfd = null
-            Log.d("LlamaHelper", ">>> File descriptors closed successfully")
-        } catch (e: Exception) {
-            Log.e("LlamaHelper", "Error closing file descriptors", e)
-        }
-        
         currentContext?.let { id ->
             llama.releaseContext(id)
         }
