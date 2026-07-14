@@ -168,6 +168,7 @@ class LlamaHelper(
         val context = currentContext
         if (context != null) {
             Log.d("LlamaHelper", ">>> Resetting KV cache for context: $context")
+            // Вызываем очистку KV-кэша оригинального ядра
             llama.clearContext(context)
             Log.d("LlamaHelper", ">>> KV cache cleared successfully")
         } else {
