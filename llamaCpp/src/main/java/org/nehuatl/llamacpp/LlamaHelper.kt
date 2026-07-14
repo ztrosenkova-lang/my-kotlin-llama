@@ -22,9 +22,6 @@ class LlamaHelper(
     private var tokenCount = 0
     private var allText = ""
 
-    // Нативные методы для работы с KV-кэшем
-    private external fun llama_kv_cache_clear(contextPointer: Long)
-
     /**
      * Загрузка модели с поддержкой мультимодальности (mmproj)
      * @param path Путь к модели GGUF
@@ -165,19 +162,15 @@ class LlamaHelper(
 
     /**
      * 🆕 Официальный метод очистки KV-кэша (освобождение ОЗУ)
-     * Вызывает llama_kv_cache_clear(ctx) на стороне C++ через JNI
+     * Использует встроенный метод сброса сессии из официальной библиотеки
      */
     fun reset() {
-        val context = currentContext
-        if (context != null) {
-            Log.d("LlamaHelper", ">>> Resetting KV cache for context: $context")
-            // ИСПРАВЛЕНО: Правильный вызов нативного метода очистки KV-кэша через контекст библиотеки
-            context?.let { ctx ->
-                llama_kv_cache_clear(ctx.toLong())
-            }
+        try {
+            Log.d("LlamaHelper", ">>> Resetting KV cache via official library method")
+            llama.resetSession()
             Log.d("LlamaHelper", ">>> KV cache cleared successfully")
-        } else {
-            Log.w("LlamaHelper", "Cannot reset: no active context")
+        } catch (e: Exception) {
+            Log.e("LlamaHelper", "Failed to reset session", e)
         }
     }
 
