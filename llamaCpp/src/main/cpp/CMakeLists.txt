@@ -1,18 +1,18 @@
 cmake_minimum_required(VERSION 3.22.1)
 project("llamacpp" C CXX)
 
-# Отключаем строгую проверку шаблонов для Clang 21 (обход ошибки в eagle3.cpp и dflash.cpp)
+# Исправленный флаг: отключаем ошибку шаблонов для Clang
 add_compile_options(-Wno-error=template-id-cdtor)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# ОТКЛЮЧАЕМ КОНФЛИКТУЮЩИЕ И ЛИШНИЕ МОДЕЛИ ДЛЯ ОБХОДА ОШИБКИ CLANG 21
+# Отключаем лишние сборки
 set(LLAMA_BUILD_SERVER OFF CACHE INTERNAL "")
 set(LLAMA_BUILD_EXAMPLES OFF CACHE INTERNAL "")
 set(LLAMA_BUILD_TESTS OFF CACHE INTERNAL "")
 
-# ТОЧЕЧНАЯ СБОРКА: принудительно перезаписываем кэш сервера
+# Включаем только нужные модели (Llama, Qwen, Gemma)
 set(LLAMA_ALL_MODELS OFF CACHE BOOL "Cut models" FORCE)
 set(LLAMA_MODELS "llama,qwen,gemma" CACHE STRING "Target models" FORCE)
 
@@ -25,14 +25,18 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(llamacpp_core)
 
-# Передаем заголовочные папки скачанного ядра компилятору
+# Создаём пустые заглушки для проблемных файлов, чтобы обойти ошибки компиляции
+file(WRITE ${llamacpp_core_SOURCE_DIR}/src/models/eagle3.cpp " ")
+file(WRITE ${llamacpp_core_SOURCE_DIR}/src/models/dflash.cpp " ")
+
+# Передаём заголовочные папки скачанного ядра компилятору
 target_include_directories(llama PRIVATE
     ${llamacpp_core_SOURCE_DIR}
     ${llamacpp_core_SOURCE_DIR}/include
     ${llamacpp_core_SOURCE_DIR}/common
 )
 
-# Линкуем системные Android-библиотеки напрямую к собранному ядру llama
+# Линкуем системные Android-библиотеки
 target_link_libraries(llama PRIVATE
     android
     log
