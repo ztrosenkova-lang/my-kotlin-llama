@@ -37,15 +37,20 @@ endforeach()
 # Теперь собираем ядро
 FetchContent_MakeAvailable(llamacpp_core)
 
-# Передаём заголовочные папки скачанного ядра компилятору
-target_include_directories(llama PRIVATE
+# Объявляем сборку нашего JNI-моста
+add_library(${PROJECT_NAME} SHARED LlamaHelperJNI.cpp)
+
+# Передаём заголовочные папки скачанного ядра компилятору для нашего проекта
+target_include_directories(${PROJECT_NAME} PRIVATE
     ${llamacpp_core_SOURCE_DIR}
     ${llamacpp_core_SOURCE_DIR}/include
     ${llamacpp_core_SOURCE_DIR}/common
 )
 
-# Линкуем системные Android-библиотеки
-target_link_libraries(llama PRIVATE
+# Линкуем наш мост с нативными библиотеками ядра и модулем зрения
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    llama
+    llava
     android
     log
     jnigraphics
