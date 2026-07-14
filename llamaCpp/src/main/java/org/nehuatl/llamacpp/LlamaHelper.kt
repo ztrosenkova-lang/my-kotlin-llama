@@ -3,7 +3,7 @@ package org.nehuatl.llamacpp
 import android.content.ContentResolver
 import android.net.Uri
 import android.util.Log
-import io.github.ljcamargo.kotlinllamacpp.LlamaAndroid
+import com.github.ljcamargo.kotlinllamacpp.LlamaAndroid // ИСПРАВЛЕНО: правильный пакет com вместо io
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -65,11 +65,13 @@ class LlamaHelper(
                     imgPfd?.let { params["image_fd"] = it.detachFd() }
                 }
 
-                // ПРАВИЛЬНЫЙ ВЫЗОВ: передаем лямбду tokenCallback третьим параметром
-                llama.launchCompletion(id, params) { token ->
-                    scope.launch {
-                        sharedFlow.emit(LLMEvent.Ongoing(token))
-                    }
+                // ИСПРАВЛЕНО: Сигнатура launchCompletion принимает строго (id, params)
+                val result = llama.launchCompletion(id, params)
+                
+                // Извлекаем текст ответа из возвращаемой карты результатов библиотеки
+                val textOutput = result?.get("text") as? String ?: ""
+                if (textOutput.isNotEmpty()) {
+                    sharedFlow.emit(LLMEvent.Ongoing(textOutput))
                 }
             } catch (e: Exception) {
                 Log.e("LlamaHelper", "Prediction failed", e)
@@ -78,23 +80,28 @@ class LlamaHelper(
     }
 
     fun reset() {
-        try {
-            currentContext?.let { id ->
-                llama.releaseContext(id)
-                currentContext = null
+        scope.launch(Dispatchers.IO) {
+            try {
+                currentContext?.let { id ->
+                    llama.releaseContext(id)
+                    currentContext = null
+                }
+            } catch (e: Exception) {
+                Log.e("LlamaHelper", "Reset failed", e)
             }
-        } catch (e: Exception) {
-            Log.e("LlamaHelper", "Reset failed", e)
         }
     }
 
     fun stopPrediction() {
-        try {
-            currentContext?.let { id ->
-                llama.stopCompletion(id)
+        // ИСПРАВЛЕНО: Оборачиваем suspend метод библиотеки в scope.launch корутину
+        scope.launch(Dispatchers.IO) {
+            try {
+                currentContext?.let { id ->
+                    llama.stopCompletion(id)
+                }
+            } catch (e: Exception) {
+                Log.e("LlamaHelper", "Stop failed", e)
             }
-        } catch (e: Exception) {
-            Log.e("LlamaHelper", "Stop failed", e)
         }
     }
 
