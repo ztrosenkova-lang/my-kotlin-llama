@@ -14,7 +14,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(llamacpp_core)
 
 # 2. Объявляем сборку нашего JNI-моста
-add_library(${PROJECT_NAME} SHARED net_wrapper.cpp)
+add_library(${PROJECT_NAME} SHARED LlamaHelperJNI.cpp)
 
 # 3. ЖЕСТКО УКАЗЫВАЕМ ПУТИ К ИСХОДНИКАМ СКАЧАННОГО ЯДРА (Исправление бага):
 target_include_directories(${PROJECT_NAME} PRIVATE
