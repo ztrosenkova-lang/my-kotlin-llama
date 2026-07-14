@@ -22,6 +22,9 @@ class LlamaHelper(
     private var tokenCount = 0
     private var allText = ""
 
+    // Нативные методы для работы с KV-кэшем
+    private external fun llama_kv_cache_clear(contextPointer: Long)
+
     /**
      * Загрузка модели с поддержкой мультимодальности (mmproj)
      * @param path Путь к модели GGUF
@@ -168,8 +171,10 @@ class LlamaHelper(
         val context = currentContext
         if (context != null) {
             Log.d("LlamaHelper", ">>> Resetting KV cache for context: $context")
-            // Вызываем очистку кэша токенов оригинального ядра
-            llama_kv_cache_clear(context)
+            // ИСПРАВЛЕНО: Правильный вызов нативного метода очистки KV-кэша через контекст библиотеки
+            context?.let { ctx ->
+                llama_kv_cache_clear(ctx.toLong())
+            }
             Log.d("LlamaHelper", ">>> KV cache cleared successfully")
         } else {
             Log.w("LlamaHelper", "Cannot reset: no active context")
