@@ -4,7 +4,12 @@ project("llamacpp" C CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# 1. Скачиваем официальное ядро b9859
+# ОТКЛЮЧАЕМ КОНФЛИКТУЮЩИЕ И ЛИШНИЕ МОДЕЛИ ДЛЯ ОБХОДА ОШИБКИ CLANG 21
+set(LLAMA_BUILD_SERVER OFF CACHE INTERNAL "")
+set(LLAMA_BUILD_EXAMPLES OFF CACHE INTERNAL "")
+set(LLAMA_BUILD_TESTS OFF CACHE INTERNAL "")
+
+# Скачиваем официальное ядро b9859
 include(FetchContent)
 FetchContent_Declare(
     llamacpp_core
@@ -13,14 +18,14 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(llamacpp_core)
 
-# 2. Подключаем пути к заголовкам скачанного ядра
+# Передаем заголовочные папки скачанного ядра компилятору
 target_include_directories(llama PRIVATE
     ${llamacpp_core_SOURCE_DIR}
     ${llamacpp_core_SOURCE_DIR}/include
     ${llamacpp_core_SOURCE_DIR}/common
 )
 
-# 3. ИСПРАВЛЕНО: Линкуем системные библиотеки строго через PRIVATE signature
+# Линкуем системные Android-библиотеки напрямую к собранному ядру llama
 target_link_libraries(llama PRIVATE
     android
     log
