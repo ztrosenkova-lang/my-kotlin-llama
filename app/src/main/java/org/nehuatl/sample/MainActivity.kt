@@ -32,24 +32,34 @@ class MainActivity : ComponentActivity() {
     private val modelPickerLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
-        uri?.let {
-            contentResolver.takePersistableUriPermission(
-                it,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION
-            )
-            modelPath = it.toString()
+        uri?.let { modelUri ->
+            try {
+                contentResolver.takePersistableUriPermission(
+                    modelUri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+                Log.d("MainActivity", "Вечные права на GGUF-модель зафиксированы!")
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Ошибка фиксации прав на GGUF", e)
+            }
+            modelPath = modelUri.toString()
         }
     }
 
     private val mmprojPickerLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
-        uri?.let {
-            contentResolver.takePersistableUriPermission(
-                it,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION
-            )
-            mmprojPath = it.toString()
+        uri?.let { mmprojUri ->
+            try {
+                contentResolver.takePersistableUriPermission(
+                    mmprojUri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+                Log.d("MainActivity", "Вечные права на mmproj зафиксированы!")
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Ошибка фиксации прав на mmproj", e)
+            }
+            mmprojPath = mmprojUri.toString()
         }
     }
 
@@ -57,10 +67,15 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         uri?.let {
-            contentResolver.takePersistableUriPermission(
-                it,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION
-            )
+            try {
+                contentResolver.takePersistableUriPermission(
+                    it,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+                Log.d("MainActivity", "Вечные права на изображение зафиксированы!")
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Ошибка фиксации прав на изображение", e)
+            }
             imagePath = it.toString()
         }
     }
