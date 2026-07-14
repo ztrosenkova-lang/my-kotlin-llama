@@ -847,6 +847,10 @@ private fun StatusBar(
                     is GenerationState.Error -> {
                         Text("⚠ ${state.message}", color = AccentColor)
                     }
+                    else -> {
+                        // Обработка любых других состояний (например, Loading)
+                        Text("Ожидание...", color = DarkText)
+                    }
                 }
             }
         }
