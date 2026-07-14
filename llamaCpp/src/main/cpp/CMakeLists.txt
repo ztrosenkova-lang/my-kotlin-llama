@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.22.1)
 project("llamacpp" C CXX)
 
+# Отключаем строгую проверку шаблонов для Clang 21 (обход ошибки в eagle3.cpp и dflash.cpp)
+add_compile_options(-Wno-error=template-id-cdtor)
+
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
