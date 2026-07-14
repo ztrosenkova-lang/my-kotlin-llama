@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include(FetchContent)
 FetchContent_Declare(
     llamacpp_core
-    GIT_REPOSITORY https://github.com/ggerganov/llama.cpp
+    GIT_REPOSITORY https://github.com/ggml-org/llama.cpp
     GIT_TAG        b9859
 )
 FetchContent_MakeAvailable(llamacpp_core)
