@@ -53,8 +53,9 @@ class LlamaHelper(
             val modelFd = modelPfd.detachFd()
             Log.d("LlamaHelper", ">>> Model FD: $modelFd")
 
-            // Удаляем строковый путь "model", оставляем только дескриптор
+            // Добавляем фиктивное имя модели для инициализации токенизатора
             val config = mutableMapOf<String, Any>(
+                "model" to "model.gguf",
                 "model_fd" to modelFd,
                 "use_mmap" to false,
                 "use_mlock" to false,
