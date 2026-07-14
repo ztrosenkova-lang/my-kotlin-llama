@@ -144,33 +144,6 @@ fun ChatScreen(
             onLoad = {
                 showModelDialog = false
                 if (currentModelPath != null) {
-                    // 1. Запрашиваем вечные права на чтение файла языковой модели GGUF
-                    try {
-                        val modelUri = android.net.Uri.parse(currentModelPath)
-                        context.contentResolver.takePersistableUriPermission(
-                            modelUri,
-                            android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
-                        )
-                        Log.d("ChatScreen", "Постоянные права на GGUF-модель успешно зафиксированы")
-                    } catch (e: Exception) {
-                        Log.e("ChatScreen", "Не удалось зафиксировать права на GGUF", e)
-                    }
-
-                    // 2. Запрашиваем вечные права на файл проектора зрения mmproj (если он выбран)
-                    if (!mmprojPath.isNullOrEmpty()) {
-                        try {
-                            val mmprojUri = android.net.Uri.parse(mmprojPath)
-                            context.contentResolver.takePersistableUriPermission(
-                                mmprojUri,
-                                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
-                            )
-                            Log.d("ChatScreen", "Постоянные права на mmproj проектор успешно зафиксированы")
-                        } catch (e: Exception) {
-                            Log.e("ChatScreen", "Не удалось зафиксировать права на mmproj", e)
-                        }
-                    }
-
-                    // 3. Безопасно запускаем загрузку во ViewModel
                     viewModel.loadModel(currentModelPath, mmprojPath)
                 }
             },
