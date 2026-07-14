@@ -454,8 +454,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             llamaHelper.abort()
             tts?.stop() // Останавливаем озвучку при новом запросе
             
-            // ИСПРАВЛЕНО: вызываем predict без лишних параметров
-            llamaHelper.predict(
+            // ИСПРАВЛЕНО: вызываем launchCompletion с параметрами
+            llamaHelper.launchCompletion(
                 prompt = formattedPrompt,
                 imagePath = imagePath
             )
