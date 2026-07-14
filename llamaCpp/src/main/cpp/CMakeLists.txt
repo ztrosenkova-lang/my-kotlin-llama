@@ -12,22 +12,30 @@ set(LLAMA_BUILD_SERVER OFF CACHE INTERNAL "")
 set(LLAMA_BUILD_EXAMPLES OFF CACHE INTERNAL "")
 set(LLAMA_BUILD_TESTS OFF CACHE INTERNAL "")
 
-# Включаем только нужные модели (Llama, Qwen, Gemma)
+# Включаем только нужные модели (Llama, Qwen, DeepSeek, Gemma)
 set(LLAMA_ALL_MODELS OFF CACHE BOOL "Cut models" FORCE)
-set(LLAMA_MODELS "llama,qwen,gemma" CACHE STRING "Target models" FORCE)
+set(LLAMA_MODELS "llama,qwen,deepseek,gemma" CACHE STRING "Target models" FORCE)
 
-# Скачиваем официальное ядро b9859
+# Ручное скачивание ядра через Populate
 include(FetchContent)
 FetchContent_Declare(
     llamacpp_core
     GIT_REPOSITORY https://github.com/ggml-org/llama.cpp
     GIT_TAG        b9859
 )
-FetchContent_MakeAvailable(llamacpp_core)
+FetchContent_Populate(llamacpp_core)
 
-# Создаём пустые заглушки для проблемных файлов, чтобы обойти ошибки компиляции
-file(WRITE ${llamacpp_core_SOURCE_DIR}/src/models/eagle3.cpp " ")
-file(WRITE ${llamacpp_core_SOURCE_DIR}/src/models/dflash.cpp " ")
+# ЦИКЛ ОЧИСТКИ: удаляем все модели, кроме Llama, Qwen, DeepSeek и Gemma
+file(GLOB ALL_MODELS_FILES "${llamacpp_core_SOURCE_DIR}/src/models/*.cpp")
+foreach(MODEL_FILE ${ALL_MODELS_FILES})
+    # Сохраняем поддержку Llama, Qwen, DeepSeek и Gemma
+    if(NOT MODEL_FILE MATCHES "llama" AND NOT MODEL_FILE MATCHES "qwen" AND NOT MODEL_FILE MATCHES "deepseek" AND NOT MODEL_FILE MATCHES "gemma")
+        file(WRITE ${MODEL_FILE} " ")
+    endif()
+endforeach()
+
+# Теперь собираем ядро
+FetchContent_MakeAvailable(llamacpp_core)
 
 # Передаём заголовочные папки скачанного ядра компилятору
 target_include_directories(llama PRIVATE
