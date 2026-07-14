@@ -3,6 +3,7 @@ package org.nehuatl.llamacpp
 import android.content.ContentResolver
 import android.net.Uri
 import android.util.Log
+import io.github.ljcamargo.llamacpp.LlamaConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -53,19 +54,19 @@ class LlamaHelper(
             val modelFd = modelPfd.detachFd()
             Log.d("LlamaHelper", ">>> Model FD: $modelFd")
 
-            // Используем официальные параметры инициализации из README библиотеки
-            val config = mutableMapOf<String, Any>(
-                "model_fd" to modelFd,
-                "n_ctx" to contextLength,
-                "n_threads" to 4,
-                "use_mmap" to true,
-                "use_mlock" to false
-            )
-
-            // Настраиваем сэмплинг против заиканий (PocketPal style)
-            config["repetition_penalty"] = 1.15f   // Штраф за повторы букв и слогов
-            config["top_k"] = 40                   // Ограничиваем выбор самыми логичными токенами
-            config["top_p"] = 0.9f                 // Отсекаем случайный мусор
+            // Используем официальный класс конфигурации библиотеки
+            val config = LlamaConfig().apply {
+                this.modelFd = modelFd
+                this.contextLength = contextLength
+                this.threads = 4
+                this.useMmap = true
+                this.useMlock = false
+                
+                // Настраиваем сэмплинг против заиканий (PocketPal style)
+                this.repetitionPenalty = 1.15f   // Штраф за повторы букв и слогов
+                this.topK = 40                   // Ограничиваем выбор самыми логичными токенами
+                this.topP = 0.9f                 // Отсекаем случайный мусор
+            }
 
             mmprojPath?.let {
                 val mmUri = Uri.parse(it)
@@ -73,7 +74,7 @@ class LlamaHelper(
                 val mmPfd = contentResolver.openFileDescriptor(mmUri, "r")
                 if (mmPfd != null) {
                     val mmFd = mmPfd.detachFd()
-                    config["mmproj_fd"] = mmFd
+                    config.mmprojFd = mmFd
                     Log.d("LlamaHelper", ">>> Mmproj FD: $mmFd")
                 }
             }
