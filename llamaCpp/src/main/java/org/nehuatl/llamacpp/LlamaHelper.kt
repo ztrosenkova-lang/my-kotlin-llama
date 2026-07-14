@@ -69,8 +69,8 @@ class LlamaHelper(
                 // Запускаем движок через официальный метод startEngine
                 val result = llama.startEngine(config)
                 
-                // Извлекаем ID контекста из результата
-                val id = result["context_id"] ?: result["contextId"] 
+                // Извлекаем ID контекста из результата с безопасной проверкой
+                val id = result?.get("context_id") ?: result?.get("contextId") 
                     ?: throw Exception("context_id not found in result")
                 
                 currentContext = (id as Number).toInt()
@@ -124,18 +124,21 @@ class LlamaHelper(
         completionJob = scope.launch {
             sharedFlow.tryEmit(LLMEvent.Started(prompt))
             
-            // Вызываем launchCompletion с двумя параметрами: id и params
+            // Вызываем launchCompletion с тремя параметрами: id, params и tokenCallback
             val result = llama.launchCompletion(
                 id = context,
                 params = params
-            )
-            
-            // Извлекаем токены из результата
-            val tokens = result["tokens"] as? List<String> ?: emptyList()
-            tokens.forEach { word ->
-                allText += word
+            ) { token ->
+                // Обрабатываем каждый токен в реальном времени
+                allText += token
                 tokenCount++
-                sharedFlow.tryEmit(LLMEvent.Ongoing(word, tokenCount))
+                sharedFlow.tryEmit(LLMEvent.Ongoing(token, tokenCount))
+            }
+            
+            // Безопасно обрабатываем финальные метрики, если они есть
+            if (result != null) {
+                // Если в результате есть дополнительные данные, можно их обработать
+                Log.d("LlamaHelper", "Generation completed with result: $result")
             }
             
             val duration = System.currentTimeMillis() - startTime
