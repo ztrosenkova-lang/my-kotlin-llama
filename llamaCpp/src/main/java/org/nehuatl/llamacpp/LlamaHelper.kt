@@ -3,7 +3,6 @@ package org.nehuatl.llamacpp
 import android.content.ContentResolver
 import android.net.Uri
 import android.util.Log
-import com.github.ljcamargo.kotlinllamacpp.LlamaAndroid // ИСПРАВЛЕНО: правильный пакет com вместо io
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -14,7 +13,8 @@ class LlamaHelper(
     val scope: CoroutineScope = CoroutineScope(Dispatchers.IO),
     val sharedFlow: MutableSharedFlow<LLMEvent>
 ) {
-    private val llama by lazy { LlamaAndroid(contentResolver) }
+    // Используем полный путь к классу, чтобы избежать ошибок импорта пакета ljcamargo
+    private val llama by lazy { io.github.ljcamargo.kotlinllamacpp.LlamaAndroid(contentResolver) }
     private var currentContext: Int? = null
 
     fun load(path: String, contextLength: Int, mmprojPath: String? = null, loaded: (Long) -> Unit) {
@@ -65,13 +65,11 @@ class LlamaHelper(
                     imgPfd?.let { params["image_fd"] = it.detachFd() }
                 }
 
-                // ИСПРАВЛЕНО: Сигнатура launchCompletion принимает строго (id, params)
-                val result = llama.launchCompletion(id, params)
-                
-                // Извлекаем текст ответа из возвращаемой карты результатов библиотеки
-                val textOutput = result?.get("text") as? String ?: ""
-                if (textOutput.isNotEmpty()) {
-                    sharedFlow.emit(LLMEvent.Ongoing(textOutput))
+                // Передаем обязательный tokenCallback третьим параметром строго по правилам библиотеки
+                llama.launchCompletion(id, params) { token ->
+                    scope.launch {
+                        sharedFlow.emit(LLMEvent.Ongoing(token))
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("LlamaHelper", "Prediction failed", e)
@@ -93,7 +91,6 @@ class LlamaHelper(
     }
 
     fun stopPrediction() {
-        // ИСПРАВЛЕНО: Оборачиваем suspend метод библиотеки в scope.launch корутину
         scope.launch(Dispatchers.IO) {
             try {
                 currentContext?.let { id ->
