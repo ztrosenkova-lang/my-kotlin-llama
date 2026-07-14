@@ -1,6 +1,7 @@
 package org.nehuatl.llamacpp
 
 import android.content.ContentResolver
+import android.net.Uri
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,18 +41,44 @@ class LlamaHelper(
             try {
                 Log.d("LlamaHelper", ">>> Loading model with URI: $path")
                 
-                // ЗАВОДСКОЙ ВЫЗОВ ИНИЦИАЛИЗАЦИИ v0.4.0:
-                // Просто передаем строковые URI-пути к модели и проектору напрямую в метод движка
-                llama.load(
-                    path = path,
-                    contextLength = contextLength,
-                    mmprojPath = mmprojPath
-                ) { contextId ->
-                    currentContext = contextId
-                    Log.d("LlamaHelper", ">>> Context loaded successfully with ID: $currentContext")
-                    sharedFlow.tryEmit(LLMEvent.Loaded(path))
-                    loaded(contextId.toLong())
+                // Открываем файловый дескриптор модели
+                val pfd = contentResolver.openFileDescriptor(Uri.parse(path), "r")
+                    ?: throw Exception("Failed to open model PFD")
+                val modelFd = pfd.detachFd()
+                Log.d("LlamaHelper", ">>> Model FD: $modelFd")
+
+                // Собираем конфигурацию со строгим приведением типов
+                val config = mutableMapOf<String, Any>(
+                    "model_fd" to modelFd,
+                    "n_ctx" to contextLength,
+                    "n_threads" to 4,
+                    "use_mmap" to true,
+                    "use_mlock" to false
+                )
+
+                // Если выбран mmproj для зрения
+                if (!mmprojPath.isNullOrEmpty()) {
+                    val mmPfd = contentResolver.openFileDescriptor(Uri.parse(mmprojPath), "r")
+                    mmPfd?.let { 
+                        val mmFd = it.detachFd()
+                        config["mmproj_fd"] = mmFd
+                        Log.d("LlamaHelper", ">>> Mmproj FD: $mmFd")
+                    }
                 }
+
+                // Запускаем движок через официальный метод startEngine
+                val result = llama.startEngine(config)
+                
+                // Извлекаем ID контекста из результата
+                val id = result["context_id"] ?: result["contextId"] 
+                    ?: throw Exception("context_id not found in result")
+                
+                currentContext = (id as Number).toInt()
+                Log.d("LlamaHelper", ">>> Context loaded successfully with ID: $currentContext")
+                
+                sharedFlow.tryEmit(LLMEvent.Loaded(path))
+                loaded(currentContext!!.toLong())
+                
             } catch (e: Exception) {
                 Log.e("LlamaHelper", "Failed to load model", e)
                 sharedFlow.tryEmit(LLMEvent.Error("Failed to load model: ${e.message}"))
@@ -83,23 +110,34 @@ class LlamaHelper(
         // Передаем изображение через правильный параметр image_fd
         imagePath?.let {
             try {
-                Log.d("LlamaHelper", ">>> Opening image for URI: $imagePath")
-                params["image_path"] = imagePath
+                val imgPfd = contentResolver.openFileDescriptor(Uri.parse(it), "r")
+                imgPfd?.let { pfd ->
+                    val imgFd = pfd.detachFd()
+                    params["image_fd"] = imgFd
+                    Log.d("LlamaHelper", ">>> Image FD added to params: $imgFd")
+                }
             } catch (e: Exception) {
-                Log.e("LlamaHelper", "Failed to open image", e)
+                Log.e("LlamaHelper", "Failed to open image FD", e)
             }
         }
 
         completionJob = scope.launch {
             sharedFlow.tryEmit(LLMEvent.Started(prompt))
-            llama.launchCompletion(
+            
+            // Вызываем launchCompletion с двумя параметрами: id и params
+            val result = llama.launchCompletion(
                 id = context,
                 params = params
-            ) { word ->
+            )
+            
+            // Извлекаем токены из результата
+            val tokens = result["tokens"] as? List<String> ?: emptyList()
+            tokens.forEach { word ->
                 allText += word
                 tokenCount++
                 sharedFlow.tryEmit(LLMEvent.Ongoing(word, tokenCount))
             }
+            
             val duration = System.currentTimeMillis() - startTime
             sharedFlow.tryEmit(LLMEvent.Done(allText, tokenCount, duration))
         }
