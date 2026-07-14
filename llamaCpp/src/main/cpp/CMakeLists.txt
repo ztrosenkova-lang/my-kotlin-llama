@@ -12,6 +12,12 @@ set(LLAMA_BUILD_SERVER OFF CACHE INTERNAL "")
 set(LLAMA_BUILD_EXAMPLES OFF CACHE INTERNAL "")
 set(LLAMA_BUILD_TESTS OFF CACHE INTERNAL "")
 
+# ТОЧЕЧНАЯ СБОРКА: отключаем все модели, включаем только нужные
+set(LLAMA_ALL_MODELS OFF CACHE INTERNAL "")
+# Включаем обратно только нужные нам современные архитектуры:
+# DeepSeek строится на архитектурах qwen/llama, поэтому поддержка qwen и llama автоматически запускает и DeepSeek
+set(LLAMA_MODELS "llama,qwen,gemma" CACHE INTERNAL "")
+
 # Скачиваем официальное ядро b9859
 include(FetchContent)
 FetchContent_Declare(
@@ -20,12 +26,6 @@ FetchContent_Declare(
     GIT_TAG        b9859
 )
 FetchContent_MakeAvailable(llamacpp_core)
-
-# Фикс: вместо удаления используем file(WRITE ...) для создания пустых файлов.
-# Это позволяет cmake пройти стадию генерации, не ломая структуру llama.cpp.
-file(WRITE ${llamacpp_core_SOURCE_DIR}/src/models/eagle3.cpp " ")
-file(WRITE ${llamacpp_core_SOURCE_DIR}/src/models/dflash.cpp " ")
-file(WRITE ${llamacpp_core_SOURCE_DIR}/src/models/t5.cpp " ")
 
 # Передаем заголовочные папки скачанного ядра компилятору
 target_include_directories(llama PRIVATE
