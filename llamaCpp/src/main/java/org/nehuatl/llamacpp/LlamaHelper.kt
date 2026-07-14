@@ -162,14 +162,13 @@ class LlamaHelper(
 
     /**
      * 🆕 Официальный метод очистки KV-кэша (освобождение ОЗУ)
-     * Вызывает llama_kv_cache_clear(ctx) на стороне C++
+     * Вызывает llama_kv_cache_clear(ctx) на стороне C++ через JNI
      */
     fun reset() {
         val context = currentContext
         if (context != null) {
             Log.d("LlamaHelper", ">>> Resetting KV cache for context: $context")
-            // Вызываем системный метод очистки кэша токенов оригинального ядра
-            llama_kv_cache_clear(context)
+            llama.clearContext(context)
             Log.d("LlamaHelper", ">>> KV cache cleared successfully")
         } else {
             Log.w("LlamaHelper", "Cannot reset: no active context")
