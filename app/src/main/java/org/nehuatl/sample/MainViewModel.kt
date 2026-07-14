@@ -22,7 +22,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import org.nehuatl.llamacpp.LlamaHelper
+import org.nehuatl.llamacpp.LLamaContext
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.charset.StandardCharsets
@@ -41,12 +41,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val viewModelJob = SupervisorJob()
     private val scope = CoroutineScope(Dispatchers.IO + viewModelJob)
 
-    private val _llmFlow = MutableSharedFlow<LlamaHelper.LLMEvent>(
+    private val _llmFlow = MutableSharedFlow<LLamaContext.LLMEvent>(
         replay = 0,
         extraBufferCapacity = 64,
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
-    val llmFlow: SharedFlow<LlamaHelper.LLMEvent> = _llmFlow.asSharedFlow()
+    val llmFlow: SharedFlow<LLamaContext.LLMEvent> = _llmFlow.asSharedFlow()
     private val _state = MutableStateFlow<GenerationState>(GenerationState.Idle)
     val state = _state.asStateFlow()
     private val _generatedText = MutableStateFlow("")
@@ -88,12 +88,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    private val llamaHelper by lazy {
-        LlamaHelper(
-            contentResolver = contentResolver,
-            scope = scope,
-            sharedFlow = _llmFlow,
-        )
+    private val llamaHelper by lazy { 
+        LLamaContext(contentResolver) 
     }
 
     fun loadModel(path: String, mmprojPath: String? = null) {
@@ -469,11 +465,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
             llmFlow.collect { event ->
                 when (event) {
-                    is LlamaHelper.LLMEvent.Started -> {
+                    is LLamaContext.LLMEvent.Started -> {
                         Log.i("MainViewModel", "Generation started")
                     }
-                    is LlamaHelper.LLMEvent.Ongoing -> {
-                        val word = event.word
+                    is LLamaContext.LLMEvent.Ongoing -> {
+                        val word = event.text
 
                         // 1. Мгновенная проверка и отсечение стоп-токенов ролей (без пробелов)
                         if (word.contains("<|") || word.contains("|>") ||
@@ -504,7 +500,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             _state.value = currentState.copy(tokensGenerated = event.tokenCount)
                         }
                     }
-                    is LlamaHelper.LLMEvent.Done -> {
+                    is LLamaContext.LLMEvent.Done -> {
                         val aiResponse = _generatedText.value
                         if (aiResponse.isNotEmpty()) {
                             _chatHistory.value = _chatHistory.value + ChatMessage("assistant", aiResponse)
@@ -517,7 +513,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         )
                         Log.i("MainViewModel", "Generation completed")
                     }
-                    is LlamaHelper.LLMEvent.Error -> {
+                    is LLamaContext.LLMEvent.Error -> {
                         _state.value = GenerationState.Error("Generation interrupted: ${event.message}")
                         Log.e("MainViewModel", "Generation interrupted ${event.message}")
                     }
