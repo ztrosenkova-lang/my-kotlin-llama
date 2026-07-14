@@ -25,6 +25,7 @@ FetchContent_MakeAvailable(llamacpp_core)
 # Это позволяет cmake пройти стадию генерации, не ломая структуру llama.cpp.
 file(WRITE ${llamacpp_core_SOURCE_DIR}/src/models/eagle3.cpp " ")
 file(WRITE ${llamacpp_core_SOURCE_DIR}/src/models/dflash.cpp " ")
+file(WRITE ${llamacpp_core_SOURCE_DIR}/src/models/t5.cpp " ")
 
 # Передаем заголовочные папки скачанного ядра компилятору
 target_include_directories(llama PRIVATE
