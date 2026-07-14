@@ -21,11 +21,10 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(llamacpp_core)
 
-# УДАЛЯЕМ ПРОБЛЕМНЫЕ ФАЙЛЫ МОДЕЛЕЙ, ВЫЗЫВАЮЩИЕ ОШИБКУ В CLANG 21
-file(REMOVE 
-    ${llamacpp_core_SOURCE_DIR}/src/models/eagle3.cpp
-    ${llamacpp_core_SOURCE_DIR}/src/models/dflash.cpp
-)
+# Фикс: вместо удаления используем file(WRITE ...) для создания пустых файлов.
+# Это позволяет cmake пройти стадию генерации, не ломая структуру llama.cpp.
+file(WRITE ${llamacpp_core_SOURCE_DIR}/src/models/eagle3.cpp " ")
+file(WRITE ${llamacpp_core_SOURCE_DIR}/src/models/dflash.cpp " ")
 
 # Передаем заголовочные папки скачанного ядра компилятору
 target_include_directories(llama PRIVATE
