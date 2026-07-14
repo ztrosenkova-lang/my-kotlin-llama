@@ -90,7 +90,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     private val llamaHelper by lazy {
         LlamaHelper(
-            context = getApplication<Application>(), // ИСПРАВЛЕНО: передаем контекст для защиты от краша
             contentResolver = contentResolver,
             scope = scope,
             sharedFlow = _llmFlow,
