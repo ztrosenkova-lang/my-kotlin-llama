@@ -4,7 +4,7 @@ project("llamacpp" C CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# 1. Настраиваем автоматическое скачивание официального ядра b9859 с GitHub
+# Скачиваем официальное ядро b9859
 include(FetchContent)
 FetchContent_Declare(
     llamacpp_core
@@ -13,20 +13,15 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(llamacpp_core)
 
-# 2. Объявляем сборку нашего JNI-моста
-add_library(${PROJECT_NAME} SHARED LlamaHelperJNI.cpp)
-
-# 3. ЖЕСТКО УКАЗЫВАЕМ ПУТИ К ИСХОДНИКАМ СКАЧАННОГО ЯДРА (Исправление бага):
-target_include_directories(${PROJECT_NAME} PRIVATE
+# Подключаем пути к заголовкам скачанного ядра
+target_include_directories(llama PRIVATE
     ${llamacpp_core_SOURCE_DIR}
     ${llamacpp_core_SOURCE_DIR}/include
     ${llamacpp_core_SOURCE_DIR}/common
 )
 
-# 4. Намертво связываем наш мост с нативными библиотеками ядра и модулем зрения
-target_link_libraries(${PROJECT_NAME}
-    llama
-    llava
+# Линкуем системные библиотеки Android напрямую к ядру llama
+target_link_libraries(llama
     android
     log
     jnigraphics
