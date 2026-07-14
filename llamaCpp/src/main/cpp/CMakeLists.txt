@@ -12,11 +12,9 @@ set(LLAMA_BUILD_SERVER OFF CACHE INTERNAL "")
 set(LLAMA_BUILD_EXAMPLES OFF CACHE INTERNAL "")
 set(LLAMA_BUILD_TESTS OFF CACHE INTERNAL "")
 
-# ТОЧЕЧНАЯ СБОРКА: отключаем все модели, включаем только нужные
-set(LLAMA_ALL_MODELS OFF CACHE INTERNAL "")
-# Включаем обратно только нужные нам современные архитектуры:
-# DeepSeek строится на архитектурах qwen/llama, поэтому поддержка qwen и llama автоматически запускает и DeepSeek
-set(LLAMA_MODELS "llama,qwen,gemma" CACHE INTERNAL "")
+# ТОЧЕЧНАЯ СБОРКА: принудительно перезаписываем кэш сервера
+set(LLAMA_ALL_MODELS OFF CACHE BOOL "Cut models" FORCE)
+set(LLAMA_MODELS "llama,qwen,gemma" CACHE STRING "Target models" FORCE)
 
 # Скачиваем официальное ядро b9859
 include(FetchContent)
