@@ -22,7 +22,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import org.nehuatl.sample.LlamaHelper
+import org.nehuatl.llamacpp.LlamaHelper
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.charset.StandardCharsets
@@ -124,7 +124,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     fun clearChat() {
         llamaHelper.abort()
         try {
-            llamaHelper.reset() // Теперь этот метод официально существует и вычистит ОЗУ!
+            llamaHelper.reset()
         } catch (e: Exception) {
             e.printStackTrace()
         }
