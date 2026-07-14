@@ -53,22 +53,13 @@ class LlamaHelper(
             val modelFd = modelPfd.detachFd()
             Log.d("LlamaHelper", ">>> Model FD: $modelFd")
 
-            // Добавляем фиктивное имя модели для инициализации токенизатора
+            // Используем официальные параметры инициализации из README библиотеки
             val config = mutableMapOf<String, Any>(
-                "model" to "model.gguf",
                 "model_fd" to modelFd,
-                "use_mmap" to false,
-                "use_mlock" to false,
                 "n_ctx" to contextLength,
-                "embedding" to false,
-                "n_batch" to 512,
-                "n_threads" to 0,
-                "n_gpu_layers" to 0,
-                "vocab_only" to false,
-                "lora" to "",
-                "lora_scaled" to 1.0,
-                "rope_freq_base" to 0.0,
-                "rope_freq_scale" to 0.0
+                "n_threads" to 4,
+                "use_mmap" to true,
+                "use_mlock" to false
             )
 
             // Настраиваем сэмплинг против заиканий (PocketPal style)
