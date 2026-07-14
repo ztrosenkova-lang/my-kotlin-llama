@@ -13,8 +13,10 @@ class LlamaHelper(
     val scope: CoroutineScope = CoroutineScope(Dispatchers.IO),
     val sharedFlow: MutableSharedFlow<LLMEvent>
 ) {
-    // Используем полный путь к классу, чтобы избежать ошибок импорта пакета ljcamargo
-    private val llama by lazy { io.github.ljcamargo.kotlinllamacpp.LlamaAndroid(contentResolver) }
+    // ИСПРАВЛЕНО: Явно указываем тип переменной для делегата lazy, чтобы убрать ошибку Property delegate
+    private val llama: io.github.ljcamargo.kotlinllamacpp.LlamaAndroid by lazy { 
+        io.github.ljcamargo.kotlinllamacpp.LlamaAndroid(contentResolver) 
+    }
     private var currentContext: Int? = null
 
     fun load(path: String, contextLength: Int, mmprojPath: String? = null, loaded: (Long) -> Unit) {
@@ -65,7 +67,7 @@ class LlamaHelper(
                     imgPfd?.let { params["image_fd"] = it.detachFd() }
                 }
 
-                // Передаем обязательный tokenCallback третьим параметром строго по правилам библиотеки
+                // Передаем токен-колбэк третьим параметром, как требует встроенная библиотека
                 llama.launchCompletion(id, params) { token ->
                     scope.launch {
                         sharedFlow.emit(LLMEvent.Ongoing(token))
