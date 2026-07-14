@@ -22,6 +22,13 @@ class LlamaHelper(
     private var tokenCount = 0
     private var allText = ""
 
+    /**
+     * Загрузка модели с поддержкой мультимодальности (mmproj)
+     * @param path Путь к модели GGUF
+     * @param contextLength Размер контекста (KV-кэш)
+     * @param mmprojPath Путь к проектору для зрения (опционально)
+     * @param loaded Callback с ID контекста
+     */
     fun load(
         path: String,
         contextLength: Int,
@@ -34,7 +41,7 @@ class LlamaHelper(
             val modelUri = Uri.parse(path)
             Log.d("LlamaHelper", ">>> Opening model FD for URI: $modelUri")
             
-            // Explicitly check readability
+            // Проверяем читаемость модели
             contentResolver.openInputStream(modelUri)?.use { input ->
                 val firstByte = input.read()
                 val size = contentResolver.openFileDescriptor(modelUri, "r")?.use { it.statSize } ?: -1
@@ -62,6 +69,11 @@ class LlamaHelper(
                 "rope_freq_base" to 0.0,
                 "rope_freq_scale" to 0.0
             )
+
+            // Настраиваем сэмплинг против заиканий (PocketPal style)
+            config["repetition_penalty"] = 1.15f   // Штраф за повторы букв и слогов
+            config["top_k"] = 40                   // Ограничиваем выбор самыми логичными токенами
+            config["top_p"] = 0.9f                 // Отсекаем случайный мусор
 
             mmprojPath?.let {
                 val mmUri = Uri.parse(it)
@@ -105,6 +117,12 @@ class LlamaHelper(
         }
     }
 
+    /**
+     * Основной метод генерации с поддержкой мультимодальности
+     * @param prompt Текстовый запрос пользователя
+     * @param imagePath URI изображения для анализа (опционально)
+     * @param partialCompletion Включить стриминг токенов
+     */
     fun predict(prompt: String, imagePath: String? = null, partialCompletion: Boolean = true) {
         val context = currentContext ?: throw Exception("Model was not loaded yet")
         val startTime = System.currentTimeMillis()
@@ -116,15 +134,12 @@ class LlamaHelper(
             "emit_partial_completion" to partialCompletion,
         )
         
+        // 🔥 НОВОЕ: Передаем изображение в C++ слой для llava_image_embed
         imagePath?.let {
             try {
                 val imgUri = Uri.parse(it)
                 Log.d("LlamaHelper", ">>> Opening image FD for URI: $imgUri")
                 contentResolver.openFileDescriptor(imgUri, "r")?.use { pfd ->
-                    // Since we want to pass the FD to JNI, we should detach it if needed,
-                    // but here we might be able to just pass the FD number if it stays open
-                    // for the duration of the call.
-                    // Actually, detachFd() is safer.
                     val imgFd = pfd.detachFd()
                     params["image_fds"] = listOf(imgFd)
                     Log.d("LlamaHelper", ">>> Image FD added to params: $imgFd")
@@ -142,6 +157,21 @@ class LlamaHelper(
             )
             val duration = System.currentTimeMillis() - startTime
             sharedFlow.tryEmit(LLMEvent.Done(allText, tokenCount, duration))
+        }
+    }
+
+    /**
+     * 🆕 Официальный метод очистки KV-кэша (освобождение ОЗУ)
+     * Вызывает llama_kv_cache_clear(ctx) на стороне C++
+     */
+    fun reset() {
+        val context = currentContext
+        if (context != null) {
+            Log.d("LlamaHelper", ">>> Resetting KV cache for context: $context")
+            llama.clearContext(context)
+            Log.d("LlamaHelper", ">>> KV cache cleared successfully")
+        } else {
+            Log.w("LlamaHelper", "Cannot reset: no active context")
         }
     }
 
