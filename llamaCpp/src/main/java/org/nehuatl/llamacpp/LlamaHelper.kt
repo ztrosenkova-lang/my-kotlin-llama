@@ -2,6 +2,7 @@ package org.nehuatl.llamacpp
 
 import android.content.ContentResolver
 import android.net.Uri
+import android.os.ParcelFileDescriptor
 import android.util.Log
 import io.github.ljcamargo.llamacpp.LlamaConfig
 import kotlinx.coroutines.CoroutineScope
@@ -22,6 +23,10 @@ class LlamaHelper(
     private var currentContext: Int? = null
     private var tokenCount = 0
     private var allText = ""
+
+    // Удерживаем ссылки на ParcelFileDescriptor для Android 14+
+    private var modelPfd: ParcelFileDescriptor? = null
+    private var mmprojPfd: ParcelFileDescriptor? = null
 
     /**
      * Загрузка модели с поддержкой мультимодальности (mmproj)
@@ -49,9 +54,10 @@ class LlamaHelper(
                 Log.d("LlamaHelper", ">>> Model is readable, first byte: $firstByte, size: $size")
             } ?: Log.e("LlamaHelper", ">>> Model is NOT readable via openInputStream")
 
-            val modelPfd = contentResolver.openFileDescriptor(modelUri, "r")
+            // Открываем ParcelFileDescriptor без detachFd() для Android 14
+            modelPfd = contentResolver.openFileDescriptor(modelUri, "r")
                 ?: throw IllegalArgumentException("Cannot open model URI: $modelUri")
-            val modelFd = modelPfd.detachFd()
+            val modelFd = modelPfd!!.fd // Берем дескриптор напрямую, не отрывая его!
             Log.d("LlamaHelper", ">>> Model FD: $modelFd")
 
             // Используем официальный класс конфигурации библиотеки
@@ -71,9 +77,9 @@ class LlamaHelper(
             mmprojPath?.let {
                 val mmUri = Uri.parse(it)
                 Log.d("LlamaHelper", ">>> Opening mmproj FD for URI: $mmUri")
-                val mmPfd = contentResolver.openFileDescriptor(mmUri, "r")
-                if (mmPfd != null) {
-                    val mmFd = mmPfd.detachFd()
+                mmprojPfd = contentResolver.openFileDescriptor(mmUri, "r")
+                if (mmprojPfd != null) {
+                    val mmFd = mmprojPfd!!.fd // Берем дескриптор напрямую
                     config.mmprojFd = mmFd
                     Log.d("LlamaHelper", ">>> Mmproj FD: $mmFd")
                 }
@@ -133,7 +139,7 @@ class LlamaHelper(
                 val imgUri = Uri.parse(it)
                 Log.d("LlamaHelper", ">>> Opening image FD for URI: $imgUri")
                 contentResolver.openFileDescriptor(imgUri, "r")?.use { pfd ->
-                    val imgFd = pfd.detachFd()
+                    val imgFd = pfd.fd
                     params["image_fd"] = imgFd
                     Log.d("LlamaHelper", ">>> Image FD added to params: $imgFd")
                 }
@@ -180,6 +186,17 @@ class LlamaHelper(
     }
 
     fun release() {
+        // Закрываем удерживаемые дескрипторы
+        try {
+            modelPfd?.close()
+            mmprojPfd?.close()
+            modelPfd = null
+            mmprojPfd = null
+            Log.d("LlamaHelper", ">>> File descriptors closed successfully")
+        } catch (e: Exception) {
+            Log.e("LlamaHelper", "Error closing file descriptors", e)
+        }
+        
         currentContext?.let { id ->
             llama.releaseContext(id)
         }
