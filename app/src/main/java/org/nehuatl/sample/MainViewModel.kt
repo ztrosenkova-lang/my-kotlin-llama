@@ -123,6 +123,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     fun clearChat() {
         llamaHelper.abort()
+        try {
+            llamaHelper.reset() // Теперь этот метод официально существует и вычистит ОЗУ!
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
         _chatHistory.value = emptyList()
         _generatedText.value = ""
         tts?.stop()
