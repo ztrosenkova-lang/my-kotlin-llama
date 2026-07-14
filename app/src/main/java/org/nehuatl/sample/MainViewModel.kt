@@ -102,9 +102,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         scope.launch {
             try {
                 llamaHelper.load(
-                    path = path,
+                    path = android.net.Uri.parse(path),
                     contextLength = contextSize.value,
-                    mmprojPath = if (mmprojPath.isNullOrEmpty()) null else mmprojPath,
+                    mmprojPath = if (mmprojPath.isNullOrEmpty()) null else android.net.Uri.parse(mmprojPath),
                     loaded = { id ->
                         _state.value = GenerationState.ModelLoaded(path)
                         val uri = Uri.parse(path)
