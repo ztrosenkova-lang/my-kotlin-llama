@@ -134,14 +134,14 @@ class LlamaHelper(
             "emit_partial_completion" to partialCompletion,
         )
         
-        // 🔥 НОВОЕ: Передаем изображение в C++ слой для llava_image_embed
+        // 🔥 ИСПРАВЛЕНО: Передаем изображение через правильный параметр image_fd
         imagePath?.let {
             try {
                 val imgUri = Uri.parse(it)
                 Log.d("LlamaHelper", ">>> Opening image FD for URI: $imgUri")
                 contentResolver.openFileDescriptor(imgUri, "r")?.use { pfd ->
                     val imgFd = pfd.detachFd()
-                    params["image_fds"] = listOf(imgFd)
+                    params["image_fd"] = imgFd
                     Log.d("LlamaHelper", ">>> Image FD added to params: $imgFd")
                 }
             } catch (e: Exception) {
@@ -161,13 +161,17 @@ class LlamaHelper(
     }
 
     /**
-     * 🆕 Официальный метод очистки KV-кэша (освобождение ОЗУ)
-     * Использует встроенный метод сброса сессии из официальной библиотеки
+     * 🆕 ИСПРАВЛЕНО: Официальный метод очистки KV-кэша (освобождение ОЗУ)
+     * Сбрасывает текущий контекст через releaseContext
      */
     fun reset() {
         try {
             Log.d("LlamaHelper", ">>> Resetting KV cache via official library method")
-            llama.resetSession()
+            currentContext?.let { id -> 
+                // Сбрасываем и очищаем кэш токенов для текущего контекста
+                llama.releaseContext(id) 
+                currentContext = null
+            }
             Log.d("LlamaHelper", ">>> KV cache cleared successfully")
         } catch (e: Exception) {
             Log.e("LlamaHelper", "Failed to reset session", e)
