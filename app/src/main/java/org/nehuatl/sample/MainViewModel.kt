@@ -463,7 +463,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         Log.i("MainViewModel", "Generation started")
                     }
                     is LLamaContext.LLMEvent.Ongoing -> {
-                        val token = event.text
+                        val token = event.token
 
                         // 1. Мгновенная проверка и отсечение стоп-токенов ролей (без пробелов)
                         if (token.contains("<|") || token.contains("|>") ||
