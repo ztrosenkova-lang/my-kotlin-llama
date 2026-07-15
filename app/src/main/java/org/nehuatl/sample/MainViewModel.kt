@@ -2,26 +2,24 @@ package org.nehuatl.sample
 
 import android.app.Application
 import android.content.ContentResolver
-import android.content.Intent
-import android.os.SystemClock
-import android.speech.tts.TextToSpeech
 import android.util.Log
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import org.nehuatl.llamacpp.LLamaContext // ПРАВИЛЬНЫЙ ИМПОРТ ИЗ ЯДРА
+import org.nehuatl.llamacpp.LLamaContext // ИМПОРТ ИЗ НАСТОЯЩЕГО МОДУЛЯ ЯДРА
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.Locale
+import android.speech.tts.TextToSpeech
+import android.os.SystemClock
 
 class MainViewModel(
     application: Application,
@@ -29,13 +27,19 @@ class MainViewModel(
 ) : AndroidViewModel(application), TextToSpeech.OnInitListener {
 
     private val scope = CoroutineScope(Dispatchers.IO)
-    private val _llmFlow = MutableSharedFlow<LLamaContext.LLMEvent>()
+    private val _llmFlow = MutableSharedFlow<org.nehuatl.llamacpp.LLamaContext.LLMEvent>()
 
     private val _state = MutableStateFlow<GenerationState>(GenerationState.Idle)
     val state: StateFlow<GenerationState> = _state.asStateFlow()
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
+
+    // ВОССТАНОВЛЕНЫ ВСЕ ТВОИ ОРИГИНАЛЬНЫЕ ПЕРЕМЕННЫЕ ИНТЕРФЕЙСА CHATSCREEN
+    val generatedText = mutableStateOf("")
+    val systemPrompt = mutableStateOf("Ты — Меч Правды v2.0, автономный голосовой ассистент. Отвечай кратко, емко, строго на русском языке.")
+    val chatHistory = mutableStateOf("")
+    val temperature = mutableStateOf(0.7f)
 
     var contextSize = mutableStateOf(2048)
     var currentModelName = mutableStateOf("Модель не выбрана")
@@ -62,6 +66,22 @@ class MainViewModel(
         }
     }
 
+    fun updateTemperature(value: Float) {
+        temperature.value = value
+    }
+
+    fun updateSystemPrompt(value: String) {
+        systemPrompt.value = value
+    }
+
+    fun overwriteLongTermMemory(text: String) {
+        chatHistory.value = text
+    }
+
+    fun readFromLongTermMemory(): String {
+        return chatHistory.value
+    }
+
     fun scheduleInternalReminder(message: String, delayMs: Long) {
         viewModelScope.launch(Dispatchers.Default) {
             delay(delayMs)
@@ -70,7 +90,7 @@ class MainViewModel(
     }
 
     fun triggerVoiceAlarm(message: String) {
-        GlobalScope.launch(Dispatchers.Main) {
+        viewModelScope.launch(Dispatchers.Main) {
             if (isTtsReady) {
                 repeat(5) {
                     tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, null)
@@ -131,11 +151,10 @@ class MainViewModel(
         val userMessage = ChatMessage(text = prompt, isUser = true, imagePath = imagePath)
         _messages.value = _messages.value + userMessage
 
-        val systemPrompt = "Ты — Меч Правды v2.0, автономный голосовой ассистент. Отвечай кратко, емко, строго на русском языке."
         val limitedHistory = _messages.value.takeLast(8)
 
         val fullPromptBuilder = StringBuilder()
-        fullPromptBuilder.append("<|im_start|>system\n").append(systemPrompt).append("<|im_end|>\n")
+        fullPromptBuilder.append("<|im_start|>system\n").append(systemPrompt.value).append("<|im_end|>\n")
         for (msg in limitedHistory) {
             val role = if (msg.isUser) "user" else "assistant"
             fullPromptBuilder.append("<|im_start|>").append(role).append("\n").append(msg.text).append("<|im_end|>\n")
@@ -159,12 +178,12 @@ class MainViewModel(
             var lastUpdateTime = 0L
 
             llamaHelper.state.collect { helperState ->
-                // Синхронизация состояний из оригинального класса ядра
                 when (helperState) {
                     is org.nehuatl.llamacpp.GenerationState.Generating -> {
                         val token = helperState.text
                         byteBuffer.write(token.toByteArray(Charsets.UTF_8))
                         val currentText = byteBuffer.toString("UTF-8")
+                        generatedText.value = currentText
                         
                         val now = SystemClock.uptimeMillis()
                         if (now - lastUpdateTime > 64) {
@@ -177,6 +196,7 @@ class MainViewModel(
                         _messages.value = _messages.value + ChatMessage(text = finalResult, isUser = false)
                         _state.value = GenerationState.ModelLoaded(currentModelName.value)
                         triggerVoiceAlarm(finalResult)
+                        generatedText.value = ""
                         byteBuffer.reset()
                     }
                     is org.nehuatl.llamacpp.GenerationState.Error -> {
@@ -206,16 +226,4 @@ class MainViewModel(
     }
 }
 
-sealed interface GenerationState {
-    object Idle : GenerationState
-    object Loading : GenerationState
-    data class ModelLoaded(val path: String) : GenerationState
-    data class Generating(val text: String) : GenerationState
-    data class Error(val message: String) : GenerationState
-}
-
-data class ChatMessage(
-    val text: String,
-    val isUser: Boolean,
-    val imagePath: String? = null
-)
+// УДАЛЕН ДУБЛИКАТ ИНТЕРФЕЙСА GENERATIONSTATE ИЗ ЭТОГО ФАЙЛА
