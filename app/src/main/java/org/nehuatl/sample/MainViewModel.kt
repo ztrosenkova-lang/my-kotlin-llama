@@ -11,7 +11,6 @@ import android.net.Uri
 import android.speech.tts.TextToSpeech
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
-import io.github.ljcamargo.kotlinllamacpp.LlamaAndroid
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -23,6 +22,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.nehuatl.llamacpp.LLamaContext
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.charset.StandardCharsets
@@ -41,12 +41,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val viewModelJob = SupervisorJob()
     private val scope = CoroutineScope(Dispatchers.IO + viewModelJob)
 
-    private val _llmFlow = MutableSharedFlow<LlamaAndroid.LLMEvent>(
+    private val _llmFlow = MutableSharedFlow<LLamaContext.LLMEvent>(
         replay = 0,
         extraBufferCapacity = 64,
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
-    val llmFlow: SharedFlow<LlamaAndroid.LLMEvent> = _llmFlow.asSharedFlow()
+    val llmFlow: SharedFlow<LLamaContext.LLMEvent> = _llmFlow.asSharedFlow()
     private val _state = MutableStateFlow<GenerationState>(GenerationState.Idle)
     val state = _state.asStateFlow()
     private val _generatedText = MutableStateFlow("")
@@ -89,7 +89,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     private val llamaHelper by lazy { 
-        LlamaAndroid(contentResolver) 
+        LLamaContext(contentResolver) 
     }
 
     fun loadModel(path: String, mmprojPath: String? = null) {
@@ -97,50 +97,28 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _state.value = GenerationState.LoadingModel
         scope.launch {
             try {
-                // Открываем файловый дескриптор модели
-                val pfd = contentResolver.openFileDescriptor(Uri.parse(path), "r")
-                    ?: throw Exception("Failed to open model PFD")
-                val modelFd = pfd.detachFd()
-
-                val config = mutableMapOf<String, Any>(
-                    "model_fd" to modelFd,
-                    "n_ctx" to contextSize.value,
-                    "n_threads" to 4,
-                    "use_mmap" to true,
-                    "use_mlock" to false
+                llamaHelper.load(
+                    path = path,
+                    contextLength = contextSize.value,
+                    mmprojPath = mmprojPath,
+                    loaded = { id ->
+                        _state.value = GenerationState.ModelLoaded(path)
+                        val uri = Uri.parse(path)
+                        currentModelName = getFileNameFromUri(contentResolver, uri)
+                    }
                 )
-
-                if (!mmprojPath.isNullOrEmpty()) {
-                    val mmPfd = contentResolver.openFileDescriptor(Uri.parse(mmprojPath), "r")
-                    mmPfd?.let { config["mmproj_fd"] = it.detachFd() }
-                }
-
-                val result = llamaHelper.startEngine(config)
-                val id = result?.get("context_id") ?: result?.get("contextId") 
-                    ?: throw Exception("context_id not found")
-                
-                currentContext = (id as Number).toInt()
-                _state.value = GenerationState.ModelLoaded(path)
-                
             } catch (e: Exception) {
                 _state.value = GenerationState.Error(e.message ?: "Unknown error")
             }
         }
     }
 
-    // Добавляем переменную для хранения ID контекста
-    private var currentContext: Int? = null
-
     fun updateSystemPrompt(newPrompt: String) {
         _systemPrompt.value = newPrompt
     }
 
     fun clearChat() {
-        // Очистка памяти чата через releaseContext
-        currentContext?.let { id ->
-            llamaHelper.releaseContext(id)
-            currentContext = null
-        }
+        llamaHelper.release()
         _chatHistory.value = emptyList()
         _generatedText.value = ""
         tts?.stop()
@@ -470,83 +448,72 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             _generatedText.value = ""
             tts?.stop() // Останавливаем озвучку при новом запросе
             
-            // Получаем ID контекста
-            val contextId = currentContext ?: throw Exception("Model not loaded")
-            
-            // Подготавливаем параметры для генерации
-            val params = mutableMapOf<String, Any>(
-                "prompt" to formattedPrompt,
-                "top_k" to 40,
-                "top_p" to 0.9f,
-                "repetition_penalty" to 1.15f
-            )
-            
-            // Добавляем изображение, если оно есть
-            imagePath?.let {
-                try {
-                    val imgPfd = contentResolver.openFileDescriptor(Uri.parse(it), "r")
-                    imgPfd?.let { pfd ->
-                        val imgFd = pfd.detachFd()
-                        params["image_fd"] = imgFd
-                    }
-                } catch (e: Exception) {
-                    Log.e("MainViewModel", "Failed to open image", e)
-                }
-            }
-
-            // Запускаем генерацию через launchCompletion
-            val result = llamaHelper.launchCompletion(
-                id = contextId,
-                params = params
+            // ИСПРАВЛЕНО: вызываем predict с параметрами
+            llamaHelper.predict(
+                prompt = formattedPrompt,
+                imagePath = imagePath
             )
 
             // БАЙТОВЫЙ БУФЕР ДЛЯ ЧИСТОЙ СКЛЕЙКИ КИРИЛЛИЦЫ (PocketPal algorithm)
             val byteBuffer = ByteArrayOutputStream()
 
-            // Извлекаем токены из результата
-            val tokens = result?.get("tokens") as? List<String> ?: emptyList()
-            tokens.forEach { word ->
-                // 1. Мгновенная проверка и отсечение стоп-токенов ролей (без пробелов)
-                if (word.contains("<|") || word.contains("|>") ||
-                    word.contains("User:") || word.contains("Assistant:") ||
-                    word.contains("Question:") || word.contains("Answer:")) {
-                    Log.i("MainViewModel", "Стоп-токен обнаружен. Остановка.")
-                    val aiResponse = _generatedText.value
-                    if (aiResponse.isNotEmpty()) {
-                        _chatHistory.value = _chatHistory.value + ChatMessage("assistant", aiResponse)
-                        speakText(aiResponse)
+            llmFlow.collect { event ->
+                when (event) {
+                    is LLamaContext.LLMEvent.Started -> {
+                        Log.i("MainViewModel", "Generation started")
                     }
-                    _state.value = GenerationState.Completed(prompt, tokens.size, 0)
-                    return@launch
-                }
+                    is LLamaContext.LLMEvent.Ongoing -> {
+                        val token = event.text
 
-                // 2. Логика PocketPal: копим сырые данные и декодируем UTF-8 только целиком!
-                if (!word.startsWith("<|") && !word.endsWith("|>")) {
-                    // Переводим прилетевший токен в сырые байты и кладем в буфер
-                    val bytes = word.toByteArray(StandardCharsets.UTF_8)
-                    byteBuffer.write(bytes)
-                    
-                    // Обновляем экран только чистой, правильно собранной строкой
-                    _generatedText.value = byteBuffer.toString("UTF-8")
-                }
+                        // 1. Мгновенная проверка и отсечение стоп-токенов ролей (без пробелов)
+                        if (token.contains("<|") || token.contains("|>") ||
+                            token.contains("User:") || token.contains("Assistant:") ||
+                            token.contains("Question:") || token.contains("Answer:")) {
+                            Log.i("MainViewModel", "Стоп-токен обнаружен. Остановка.")
+                            val aiResponse = _generatedText.value
+                            if (aiResponse.isNotEmpty()) {
+                                _chatHistory.value = _chatHistory.value + ChatMessage("assistant", aiResponse)
+                                speakText(aiResponse)
+                            }
+                            _state.value = GenerationState.Completed(prompt, event.tokenCount, 0)
+                            return@collect
+                        }
 
-                val currentState = _state.value
-                if (currentState is GenerationState.Generating) {
-                    _state.value = currentState.copy(tokensGenerated = tokens.size)
+                        // 2. Логика PocketPal: копим сырые данные и декодируем UTF-8 только целиком!
+                        if (!token.startsWith("<|") && !token.endsWith("|>")) {
+                            // Переводим прилетевший токен в сырые байты и кладем в буфер
+                            val bytes = token.toByteArray(StandardCharsets.UTF_8)
+                            byteBuffer.write(bytes)
+                            
+                            // Обновляем экран только чистой, правильно собранной строкой
+                            _generatedText.value = byteBuffer.toString("UTF-8")
+                        }
+
+                        val currentState = _state.value
+                        if (currentState is GenerationState.Generating) {
+                            _state.value = currentState.copy(tokensGenerated = event.tokenCount)
+                        }
+                    }
+                    is LLamaContext.LLMEvent.Done -> {
+                        val aiResponse = _generatedText.value
+                        if (aiResponse.isNotEmpty()) {
+                            _chatHistory.value = _chatHistory.value + ChatMessage("assistant", aiResponse)
+                            speakText(aiResponse)
+                        }
+                        _state.value = GenerationState.Completed(
+                            prompt = prompt,
+                            tokenCount = event.tokenCount,
+                            durationMs = event.duration
+                        )
+                        Log.i("MainViewModel", "Generation completed")
+                    }
+                    is LLamaContext.LLMEvent.Error -> {
+                        _state.value = GenerationState.Error("Generation interrupted: ${event.message}")
+                        Log.e("MainViewModel", "Generation interrupted ${event.message}")
+                    }
+                    else -> {}
                 }
             }
-            
-            // Завершаем генерацию
-            val aiResponse = _generatedText.value
-            if (aiResponse.isNotEmpty()) {
-                _chatHistory.value = _chatHistory.value + ChatMessage("assistant", aiResponse)
-                speakText(aiResponse)
-            }
-            _state.value = GenerationState.Completed(
-                prompt = prompt,
-                tokenCount = tokens.size,
-                durationMs = System.currentTimeMillis() - startTime
-            )
         }
     }
 
@@ -554,11 +521,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         if (_state.value.isActive()) {
             Log.i("MainViewModel", "Aborting generation")
             tts?.stop() // Останавливаем озвучку при прерывании
-            
-            // Останавливаем генерацию через stopCompletion
-            currentContext?.let { id ->
-                llamaHelper.stopCompletion(id)
-            }
+            llamaHelper.abort()
 
             val currentState = _state.value
             if (currentState is GenerationState.Generating) {
@@ -577,9 +540,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         instance = null
         tts?.stop()
         tts?.shutdown()
-        currentContext?.let { id ->
-            llamaHelper.releaseContext(id)
-        }
+        llamaHelper.release()
         viewModelJob.cancel()
     }
 }
