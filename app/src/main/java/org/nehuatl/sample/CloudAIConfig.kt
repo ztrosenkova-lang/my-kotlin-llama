@@ -1,11 +1,12 @@
 package org.nehuatl.sample
 
 data class CloudAIConfig(
-    val apiUrl: String = "",
-    val modelId: String = "",
-    val apiToken: String = ""
+    val apiUrl: String,
+    val modelId: String,
+    val authKey: String,
+    val isGigaChat: Boolean = true
 ) {
     fun isValid(): Boolean {
-        return apiUrl.isNotBlank() && modelId.isNotBlank() && apiToken.isNotBlank()
+        return apiUrl.isNotBlank() && authKey.isNotBlank()
     }
 }
