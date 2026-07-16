@@ -559,7 +559,7 @@ fun ChatScreen(
             }
         }
 
-        // StatusBar (обновлена для отображения AnalyzingImage)
+        // ОБНОВЛЕННЫЙ StatusBar (показывает имя модели)
         StatusBar(
             state = state,
             currentModel = currentModelPath,
@@ -738,6 +738,7 @@ private fun ModelPickerDialog(
     }
 }
 
+// ОБНОВЛЕННЫЙ StatusBar
 @Composable
 private fun StatusBar(
     state: GenerationState,
@@ -778,7 +779,9 @@ private fun StatusBar(
                         Text("Загрузка модели...", color = DarkText)
                     }
                     is GenerationState.ModelLoaded -> {
-                        Text("✓ ИИ Готов", color = AccentColor)
+                        // ПОКАЗЫВАЕМ ИМЯ ФАЙЛА МОДЕЛИ
+                        val modelName = state.path.substringAfterLast("/") // Извлекаем имя файла из пути
+                        Text("✓ Модель: $modelName", color = AccentColor)
                     }
                     is GenerationState.AnalyzingImage -> {
                         CircularProgressIndicator(modifier = Modifier.size(16.dp), color = AccentColor)
