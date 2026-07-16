@@ -559,7 +559,7 @@ fun ChatScreen(
             }
         }
 
-        // StatusBar (без кнопки "настроить")
+        // StatusBar (обновлена для отображения AnalyzingImage)
         StatusBar(
             state = state,
             currentModel = currentModelPath,
@@ -750,6 +750,7 @@ private fun StatusBar(
             containerColor = when (state) {
                 is GenerationState.Error -> AccentColor.copy(alpha = 0.15f)
                 is GenerationState.Generating -> AccentColor.copy(alpha = 0.15f)
+                is GenerationState.AnalyzingImage -> AccentColor.copy(alpha = 0.15f)
                 is GenerationState.LoadingModel -> BorderGray.copy(alpha = 0.3f)
                 else -> SurfaceGray
             }
@@ -778,6 +779,10 @@ private fun StatusBar(
                     }
                     is GenerationState.ModelLoaded -> {
                         Text("✓ ИИ Готов", color = AccentColor)
+                    }
+                    is GenerationState.AnalyzingImage -> {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = AccentColor)
+                        Text("🧐 Анализ изображения...", color = DarkText)
                     }
                     is GenerationState.Generating -> {
                         CircularProgressIndicator(modifier = Modifier.size(16.dp), color = AccentColor)
