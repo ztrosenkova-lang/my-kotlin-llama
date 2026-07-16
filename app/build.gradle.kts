@@ -9,7 +9,7 @@ plugins {
 fun nativeArchitectures(): List<String> {
     val value = project.properties["nativeArchitectures"]
     val archs = value?.toString()?.split(",") ?: listOf("x86_64", "arm64-v8a")
-    return archs.filter { it != "armeabi-v7a" && it != "x86" } // Not building for 32-bit architectures
+    return archs.filter { it != "armeabi-v7a" && it != "x86" }
 }
 
 android {
@@ -76,7 +76,6 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     
-    // Расширенная библиотека иконок Material Icons
     implementation("androidx.compose.material:material-icons-extended")
 
     testImplementation(libs.junit)
@@ -87,8 +86,7 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
     
-    // Для работы с облачными API
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
-    implementation("org.json:json:20240303")
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.logging.interceptor)
+    implementation(libs.json)
 }
