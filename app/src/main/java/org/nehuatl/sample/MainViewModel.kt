@@ -68,6 +68,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     // Настройки сэмплинга (PocketPal style)
     val temperature = MutableStateFlow(0.3f) // По умолчанию 0.3 для точных наук (химия)
     val contextSize = MutableStateFlow(2048) // Базовый размер контекста для Honor X8a
+    val maxTokens = MutableStateFlow(512) // Максимальное количество токенов для генерации
 
     // Файл долговременной памяти
     private val memoryFile: File by lazy {
@@ -135,6 +136,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     fun updateContextSize(size: Int) {
         contextSize.value = size.coerceAtLeast(512)
+    }
+
+    fun updateMaxTokens(tokens: Int) {
+        maxTokens.value = tokens.coerceIn(1, 4096) // Ограничиваем разумными пределами
     }
 
     // Функция прямой перезаписи долговременной памяти
@@ -434,10 +439,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             llamaHelper.abort()
             tts?.stop() // Останавливаем озвучку при новом запросе
             
-            // ИСПРАВЛЕНО: вызываем predict без лишних параметров
+            // ИСПРАВЛЕНО: вызываем predict с параметрами температуры и maxTokens
             llamaHelper.predict(
                 prompt = formattedPrompt,
-                imagePath = imagePath
+                imagePath = imagePath,
+                temperature = temperature.value,
+                maxTokens = maxTokens.value
             )
 
             // БАЙТОВЫЙ БУФЕР ДЛЯ ЧИСТОЙ СКЛЕЙКИ КИРИЛЛИЦЫ (PocketPal algorithm)
@@ -459,7 +466,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             val aiResponse = _generatedText.value
                             if (aiResponse.isNotEmpty()) {
                                 _chatHistory.value = _chatHistory.value + ChatMessage("assistant", aiResponse)
-                                // ✅ Озвучиваем только при принудительной остановке
                                 speakText(aiResponse)
                             }
                             _state.value = GenerationState.Completed(prompt, event.tokenCount, 0)
@@ -494,7 +500,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         val aiResponse = _generatedText.value
                         if (aiResponse.isNotEmpty()) {
                             _chatHistory.value = _chatHistory.value + ChatMessage("assistant", aiResponse)
-                            // ✅ ЕДИНСТВЕННОЕ МЕСТО, ГДЕ ОЗВУЧИВАЕМ ПОЛНЫЙ ОТВЕТ
                             speakText(aiResponse)
                         }
                         _state.value = GenerationState.Completed(
