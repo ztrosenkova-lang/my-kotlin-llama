@@ -1,8 +1,11 @@
 package org.nehuatl.sample
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -66,6 +69,18 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         enableEdgeToEdge()
+
+        // Проверяем разрешение на точный будильник для Android 12+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val alarmManager = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+            if (!alarmManager.canScheduleExactAlarms()) {
+                // Если разрешение не предоставлено, направляем пользователя в настройки
+                Log.w("MainActivity", "Разрешение на точный будильник не предоставлено")
+                // Переход в настройки будет выполнен в MainViewModel при попытке установить будильник
+                // Здесь мы только логируем
+            }
+        }
+
         setContent {
             KotlinLlamaCppTheme {
                 val viewModel: MainViewModel by viewModels {
