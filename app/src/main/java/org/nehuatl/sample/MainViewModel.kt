@@ -36,6 +36,10 @@ data class ChatMessage(val role: String, val text: String) // role: "user" ил�
 
 class MainViewModel(application: Application, val contentResolver: ContentResolver): AndroidViewModel(application) {
 
+    companion object {
+        @Volatile var instance: MainViewModel? = null
+    }
+
     private val viewModelJob = SupervisorJob()
     private val scope = CoroutineScope(Dispatchers.IO + viewModelJob)
 
@@ -74,6 +78,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private var tts: TextToSpeech? = null
 
     init {
+        instance = this
         tts = TextToSpeech(getApplication()) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 // Устанавливаем системный язык по умолчанию
@@ -454,6 +459,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             val aiResponse = _generatedText.value
                             if (aiResponse.isNotEmpty()) {
                                 _chatHistory.value = _chatHistory.value + ChatMessage("assistant", aiResponse)
+                                // ✅ Озвучиваем только при принудительной остановке
                                 speakText(aiResponse)
                             }
                             _state.value = GenerationState.Completed(prompt, event.tokenCount, 0)
@@ -488,6 +494,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         val aiResponse = _generatedText.value
                         if (aiResponse.isNotEmpty()) {
                             _chatHistory.value = _chatHistory.value + ChatMessage("assistant", aiResponse)
+                            // ✅ ЕДИНСТВЕННОЕ МЕСТО, ГДЕ ОЗВУЧИВАЕМ ПОЛНЫЙ ОТВЕТ
                             speakText(aiResponse)
                         }
                         _state.value = GenerationState.Completed(
@@ -527,6 +534,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     override fun onCleared() {
         super.onCleared()
+        instance = null
         tts?.stop()
         tts?.shutdown()
         llamaHelper.abort()
