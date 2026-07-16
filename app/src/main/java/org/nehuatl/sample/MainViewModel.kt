@@ -279,11 +279,16 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 else -> listOf("<|user|>", "<|eot_id|>")
             }
 
-            _state.value = GenerationState.Generating(
-                prompt = prompt,
-                startTime = System.currentTimeMillis(),
-                tokensGenerated = 0
-            )
+            // Переключаем состояние на анализ изображения, если оно есть
+            if (!imagePath.isNullOrEmpty()) {
+                _state.value = GenerationState.AnalyzingImage
+            } else {
+                _state.value = GenerationState.Generating(
+                    prompt = prompt,
+                    startTime = System.currentTimeMillis(),
+                    tokensGenerated = 0
+                )
+            }
             
             // ПРИНУДИТЕЛЬНАЯ ОЧИСТКА БУФЕРА ДВИЖКА ПЕРЕД НОВЫМ ВОПРОСОМ
             _generatedText.value = ""
@@ -329,6 +334,15 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             
                             // Обновляем экран только чистой, правильно собранной строкой
                             _generatedText.value = byteBuffer.toString("UTF-8")
+                        }
+
+                        // Если мы были в состоянии AnalyzingImage, переключаем на Generating
+                        if (_state.value is GenerationState.AnalyzingImage) {
+                            _state.value = GenerationState.Generating(
+                                prompt = prompt,
+                                startTime = System.currentTimeMillis(),
+                                tokensGenerated = event.tokenCount
+                            )
                         }
 
                         val currentState = _state.value
