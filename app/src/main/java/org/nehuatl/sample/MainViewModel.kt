@@ -18,15 +18,12 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.nehuatl.llamacpp.LlamaHelper
-import java.io.ByteArrayOutputStream
 import java.io.File
-import java.nio.charset.StandardCharsets
 import java.util.Locale
 
-// Структура данных для сообщений чата
-data class ChatMessage(val role: String, val text: String) // role: "user" или "assistant"
+data class ChatMessage(val role: String, val text: String)
 
-class MainViewModel(application: Application, val contentResolver: ContentResolver): AndroidViewModel(application) {
+class MainViewModel(application: Application, val contentResolver: ContentResolver) : AndroidViewModel(application) {
 
     companion object {
         @Volatile var instance: MainViewModel? = null
@@ -35,7 +32,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val viewModelJob = SupervisorJob()
     private val scope = CoroutineScope(Dispatchers.IO + viewModelJob)
 
-    // === Локальный ИИ ===
     private val _llmFlow = MutableSharedFlow<LlamaHelper.LLMEvent>(
         replay = 0,
         extraBufferCapacity = 64,
@@ -46,8 +42,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     val state = _state.asStateFlow()
     private val _generatedText = MutableStateFlow("")
     val generatedText = _generatedText.asStateFlow()
-    
-    // === Облачный ИИ ===
+
     private val _cloudState = MutableStateFlow<CloudAIState>(CloudAIState.Idle)
     val cloudState = _cloudState.asStateFlow()
     private val _cloudGeneratedText = MutableStateFlow("")
@@ -58,11 +53,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
     val cloudFlow: SharedFlow<CloudAIEvent> = _cloudFlow.asSharedFlow()
-    
+
     private val cloudPreferences: android.content.SharedPreferences by lazy {
         getApplication<Application>().getSharedPreferences("cloud_ai", Context.MODE_PRIVATE)
     }
-    
+
     private val cloudAIProvider by lazy {
         CloudAIProvider(
             context = getApplication(),
@@ -72,28 +67,22 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         )
     }
 
-    // Переменная для хранения имени файла текущей модели
     private var currentModelName: String = ""
 
-    // Динамический системный промпт (доступен для изменения из UI)
     private val _systemPrompt = MutableStateFlow("Ты — полезный, умный и лаконичный ИИ-ассистент. Отвечай строго на русском языке.")
     val systemPrompt = _systemPrompt.asStateFlow()
 
-    // История чата
     private val _chatHistory = MutableStateFlow<List<ChatMessage>>(emptyList())
     val chatHistory = _chatHistory.asStateFlow()
 
-    // Настройки сэмплинга (PocketPal style)
-    val temperature = MutableStateFlow(0.3f) // По умолчанию 0.3 для точных наук (химия)
-    val contextSize = MutableStateFlow(2048) // Базовый размер контекста для Honor X8a
-    val maxTokens = MutableStateFlow(512) // Максимальное количество токенов для генерации
+    val temperature = MutableStateFlow(0.3f)
+    val contextSize = MutableStateFlow(2048)
+    val maxTokens = MutableStateFlow(512)
 
-    // Файл долговременной памяти
     private val memoryFile: File by lazy {
         File(getApplication<Application>().filesDir, "memory.txt")
     }
 
-    // TTS движок для озвучки ответов
     private var tts: TextToSpeech? = null
 
     init {
@@ -106,8 +95,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 Log.e("MainViewModel", "Ошибка инициализации TTS")
             }
         }
-        
-        // Обработка событий облачного ИИ
+
         scope.launch {
             _cloudFlow.collect { event ->
                 when (event) {
@@ -120,6 +108,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         )
                     }
                     is CloudAIEvent.Ongoing -> {
+                        _cloudGeneratedText.value = event.text
                         val currentState = _cloudState.value
                         if (currentState is CloudAIState.Generating) {
                             _cloudState.value = currentState.copy(tokensGenerated = event.tokenCount)
@@ -132,10 +121,17 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
                             speakText(fullText)
                         }
+                        _cloudGeneratedText.value = fullText
                     }
                     is CloudAIEvent.Error -> {
                         _cloudState.value = CloudAIState.Error(event.message)
                         Log.e("MainViewModel", "Ошибка облачного ИИ: ${event.message}")
+                    }
+                    is CloudAIEvent.TokenReceived -> {
+                        val config = cloudAIProvider.getConfig()
+                        if (config != null) {
+                            _cloudState.value = CloudAIState.Ready(config.modelId)
+                        }
                     }
                 }
             }
@@ -150,7 +146,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         )
     }
 
-    // === Методы для облачного ИИ ===
     fun isCloudConfigured(): Boolean {
         return cloudAIProvider.isConfigured()
     }
@@ -173,28 +168,30 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _cloudState.value = CloudAIState.Idle
     }
 
+    fun generateCloudToken(callback: (Boolean) -> Unit) {
+        scope.launch {
+            val success = cloudAIProvider.generateToken()
+            callback(success)
+        }
+    }
+
     fun generateCloud(prompt: String) {
         if (!cloudAIProvider.isConfigured()) {
             _cloudState.value = CloudAIState.Error("Облачный ИИ не настроен")
             return
         }
-        
-        // Добавляем сообщение пользователя в историю
+
         val newUserMessage = ChatMessage("user", prompt)
         _chatHistory.value = _chatHistory.value + newUserMessage
-        
+
         val currentSystemPrompt = _systemPrompt.value
         val history = _chatHistory.value
-        
-        // ВСЕГДА читаем содержимое файла памяти для автоматического подмешивания базы знаний
         val memoryData = readFromLongTermMemory()
         val memoryContext = if (memoryData.isNotEmpty()) {
             "Дополнительная локальная база знаний и факты от пользователя:\n$memoryData\nИспользуй эти данные и прайс-листы для точных ответов на вопросы пользователя."
         } else ""
-        
-        // Подготавливаем историю для облачного ИИ
-        val cloudHistory = history.dropLast(1) // Убираем последнее сообщение пользователя
-        
+
+        val cloudHistory = history.dropLast(1)
         cloudAIProvider.generate(
             prompt = prompt,
             systemPrompt = currentSystemPrompt + (if (memoryContext.isNotEmpty()) "\n\n$memoryContext" else ""),
@@ -203,11 +200,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     fun abortCloud() {
+        cloudAIProvider.abort()
         _cloudState.value = CloudAIState.Idle
-        // TODO: Реализовать отмену запроса к облачному API
     }
 
-    // === Существующие методы ===
     fun loadModel(path: String, mmprojPath: String? = null) {
         if (path.isEmpty()) return
         _state.value = GenerationState.LoadingModel
@@ -296,8 +292,49 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     fun generateLocal(prompt: String, imagePath: String? = null) {
-        // Вся существующая логика локальной генерации
-        // ... (сохраняется без изменений)
+        val newUserMessage = ChatMessage("user", prompt)
+        _chatHistory.value = _chatHistory.value + newUserMessage
+        _generatedText.value = ""
+        _state.value = GenerationState.Generating(prompt = prompt, tokensGenerated = 0)
+        
+        scope.launch {
+            try {
+                llamaHelper.predict(prompt, imagePath)
+            } catch (e: Exception) {
+                _state.value = GenerationState.Error(e.message ?: "Unknown error")
+            }
+        }
+
+        scope.launch {
+            _llmFlow.collect { event ->
+                when (event) {
+                    is LlamaHelper.LLMEvent.Started -> {
+                        _state.value = GenerationState.Generating(prompt = event.prompt, tokensGenerated = 0)
+                    }
+                    is LlamaHelper.LLMEvent.Ongoing -> {
+                        _generatedText.value += event.word
+                        val currentState = _state.value
+                        if (currentState is GenerationState.Generating) {
+                            _state.value = currentState.copy(tokensGenerated = event.tokenCount)
+                        }
+                    }
+                    is LlamaHelper.LLMEvent.Done -> {
+                        _state.value = GenerationState.Completed(event.tokenCount, event.duration)
+                        if (event.fullText.isNotEmpty()) {
+                            _chatHistory.value = _chatHistory.value + ChatMessage("assistant", event.fullText)
+                            speakText(event.fullText)
+                        }
+                        _generatedText.value = event.fullText
+                    }
+                    is LlamaHelper.LLMEvent.Error -> {
+                        _state.value = GenerationState.Error(event.message)
+                    }
+                    is LlamaHelper.LLMEvent.Loaded -> {
+                        _state.value = GenerationState.ModelLoaded(event.path)
+                    }
+                }
+            }
+        }
     }
 
     fun abortLocal() {
