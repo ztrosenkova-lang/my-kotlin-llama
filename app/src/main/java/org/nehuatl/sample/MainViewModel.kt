@@ -1,8 +1,11 @@
 package org.nehuatl.sample
 
 import android.app.Application
+import android.app.AlarmManager
+import android.app.PendingIntent
 import android.content.ContentResolver
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.speech.tts.TextToSpeech
 import android.util.Log
@@ -19,7 +22,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.nehuatl.llamacpp.LlamaHelper
 import java.io.File
-import java.util.Locale
+import java.text.SimpleDateFormat
+import java.util.*
+import java.util.concurrent.TimeUnit
 
 data class ChatMessage(val role: String, val text: String)
 
@@ -27,11 +32,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     companion object {
         @Volatile var instance: MainViewModel? = null
+        private const val TAG = "MainViewModel"
+        private const val REMEMBER_COMMAND = "сделай выводы и запомни"
     }
 
     private val viewModelJob = SupervisorJob()
     private val scope = CoroutineScope(Dispatchers.IO + viewModelJob)
 
+    // === Локальный ИИ ===
     private val _llmFlow = MutableSharedFlow<LlamaHelper.LLMEvent>(
         replay = 0,
         extraBufferCapacity = 64,
@@ -43,6 +51,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _generatedText = MutableStateFlow("")
     val generatedText = _generatedText.asStateFlow()
 
+    // === Облачный ИИ ===
     private val _cloudState = MutableStateFlow<CloudAIState>(CloudAIState.Idle)
     val cloudState = _cloudState.asStateFlow()
     private val _cloudGeneratedText = MutableStateFlow("")
@@ -79,23 +88,31 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     val contextSize = MutableStateFlow(2048)
     val maxTokens = MutableStateFlow(512)
 
+    // Файлы памяти
     private val memoryFile: File by lazy {
         File(getApplication<Application>().filesDir, "memory.txt")
     }
+    private val brainFile: File by lazy {
+        File(getApplication<Application>().filesDir, "brain.txt")
+    }
 
     private var tts: TextToSpeech? = null
+    private val alarmManager by lazy {
+        getApplication<Application>().getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    }
 
     init {
         instance = this
         tts = TextToSpeech(getApplication()) { status ->
             if (status == TextToSpeech.SUCCESS) {
-                tts?.language = Locale.getDefault()
-                Log.d("MainViewModel", "TTS инициализирован успешно")
+                tts?.language = Locale("ru")
+                Log.d(TAG, "TTS инициализирован успешно")
             } else {
-                Log.e("MainViewModel", "Ошибка инициализации TTS")
+                Log.e(TAG, "Ошибка инициализации TTS")
             }
         }
 
+        // Сбор событий от облачного ИИ
         scope.launch {
             _cloudFlow.collect { event ->
                 when (event) {
@@ -125,13 +142,52 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     }
                     is CloudAIEvent.Error -> {
                         _cloudState.value = CloudAIState.Error(event.message)
-                        Log.e("MainViewModel", "Ошибка облачного ИИ: ${event.message}")
+                        Log.e(TAG, "Ошибка облачного ИИ: ${event.message}")
                     }
                     is CloudAIEvent.TokenReceived -> {
                         val config = cloudAIProvider.getConfig()
                         if (config != null) {
                             _cloudState.value = CloudAIState.Ready(config.modelId)
                         }
+                    }
+                }
+            }
+        }
+
+        // Сбор событий от локального ИИ
+        scope.launch {
+            _llmFlow.collect { event ->
+                when (event) {
+                    is LlamaHelper.LLMEvent.Started -> {
+                        _state.value = GenerationState.Generating(prompt = event.prompt, tokensGenerated = 0)
+                    }
+                    is LlamaHelper.LLMEvent.Ongoing -> {
+                        _generatedText.value += event.word
+                        val currentState = _state.value
+                        if (currentState is GenerationState.Generating) {
+                            _state.value = currentState.copy(tokensGenerated = event.tokenCount)
+                        }
+                    }
+                    is LlamaHelper.LLMEvent.Done -> {
+                        _state.value = GenerationState.Completed(event.tokenCount, event.duration)
+                        val fullText = event.fullText
+                        if (fullText.isNotEmpty()) {
+                            _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
+                            speakText(fullText)
+                            // Проверяем, нужно ли запомнить (команда "сделай выводы и запомни")
+                            val lastUserMessage = _chatHistory.value.lastOrNull { it.role == "user" }?.text ?: ""
+                            if (lastUserMessage.contains(REMEMBER_COMMAND, ignoreCase = true)) {
+                                saveToLongTermMemory(fullText)
+                            }
+                        }
+                        _generatedText.value = fullText
+                    }
+                    is LlamaHelper.LLMEvent.Error -> {
+                        _state.value = GenerationState.Error(event.message)
+                        Log.e(TAG, "Ошибка локального ИИ: ${event.message}")
+                    }
+                    is LlamaHelper.LLMEvent.Loaded -> {
+                        _state.value = GenerationState.ModelLoaded(event.path)
                     }
                 }
             }
@@ -146,13 +202,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         )
     }
 
-    fun isCloudConfigured(): Boolean {
-        return cloudAIProvider.isConfigured()
-    }
+    // === Методы для облачного ИИ ===
+    fun isCloudConfigured(): Boolean = cloudAIProvider.isConfigured()
 
-    fun getCloudConfig(): CloudAIConfig? {
-        return cloudAIProvider.getConfig()
-    }
+    fun getCloudConfig(): CloudAIConfig? = cloudAIProvider.getConfig()
 
     fun saveCloudConfig(config: CloudAIConfig) {
         cloudAIProvider.saveConfig(config)
@@ -187,9 +240,15 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         val currentSystemPrompt = _systemPrompt.value
         val history = _chatHistory.value
         val memoryData = readFromLongTermMemory()
-        val memoryContext = if (memoryData.isNotEmpty()) {
-            "Дополнительная локальная база знаний и факты от пользователя:\n$memoryData\nИспользуй эти данные и прайс-листы для точных ответов на вопросы пользователя."
-        } else ""
+        val brainData = readBrain()
+        val memoryContext = buildString {
+            if (memoryData.isNotEmpty()) {
+                append("Дополнительная локальная база знаний и факты от пользователя:\n$memoryData\n")
+            }
+            if (brainData.isNotEmpty()) {
+                append("Важные выводы из прошлых разговоров (мозг):\n$brainData\n")
+            }
+        }
 
         val cloudHistory = history.dropLast(1)
         cloudAIProvider.generate(
@@ -204,6 +263,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _cloudState.value = CloudAIState.Idle
     }
 
+    // === Методы для локального ИИ ===
     fun loadModel(path: String, mmprojPath: String? = null) {
         if (path.isEmpty()) return
         _state.value = GenerationState.LoadingModel
@@ -225,8 +285,202 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    fun updateSystemPrompt(newPrompt: String) {
-        _systemPrompt.value = newPrompt
+    fun generateLocal(prompt: String, imagePath: String? = null) {
+        // Проверяем, загружена ли модель
+        if (llamaHelper.getContextId() == null) {
+            _state.value = GenerationState.Error("Модель не загружена. Загрузите модель через 'движок'.")
+            return
+        }
+
+        // Обработка специальных команд
+        if (prompt.lowercase().contains(REMEMBER_COMMAND)) {
+            // Команда "сделай выводы и запомни" — обрабатываем отдельно через облачный ИИ или локальный
+            analyzeAndRemember(prompt)
+            return
+        }
+
+        if (prompt.lowercase().contains("будильник") || prompt.lowercase().contains("напомни")) {
+            // Обработка команды будильника
+            handleAlarmCommand(prompt)
+            return
+        }
+
+        // Обычная генерация
+        val newUserMessage = ChatMessage("user", prompt)
+        _chatHistory.value = _chatHistory.value + newUserMessage
+        _generatedText.value = ""
+        _state.value = GenerationState.Generating(prompt = prompt, tokensGenerated = 0)
+
+        scope.launch {
+            try {
+                llamaHelper.predict(prompt, imagePath)
+            } catch (e: Exception) {
+                _state.value = GenerationState.Error(e.message ?: "Unknown error")
+            }
+        }
+    }
+
+    private fun analyzeAndRemember(prompt: String) {
+        // Логика для команды "сделай выводы и запомни"
+        val history = getFullChatHistory()
+        if (history.isEmpty()) {
+            _state.value = GenerationState.Error("Нет истории для анализа")
+            return
+        }
+
+        // Используем локальную модель для анализа, если она загружена
+        if (llamaHelper.getContextId() != null) {
+            _state.value = GenerationState.Generating(prompt = prompt, tokensGenerated = 0)
+            scope.launch {
+                try {
+                    val analysisPrompt = "Проанализируй историю нашего разговора и сделай краткие выводы. Выдели самую важную информацию, факты и инсайты. Ответ должен быть кратким (не более 3-5 предложений):\n\n$history"
+                    llamaHelper.predict(analysisPrompt, null)
+                } catch (e: Exception) {
+                    _state.value = GenerationState.Error(e.message ?: "Unknown error")
+                }
+            }
+        } else {
+            // Если локальная модель не загружена, используем облачную
+            generateCloud("Сделай краткие выводы из этого диалога и запомни их. Только суть, факты, важные детали:\n$history")
+        }
+    }
+
+    private fun handleAlarmCommand(prompt: String) {
+        // Парсим время из команды "в 18.00 идем в гараж" или "напомни в 09.30 сдать отчет"
+        val timePattern = Regex("(?:в|в\\s+|напомни\\s+в\\s+)(\\d{1,2}[:.]\\d{2})")
+        val match = timePattern.find(prompt)
+        if (match != null) {
+            val timeStr = match.groupValues[1].replace(".", ":")
+            val message = prompt.replace(Regex("(?:в\\s+|напомни\\s+в\\s+)\\d{1,2}[:.]\\d{2}\\s*"), "").trim()
+            setAlarm(timeStr, message)
+            appendSystemMessage("⏰ Будильник установлен на $timeStr: '$message'")
+        } else {
+            appendSystemMessage("⚠️ Не удалось распознать время. Используйте формат: 'в 18.00 идем в гараж'")
+        }
+    }
+
+    private fun setAlarm(timeStr: String, message: String) {
+        try {
+            val dateFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+            val alarmTime = dateFormat.parse(timeStr) ?: return
+            val calendar = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, alarmTime.hours)
+                set(Calendar.MINUTE, alarmTime.minutes)
+                set(Calendar.SECOND, 0)
+                // Если время уже прошло сегодня, устанавливаем на завтра
+                if (timeInMillis < System.currentTimeMillis()) {
+                    add(Calendar.DAY_OF_YEAR, 1)
+                }
+            }
+
+            val intent = Intent(getApplication(), AlarmReceiver::class.java).apply {
+                putExtra("MESSAGE", message)
+                putExtra("TIME", timeStr)
+            }
+            val pendingIntent = PendingIntent.getBroadcast(
+                getApplication(),
+                System.currentTimeMillis().toInt(),
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            alarmManager.setExact(
+                AlarmManager.RTC_WAKEUP,
+                calendar.timeInMillis,
+                pendingIntent
+            )
+            Log.d(TAG, "Будильник установлен на $timeStr: $message")
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка установки будильника: ${e.message}")
+            appendSystemMessage("⚠️ Ошибка установки будильника: ${e.message}")
+        }
+    }
+
+    private fun getFullChatHistory(): String {
+        return _chatHistory.value.joinToString("\n") { "${it.role}: ${it.text}" }
+    }
+
+    private fun appendSystemMessage(text: String) {
+        _chatHistory.value = _chatHistory.value + ChatMessage("system", text)
+    }
+
+    fun abortLocal() {
+        if (_state.value.isActive()) {
+            Log.i(TAG, "Aborting generation")
+            tts?.stop()
+            llamaHelper.abort()
+        }
+    }
+
+    // === Работа с памятью ===
+    private fun saveToLongTermMemory(text: String) {
+        try {
+            if (!memoryFile.exists()) {
+                memoryFile.createNewFile()
+            }
+            // Добавляем новую запись с датой
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+            val timestamp = dateFormat.format(Date())
+            memoryFile.appendText("[$timestamp] $text\n")
+            Log.d(TAG, "Записано в долговременную память: $text")
+            appendSystemMessage("🧠 Запомнено: $text")
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка записи памяти: ${e.message}")
+        }
+    }
+
+    fun readFromLongTermMemory(): String {
+        return try {
+            if (memoryFile.exists()) {
+                memoryFile.readText().trim()
+            } else {
+                ""
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка чтения памяти: ${e.message}")
+            ""
+        }
+    }
+
+    fun overwriteLongTermMemory(newFullText: String) {
+        try {
+            if (!memoryFile.exists()) {
+                memoryFile.createNewFile()
+            }
+            memoryFile.writeText(newFullText)
+            Log.d(TAG, "База знаний успешно обновлена")
+            appendSystemMessage("🧠 База знаний обновлена")
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка перезаписи базы знаний: ${e.message}")
+        }
+    }
+
+    // Работа с мозгом (краткие выводы)
+    private fun saveBrain(text: String) {
+        try {
+            if (!brainFile.exists()) {
+                brainFile.createNewFile()
+            }
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+            val timestamp = dateFormat.format(Date())
+            brainFile.appendText("[$timestamp] $text\n")
+            Log.d(TAG, "Записано в мозг: $text")
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка записи мозга: ${e.message}")
+        }
+    }
+
+    private fun readBrain(): String {
+        return try {
+            if (brainFile.exists()) {
+                brainFile.readText().trim()
+            } else {
+                ""
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка чтения мозга: ${e.message}")
+            ""
+        }
     }
 
     fun clearChat() {
@@ -234,6 +488,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _generatedText.value = ""
         _cloudGeneratedText.value = ""
         tts?.stop()
+    }
+
+    fun updateSystemPrompt(newPrompt: String) {
+        _systemPrompt.value = newPrompt
     }
 
     fun updateTemperature(temp: Float) {
@@ -248,101 +506,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         maxTokens.value = tokens.coerceIn(1, 4096)
     }
 
-    fun overwriteLongTermMemory(newFullText: String) {
-        try {
-            if (!memoryFile.exists()) {
-                memoryFile.createNewFile()
-            }
-            memoryFile.writeText(newFullText)
-            Log.d("MainViewModel", "База знаний успешно обновлена")
-        } catch (e: Exception) {
-            Log.e("MainViewModel", "Ошибка перезаписи базы знаний: ${e.message}")
-        }
-    }
-
-    private fun saveToLongTermMemory(text: String) {
-        try {
-            if (!memoryFile.exists()) {
-                memoryFile.createNewFile()
-            }
-            memoryFile.appendText("$text\n")
-            Log.d("MainViewModel", "Записано в долговременную память: $text")
-        } catch (e: Exception) {
-            Log.e("MainViewModel", "Ошибка записи памяти: ${e.message}")
-        }
-    }
-
-    fun readFromLongTermMemory(): String {
-        return try {
-            if (memoryFile.exists()) {
-                memoryFile.readText().trim()
-            } else {
-                ""
-            }
-        } catch (e: Exception) {
-            Log.e("MainViewModel", "Ошибка чтения памяти: ${e.message}")
-            ""
-        }
-    }
-
     private fun speakText(text: String) {
         val cleanText = text.replace(Regex("[*#`_]"), "")
         tts?.speak(cleanText, TextToSpeech.QUEUE_FLUSH, null, null)
-        Log.d("MainViewModel", "Озвучка запущена: ${cleanText.take(50)}...")
-    }
-
-    fun generateLocal(prompt: String, imagePath: String? = null) {
-        val newUserMessage = ChatMessage("user", prompt)
-        _chatHistory.value = _chatHistory.value + newUserMessage
-        _generatedText.value = ""
-        _state.value = GenerationState.Generating(prompt = prompt, tokensGenerated = 0)
-        
-        scope.launch {
-            try {
-                llamaHelper.predict(prompt, imagePath)
-            } catch (e: Exception) {
-                _state.value = GenerationState.Error(e.message ?: "Unknown error")
-            }
-        }
-
-        scope.launch {
-            _llmFlow.collect { event ->
-                when (event) {
-                    is LlamaHelper.LLMEvent.Started -> {
-                        _state.value = GenerationState.Generating(prompt = event.prompt, tokensGenerated = 0)
-                    }
-                    is LlamaHelper.LLMEvent.Ongoing -> {
-                        _generatedText.value += event.word
-                        val currentState = _state.value
-                        if (currentState is GenerationState.Generating) {
-                            _state.value = currentState.copy(tokensGenerated = event.tokenCount)
-                        }
-                    }
-                    is LlamaHelper.LLMEvent.Done -> {
-                        _state.value = GenerationState.Completed(event.tokenCount, event.duration)
-                        if (event.fullText.isNotEmpty()) {
-                            _chatHistory.value = _chatHistory.value + ChatMessage("assistant", event.fullText)
-                            speakText(event.fullText)
-                        }
-                        _generatedText.value = event.fullText
-                    }
-                    is LlamaHelper.LLMEvent.Error -> {
-                        _state.value = GenerationState.Error(event.message)
-                    }
-                    is LlamaHelper.LLMEvent.Loaded -> {
-                        _state.value = GenerationState.ModelLoaded(event.path)
-                    }
-                }
-            }
-        }
-    }
-
-    fun abortLocal() {
-        if (_state.value.isActive()) {
-            Log.i("MainViewModel", "Aborting generation")
-            tts?.stop()
-            llamaHelper.abort()
-        }
+        Log.d(TAG, "Озвучка запущена: ${cleanText.take(50)}...")
     }
 
     override fun onCleared() {
@@ -372,5 +539,27 @@ private fun getFileNameFromUri(contentResolver: ContentResolver, uri: Uri): Stri
     if (name.isEmpty()) {
         name = uri.lastPathSegment ?: ""
     }
-    return name.lowercase()
+    // Убираем префикс "primary%3AModels%" если он есть
+    val cleanName = name.replace(Regex("^primary%3AModels%"), "").replace(Regex("^primary:Models:"), "")
+    return cleanName
+}
+
+// Дополнительный класс для приема будильника
+class AlarmReceiver : android.content.BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val message = intent.getStringExtra("MESSAGE") ?: "Напоминание!"
+        val time = intent.getStringExtra("TIME") ?: ""
+        // Показываем уведомление и говорим текст
+        val notificationText = "⏰ Будильник ($time): $message"
+        
+        // Отправляем сообщение в чат через ViewModel
+        MainViewModel.instance?.let { vm ->
+            vm.appendSystemMessage(notificationText)
+            // Проговариваем 5 раз
+            repeat(5) {
+                vm.speakText(notificationText)
+                Thread.sleep(1000)
+            }
+        }
+    }
 }
