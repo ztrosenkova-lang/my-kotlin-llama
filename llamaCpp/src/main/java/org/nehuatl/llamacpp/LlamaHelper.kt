@@ -22,6 +22,9 @@ class LlamaHelper(
     private var tokenCount = 0
     private var allText = ""
 
+    // --- НОВЫЙ МЕТОД: возвращает ID текущего контекста (или null, если модель не загружена) ---
+    fun getContextId(): Int? = currentContext
+
     fun load(
         path: String,
         contextLength: Int,
