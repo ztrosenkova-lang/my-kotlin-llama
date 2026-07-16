@@ -42,6 +42,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -813,7 +814,7 @@ private fun CloudAIDialog(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text("🔵 GigaChat", color = DarkText)
-                    androidx.compose.material3.Switch(
+                    Switch(
                         checked = isGigaChat,
                         onCheckedChange = onIsGigaChatChange,
                         colors = SwitchDefaults.colors(
