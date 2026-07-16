@@ -26,7 +26,6 @@ class CloudAIProvider(
     companion object {
         private const val TAG = "CloudAIProvider"
         private const val PREFS_KEY_API_URL = "cloud_api_url"
-        private const val PREFS_KEY_MODEL_ID = "cloud_model_id"
         private const val PREFS_KEY_AUTH_KEY = "cloud_auth_key"
         private const val PREFS_KEY_ACCESS_TOKEN = "cloud_access_token"
         private const val PREFS_KEY_IS_GIGACHAT = "cloud_is_gigachat"
@@ -53,14 +52,12 @@ class CloudAIProvider(
 
     fun getConfig(): CloudAIConfig? {
         val apiUrl = preferences.getString(PREFS_KEY_API_URL, null)
-        val modelId = preferences.getString(PREFS_KEY_MODEL_ID, "GigaChat")
         val authKey = preferences.getString(PREFS_KEY_AUTH_KEY, null)
         val isGigaChat = preferences.getBoolean(PREFS_KEY_IS_GIGACHAT, true)
-        
         return if (apiUrl != null && authKey != null) {
             CloudAIConfig(
                 apiUrl = apiUrl,
-                modelId = modelId ?: "GigaChat",
+                modelId = if (isGigaChat) "GigaChat" else "Custom",
                 authKey = authKey,
                 isGigaChat = isGigaChat
             )
@@ -70,7 +67,6 @@ class CloudAIProvider(
     fun saveConfig(config: CloudAIConfig) {
         preferences.edit().apply {
             putString(PREFS_KEY_API_URL, config.apiUrl)
-            putString(PREFS_KEY_MODEL_ID, config.modelId)
             putString(PREFS_KEY_AUTH_KEY, config.authKey)
             putBoolean(PREFS_KEY_IS_GIGACHAT, config.isGigaChat)
             apply()
@@ -297,5 +293,3 @@ class CloudAIProvider(
         sharedFlow.tryEmit(CloudAIEvent.Error("Отмена запроса"))
     }
 }
-
-// CloudAIConfig вынесен в отдельный файл, поэтому здесь он не объявляется!
