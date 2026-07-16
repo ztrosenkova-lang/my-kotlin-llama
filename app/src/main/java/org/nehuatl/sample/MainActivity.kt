@@ -70,14 +70,14 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
 
-        // Проверяем разрешение на точный будильник для Android 12+
+        // Принудительно запрашиваем разрешение на точный будильник для Android 12+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val alarmManager = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
             if (!alarmManager.canScheduleExactAlarms()) {
-                // Если разрешение не предоставлено, направляем пользователя в настройки
-                Log.w("MainActivity", "Разрешение на точный будильник не предоставлено")
-                // Переход в настройки будет выполнен в MainViewModel при попытке установить будильник
-                // Здесь мы только логируем
+                Log.w("MainActivity", "Разрешение на точный будильник не предоставлено. Открываем настройки.")
+                // Открываем настройки, чтобы пользователь включил разрешение
+                val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                startActivity(intent)
             }
         }
 
