@@ -42,6 +42,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -67,7 +68,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
-// Светлая воздушная палитра
 private val AppBackground = Color(0xFFFFFFFF)
 private val SurfaceGray = Color(0xFFF1F3F5)
 private val BorderGray = Color(0xFFCED4DA)
@@ -90,7 +90,6 @@ fun ChatScreen(
 ) {
     val context = LocalContext.current
     
-    // Состояния локального ИИ
     val state by viewModel.state.collectAsStateWithLifecycle()
     val generatedText by viewModel.generatedText.collectAsStateWithLifecycle()
     val systemPromptText by viewModel.systemPrompt.collectAsStateWithLifecycle()
@@ -98,7 +97,6 @@ fun ChatScreen(
     val temperature by viewModel.temperature.collectAsStateWithLifecycle()
     val maxTokens by viewModel.maxTokens.collectAsStateWithLifecycle()
     
-    // Состояния облачного ИИ
     val cloudState by viewModel.cloudState.collectAsStateWithLifecycle()
     val cloudGeneratedText by viewModel.cloudGeneratedText.collectAsStateWithLifecycle()
 
@@ -113,23 +111,24 @@ fun ChatScreen(
     var showMemoryEditor by remember { mutableStateOf(false) }
     var memoryEditText by remember { mutableStateOf("") }
     
-    // Состояния для диалога облачного ИИ
     var cloudApiUrl by remember { mutableStateOf("") }
     var cloudModelId by remember { mutableStateOf("") }
-    var cloudApiToken by remember { mutableStateOf("") }
+    var cloudAuthKey by remember { mutableStateOf("") }
+    var cloudIsGigaChat by remember { mutableStateOf(true) }
+    var isGeneratingToken by remember { mutableStateOf(false) }
 
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     val scrollState = rememberScrollState()
 
-    // Загружаем конфигурацию облачного ИИ при открытии диалога
     LaunchedEffect(showCloudDialog) {
         if (showCloudDialog) {
             val config = viewModel.getCloudConfig()
             if (config != null) {
                 cloudApiUrl = config.apiUrl
                 cloudModelId = config.modelId
-                cloudApiToken = config.apiToken
+                cloudAuthKey = config.authKey
+                cloudIsGigaChat = config.isGigaChat
             }
         }
     }
@@ -155,7 +154,6 @@ fun ChatScreen(
         }
     }
 
-    // === Диалоги ===
     if (showModelDialog) {
         ModelPickerDialog(
             currentModelPath = currentModelPath,
@@ -178,15 +176,18 @@ fun ChatScreen(
         CloudAIDialog(
             apiUrl = cloudApiUrl,
             modelId = cloudModelId,
-            apiToken = cloudApiToken,
+            authKey = cloudAuthKey,
+            isGigaChat = cloudIsGigaChat,
             onApiUrlChange = { cloudApiUrl = it },
             onModelIdChange = { cloudModelId = it },
-            onApiTokenChange = { cloudApiToken = it },
+            onAuthKeyChange = { cloudAuthKey = it },
+            onIsGigaChatChange = { cloudIsGigaChat = it },
             onSave = {
                 val config = CloudAIConfig(
                     apiUrl = cloudApiUrl,
                     modelId = cloudModelId,
-                    apiToken = cloudApiToken
+                    authKey = cloudAuthKey,
+                    isGigaChat = cloudIsGigaChat
                 )
                 viewModel.saveCloudConfig(config)
                 showCloudDialog = false
@@ -195,10 +196,18 @@ fun ChatScreen(
                 viewModel.clearCloudConfig()
                 cloudApiUrl = ""
                 cloudModelId = ""
-                cloudApiToken = ""
+                cloudAuthKey = ""
+                cloudIsGigaChat = true
                 showCloudDialog = false
             },
-            onDismiss = { showCloudDialog = false }
+            onDismiss = { showCloudDialog = false },
+            onGenerateToken = {
+                isGeneratingToken = true
+                viewModel.generateCloudToken { success ->
+                    isGeneratingToken = false
+                }
+            },
+            isGeneratingToken = isGeneratingToken
         )
     }
 
@@ -359,7 +368,6 @@ fun ChatScreen(
             .background(AppBackground)
             .imePadding()
     ) {
-        // Верхняя панель с логотипом
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -399,7 +407,6 @@ fun ChatScreen(
             }
         }
 
-        // Панель с пятью кнопками
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -417,7 +424,6 @@ fun ChatScreen(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Кнопка 1: Редактор мозга
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -441,7 +447,6 @@ fun ChatScreen(
                     )
                 }
 
-                // Кнопка 2: Настройки движка
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -462,7 +467,6 @@ fun ChatScreen(
                     )
                 }
 
-                // Кнопка 3: Роль ИИ
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -483,7 +487,6 @@ fun ChatScreen(
                     )
                 }
 
-                // Кнопка 4: Облачный ИИ
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -504,7 +507,6 @@ fun ChatScreen(
                     )
                 }
 
-                // Кнопка 5: Справка
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -527,7 +529,6 @@ fun ChatScreen(
             }
         }
 
-        // Выезжающая панель настроек
         if (showSettings) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = SurfaceGray),
@@ -622,7 +623,6 @@ fun ChatScreen(
             }
         }
 
-        // Выезжающая панель системного промпта
         if (showPromptSettings) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = SurfaceGray),
@@ -672,14 +672,12 @@ fun ChatScreen(
             }
         }
 
-        // Статус-бар (локальный ИИ)
         StatusBar(
             state = state,
             currentModel = currentModelPath,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
         )
 
-        // Текстовое поле чата
         Card(
             modifier = Modifier
                 .weight(1f)
@@ -717,7 +715,6 @@ fun ChatScreen(
                         )
                     }
                     
-                    // Отображение облачного ответа
                     if (cloudGeneratedText.isNotEmpty() && cloudState is CloudAIState.Generating) {
                         Text(
                             text = "☁️ ИИ: $cloudGeneratedText",
@@ -731,7 +728,6 @@ fun ChatScreen(
             }
         }
 
-        // Cloud Status Bar
         CloudStatusBar(
             state = cloudState,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
@@ -781,13 +777,17 @@ fun ChatScreen(
 private fun CloudAIDialog(
     apiUrl: String,
     modelId: String,
-    apiToken: String,
+    authKey: String,
+    isGigaChat: Boolean,
     onApiUrlChange: (String) -> Unit,
     onModelIdChange: (String) -> Unit,
-    onApiTokenChange: (String) -> Unit,
+    onAuthKeyChange: (String) -> Unit,
+    onIsGigaChatChange: (Boolean) -> Unit,
     onSave: () -> Unit,
     onClear: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onGenerateToken: () -> Unit,
+    isGeneratingToken: Boolean
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -803,16 +803,40 @@ private fun CloudAIDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = "Введите данные для подключения к облачному ИИ (СберГигачат, DeepSeek, Claude и др.)",
+                    text = "Введите данные для подключения к облачному ИИ",
                     style = MaterialTheme.typography.bodyMedium,
                     color = DarkText
                 )
+                
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("🔵 GigaChat", color = DarkText)
+                    androidx.compose.material3.Switch(
+                        checked = isGigaChat,
+                        onCheckedChange = onIsGigaChatChange,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = AccentColor,
+                            checkedTrackColor = AccentColor.copy(alpha = 0.5f),
+                            uncheckedThumbColor = BorderGray,
+                            uncheckedTrackColor = BorderGray.copy(alpha = 0.5f)
+                        )
+                    )
+                    Text("🌐 Другой провайдер", color = DarkText)
+                }
                 
                 OutlinedTextField(
                     value = apiUrl,
                     onValueChange = onApiUrlChange,
                     label = { Text("API URL", color = DarkText) },
-                    placeholder = { Text("https://api.example.com/v1/chat/completions", color = DarkText.copy(alpha = 0.5f)) },
+                    placeholder = { 
+                        Text(
+                            if (isGigaChat) "https://gigachat.devices.sberbank.ru/api/v1/chat/completions"
+                            else "https://openrouter.ai/api/v1/chat/completions",
+                            color = DarkText.copy(alpha = 0.5f)
+                        )
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -828,7 +852,13 @@ private fun CloudAIDialog(
                     value = modelId,
                     onValueChange = onModelIdChange,
                     label = { Text("ID модели", color = DarkText) },
-                    placeholder = { Text("gigaChat-pro", color = DarkText.copy(alpha = 0.5f)) },
+                    placeholder = { 
+                        Text(
+                            if (isGigaChat) "GigaChat"
+                            else "google/gemma-4-31b-it:free",
+                            color = DarkText.copy(alpha = 0.5f)
+                        )
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -841,10 +871,22 @@ private fun CloudAIDialog(
                 )
                 
                 OutlinedTextField(
-                    value = apiToken,
-                    onValueChange = onApiTokenChange,
-                    label = { Text("API Token", color = DarkText) },
-                    placeholder = { Text("Введите ваш токен доступа", color = DarkText.copy(alpha = 0.5f)) },
+                    value = authKey,
+                    onValueChange = onAuthKeyChange,
+                    label = { 
+                        Text(
+                            if (isGigaChat) "Authorization Key (Client Secret)" 
+                            else "API Key",
+                            color = DarkText
+                        )
+                    },
+                    placeholder = { 
+                        Text(
+                            if (isGigaChat) "Введите ключ из Сбер Студии" 
+                            else "Введите ваш API ключ",
+                            color = DarkText.copy(alpha = 0.5f)
+                        )
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -855,6 +897,35 @@ private fun CloudAIDialog(
                         cursorColor = AccentColor
                     )
                 )
+                
+                Button(
+                    onClick = onGenerateToken,
+                    enabled = !isGeneratingToken && authKey.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (authKey.isNotBlank()) AccentColor else BorderGray
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (isGeneratingToken) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = DarkText,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Получение токена...", color = DarkText)
+                    } else {
+                        Text(if (isGigaChat) "🔑 Получить токен" else "🔑 Установить ключ", color = DarkText)
+                    }
+                }
+                
+                if (!isGigaChat) {
+                    Text(
+                        text = "ℹ️ Для обычных провайдеров ключ используется как токен",
+                        color = DarkText.copy(alpha = 0.6f),
+                        fontSize = 12.sp
+                    )
+                }
             }
         },
         confirmButton = {
@@ -889,7 +960,6 @@ private fun CloudStatusBar(
             containerColor = when (state) {
                 is CloudAIState.Error -> AccentColor.copy(alpha = 0.15f)
                 is CloudAIState.Generating -> AccentColor.copy(alpha = 0.15f)
-                is CloudAIState.Loading -> BorderGray.copy(alpha = 0.3f)
                 is CloudAIState.Ready -> SurfaceGray
                 else -> SurfaceGray
             }
@@ -911,10 +981,6 @@ private fun CloudStatusBar(
                 when (state) {
                     is CloudAIState.Idle -> {
                         Text("☁️ Облачный ИИ не настроен", color = DarkText.copy(alpha = 0.5f))
-                    }
-                    is CloudAIState.Loading -> {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = AccentColor)
-                        Text("Подключение...", color = DarkText)
                     }
                     is CloudAIState.Ready -> {
                         Text("☁️ Облачный ИИ готов (${state.modelId})", color = AccentColor)
