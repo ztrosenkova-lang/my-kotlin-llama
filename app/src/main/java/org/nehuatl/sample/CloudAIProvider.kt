@@ -212,7 +212,8 @@ class CloudAIProvider(
                 var tokenCount = 0
                 val startTime = System.currentTimeMillis()
 
-                client.newCall(request).execute().use { response ->
+                val response = client.newCall(request).execute()
+                try {
                     if (!response.isSuccessful) {
                         val errorBody = response.body?.string() ?: "Unknown error"
                         Log.e(TAG, "Ошибка генерации: ${response.code}, $errorBody")
@@ -228,7 +229,8 @@ class CloudAIProvider(
                                 val retryRequest = request.newBuilder()
                                     .header("Authorization", "Bearer $newToken")
                                     .build()
-                                retryRequest.execute().use { retryResponse ->
+                                val retryResponse = client.newCall(retryRequest).execute()
+                                try {
                                     if (retryResponse.isSuccessful) {
                                         val retryBody = retryResponse.body?.string() ?: ""
                                         fullResponse = parseResponse(retryBody)
@@ -236,6 +238,8 @@ class CloudAIProvider(
                                         sharedFlow.tryEmit(CloudAIEvent.Error("Ошибка после обновления токена: ${retryResponse.code}"))
                                         return@launch
                                     }
+                                } finally {
+                                    retryResponse.close()
                                 }
                             } else {
                                 sharedFlow.tryEmit(CloudAIEvent.Error("Не удалось обновить токен"))
@@ -249,6 +253,8 @@ class CloudAIProvider(
                         val responseBody = response.body?.string() ?: ""
                         fullResponse = parseResponse(responseBody)
                     }
+                } finally {
+                    response.close()
                 }
 
                 if (fullResponse.isNotEmpty()) {
@@ -292,21 +298,4 @@ class CloudAIProvider(
     }
 }
 
-data class CloudAIConfig(
-    val apiUrl: String,
-    val modelId: String,
-    val authKey: String,
-    val isGigaChat: Boolean = true
-) {
-    fun isValid(): Boolean {
-        return apiUrl.isNotBlank() && authKey.isNotBlank()
-    }
-}
-
-sealed class CloudAIEvent {
-    data class Started(val prompt: String) : CloudAIEvent()
-    data class Ongoing(val text: String, val tokenCount: Int) : CloudAIEvent()
-    data class Done(val fullText: String, val tokenCount: Int, val duration: Long) : CloudAIEvent()
-    data class Error(val message: String) : CloudAIEvent()
-    object TokenReceived : CloudAIEvent()
-}
+// CloudAIConfig вынесен в отдельный файл, поэтому здесь он не объявляется!
