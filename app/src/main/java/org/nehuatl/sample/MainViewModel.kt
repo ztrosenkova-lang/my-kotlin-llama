@@ -400,7 +400,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         return _chatHistory.value.joinToString("\n") { "${it.role}: ${it.text}" }
     }
 
-    private fun appendSystemMessage(text: String) {
+    internal fun appendSystemMessage(text: String) {
         _chatHistory.value = _chatHistory.value + ChatMessage("system", text)
     }
 
@@ -506,7 +506,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         maxTokens.value = tokens.coerceIn(1, 4096)
     }
 
-    private fun speakText(text: String) {
+    internal fun speakText(text: String) {
         val cleanText = text.replace(Regex("[*#`_]"), "")
         tts?.speak(cleanText, TextToSpeech.QUEUE_FLUSH, null, null)
         Log.d(TAG, "Озвучка запущена: ${cleanText.take(50)}...")
