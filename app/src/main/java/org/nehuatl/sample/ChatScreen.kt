@@ -92,6 +92,7 @@ fun ChatScreen(
     val systemPromptText by viewModel.systemPrompt.collectAsStateWithLifecycle()
     val chatMessages by viewModel.chatHistory.collectAsStateWithLifecycle()
     val temperature by viewModel.temperature.collectAsStateWithLifecycle()
+    val maxTokens by viewModel.maxTokens.collectAsStateWithLifecycle()
 
     var promptInput by remember { mutableStateOf("") }
     var showModelDialog by remember { mutableStateOf(currentModelPath == null) }
@@ -486,6 +487,28 @@ fun ChatScreen(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
+                    // 👇 НОВЫЙ БЛОК: Регулировка максимального количества токенов
+                    Text(
+                        text = "Максимум токенов: ${maxTokens}",
+                        color = DarkText
+                    )
+                    Slider(
+                        value = maxTokens.toFloat(),
+                        onValueChange = { newValue ->
+                            viewModel.updateMaxTokens(newValue.toInt())
+                        },
+                        valueRange = 1f..4096f,
+                        steps = 50,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = SliderDefaults.colors(
+                            thumbColor = AccentColor,
+                            activeTrackColor = AccentColor,
+                            inactiveTrackColor = BorderGray
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Кнопка смены/сброса модели
                     Button(
                         onClick = { showModelDialog = true },
                         colors = ButtonDefaults.buttonColors(containerColor = BorderGray),
@@ -495,15 +518,35 @@ fun ChatScreen(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    Button(
-                        onClick = {
-                            viewModel.updateTemperature(tempTemperature)
-                            showSettings = false
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
-                        modifier = Modifier.align(Alignment.End)
+                    // 👇 НОВАЯ КНОПКА "Сохранить"
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("Закрыть", color = DarkText)
+                        Button(
+                            onClick = {
+                                viewModel.updateTemperature(tempTemperature)
+                                // maxTokens уже обновляется через слайдер
+                                showSettings = false
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Сохранить", color = DarkText)
+                        }
+                        
+                        Button(
+                            onClick = {
+                                // Сбрасываем изменения
+                                tempTemperature = temperature
+                                viewModel.updateMaxTokens(maxTokens)
+                                showSettings = false
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = BorderGray),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Закрыть", color = DarkText)
+                        }
                     }
                 }
             }
@@ -559,7 +602,7 @@ fun ChatScreen(
             }
         }
 
-        // ОБНОВЛЕННЫЙ StatusBar (показывает имя модели)
+        // StatusBar (обновлена для отображения AnalyzingImage)
         StatusBar(
             state = state,
             currentModel = currentModelPath,
@@ -738,7 +781,6 @@ private fun ModelPickerDialog(
     }
 }
 
-// ОБНОВЛЕННЫЙ StatusBar
 @Composable
 private fun StatusBar(
     state: GenerationState,
@@ -779,8 +821,7 @@ private fun StatusBar(
                         Text("Загрузка модели...", color = DarkText)
                     }
                     is GenerationState.ModelLoaded -> {
-                        // ПОКАЗЫВАЕМ ИМЯ ФАЙЛА МОДЕЛИ
-                        val modelName = state.path.substringAfterLast("/") // Извлекаем имя файла из пути
+                        val modelName = state.path.substringAfterLast("/")
                         Text("✓ Модель: $modelName", color = AccentColor)
                     }
                     is GenerationState.AnalyzingImage -> {
