@@ -57,6 +57,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
@@ -87,12 +88,19 @@ fun ChatScreen(
     onImageUsed: () -> Unit,
     imagePath: String? = null
 ) {
+    val context = LocalContext.current
+    
+    // Состояния локального ИИ
     val state by viewModel.state.collectAsStateWithLifecycle()
     val generatedText by viewModel.generatedText.collectAsStateWithLifecycle()
     val systemPromptText by viewModel.systemPrompt.collectAsStateWithLifecycle()
     val chatMessages by viewModel.chatHistory.collectAsStateWithLifecycle()
     val temperature by viewModel.temperature.collectAsStateWithLifecycle()
     val maxTokens by viewModel.maxTokens.collectAsStateWithLifecycle()
+    
+    // Состояния облачного ИИ
+    val cloudState by viewModel.cloudState.collectAsStateWithLifecycle()
+    val cloudGeneratedText by viewModel.cloudGeneratedText.collectAsStateWithLifecycle()
 
     var promptInput by remember { mutableStateOf("") }
     var showModelDialog by remember { mutableStateOf(currentModelPath == null) }
@@ -104,10 +112,27 @@ fun ChatScreen(
     var showHelpDialog by remember { mutableStateOf(false) }
     var showMemoryEditor by remember { mutableStateOf(false) }
     var memoryEditText by remember { mutableStateOf("") }
+    
+    // Состояния для диалога облачного ИИ
+    var cloudApiUrl by remember { mutableStateOf("") }
+    var cloudModelId by remember { mutableStateOf("") }
+    var cloudApiToken by remember { mutableStateOf("") }
 
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     val scrollState = rememberScrollState()
+
+    // Загружаем конфигурацию облачного ИИ при открытии диалога
+    LaunchedEffect(showCloudDialog) {
+        if (showCloudDialog) {
+            val config = viewModel.getCloudConfig()
+            if (config != null) {
+                cloudApiUrl = config.apiUrl
+                cloudModelId = config.modelId
+                cloudApiToken = config.apiToken
+            }
+        }
+    }
 
     LaunchedEffect(chatMessages.size, generatedText.length) {
         scrollState.scrollTo(scrollState.maxValue)
@@ -130,6 +155,7 @@ fun ChatScreen(
         }
     }
 
+    // === Диалоги ===
     if (showModelDialog) {
         ModelPickerDialog(
             currentModelPath = currentModelPath,
@@ -148,12 +174,40 @@ fun ChatScreen(
         )
     }
 
+    if (showCloudDialog) {
+        CloudAIDialog(
+            apiUrl = cloudApiUrl,
+            modelId = cloudModelId,
+            apiToken = cloudApiToken,
+            onApiUrlChange = { cloudApiUrl = it },
+            onModelIdChange = { cloudModelId = it },
+            onApiTokenChange = { cloudApiToken = it },
+            onSave = {
+                val config = CloudAIConfig(
+                    apiUrl = cloudApiUrl,
+                    modelId = cloudModelId,
+                    apiToken = cloudApiToken
+                )
+                viewModel.saveCloudConfig(config)
+                showCloudDialog = false
+            },
+            onClear = {
+                viewModel.clearCloudConfig()
+                cloudApiUrl = ""
+                cloudModelId = ""
+                cloudApiToken = ""
+                showCloudDialog = false
+            },
+            onDismiss = { showCloudDialog = false }
+        )
+    }
+
     if (showHelpDialog) {
         AlertDialog(
             onDismissRequest = { showHelpDialog = false },
             title = {
                 Text(
-                    text = "📖 Меч Правды v2.0 — Руководство",
+                    text = "🛡️ Руководство пользователя «Меч Правды v2.0»",
                     style = MaterialTheme.typography.titleLarge,
                     color = DarkText
                 )
@@ -165,29 +219,77 @@ fun ChatScreen(
                         .verticalScroll(rememberScrollState())
                 ) {
                     Text(
-                        text = "Добро пожаловать в твой полностью локальный ИИ-ассистент!",
+                        text = "Добро пожаловать в полностью автономный ИИ-ассистент! Приложение работает на 100% локально, без интернета и скрытых облачных серверов. Ваши данные в абсолютной безопасности.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = DarkText
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                    Text(text = "🧠 1. Долговременная память", fontWeight = FontWeight.Bold, color = AccentColor)
-                    Text(text = "• Чтобы ИИ что-то зафиксировал, начни фразу со слова 'запомни'.", color = DarkText)
-                    Text(text = "• Чтобы извлечь данные, используй слово 'вспомни'.", color = DarkText)
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "📋 ПАНЕЛЬ УПРАВЛЕНИЯ (5 КНОПОК ПОД ШАПКОЙ):",
+                        fontWeight = FontWeight.Bold,
+                        color = AccentColor
+                    )
+                    Text(
+                        text = "1. 📝 [мозг] — Локальная База Знаний (Блокнот). Сюда можно вставить любой текст (например, прайс-листы, сметы, учебники по химии). ИИ автоматически выучит этот файл и будет использовать его данные при расчётах.",
+                        color = DarkText
+                    )
+                    Text(
+                        text = "2. ⚙️ [движок] — Ползунок креативности (температуры) и кнопка экстренной перезагрузки/смены GGUF-модели.",
+                        color = DarkText
+                    )
+                    Text(
+                        text = "3. 🎭 [характер] — Быстрое редактирование системной роли ИИ. Вы можете на ходу превратить ассистента в строгого профессора или инженера.",
+                        color = DarkText
+                    )
+                    Text(
+                        text = "4. ☁️ [облачный ии] — Настройка подключения к облачным ИИ (СберГигачат, DeepSeek и др.).",
+                        color = DarkText
+                    )
+                    Text(
+                        text = "5. ℹ️ [справка] — Это руководство.",
+                        color = DarkText
+                    )
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                    Text(text = "💬 2. Сплошной чат с контекстом", fontWeight = FontWeight.Bold, color = AccentColor)
-                    Text(text = "• Приложение сохраняет историю текущего разговора.", color = DarkText)
-                    Text(text = "• Чтобы очистить ОЗУ, нажми кнопку 'Очистить'.", color = DarkText)
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "📸 МУЛЬТИМОДАЛЬНОСТЬ (ЗРЕНИЕ ИИ):",
+                        fontWeight = FontWeight.Bold,
+                        color = AccentColor
+                    )
+                    Text(
+                        text = "Нажмите на иконку скрепки (или камеры) в поле ввода, чтобы загрузить скриншот или сделать фото. Локальная модель умеет сканировать графики, распознавать мелкий текст и пошагово решать химические уравнения прямо со снимка.",
+                        color = DarkText
+                    )
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                    Text(text = "📷 3. Зрение и работа с камерой", fontWeight = FontWeight.Bold, color = AccentColor)
-                    Text(text = "• Загрузи мультимодальный файл проектора зрения (.gguf).", color = DarkText)
-                    Text(text = "• Нажми на скрепку, сделай фото и отправь.", color = DarkText)
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "🔊 ИНТЕРАКТИВНЫЙ ЧАТ И ГОЛОС:",
+                        fontWeight = FontWeight.Bold,
+                        color = AccentColor
+                    )
+                    Text(
+                        text = "• Вы можете свободно выделять и копировать формулы, сметы или фрагменты диалога долгим нажатием на экран (благодаря SelectionContainer).",
+                        color = DarkText
+                    )
+                    Text(
+                        text = "• Каждый ответ ИИ автоматически проговаривается встроенным голосовым движком (TTS) — как в электронных книгах.",
+                        color = DarkText
+                    )
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                    Text(text = "⚙️ 4. Динамическая смена роли ИИ", fontWeight = FontWeight.Bold, color = AccentColor)
-                    Text(text = "• Нажми на Шестерёнку и измени системный промпт.", color = DarkText)
+                    Text(
+                        text = "⏰ ВСТРОЕННЫЙ ГОВОРЯЩИЙ БУДИЛЬНИК:",
+                        fontWeight = FontWeight.Bold,
+                        color = AccentColor
+                    )
+                    Text(
+                        text = "Вы можете ставить напоминания прямо в чате обычным языком! Напишите: 'в 18.00 идем в гараж' или 'напомни в 09.30 сдать отчет'. Приложение само запишет задачу в память, а в назначенную минуту автоматически напечатает предупреждение в чат и 5 раз подряд вслух на всю комнату проговорит ваше напоминание!",
+                        color = DarkText
+                    )
                 }
             },
             confirmButton = {
@@ -251,33 +353,6 @@ fun ChatScreen(
         )
     }
 
-    if (showCloudDialog) {
-        AlertDialog(
-            onDismissRequest = { showCloudDialog = false },
-            title = {
-                Text(
-                    text = "☁️ Облачный ИИ",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = DarkText
-                )
-            },
-            text = {
-                Text(
-                    text = "Модуль подключения внешних облачных моделей находится в разработке.",
-                    color = DarkText
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = { showCloudDialog = false },
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentColor)
-                ) {
-                    Text("ОК", color = DarkText)
-                }
-            }
-        )
-    }
-
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -324,7 +399,7 @@ fun ChatScreen(
             }
         }
 
-        // Панель с пятью кнопками и подписями (ВСЕ иконки из расширенной библиотеки)
+        // Панель с пятью кнопками
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -342,7 +417,7 @@ fun ChatScreen(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Кнопка 1: Редактор мозга - Memory
+                // Кнопка 1: Редактор мозга
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -366,7 +441,7 @@ fun ChatScreen(
                     )
                 }
 
-                // Кнопка 2: Настройки движка - Settings
+                // Кнопка 2: Настройки движка
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -387,7 +462,7 @@ fun ChatScreen(
                     )
                 }
 
-                // Кнопка 3: Роль ИИ - Psychology
+                // Кнопка 3: Роль ИИ
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -408,7 +483,7 @@ fun ChatScreen(
                     )
                 }
 
-                // Кнопка 4: Облачный ИИ - Cloud
+                // Кнопка 4: Облачный ИИ
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -429,7 +504,7 @@ fun ChatScreen(
                     )
                 }
 
-                // Кнопка 5: Справка - Info
+                // Кнопка 5: Справка
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -452,7 +527,7 @@ fun ChatScreen(
             }
         }
 
-        // Выезжающая панель настроек температуры
+        // Выезжающая панель настроек
         if (showSettings) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = SurfaceGray),
@@ -487,7 +562,6 @@ fun ChatScreen(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // 👇 НОВЫЙ БЛОК: Регулировка максимального количества токенов
                     Text(
                         text = "Максимум токенов: ${maxTokens}",
                         color = DarkText
@@ -508,7 +582,6 @@ fun ChatScreen(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Кнопка смены/сброса модели
                     Button(
                         onClick = { showModelDialog = true },
                         colors = ButtonDefaults.buttonColors(containerColor = BorderGray),
@@ -518,7 +591,6 @@ fun ChatScreen(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // 👇 НОВАЯ КНОПКА "Сохранить"
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -526,7 +598,6 @@ fun ChatScreen(
                         Button(
                             onClick = {
                                 viewModel.updateTemperature(tempTemperature)
-                                // maxTokens уже обновляется через слайдер
                                 showSettings = false
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
@@ -537,7 +608,6 @@ fun ChatScreen(
                         
                         Button(
                             onClick = {
-                                // Сбрасываем изменения
                                 tempTemperature = temperature
                                 viewModel.updateMaxTokens(maxTokens)
                                 showSettings = false
@@ -602,7 +672,7 @@ fun ChatScreen(
             }
         }
 
-        // StatusBar (обновлена для отображения AnalyzingImage)
+        // Статус-бар (локальный ИИ)
         StatusBar(
             state = state,
             currentModel = currentModelPath,
@@ -646,9 +716,26 @@ fun ChatScreen(
                             modifier = Modifier.padding(vertical = 2.dp)
                         )
                     }
+                    
+                    // Отображение облачного ответа
+                    if (cloudGeneratedText.isNotEmpty() && cloudState is CloudAIState.Generating) {
+                        Text(
+                            text = "☁️ ИИ: $cloudGeneratedText",
+                            color = DarkText.copy(alpha = 0.8f),
+                            fontFamily = ChatFontFamily,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(vertical = 2.dp)
+                        )
+                    }
                 }
             }
         }
+
+        // Cloud Status Bar
+        CloudStatusBar(
+            state = cloudState,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+        )
 
         imagePath?.let {
             Card(
@@ -671,22 +758,184 @@ fun ChatScreen(
             onGenerate = {
                 if (state.canGenerate() && promptInput.isNotBlank()) {
                     keyboardController?.hide()
-                    viewModel.generate(promptInput, imagePath)
+                    viewModel.generateLocal(promptInput, imagePath)
                     promptInput = ""
                     onImageUsed()
                 }
             },
             onAbort = {
                 keyboardController?.hide()
-                viewModel.abort()
+                viewModel.abortLocal()
             },
             onClearChat = { viewModel.clearChat() },
             onPickImage = onPickImage,
-            enabled = state.canGenerate(),
-            isGenerating = state is GenerationState.Generating,
+            enabled = state.canGenerate() || cloudState.canGenerate(),
+            isGenerating = state is GenerationState.Generating || cloudState.isActive(),
             focusRequester = focusRequester,
             modifier = Modifier.padding(16.dp)
         )
+    }
+}
+
+@Composable
+private fun CloudAIDialog(
+    apiUrl: String,
+    modelId: String,
+    apiToken: String,
+    onApiUrlChange: (String) -> Unit,
+    onModelIdChange: (String) -> Unit,
+    onApiTokenChange: (String) -> Unit,
+    onSave: () -> Unit,
+    onClear: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "☁️ Настройки облачного ИИ",
+                style = MaterialTheme.typography.titleLarge,
+                color = DarkText
+            )
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Введите данные для подключения к облачному ИИ (СберГигачат, DeepSeek, Claude и др.)",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = DarkText
+                )
+                
+                OutlinedTextField(
+                    value = apiUrl,
+                    onValueChange = onApiUrlChange,
+                    label = { Text("API URL", color = DarkText) },
+                    placeholder = { Text("https://api.example.com/v1/chat/completions", color = DarkText.copy(alpha = 0.5f)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = DarkText,
+                        unfocusedTextColor = DarkText,
+                        focusedBorderColor = AccentColor,
+                        unfocusedBorderColor = BorderGray,
+                        cursorColor = AccentColor
+                    )
+                )
+                
+                OutlinedTextField(
+                    value = modelId,
+                    onValueChange = onModelIdChange,
+                    label = { Text("ID модели", color = DarkText) },
+                    placeholder = { Text("gigaChat-pro", color = DarkText.copy(alpha = 0.5f)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = DarkText,
+                        unfocusedTextColor = DarkText,
+                        focusedBorderColor = AccentColor,
+                        unfocusedBorderColor = BorderGray,
+                        cursorColor = AccentColor
+                    )
+                )
+                
+                OutlinedTextField(
+                    value = apiToken,
+                    onValueChange = onApiTokenChange,
+                    label = { Text("API Token", color = DarkText) },
+                    placeholder = { Text("Введите ваш токен доступа", color = DarkText.copy(alpha = 0.5f)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = DarkText,
+                        unfocusedTextColor = DarkText,
+                        focusedBorderColor = AccentColor,
+                        unfocusedBorderColor = BorderGray,
+                        cursorColor = AccentColor
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onSave,
+                colors = ButtonDefaults.buttonColors(containerColor = AccentColor)
+            ) {
+                Text("Сохранить", color = DarkText)
+            }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onClear) {
+                    Text("Очистить", color = DarkText.copy(alpha = 0.6f))
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Закрыть", color = DarkText)
+                }
+            }
+        }
+    )
+}
+
+@Composable
+private fun CloudStatusBar(
+    state: CloudAIState,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = when (state) {
+                is CloudAIState.Error -> AccentColor.copy(alpha = 0.15f)
+                is CloudAIState.Generating -> AccentColor.copy(alpha = 0.15f)
+                is CloudAIState.Loading -> BorderGray.copy(alpha = 0.3f)
+                is CloudAIState.Ready -> SurfaceGray
+                else -> SurfaceGray
+            }
+        ),
+        border = BorderStroke(1.dp, BorderGray)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                when (state) {
+                    is CloudAIState.Idle -> {
+                        Text("☁️ Облачный ИИ не настроен", color = DarkText.copy(alpha = 0.5f))
+                    }
+                    is CloudAIState.Loading -> {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = AccentColor)
+                        Text("Подключение...", color = DarkText)
+                    }
+                    is CloudAIState.Ready -> {
+                        Text("☁️ Облачный ИИ готов (${state.modelId})", color = AccentColor)
+                    }
+                    is CloudAIState.Generating -> {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = AccentColor)
+                        val label = if (state.tokensGenerated == 0) "☁️ Думаю..." else "☁️ Генерация... (${state.tokensGenerated} токенов)"
+                        Text(label, color = DarkText)
+                    }
+                    is CloudAIState.Completed -> {
+                        Text(
+                            "☁️ Ответ готов (${state.tokenCount} токенов, ${state.durationMs}мс)",
+                            color = AccentColor
+                        )
+                    }
+                    is CloudAIState.Error -> {
+                        Text("⚠️ ${state.message}", color = AccentColor)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -896,13 +1145,11 @@ private fun PromptInput(
             )
         )
 
-        // Вертикальный контейнер с двумя кнопками (ВСЕ иконки из расширенной библиотеки)
         Column(
             verticalArrangement = Arrangement.spacedBy(4.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (isGenerating) {
-                // Кнопка "Стоп" - Close (из расширенной)
                 IconButton(
                     onClick = onAbort,
                     modifier = Modifier.size(48.dp),
@@ -917,7 +1164,6 @@ private fun PromptInput(
                     )
                 }
             } else {
-                // Кнопка "Отправить" - ArrowUpward (из расширенной)
                 IconButton(
                     onClick = onGenerate,
                     enabled = enabled && prompt.isNotBlank(),
@@ -934,7 +1180,6 @@ private fun PromptInput(
                 }
             }
 
-            // Кнопка "Очистить чат" - Delete (из расширенной)
             IconButton(
                 onClick = onClearChat,
                 enabled = true,
