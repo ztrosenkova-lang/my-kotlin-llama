@@ -1,11 +1,8 @@
 package org.nehuatl.sample
 
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -32,34 +29,24 @@ class MainActivity : ComponentActivity() {
     private val modelPickerLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
-        uri?.let { modelUri ->
-            try {
-                contentResolver.takePersistableUriPermission(
-                    modelUri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-                Log.d("MainActivity", "Вечные права на GGUF-модель зафиксированы!")
-            } catch (e: Exception) {
-                Log.e("MainActivity", "Ошибка фиксации прав на GGUF", e)
-            }
-            modelPath = modelUri.toString()
+        uri?.let {
+            contentResolver.takePersistableUriPermission(
+                it,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+            modelPath = it.toString()
         }
     }
 
     private val mmprojPickerLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
-        uri?.let { mmprojUri ->
-            try {
-                contentResolver.takePersistableUriPermission(
-                    mmprojUri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-                Log.d("MainActivity", "Вечные права на mmproj зафиксированы!")
-            } catch (e: Exception) {
-                Log.e("MainActivity", "Ошибка фиксации прав на mmproj", e)
-            }
-            mmprojPath = mmprojUri.toString()
+        uri?.let {
+            contentResolver.takePersistableUriPermission(
+                it,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+            mmprojPath = it.toString()
         }
     }
 
@@ -67,15 +54,10 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         uri?.let {
-            try {
-                contentResolver.takePersistableUriPermission(
-                    it,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-                Log.d("MainActivity", "Вечные права на изображение зафиксированы!")
-            } catch (e: Exception) {
-                Log.e("MainActivity", "Ошибка фиксации прав на изображение", e)
-            }
+            contentResolver.takePersistableUriPermission(
+                it,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
             imagePath = it.toString()
         }
     }
@@ -84,16 +66,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         enableEdgeToEdge()
-
-        // 🔔 ЗАПРОС РАЗРЕШЕНИЯ ДЛЯ ТОЧНОГО БУДИЛЬНИКА (Android 12+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val alarmManager = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
-            if (!alarmManager.canScheduleExactAlarms()) {
-                val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
-                startActivity(intent)
-            }
-        }
-
         setContent {
             KotlinLlamaCppTheme {
                 val viewModel: MainViewModel by viewModels {
