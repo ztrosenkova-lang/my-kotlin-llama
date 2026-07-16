@@ -1,7 +1,5 @@
 package org.nehuatl.sample
 
-import android.content.Intent
-import android.util.Log
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -59,7 +57,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
@@ -95,9 +92,6 @@ fun ChatScreen(
     val systemPromptText by viewModel.systemPrompt.collectAsStateWithLifecycle()
     val chatMessages by viewModel.chatHistory.collectAsStateWithLifecycle()
     val temperature by viewModel.temperature.collectAsStateWithLifecycle()
-
-    val context = LocalContext.current
-    var selectedMmprojUri by remember { mutableStateOf<String?>(null) }
 
     var promptInput by remember { mutableStateOf("") }
     var showModelDialog by remember { mutableStateOf(currentModelPath == null) }
@@ -158,7 +152,7 @@ fun ChatScreen(
             onDismissRequest = { showHelpDialog = false },
             title = {
                 Text(
-                    text = "🛡️ Руководство пользователя «Меч Правды v2.0»",
+                    text = "📖 Меч Правды v2.0 — Руководство",
                     style = MaterialTheme.typography.titleLarge,
                     color = DarkText
                 )
@@ -170,77 +164,29 @@ fun ChatScreen(
                         .verticalScroll(rememberScrollState())
                 ) {
                     Text(
-                        text = "Добро пожаловать в полностью автономный ИИ-ассистент! Приложение работает на 100% локально, без интернета и скрытых облачных серверов. Ваши данные в абсолютной безопасности.",
+                        text = "Добро пожаловать в твой полностью локальный ИИ-ассистент!",
                         style = MaterialTheme.typography.bodyMedium,
                         color = DarkText
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                    Text(
-                        text = "📋 ПАНЕЛЬ УПРАВЛЕНИЯ (5 КНОПОК ПОД ШАПКОЙ):",
-                        fontWeight = FontWeight.Bold,
-                        color = AccentColor
-                    )
-                    Text(
-                        text = "1. 📝 [мозг] — Локальная База Знаний (Блокнот). Сюда можно вставить любой текст (например, прайс-листы, сметы, учебники по химии). ИИ автоматически выучит этот файл и будет использовать его данные при расчётах.",
-                        color = DarkText
-                    )
-                    Text(
-                        text = "2. ⚙️ [движок] — Ползунок креативности (температуры) и кнопка экстренной перезагрузки/смены GGUF-модели.",
-                        color = DarkText
-                    )
-                    Text(
-                        text = "3. 🎭 [характер] — Быстрое редактирование системной роли ИИ. Вы можете на ходу превратить ассистента в строгого профессора или инженера.",
-                        color = DarkText
-                    )
-                    Text(
-                        text = "4. ☁️ [облачный ии] — Наш задел на будущее. Модуль интеграции с внешними тяжелыми моделями (Claude/DeepSeek) для версии v3.0.",
-                        color = DarkText
-                    )
-                    Text(
-                        text = "5. ℹ️ [справка] — Это руководство.",
-                        color = DarkText
-                    )
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(text = "🧠 1. Долговременная память", fontWeight = FontWeight.Bold, color = AccentColor)
+                    Text(text = "• Чтобы ИИ что-то зафиксировал, начни фразу со слова 'запомни'.", color = DarkText)
+                    Text(text = "• Чтобы извлечь данные, используй слово 'вспомни'.", color = DarkText)
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    Text(
-                        text = "📸 МУЛЬТИМОДАЛЬНОСТЬ (ЗРЕНИЕ ИИ):",
-                        fontWeight = FontWeight.Bold,
-                        color = AccentColor
-                    )
-                    Text(
-                        text = "Нажмите на иконку скрепки (или камеры) в поле ввода, чтобы загрузить скриншот или сделать фото. Локальная модель умеет сканировать графики, распознавать мелкий текст и пошагово решать химические уравнения прямо со снимка.",
-                        color = DarkText
-                    )
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(text = "💬 2. Сплошной чат с контекстом", fontWeight = FontWeight.Bold, color = AccentColor)
+                    Text(text = "• Приложение сохраняет историю текущего разговора.", color = DarkText)
+                    Text(text = "• Чтобы очистить ОЗУ, нажми кнопку 'Очистить'.", color = DarkText)
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    Text(
-                        text = "🔊 ИНТЕРАКТИВНЫЙ ЧАТ И ГОЛОС:",
-                        fontWeight = FontWeight.Bold,
-                        color = AccentColor
-                    )
-                    Text(
-                        text = "• Вы можете свободно выделять и копировать формулы, сметы или фрагменты диалога долгим нажатием на экран (благодаря SelectionContainer).",
-                        color = DarkText
-                    )
-                    Text(
-                        text = "• Каждый ответ ИИ автоматически проговаривается встроенным голосовым движком (TTS) — как в электронных книгах.",
-                        color = DarkText
-                    )
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(text = "📷 3. Зрение и работа с камерой", fontWeight = FontWeight.Bold, color = AccentColor)
+                    Text(text = "• Загрузи мультимодальный файл проектора зрения (.gguf).", color = DarkText)
+                    Text(text = "• Нажми на скрепку, сделай фото и отправь.", color = DarkText)
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    Text(
-                        text = "⏰ ВСТРОЕННЫЙ ГОВОРЯЩИЙ БУДИЛЬНИК:",
-                        fontWeight = FontWeight.Bold,
-                        color = AccentColor
-                    )
-                    Text(
-                        text = "Вы можете ставить напоминания прямо в чате обычным языком! Напишите: 'в 18.00 идем в гараж' или 'напомни в 09.30 сдать отчет'. Приложение само запишет задачу в память, а в назначенную минуту автоматически напечатает предупреждение в чат и 5 раз подряд вслух на всю комнату проговорит ваше напоминание!",
-                        color = DarkText
-                    )
+                    Text(text = "⚙️ 4. Динамическая смена роли ИИ", fontWeight = FontWeight.Bold, color = AccentColor)
+                    Text(text = "• Нажми на Шестерёнку и измени системный промпт.", color = DarkText)
                 }
             },
             confirmButton = {
@@ -846,10 +792,6 @@ private fun StatusBar(
                     }
                     is GenerationState.Error -> {
                         Text("⚠ ${state.message}", color = AccentColor)
-                    }
-                    else -> {
-                        // Обработка любых других состояний (например, Loading)
-                        Text("Ожидание...", color = DarkText)
                     }
                 }
             }
