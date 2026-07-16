@@ -320,7 +320,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             val aiResponse = _generatedText.value
                             if (aiResponse.isNotEmpty()) {
                                 _chatHistory.value = _chatHistory.value + ChatMessage("assistant", aiResponse)
-                                speakText(aiResponse)
+                                speakText(aiResponse) // Озвучиваем принудительно остановленный ответ
                             }
                             _state.value = GenerationState.Completed(prompt, event.tokenCount, 0)
                             return@collect
@@ -354,7 +354,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         val aiResponse = _generatedText.value
                         if (aiResponse.isNotEmpty()) {
                             _chatHistory.value = _chatHistory.value + ChatMessage("assistant", aiResponse)
-                            speakText(aiResponse)
+                            speakText(aiResponse) // ✅ ОЗВУЧИВАЕМ ОТВЕТ
                         }
                         _state.value = GenerationState.Completed(
                             prompt = prompt,
