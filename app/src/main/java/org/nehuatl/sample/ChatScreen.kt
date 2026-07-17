@@ -4,7 +4,9 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -77,6 +79,13 @@ private val AccentColor = Color(0xFF74C0FC)
 private val DarkText = Color(0xFF212529)
 private val ChatFontFamily = FontFamily.Monospace
 
+// Состояния переключателя
+enum class AIMode {
+    LOCAL,
+    CLOUD,
+    NEUTRAL
+}
+
 @Composable
 fun ChatScreen(
     modifier: Modifier = Modifier,
@@ -100,7 +109,7 @@ fun ChatScreen(
     val cloudGeneratedText by viewModel.cloudGeneratedText.collectAsStateWithLifecycle()
 
     var promptInput by remember { mutableStateOf("") }
-    var showModelDialog by remember { mutableStateOf(false) } // Теперь НЕ открываем автоматически
+    var showModelDialog by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var showPromptSettings by remember { mutableStateOf(false) }
     var showCloudDialog by remember { mutableStateOf(false) }
@@ -115,6 +124,9 @@ fun ChatScreen(
     var cloudIsGigaChat by remember { mutableStateOf(true) }
     var isGeneratingToken by remember { mutableStateOf(false) }
 
+    // Состояние переключателя
+    var currentMode by remember { mutableStateOf(AIMode.NEUTRAL) }
+
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     val scrollState = rememberScrollState()
@@ -127,7 +139,6 @@ fun ChatScreen(
                 cloudAuthKey = config.authKey
                 cloudIsGigaChat = config.isGigaChat
             } else {
-                // Если конфига нет, подставляем адрес GigaChat по умолчанию
                 cloudApiUrl = "https://gigachat.devices.sberbank.ru/api/v1/chat/completions"
                 cloudIsGigaChat = true
             }
@@ -153,7 +164,7 @@ fun ChatScreen(
         }
     }
 
-    // Диалог выбора модели — теперь открывается только по кнопке
+    // Диалог выбора модели
     if (showModelDialog) {
         ModelPickerDialog(
             currentModelPath = currentModelPath,
@@ -164,6 +175,7 @@ fun ChatScreen(
                 showModelDialog = false
                 if (currentModelPath != null) {
                     viewModel.loadModel(currentModelPath, mmprojPath)
+                    currentMode = AIMode.LOCAL
                 }
             },
             onDismiss = { showModelDialog = false }
@@ -187,6 +199,7 @@ fun ChatScreen(
                 )
                 viewModel.saveCloudConfig(config)
                 showCloudDialog = false
+                currentMode = AIMode.CLOUD
             },
             onClear = {
                 viewModel.clearCloudConfig()
@@ -194,6 +207,7 @@ fun ChatScreen(
                 cloudAuthKey = ""
                 cloudIsGigaChat = true
                 showCloudDialog = false
+                if (currentMode == AIMode.CLOUD) currentMode = AIMode.NEUTRAL
             },
             onDismiss = { showCloudDialog = false },
             onGenerateToken = {
@@ -206,7 +220,6 @@ fun ChatScreen(
         )
     }
 
-    // Остальные диалоги (справка, память) без изменений
     if (showHelpDialog) {
         HelpDialog(onDismiss = { showHelpDialog = false })
     }
@@ -225,10 +238,31 @@ fun ChatScreen(
             .background(AppBackground)
             .imePadding()
     ) {
-        // Верхняя панель (без изменений)
-        TopBar()
+        // Верхняя панель с логотипом и переключателем
+        TopBarWithSwitch(
+            currentMode = currentMode,
+            onModeChange = { newMode ->
+                currentMode = newMode
+                when (newMode) {
+                    AIMode.LOCAL -> {
+                        if (state !is GenerationState.ModelLoaded) {
+                            // Если модель не загружена, открываем диалог
+                            showModelDialog = true
+                        }
+                    }
+                    AIMode.CLOUD -> {
+                        if (!viewModel.isCloudConfigured()) {
+                            showCloudDialog = true
+                        }
+                    }
+                    AIMode.NEUTRAL -> {
+                        // Ничего не делаем
+                    }
+                }
+            }
+        )
 
-        // Панель управления (без изменений)
+        // Панель управления
         ControlPanel(
             onMemoryClick = {
                 memoryEditText = viewModel.readFromLongTermMemory()
@@ -307,14 +341,25 @@ fun ChatScreen(
             onGenerate = {
                 if (promptInput.isNotBlank()) {
                     keyboardController?.hide()
-                    // Определяем, куда отправлять: локальный или облачный ИИ
-                    if (state is GenerationState.ModelLoaded) {
-                        viewModel.generateLocal(promptInput, imagePath)
-                    } else if (cloudState is CloudAIState.Ready || cloudState is CloudAIState.Idle) {
-                        viewModel.generateCloud(promptInput)
-                    } else {
-                        // Если ничего не загружено, показываем ошибку в статусе
-                        viewModel.abortLocal()
+                    when (currentMode) {
+                        AIMode.LOCAL -> {
+                            if (state is GenerationState.ModelLoaded) {
+                                viewModel.generateLocal(promptInput, imagePath)
+                            } else {
+                                showModelDialog = true
+                            }
+                        }
+                        AIMode.CLOUD -> {
+                            if (viewModel.isCloudConfigured()) {
+                                viewModel.generateCloud(promptInput)
+                            } else {
+                                showCloudDialog = true
+                            }
+                        }
+                        AIMode.NEUTRAL -> {
+                            // Показываем подсказку или ничего не делаем
+                            viewModel.appendSystemMessage("Выберите режим работы: локальный или облачный ИИ")
+                        }
                     }
                     promptInput = ""
                     onImageUsed()
@@ -335,10 +380,12 @@ fun ChatScreen(
     }
 }
 
-// === Вспомогательные компоненты (вынесены для чистоты) ===
-
+// === Обновленная верхняя панель с переключателем ===
 @Composable
-private fun TopBar() {
+private fun TopBarWithSwitch(
+    currentMode: AIMode,
+    onModeChange: (AIMode) -> Unit
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -348,27 +395,105 @@ private fun TopBar() {
         colors = CardDefaults.cardColors(containerColor = SurfaceGray)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Логотип и название (две строки)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Image(
                     painter = painterResource(id = R.mipmap.ic_launcher),
                     contentDescription = "Лого",
                     contentScale = ContentScale.FillBounds,
-                    modifier = Modifier.size(72.dp).clip(RoundedCornerShape(16.dp))
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(RoundedCornerShape(16.dp))
                 )
-                Text(
-                    text = "Меч Правды v2.0",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = DarkText
+                Column(
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "Меч",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = DarkText,
+                        fontSize = 18.sp
+                    )
+                    Text(
+                        text = "Правды v2.0",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Normal,
+                        color = DarkText,
+                        fontSize = 14.sp
+                    )
+                }
+            }
+
+            // Переключатель режимов (3 позиции)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // Кнопка LOCAL
+                ModeButton(
+                    label = "Лок",
+                    isSelected = currentMode == AIMode.LOCAL,
+                    onClick = { onModeChange(AIMode.LOCAL) }
+                )
+                // Кнопка NEUTRAL
+                ModeButton(
+                    label = "⚪",
+                    isSelected = currentMode == AIMode.NEUTRAL,
+                    onClick = { onModeChange(AIMode.NEUTRAL) }
+                )
+                // Кнопка CLOUD
+                ModeButton(
+                    label = "Обл",
+                    isSelected = currentMode == AIMode.CLOUD,
+                    onClick = { onModeChange(AIMode.CLOUD) }
                 )
             }
         }
     }
 }
+
+// Компонент кнопки переключателя
+@Composable
+private fun ModeButton(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(48.dp, 36.dp)
+            .clickable { onClick() }
+            .background(
+                color = if (isSelected) AccentColor else SurfaceGray,
+                shape = RoundedCornerShape(8.dp)
+            )
+            .border(
+                width = if (isSelected) 2.dp else 1.dp,
+                color = if (isSelected) AccentColor else BorderGray,
+                shape = RoundedCornerShape(8.dp)
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            color = if (isSelected) Color.White else DarkText,
+            fontSize = 10.sp,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+        )
+    }
+}
+
+// === Остальные компоненты (без изменений, кроме шрифтов в статус-барах) ===
 
 @Composable
 private fun ControlPanel(
@@ -810,12 +935,7 @@ private fun ImagePreview(imagePath: String) {
     }
 }
 
-// === Существующие компоненты (StatusBar, CloudStatusBar, ModelPickerDialog, PromptInput) остаются без изменений ===
-// Они были ранее в вашем файле, я их не меняю, чтобы сохранить функциональность.
-// Если они отсутствуют, их нужно скопировать из предыдущей версии или я добавлю их в финальном ответе.
-
-// Ниже приведены заглушки для недостающих компонентов. Пожалуйста, используйте их,
-// если они отсутствуют в вашем текущем файле.
+// === Обновленные статус-бары с уменьшенным шрифтом и без слова "Модель" ===
 
 @Composable
 private fun StatusBar(state: GenerationState, currentModel: String?, modifier: Modifier = Modifier) {
@@ -833,37 +953,41 @@ private fun StatusBar(state: GenerationState, currentModel: String?, modifier: M
         border = BorderStroke(1.dp, BorderGray)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                 when (state) {
                     is GenerationState.Idle -> {
-                        Text(if (currentModel == null) "Выберите модель" else "ИИ Готов", color = if (currentModel == null) DarkText.copy(alpha = 0.5f) else AccentColor)
+                        Text(if (currentModel == null) "Выберите модель" else "Готов", color = if (currentModel == null) DarkText.copy(alpha = 0.5f) else AccentColor, fontSize = 8.sp)
                     }
                     is GenerationState.LoadingModel -> {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = AccentColor)
-                        Text("Загрузка модели...", color = DarkText)
+                        CircularProgressIndicator(modifier = Modifier.size(12.dp), color = AccentColor, strokeWidth = 2.dp)
+                        Text("Загрузка...", color = DarkText, fontSize = 8.sp)
                     }
                     is GenerationState.ModelLoaded -> {
-                        val modelName = state.path.substringAfterLast("/").replace(Regex("^primary%3AModels%"), "").replace(Regex("^primary:Models:"), "")
-                        Text("✓ Модель: $modelName", color = AccentColor)
+                        val modelName = state.path.substringAfterLast("/")
+                            .replace(Regex("^primary%3AModels%"), "")
+                            .replace(Regex("^primary:Models:"), "")
+                        // Берем только имя файла без расширения
+                        val displayName = modelName.substringBeforeLast(".")
+                        Text("✓ $displayName", color = AccentColor, fontSize = 8.sp)
                     }
                     is GenerationState.AnalyzingImage -> {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = AccentColor)
-                        Text("🧐 Анализ изображения...", color = DarkText)
+                        CircularProgressIndicator(modifier = Modifier.size(12.dp), color = AccentColor, strokeWidth = 2.dp)
+                        Text("🧐 Анализ...", color = DarkText, fontSize = 8.sp)
                     }
                     is GenerationState.Generating -> {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = AccentColor)
-                        val label = if (state.tokensGenerated == 0) "Думаю..." else "Думаю... (${state.tokensGenerated} токенов)"
-                        Text(label, color = DarkText)
+                        CircularProgressIndicator(modifier = Modifier.size(12.dp), color = AccentColor, strokeWidth = 2.dp)
+                        val label = if (state.tokensGenerated == 0) "Думаю..." else "${state.tokensGenerated} т."
+                        Text(label, color = DarkText, fontSize = 8.sp)
                     }
                     is GenerationState.Completed -> {
-                        Text("✓ Ответ готов (${state.tokenCount} токенов, ${state.durationMs}мс)", color = AccentColor)
+                        Text("✓ ${state.tokenCount} т. ${state.durationMs}мс", color = AccentColor, fontSize = 8.sp)
                     }
                     is GenerationState.Error -> {
-                        Text("⚠ ${state.message}", color = AccentColor)
+                        Text("⚠ ${state.message}", color = AccentColor, fontSize = 8.sp)
                     }
                 }
             }
@@ -886,21 +1010,21 @@ private fun CloudStatusBar(state: CloudAIState, modifier: Modifier = Modifier) {
         border = BorderStroke(1.dp, BorderGray)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                 when (state) {
-                    is CloudAIState.Idle -> Text("☁️ Облачный ИИ не настроен", color = DarkText.copy(alpha = 0.5f))
-                    is CloudAIState.Ready -> Text("☁️ Облачный ИИ готов (${state.modelId})", color = AccentColor)
+                    is CloudAIState.Idle -> Text("☁️ не настроен", color = DarkText.copy(alpha = 0.5f), fontSize = 8.sp)
+                    is CloudAIState.Ready -> Text("☁️ готов (${state.modelId})", color = AccentColor, fontSize = 8.sp)
                     is CloudAIState.Generating -> {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = AccentColor)
-                        val label = if (state.tokensGenerated == 0) "☁️ Думаю..." else "☁️ Генерация... (${state.tokensGenerated} токенов)"
-                        Text(label, color = DarkText)
+                        CircularProgressIndicator(modifier = Modifier.size(12.dp), color = AccentColor, strokeWidth = 2.dp)
+                        val label = if (state.tokensGenerated == 0) "☁️ Думаю..." else "${state.tokensGenerated} т."
+                        Text(label, color = DarkText, fontSize = 8.sp)
                     }
-                    is CloudAIState.Completed -> Text("☁️ Ответ готов (${state.tokenCount} токенов, ${state.durationMs}мс)", color = AccentColor)
-                    is CloudAIState.Error -> Text("⚠️ ${state.message}", color = AccentColor)
+                    is CloudAIState.Completed -> Text("☁️ ${state.tokenCount} т. ${state.durationMs}мс", color = AccentColor, fontSize = 8.sp)
+                    is CloudAIState.Error -> Text("⚠️ ${state.message}", color = AccentColor, fontSize = 8.sp)
                 }
             }
         }
