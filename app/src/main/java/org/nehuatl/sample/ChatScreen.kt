@@ -108,6 +108,9 @@ fun ChatScreen(
     val cloudState by viewModel.cloudState.collectAsStateWithLifecycle()
     val cloudGeneratedText by viewModel.cloudGeneratedText.collectAsStateWithLifecycle()
 
+    // Флаг загрузки модели из ViewModel
+    val isModelLoaded by viewModel.isModelLoaded.collectAsStateWithLifecycle()
+
     var promptInput by remember { mutableStateOf("") }
     var showModelDialog by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
@@ -243,7 +246,8 @@ fun ChatScreen(
                 currentMode = newMode
                 when (newMode) {
                     AIMode.LOCAL -> {
-                        if (state !is GenerationState.ModelLoaded) {
+                        // Используем флаг isModelLoaded вместо проверки state
+                        if (!isModelLoaded) {
                             showModelDialog = true
                         }
                     }
@@ -330,7 +334,7 @@ fun ChatScreen(
                     keyboardController?.hide()
                     when (currentMode) {
                         AIMode.LOCAL -> {
-                            if (state is GenerationState.ModelLoaded) {
+                            if (isModelLoaded) {
                                 viewModel.generateLocal(promptInput, imagePath)
                             } else {
                                 showModelDialog = true
@@ -409,7 +413,7 @@ private fun TopBarWithSwitch(
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = DarkText,
-                        fontSize = 16.sp,
+                        fontSize = 18.sp,
                         modifier = Modifier.fillMaxWidth()
                     )
                     Text(
@@ -417,7 +421,7 @@ private fun TopBarWithSwitch(
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = DarkText,
-                        fontSize = 12.sp,
+                        fontSize = 14.sp,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
