@@ -854,27 +854,27 @@ private fun HelpDialog(onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         title = { Text("🛡️ Руководство пользователя", style = MaterialTheme.typography.titleLarge, color = DarkText) },
         text = {
-            Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(500.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(8.dp)
+            ) {
                 Text(
-                    text = "Добро пожаловать в полностью автономный ИИ-ассистент!\n\n" +
-                            "📋 ПАНЕЛЬ УПРАВЛЕНИЯ:\n" +
-                            "1. 📝 [мозг] — База Знаний (Блокнот).\n" +
-                            "2. ⚙️ [движок] — Настройки температуры и смена модели.\n" +
-                            "3. 🎭 [характер] — Системная роль ИИ.\n" +
-                            "4. ☁️ [облачный ии] — Настройка GigaChat или других API.\n" +
-                            "5. ℹ️ [справка] — Это руководство.\n\n" +
-                            "🔊 ИНТЕРАКТИВНЫЙ ЧАТ И ГОЛОС:\n" +
-                            "• Каждый ответ ИИ озвучивается TTS.\n\n" +
-                            "⏰ ВСТРОЕННЫЙ БУДИЛЬНИК:\n" +
-                            "Напишите: 'в 18.00 идем в гараж' или 'напомни в 09.30 сдать отчет'.\n\n" +
-                            "🧠 КОМАНДА ЗАПОМНИТЬ:\n" +
-                            "Напишите: 'сделай выводы и запомни'",
-                    color = DarkText
+                    text = HelpText.fullHelp,
+                    color = DarkText,
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    lineHeight = 16.sp
                 )
             }
         },
         confirmButton = {
-            Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = AccentColor)) {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(containerColor = AccentColor)
+            ) {
                 Text("Понятно", color = DarkText)
             }
         }
