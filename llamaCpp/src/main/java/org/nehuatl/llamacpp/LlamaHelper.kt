@@ -127,7 +127,17 @@ class LlamaHelper(
             "n_predict" to 512,
             "top_k" to 40,
             "top_p" to 0.95,
-            "stop" to listOf("</s>", "[INST]", "[/INST]")
+            "stop" to listOf(
+                "</s>",
+                "[INST]",
+                "[/INST]",
+                "<|endoftext|>",
+                "<|eot_id|>",
+                "<|im_end|>",
+                "###",
+                "User:",
+                "Assistant:"
+            )
         )
         
         imagePath?.let {
