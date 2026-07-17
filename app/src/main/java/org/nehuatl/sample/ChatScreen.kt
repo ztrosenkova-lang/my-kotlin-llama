@@ -391,66 +391,59 @@ private fun TopBarWithSwitch(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Логотип и название (две строки) - ВОЗВРАЩАЕМ ЛЕВОЕ ВЫРАВНИВАНИЕ
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            // Логотип слева
+            Image(
+                painter = painterResource(id = R.mipmap.ic_launcher),
+                contentDescription = "Лого",
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier
+                    .size(72.dp)
+                    .clip(RoundedCornerShape(16.dp))
+            )
+
+            // Центральная колонка с текстом и переключателем
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
-                Image(
-                    painter = painterResource(id = R.mipmap.ic_launcher),
-                    contentDescription = "Лого",
-                    contentScale = ContentScale.FillBounds,
-                    modifier = Modifier
-                        .size(72.dp)
-                        .clip(RoundedCornerShape(16.dp))
+                Text(
+                    text = "Меч Правды v2.0",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = DarkText,
+                    fontSize = 16.sp,
+                    modifier = Modifier.fillMaxWidth()
                 )
-                Column(
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.Start // <-- ВОЗВРАЩАЕМ ЛЕВОЕ ВЫРАВНИВАНИЕ
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Переключатель режимов — по центру
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(
-                        text = "Меч",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = DarkText,
-                        fontSize = 14.sp,
-                       
+                    ModeButton(
+                        label = "Local",
+                        isSelected = currentMode == AIMode.LOCAL,
+                        onClick = { onModeChange(AIMode.LOCAL) }
                     )
-                    Text(
-                        text = "Правды v2.0",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = DarkText,
-                        fontSize = 10.sp,
-                        
+                    ModeButton(
+                        label = "Neutral",
+                        isSelected = currentMode == AIMode.NEUTRAL,
+                        onClick = { onModeChange(AIMode.NEUTRAL) }
+                    )
+                    ModeButton(
+                        label = "Cloud",
+                        isSelected = currentMode == AIMode.CLOUD,
+                        onClick = { onModeChange(AIMode.CLOUD) }
                     )
                 }
-            }
-
-            // Переключатель режимов (3 позиции) — с weight(1f) для правильного отображения
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-                modifier = Modifier.weight(1f) // <-- ОСТАВЛЯЕМ weight
-            ) {
-                ModeButton(
-                    label = "Local",
-                    isSelected = currentMode == AIMode.LOCAL,
-                    onClick = { onModeChange(AIMode.LOCAL) }
-                )
-                ModeButton(
-                    label = "Neutral",
-                    isSelected = currentMode == AIMode.NEUTRAL,
-                    onClick = { onModeChange(AIMode.NEUTRAL) }
-                )
-                ModeButton(
-                    label = "Cloud",
-                    isSelected = currentMode == AIMode.CLOUD,
-                    onClick = { onModeChange(AIMode.CLOUD) }
-                )
             }
         }
     }
@@ -465,7 +458,7 @@ private fun ModeButton(
 ) {
     Box(
         modifier = Modifier
-            .size(24.dp, 16.dp) // Еще больше уменьшенный размер для гарантии
+            .size(32.dp, 20.dp) // Увеличенный размер
             .clickable { onClick() }
             .background(
                 color = if (isSelected) AccentColor else SurfaceGray,
@@ -481,7 +474,7 @@ private fun ModeButton(
         Text(
             text = label,
             color = if (isSelected) Color.White else DarkText,
-            fontSize = 6.sp, // Уменьшенный шрифт
+            fontSize = 8.sp, // Увеличенный шрифт
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
         )
     }
