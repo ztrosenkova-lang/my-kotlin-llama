@@ -461,7 +461,7 @@ private fun ModeButton(
 ) {
     Box(
         modifier = Modifier
-            .size(40.dp, 28.dp) // Уменьшенный размер
+            .size(32.dp, 20.dp) // Уменьшенный размер
             .clickable { onClick() }
             .background(
                 color = if (isSelected) AccentColor else SurfaceGray,
@@ -477,7 +477,7 @@ private fun ModeButton(
         Text(
             text = label,
             color = if (isSelected) Color.White else DarkText,
-            fontSize = 8.sp, // Уменьшенный шрифт
+            fontSize = 7.sp, // Уменьшенный шрифт
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
         )
     }
