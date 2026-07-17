@@ -112,9 +112,9 @@ class LlamaHelper(
         tokenCount = 0
         allText = ""
 
-        // Формируем полный промпт с системным промптом
+        // Формируем полный промпт: системный промпт + вопрос
         val fullPrompt = if (!systemPrompt.isNullOrEmpty()) {
-            // Используем формат для llama.cpp с системным промптом
+            // Системный промпт уже содержит всю историю и память
             "[INST] <<SYS>>\n$systemPrompt\n<</SYS>>\n\n$prompt [/INST]"
         } else {
             prompt
@@ -123,6 +123,11 @@ class LlamaHelper(
         val params = mutableMapOf<String, Any>(
             "prompt" to fullPrompt,
             "emit_partial_completion" to partialCompletion,
+            "temperature" to 0.7,
+            "n_predict" to 512,
+            "top_k" to 40,
+            "top_p" to 0.95,
+            "stop" to listOf("</s>", "[INST]", "[/INST]")
         )
         
         imagePath?.let {
