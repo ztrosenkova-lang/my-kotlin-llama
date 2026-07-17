@@ -51,6 +51,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _generatedText = MutableStateFlow("")
     val generatedText = _generatedText.asStateFlow()
 
+    // Флаг загрузки модели (НОВЫЙ)
+    private val _isModelLoaded = MutableStateFlow(false)
+    val isModelLoaded: MutableStateFlow<Boolean> = _isModelLoaded
+
     // === Облачный ИИ ===
     private val _cloudState = MutableStateFlow<CloudAIState>(CloudAIState.Idle)
     val cloudState = _cloudState.asStateFlow()
@@ -137,7 +141,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         if (fullText.isNotEmpty()) {
                             _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
                             speakText(fullText)
-                            // Проверяем команду "запомнить" в последнем сообщении пользователя
                             val lastUserMessage = _chatHistory.value.lastOrNull { it.role == "user" }?.text ?: ""
                             if (lastUserMessage.contains(REMEMBER_COMMAND, ignoreCase = true)) {
                                 saveToLongTermMemory(fullText)
@@ -179,7 +182,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         if (fullText.isNotEmpty()) {
                             _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
                             speakText(fullText)
-                            // Проверяем команду "запомнить" в последнем сообщении пользователя
                             val lastUserMessage = _chatHistory.value.lastOrNull { it.role == "user" }?.text ?: ""
                             if (lastUserMessage.contains(REMEMBER_COMMAND, ignoreCase = true)) {
                                 saveToLongTermMemory(fullText)
@@ -190,9 +192,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     is LlamaHelper.LLMEvent.Error -> {
                         _state.value = GenerationState.Error(event.message)
                         Log.e(TAG, "Ошибка локального ИИ: ${event.message}")
+                        _isModelLoaded.value = false // Сбрасываем флаг при ошибке
                     }
                     is LlamaHelper.LLMEvent.Loaded -> {
                         _state.value = GenerationState.ModelLoaded(event.path)
+                        _isModelLoaded.value = true // Устанавливаем флаг при загрузке
                     }
                 }
             }
@@ -242,13 +246,23 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         val newUserMessage = ChatMessage("user", prompt)
         _chatHistory.value = _chatHistory.value + newUserMessage
 
-        // Формируем полный системный промпт с историей, памятью и мозгом
-        val fullSystemPrompt = buildSystemPrompt()
+        val currentSystemPrompt = _systemPrompt.value
+        val history = _chatHistory.value
+        val memoryData = readFromLongTermMemory()
+        val brainData = readBrain()
+        val memoryContext = buildString {
+            if (memoryData.isNotEmpty()) {
+                append("Дополнительная локальная база знаний и факты от пользователя:\n$memoryData\n")
+            }
+            if (brainData.isNotEmpty()) {
+                append("Важные выводы из прошлых разговоров (мозг):\n$brainData\n")
+            }
+        }
 
-        val cloudHistory = _chatHistory.value.dropLast(1) // Убираем последнее сообщение пользователя
+        val cloudHistory = history.dropLast(1)
         cloudAIProvider.generate(
             prompt = prompt,
-            systemPrompt = fullSystemPrompt,
+            systemPrompt = currentSystemPrompt + (if (memoryContext.isNotEmpty()) "\n\n$memoryContext" else ""),
             chatHistory = cloudHistory
         )
     }
@@ -262,6 +276,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     fun loadModel(path: String, mmprojPath: String? = null) {
         if (path.isEmpty()) return
         _state.value = GenerationState.LoadingModel
+        _isModelLoaded.value = false
         scope.launch {
             try {
                 llamaHelper.load(
@@ -270,12 +285,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     mmprojPath = if (mmprojPath.isNullOrEmpty()) null else mmprojPath,
                     loaded = { id ->
                         _state.value = GenerationState.ModelLoaded(path)
+                        _isModelLoaded.value = true
                         val uri = Uri.parse(path)
                         currentModelName = getFileNameFromUri(contentResolver, uri)
                     }
                 )
             } catch (e: Exception) {
                 _state.value = GenerationState.Error(e.message ?: "Unknown error")
+                _isModelLoaded.value = false
             }
         }
     }
@@ -293,11 +310,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             return
         }
 
-        // Добавляем сообщение пользователя в историю
         val newUserMessage = ChatMessage("user", prompt)
         _chatHistory.value = _chatHistory.value + newUserMessage
 
-        // Формируем полный системный промпт с историей, памятью и мозгом
         val fullSystemPrompt = buildSystemPrompt()
 
         _generatedText.value = ""
@@ -305,15 +320,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         scope.launch {
             try {
-                // Передаем системный промпт и вопрос
                 llamaHelper.predict(prompt, imagePath, fullSystemPrompt)
             } catch (e: Exception) {
                 _state.value = GenerationState.Error(e.message ?: "Unknown error")
+                _isModelLoaded.value = false
             }
         }
     }
 
-    // Формируем полный системный промпт с историей, памятью и мозгом
     private fun buildSystemPrompt(): String {
         val basePrompt = _systemPrompt.value
         val memoryData = readFromLongTermMemory()
@@ -502,11 +516,17 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         Log.d(TAG, "Озвучка запущена: ${cleanText.take(50)}...")
     }
 
+    fun releaseModel() {
+        _isModelLoaded.value = false
+        llamaHelper.release()
+    }
+
     override fun onCleared() {
         super.onCleared()
         instance = null
         tts?.stop()
         tts?.shutdown()
+        _isModelLoaded.value = false
         llamaHelper.abort()
         llamaHelper.release()
         viewModelJob.cancel()
