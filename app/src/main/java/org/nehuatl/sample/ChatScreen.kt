@@ -465,23 +465,23 @@ private fun ModeButton(
 ) {
     Box(
         modifier = Modifier
-            .size(32.dp, 20.dp) // Уменьшенный размер
+            .size(24.dp, 16.dp) // Еще больше уменьшенный размер для гарантии
             .clickable { onClick() }
             .background(
                 color = if (isSelected) AccentColor else SurfaceGray,
-                shape = RoundedCornerShape(6.dp)
+                shape = RoundedCornerShape(4.dp)
             )
             .border(
-                width = if (isSelected) 1.5.dp else 0.5.dp,
+                width = if (isSelected) 1.dp else 0.5.dp,
                 color = if (isSelected) AccentColor else BorderGray,
-                shape = RoundedCornerShape(6.dp)
+                shape = RoundedCornerShape(4.dp)
             ),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = label,
             color = if (isSelected) Color.White else DarkText,
-            fontSize = 7.sp, // Уменьшенный шрифт
+            fontSize = 6.sp, // Уменьшенный шрифт
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
         )
     }
