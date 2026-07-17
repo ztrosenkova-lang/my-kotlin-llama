@@ -151,7 +151,15 @@ class LlamaHelper(
                 params = params
             )
             val duration = System.currentTimeMillis() - startTime
-            sharedFlow.tryEmit(LLMEvent.Done(allText, tokenCount, duration))
+            
+            // Очищаем ответ от маркеров [INST] и [/INST]
+            val cleanedText = allText
+                .replace(Regex("\\[/?INST\\]"), "") // Убираем [INST] и [/INST]
+                .replace(Regex("<<SYS>>"), "")      // Убираем <<SYS>>
+                .replace(Regex("<</SYS>>"), "")     // Убираем <</SYS>>
+                .trim()
+            
+            sharedFlow.tryEmit(LLMEvent.Done(cleanedText, tokenCount, duration))
         }
     }
 
