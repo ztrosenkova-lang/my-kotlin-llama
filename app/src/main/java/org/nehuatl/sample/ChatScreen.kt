@@ -59,7 +59,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
+import androidx.compute.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -79,11 +79,11 @@ private val AccentColor = Color(0xFF74C0FC)
 private val DarkText = Color(0xFF212529)
 private val ChatFontFamily = FontFamily.Monospace
 
-// Состояния переключателя
+// Состояния переключателя на английском
 enum class AIMode {
     LOCAL,
-    CLOUD,
-    NEUTRAL
+    NEUTRAL,
+    CLOUD
 }
 
 @Composable
@@ -124,7 +124,6 @@ fun ChatScreen(
     var cloudIsGigaChat by remember { mutableStateOf(true) }
     var isGeneratingToken by remember { mutableStateOf(false) }
 
-    // Состояние переключателя
     var currentMode by remember { mutableStateOf(AIMode.NEUTRAL) }
 
     val focusRequester = remember { FocusRequester() }
@@ -164,7 +163,6 @@ fun ChatScreen(
         }
     }
 
-    // Диалог выбора модели
     if (showModelDialog) {
         ModelPickerDialog(
             currentModelPath = currentModelPath,
@@ -238,7 +236,7 @@ fun ChatScreen(
             .background(AppBackground)
             .imePadding()
     ) {
-        // Верхняя панель с логотипом и переключателем
+        // Верхняя панель с переключателем
         TopBarWithSwitch(
             currentMode = currentMode,
             onModeChange = { newMode ->
@@ -246,7 +244,6 @@ fun ChatScreen(
                 when (newMode) {
                     AIMode.LOCAL -> {
                         if (state !is GenerationState.ModelLoaded) {
-                            // Если модель не загружена, открываем диалог
                             showModelDialog = true
                         }
                     }
@@ -255,14 +252,11 @@ fun ChatScreen(
                             showCloudDialog = true
                         }
                     }
-                    AIMode.NEUTRAL -> {
-                        // Ничего не делаем
-                    }
+                    AIMode.NEUTRAL -> {}
                 }
             }
         )
 
-        // Панель управления
         ControlPanel(
             onMemoryClick = {
                 memoryEditText = viewModel.readFromLongTermMemory()
@@ -274,7 +268,6 @@ fun ChatScreen(
             onHelpClick = { showHelpDialog = true }
         )
 
-        // Настройки движка
         if (showSettings) {
             SettingsPanel(
                 temperature = tempTemperature,
@@ -293,7 +286,6 @@ fun ChatScreen(
             )
         }
 
-        // Настройки системного промпта
         if (showPromptSettings) {
             PromptSettingsPanel(
                 promptText = tempPromptText,
@@ -305,14 +297,12 @@ fun ChatScreen(
             )
         }
 
-        // Статус-бар локального ИИ
         StatusBar(
             state = state,
             currentModel = currentModelPath,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
         )
 
-        // Область чата
         ChatArea(
             chatMessages = chatMessages,
             generatedText = generatedText,
@@ -323,18 +313,15 @@ fun ChatScreen(
             modifier = Modifier.weight(1f)
         )
 
-        // Статус-бар облачного ИИ
         CloudStatusBar(
             state = cloudState,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
         )
 
-        // Отображение выбранного изображения
         if (imagePath != null) {
             ImagePreview(imagePath = imagePath)
         }
 
-        // Поле ввода
         PromptInput(
             prompt = promptInput,
             onPromptChange = { promptInput = it },
@@ -357,7 +344,6 @@ fun ChatScreen(
                             }
                         }
                         AIMode.NEUTRAL -> {
-                            // Показываем подсказку или ничего не делаем
                             viewModel.appendSystemMessage("Выберите режим работы: локальный или облачный ИИ")
                         }
                     }
@@ -415,45 +401,45 @@ private fun TopBarWithSwitch(
                         .clip(RoundedCornerShape(16.dp))
                 )
                 Column(
-                    verticalArrangement = Arrangement.Center
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.Start
                 ) {
                     Text(
                         text = "Меч",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = DarkText,
-                        fontSize = 18.sp
+                        fontSize = 18.sp,
+                        modifier = Modifier.fillMaxWidth()
                     )
                     Text(
                         text = "Правды v2.0",
                         style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Normal,
+                        fontWeight = FontWeight.Bold,
                         color = DarkText,
-                        fontSize = 14.sp
+                        fontSize = 14.sp,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
 
-            // Переключатель режимов (3 позиции)
+            // Переключатель режимов (3 позиции) — УМЕНЬШЕННЫЙ РАЗМЕР
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                // Кнопка LOCAL
                 ModeButton(
-                    label = "Лок",
+                    label = "Local",
                     isSelected = currentMode == AIMode.LOCAL,
                     onClick = { onModeChange(AIMode.LOCAL) }
                 )
-                // Кнопка NEUTRAL
                 ModeButton(
-                    label = "⚪",
+                    label = "Neutral",
                     isSelected = currentMode == AIMode.NEUTRAL,
                     onClick = { onModeChange(AIMode.NEUTRAL) }
                 )
-                // Кнопка CLOUD
                 ModeButton(
-                    label = "Обл",
+                    label = "Cloud",
                     isSelected = currentMode == AIMode.CLOUD,
                     onClick = { onModeChange(AIMode.CLOUD) }
                 )
@@ -462,7 +448,7 @@ private fun TopBarWithSwitch(
     }
 }
 
-// Компонент кнопки переключателя
+// Уменьшенная кнопка переключателя
 @Composable
 private fun ModeButton(
     label: String,
@@ -471,29 +457,29 @@ private fun ModeButton(
 ) {
     Box(
         modifier = Modifier
-            .size(48.dp, 36.dp)
+            .size(40.dp, 28.dp) // Уменьшенный размер
             .clickable { onClick() }
             .background(
                 color = if (isSelected) AccentColor else SurfaceGray,
-                shape = RoundedCornerShape(8.dp)
+                shape = RoundedCornerShape(6.dp)
             )
             .border(
-                width = if (isSelected) 2.dp else 1.dp,
+                width = if (isSelected) 1.5.dp else 0.5.dp,
                 color = if (isSelected) AccentColor else BorderGray,
-                shape = RoundedCornerShape(8.dp)
+                shape = RoundedCornerShape(6.dp)
             ),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = label,
             color = if (isSelected) Color.White else DarkText,
-            fontSize = 10.sp,
+            fontSize = 8.sp, // Уменьшенный шрифт
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
         )
     }
 }
 
-// === Остальные компоненты (без изменений, кроме шрифтов в статус-барах) ===
+// === Остальные компоненты без изменений ===
 
 @Composable
 private fun ControlPanel(
@@ -935,8 +921,6 @@ private fun ImagePreview(imagePath: String) {
     }
 }
 
-// === Обновленные статус-бары с уменьшенным шрифтом и без слова "Модель" ===
-
 @Composable
 private fun StatusBar(state: GenerationState, currentModel: String?, modifier: Modifier = Modifier) {
     Card(
@@ -970,7 +954,6 @@ private fun StatusBar(state: GenerationState, currentModel: String?, modifier: M
                         val modelName = state.path.substringAfterLast("/")
                             .replace(Regex("^primary%3AModels%"), "")
                             .replace(Regex("^primary:Models:"), "")
-                        // Берем только имя файла без расширения
                         val displayName = modelName.substringBeforeLast(".")
                         Text("✓ $displayName", color = AccentColor, fontSize = 8.sp)
                     }
