@@ -33,7 +33,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     companion object {
         @Volatile var instance: MainViewModel? = null
         private const val TAG = "MainViewModel"
-        private const val REMEMBER_COMMAND = "сделай выводы и запомни"
+        private const val REMEMBER_COMMAND = "запомни"
+        private const val REMEMBER_FULL_COMMAND = "сделай выводы и запомни"
+        private const val REMEMBER_ANALYZE_COMMAND = "проанализируй и запомни"
+        private const val FIND_COMMAND = "найди"
+        private const val SEARCH_COMMAND = "поищи"
+        private const val RECALL_COMMAND = "вспомни"
+        private const val ALARM_COMMAND = "будильник"
+        private const val REMIND_COMMAND = "напомни"
     }
 
     private val viewModelJob = SupervisorJob()
@@ -142,7 +149,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
                             speakText(fullText)
                             val lastUserMessage = _chatHistory.value.lastOrNull { it.role == "user" }?.text ?: ""
-                            if (lastUserMessage.contains(REMEMBER_COMMAND, ignoreCase = true)) {
+                            if (lastUserMessage.contains(REMEMBER_COMMAND, ignoreCase = true) ||
+                                lastUserMessage.contains(REMEMBER_FULL_COMMAND, ignoreCase = true) ||
+                                lastUserMessage.contains(REMEMBER_ANALYZE_COMMAND, ignoreCase = true)) {
                                 saveToLongTermMemory(fullText)
                             }
                         }
@@ -183,7 +192,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
                             speakText(fullText)
                             val lastUserMessage = _chatHistory.value.lastOrNull { it.role == "user" }?.text ?: ""
-                            if (lastUserMessage.contains(REMEMBER_COMMAND, ignoreCase = true)) {
+                            if (lastUserMessage.contains(REMEMBER_COMMAND, ignoreCase = true) ||
+                                lastUserMessage.contains(REMEMBER_FULL_COMMAND, ignoreCase = true) ||
+                                lastUserMessage.contains(REMEMBER_ANALYZE_COMMAND, ignoreCase = true)) {
                                 saveToLongTermMemory(fullText)
                             }
                         }
@@ -238,6 +249,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     fun generateCloud(prompt: String) {
+        // Проверяем специальные команды (они не требуют настройки облачного ИИ)
+        if (prompt.lowercase().contains(ALARM_COMMAND) || prompt.lowercase().contains(REMIND_COMMAND)) {
+            handleAlarmCommand(prompt)
+            return
+        }
+
         if (!cloudAIProvider.isConfigured()) {
             _cloudState.value = CloudAIState.Error("Облачный ИИ не настроен")
             return
@@ -246,23 +263,20 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         val newUserMessage = ChatMessage("user", prompt)
         _chatHistory.value = _chatHistory.value + newUserMessage
 
-        val currentSystemPrompt = _systemPrompt.value
-        val history = _chatHistory.value
-        val memoryData = readFromLongTermMemory()
-        val brainData = readBrain()
-        val memoryContext = buildString {
-            if (memoryData.isNotEmpty()) {
-                append("Дополнительная локальная база знаний и факты от пользователя:\n$memoryData\n")
-            }
-            if (brainData.isNotEmpty()) {
-                append("Важные выводы из прошлых разговоров (мозг):\n$brainData\n")
-            }
-        }
+        // Определяем тип команды
+        val isRememberCommand = prompt.contains(REMEMBER_COMMAND, ignoreCase = true) ||
+                prompt.contains(REMEMBER_FULL_COMMAND, ignoreCase = true) ||
+                prompt.contains(REMEMBER_ANALYZE_COMMAND, ignoreCase = true)
+        val isSearchCommand = prompt.contains(FIND_COMMAND, ignoreCase = true) ||
+                prompt.contains(SEARCH_COMMAND, ignoreCase = true) ||
+                prompt.contains(RECALL_COMMAND, ignoreCase = true)
 
-        val cloudHistory = history.dropLast(1)
+        val fullSystemPrompt = buildSystemPrompt(isSearchCommand)
+
+        val cloudHistory = _chatHistory.value.dropLast(1)
         cloudAIProvider.generate(
             prompt = prompt,
-            systemPrompt = currentSystemPrompt + (if (memoryContext.isNotEmpty()) "\n\n$memoryContext" else ""),
+            systemPrompt = fullSystemPrompt,
             chatHistory = cloudHistory
         )
     }
@@ -298,8 +312,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     fun generateLocal(prompt: String, imagePath: String? = null) {
-        // Проверяем команду "будильник" или "напомни" (не требует загрузки модели)
-        if (prompt.lowercase().contains("будильник") || prompt.lowercase().contains("напомни")) {
+        // Проверяем специальные команды (не требуют загрузки модели)
+        if (prompt.lowercase().contains(ALARM_COMMAND) || prompt.lowercase().contains(REMIND_COMMAND)) {
             handleAlarmCommand(prompt)
             return
         }
@@ -313,7 +327,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         val newUserMessage = ChatMessage("user", prompt)
         _chatHistory.value = _chatHistory.value + newUserMessage
 
-        val fullSystemPrompt = buildSystemPrompt()
+        // Определяем тип команды
+        val isSearchCommand = prompt.contains(FIND_COMMAND, ignoreCase = true) ||
+                prompt.contains(SEARCH_COMMAND, ignoreCase = true) ||
+                prompt.contains(RECALL_COMMAND, ignoreCase = true)
+
+        val fullSystemPrompt = buildSystemPrompt(isSearchCommand)
 
         _generatedText.value = ""
         _state.value = GenerationState.Generating(prompt = prompt, tokensGenerated = 0)
@@ -328,7 +347,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    private fun buildSystemPrompt(): String {
+    private fun buildSystemPrompt(isSearchCommand: Boolean = false): String {
         val basePrompt = _systemPrompt.value
         val memoryData = readFromLongTermMemory()
         val brainData = readBrain()
@@ -347,12 +366,22 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
 
             if (chatHistory.isNotEmpty()) {
-                append("ИСТОРИЯ ЧАТА (ВЕСЬ ДИАЛОГ):\n")
+                if (isSearchCommand) {
+                    append("ВЕСЬ ДИАЛОГ (ПОЛНАЯ ИСТОРИЯ):\n")
+                } else {
+                    append("ИСТОРИЯ ЧАТА (ВЕСЬ ДИАЛОГ):\n")
+                }
                 chatHistory.forEach { message ->
                     val prefix = if (message.role == "user") "Пользователь" else "Ассистент"
                     append("$prefix: ${message.text}\n")
                 }
-                append("\nТы читаешь всю историю чата перед ответом. Если пользователь просит 'вспомнить', 'посмотреть выше' или 'найти' — ты можешь использовать информацию из истории.")
+                append("\n")
+            }
+
+            if (isSearchCommand) {
+                append("Пользователь просит найти, вспомнить или поискать информацию в истории или базе знаний. Внимательно проанализируй весь диалог, базу знаний и выводы. Найди нужную информацию и дай точный, конкретный ответ. Если информация не найдена — честно скажи об этом.\n")
+            } else {
+                append("Ты читаешь всю историю чата перед ответом. Если пользователь просит 'вспомнить', 'посмотреть выше' или 'найти' — ты можешь использовать информацию из истории.")
             }
         }
     }
