@@ -22,7 +22,6 @@ class LlamaHelper(
     private var tokenCount = 0
     private var allText = ""
 
-    // --- НОВЫЙ МЕТОД: возвращает ID текущего контекста (или null, если модель не загружена) ---
     fun getContextId(): Int? = currentContext
 
     fun load(
@@ -37,7 +36,6 @@ class LlamaHelper(
             val modelUri = Uri.parse(path)
             Log.d("LlamaHelper", ">>> Opening model FD for URI: $modelUri")
             
-            // Explicitly check readability
             contentResolver.openInputStream(modelUri)?.use { input ->
                 val firstByte = input.read()
                 val size = contentResolver.openFileDescriptor(modelUri, "r")?.use { it.statSize } ?: -1
@@ -108,14 +106,22 @@ class LlamaHelper(
         }
     }
 
-    fun predict(prompt: String, imagePath: String? = null, partialCompletion: Boolean = true) {
+    fun predict(prompt: String, imagePath: String? = null, systemPrompt: String? = null, partialCompletion: Boolean = true) {
         val context = currentContext ?: throw Exception("Model was not loaded yet")
         val startTime = System.currentTimeMillis()
         tokenCount = 0
         allText = ""
+
+        // Формируем полный промпт с системным промптом
+        val fullPrompt = if (!systemPrompt.isNullOrEmpty()) {
+            // Используем формат для llama.cpp с системным промптом
+            "[INST] <<SYS>>\n$systemPrompt\n<</SYS>>\n\n$prompt [/INST]"
+        } else {
+            prompt
+        }
         
         val params = mutableMapOf<String, Any>(
-            "prompt" to prompt,
+            "prompt" to fullPrompt,
             "emit_partial_completion" to partialCompletion,
         )
         
@@ -124,10 +130,6 @@ class LlamaHelper(
                 val imgUri = Uri.parse(it)
                 Log.d("LlamaHelper", ">>> Opening image FD for URI: $imgUri")
                 contentResolver.openFileDescriptor(imgUri, "r")?.use { pfd ->
-                    // Since we want to pass the FD to JNI, we should detach it if needed,
-                    // but here we might be able to just pass the FD number if it stays open
-                    // for the duration of the call.
-                    // Actually, detachFd() is safer.
                     val imgFd = pfd.detachFd()
                     params["image_fds"] = listOf(imgFd)
                     Log.d("LlamaHelper", ">>> Image FD added to params: $imgFd")
