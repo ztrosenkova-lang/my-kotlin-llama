@@ -256,7 +256,10 @@ fun ChatScreen(
                             showCloudDialog = true
                         }
                     }
-                    AIMode.NEUTRAL -> {}
+                    AIMode.NEUTRAL -> {
+                        // Выгружаем модель при переходе в нейтральный режим
+                        viewModel.releaseModel()
+                    }
                 }
             }
         )
@@ -427,10 +430,11 @@ private fun TopBarWithSwitch(
                 }
             }
 
-            // Переключатель режимов (3 позиции) — УМЕНЬШЕННЫЙ РАЗМЕР
+            // Переключатель режимов (3 позиции) — с weight(1f) для правильного отображения
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                modifier = Modifier.weight(1f) // <-- ВОЗВРАЩАЕМ weight, чтобы переключатель был виден
             ) {
                 ModeButton(
                     label = "Local",
