@@ -313,7 +313,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         scope.launch {
             try {
-                llamaHelper.predict(prompt, imagePath)
+                // ПЕРЕДАЕМ СИСТЕМНЫЙ ПРОМПТ В ЛОКАЛЬНУЮ МОДЕЛЬ
+                llamaHelper.predict(prompt, imagePath, _systemPrompt.value)
             } catch (e: Exception) {
                 _state.value = GenerationState.Error(e.message ?: "Unknown error")
             }
@@ -334,7 +335,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             scope.launch {
                 try {
                     val analysisPrompt = "Проанализируй историю нашего разговора и сделай краткие выводы. Выдели самую важную информацию, факты и инсайты. Ответ должен быть кратким (не более 3-5 предложений):\n\n$history"
-                    llamaHelper.predict(analysisPrompt, null)
+                    llamaHelper.predict(analysisPrompt, null, _systemPrompt.value)
                 } catch (e: Exception) {
                     _state.value = GenerationState.Error(e.message ?: "Unknown error")
                 }
