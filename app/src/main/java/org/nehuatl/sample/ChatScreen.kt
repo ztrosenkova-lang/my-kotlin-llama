@@ -402,14 +402,14 @@ private fun TopBarWithSwitch(
                 )
                 Column(
                     verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.Start
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
                         text = "Меч",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = DarkText,
-                        fontSize = 18.sp,
+                        fontSize = 16.sp,
                         modifier = Modifier.fillMaxWidth()
                     )
                     Text(
@@ -417,7 +417,7 @@ private fun TopBarWithSwitch(
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = DarkText,
-                        fontSize = 14.sp,
+                        fontSize = 12.sp,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
