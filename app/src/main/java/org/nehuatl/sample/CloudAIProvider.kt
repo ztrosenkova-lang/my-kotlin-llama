@@ -43,6 +43,7 @@ class CloudAIProvider(
     }
 
     private var accessToken: String? = null
+    private var tokenExpiresAt: Long = 0
 
     fun isConfigured(): Boolean {
         val authKey = preferences.getString(PREFS_KEY_AUTH_KEY, null)
@@ -73,21 +74,25 @@ class CloudAIProvider(
         }
         if (config.isGigaChat) {
             accessToken = null
+            tokenExpiresAt = 0
             preferences.edit().remove(PREFS_KEY_ACCESS_TOKEN).apply()
         } else {
             accessToken = config.authKey
+            tokenExpiresAt = Long.MAX_VALUE // Бесконечный срок для других провайдеров
         }
     }
 
     fun clearConfig() {
         preferences.edit().clear().apply()
         accessToken = null
+        tokenExpiresAt = 0
     }
 
     suspend fun generateToken(): Boolean {
         val config = getConfig() ?: return false
         if (!config.isGigaChat) {
             accessToken = config.authKey
+            tokenExpiresAt = Long.MAX_VALUE
             sharedFlow.tryEmit(CloudAIEvent.TokenReceived)
             return true
         }
@@ -116,11 +121,13 @@ class CloudAIProvider(
                     val responseBody = response.body?.string() ?: return@withContext false
                     val json = JSONObject(responseBody)
                     val token = json.optString("access_token", null)
+                    val expiresIn = json.optLong("expires_in", 1800) // По умолчанию 30 минут
                     
                     if (token != null) {
                         accessToken = token
+                        tokenExpiresAt = System.currentTimeMillis() + (expiresIn * 1000)
                         preferences.edit().putString(PREFS_KEY_ACCESS_TOKEN, token).apply()
-                        Log.d(TAG, "Токен получен")
+                        Log.d(TAG, "Токен получен, истекает через ${expiresIn} секунд")
                         sharedFlow.tryEmit(CloudAIEvent.TokenReceived)
                         return@withContext true
                     } else {
@@ -137,6 +144,37 @@ class CloudAIProvider(
         }
     }
 
+    // Проверка, истек ли токен
+    private fun isTokenExpired(): Boolean {
+        if (accessToken == null) return true
+        val config = getConfig()
+        if (config != null && !config.isGigaChat) return false // Для других провайдеров токен не истекает
+        return System.currentTimeMillis() >= tokenExpiresAt - 60000 // Обновляем за минуту до истечения
+    }
+
+    // Получение актуального токена (с автоматическим обновлением при необходимости)
+    private suspend fun getValidToken(config: CloudAIConfig): String? {
+        if (!isTokenExpired() && accessToken != null) {
+            return accessToken
+        }
+
+        // Пробуем восстановить токен из SharedPreferences
+        if (accessToken == null) {
+            val savedToken = preferences.getString(PREFS_KEY_ACCESS_TOKEN, null)
+            if (savedToken != null) {
+                accessToken = savedToken
+                if (!isTokenExpired()) {
+                    return accessToken
+                }
+            }
+        }
+
+        // Токен истек или отсутствует — запрашиваем новый
+        Log.d(TAG, "Токен истек или отсутствует, запрашиваем новый")
+        val success = generateToken()
+        return if (success) accessToken else null
+    }
+
     fun generate(prompt: String, systemPrompt: String, chatHistory: List<ChatMessage>) {
         val config = getConfig()
         if (config == null) {
@@ -148,24 +186,11 @@ class CloudAIProvider(
             try {
                 sharedFlow.tryEmit(CloudAIEvent.Started(prompt))
 
-                val token = if (config.isGigaChat) {
-                    val savedToken = preferences.getString(PREFS_KEY_ACCESS_TOKEN, null)
-                    if (savedToken != null) {
-                        accessToken = savedToken
-                        savedToken
-                    } else {
-                        val success = generateToken()
-                        if (!success) {
-                            sharedFlow.tryEmit(CloudAIEvent.Error("Не удалось получить токен"))
-                            return@launch
-                        }
-                        accessToken ?: run {
-                            sharedFlow.tryEmit(CloudAIEvent.Error("Токен пустой"))
-                            return@launch
-                        }
-                    }
-                } else {
-                    config.authKey
+                // Получаем актуальный токен
+                val token = getValidToken(config)
+                if (token == null) {
+                    sharedFlow.tryEmit(CloudAIEvent.Error("Не удалось получить токен"))
+                    return@launch
                 }
 
                 val messages = JSONArray().apply {
@@ -214,28 +239,35 @@ class CloudAIProvider(
                         val errorBody = response.body?.string() ?: "Unknown error"
                         Log.e(TAG, "Ошибка генерации: ${response.code}, $errorBody")
                         
+                        // Если 401 и это GigaChat — пробуем обновить токен и повторить
                         if (response.code == 401 && config.isGigaChat) {
                             Log.d(TAG, "Токен истек, пробуем обновить")
                             preferences.edit().remove(PREFS_KEY_ACCESS_TOKEN).apply()
                             accessToken = null
+                            tokenExpiresAt = 0
                             
                             val success = generateToken()
                             if (success) {
-                                val newToken = accessToken ?: return@launch
-                                val retryRequest = request.newBuilder()
-                                    .header("Authorization", "Bearer $newToken")
-                                    .build()
-                                val retryResponse = client.newCall(retryRequest).execute()
-                                try {
-                                    if (retryResponse.isSuccessful) {
-                                        val retryBody = retryResponse.body?.string() ?: ""
-                                        fullResponse = parseResponse(retryBody)
-                                    } else {
-                                        sharedFlow.tryEmit(CloudAIEvent.Error("Ошибка после обновления токена: ${retryResponse.code}"))
-                                        return@launch
+                                val newToken = accessToken
+                                if (newToken != null) {
+                                    val retryRequest = request.newBuilder()
+                                        .header("Authorization", "Bearer $newToken")
+                                        .build()
+                                    val retryResponse = client.newCall(retryRequest).execute()
+                                    try {
+                                        if (retryResponse.isSuccessful) {
+                                            val retryBody = retryResponse.body?.string() ?: ""
+                                            fullResponse = parseResponse(retryBody)
+                                        } else {
+                                            sharedFlow.tryEmit(CloudAIEvent.Error("Ошибка после обновления токена: ${retryResponse.code}"))
+                                            return@launch
+                                        }
+                                    } finally {
+                                        retryResponse.close()
                                     }
-                                } finally {
-                                    retryResponse.close()
+                                } else {
+                                    sharedFlow.tryEmit(CloudAIEvent.Error("Не удалось обновить токен"))
+                                    return@launch
                                 }
                             } else {
                                 sharedFlow.tryEmit(CloudAIEvent.Error("Не удалось обновить токен"))
