@@ -58,7 +58,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _generatedText = MutableStateFlow("")
     val generatedText = _generatedText.asStateFlow()
 
-    // Флаг загрузки модели (НОВЫЙ)
+    // Флаг загрузки модели
     private val _isModelLoaded = MutableStateFlow(false)
     val isModelLoaded: MutableStateFlow<Boolean> = _isModelLoaded
 
@@ -203,11 +203,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     is LlamaHelper.LLMEvent.Error -> {
                         _state.value = GenerationState.Error(event.message)
                         Log.e(TAG, "Ошибка локального ИИ: ${event.message}")
-                        _isModelLoaded.value = false // Сбрасываем флаг при ошибке
+                        _isModelLoaded.value = false
                     }
                     is LlamaHelper.LLMEvent.Loaded -> {
                         _state.value = GenerationState.ModelLoaded(event.path)
-                        _isModelLoaded.value = true // Устанавливаем флаг при загрузке
+                        _isModelLoaded.value = true
                     }
                 }
             }
@@ -249,7 +249,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     fun generateCloud(prompt: String) {
-        // Проверяем специальные команды (они не требуют настройки облачного ИИ)
+        // Проверяем специальные команды (не требуют настройки облачного ИИ)
         if (prompt.lowercase().contains(ALARM_COMMAND) || prompt.lowercase().contains(REMIND_COMMAND)) {
             handleAlarmCommand(prompt)
             return
@@ -264,9 +264,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _chatHistory.value = _chatHistory.value + newUserMessage
 
         // Определяем тип команды
-        val isRememberCommand = prompt.contains(REMEMBER_COMMAND, ignoreCase = true) ||
-                prompt.contains(REMEMBER_FULL_COMMAND, ignoreCase = true) ||
-                prompt.contains(REMEMBER_ANALYZE_COMMAND, ignoreCase = true)
         val isSearchCommand = prompt.contains(FIND_COMMAND, ignoreCase = true) ||
                 prompt.contains(SEARCH_COMMAND, ignoreCase = true) ||
                 prompt.contains(RECALL_COMMAND, ignoreCase = true)
@@ -347,8 +344,15 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    private fun buildSystemPrompt(isSearchCommand: Boolean = false): String {
+    private fun buildSystemPrompt(isSearchCommand: Boolean): String {
         val basePrompt = _systemPrompt.value
+
+        if (!isSearchCommand) {
+            // Для обычных вопросов — только базовый системный промпт
+            return basePrompt
+        }
+
+        // Для команд поиска/воспоминания — добавляем всю историю, память и мозг
         val memoryData = readFromLongTermMemory()
         val brainData = readBrain()
         val chatHistory = _chatHistory.value
@@ -366,11 +370,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
 
             if (chatHistory.isNotEmpty()) {
-                if (isSearchCommand) {
-                    append("ВЕСЬ ДИАЛОГ (ПОЛНАЯ ИСТОРИЯ):\n")
-                } else {
-                    append("ИСТОРИЯ ЧАТА (ВЕСЬ ДИАЛОГ):\n")
-                }
+                append("ИСТОРИЯ ЧАТА (ВЕСЬ ДИАЛОГ):\n")
                 chatHistory.forEach { message ->
                     val prefix = if (message.role == "user") "Пользователь" else "Ассистент"
                     append("$prefix: ${message.text}\n")
@@ -378,11 +378,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 append("\n")
             }
 
-            if (isSearchCommand) {
-                append("Пользователь просит найти, вспомнить или поискать информацию в истории или базе знаний. Внимательно проанализируй весь диалог, базу знаний и выводы. Найди нужную информацию и дай точный, конкретный ответ. Если информация не найдена — честно скажи об этом.\n")
-            } else {
-                append("Ты читаешь всю историю чата перед ответом. Если пользователь просит 'вспомнить', 'посмотреть выше' или 'найти' — ты можешь использовать информацию из истории.")
-            }
+            append("Пользователь просит найти, вспомнить или поискать информацию в истории или базе знаний. Внимательно проанализируй весь диалог, базу знаний и выводы. Найди нужную информацию и дай точный, конкретный ответ. Если информация не найдена — честно скажи об этом.")
         }
     }
 
