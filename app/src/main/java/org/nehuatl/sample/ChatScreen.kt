@@ -416,16 +416,16 @@ private fun TopBarWithSwitch(
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = DarkText,
-                        fontSize = 18.sp,
-                        modifier = Modifier.fillMaxWidth()
+                        fontSize = 14.sp,
+                       
                     )
                     Text(
                         text = "Правды v2.0",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = DarkText,
-                        fontSize = 14.sp,
-                        modifier = Modifier.fillMaxWidth()
+                        fontSize = 10.sp,
+                        
                     )
                 }
             }
