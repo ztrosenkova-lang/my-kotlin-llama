@@ -394,7 +394,7 @@ private fun TopBarWithSwitch(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Логотип и название (две строки)
+            // Логотип и название (две строки) - ВОЗВРАЩАЕМ ЛЕВОЕ ВЫРАВНИВАНИЕ
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -409,7 +409,7 @@ private fun TopBarWithSwitch(
                 )
                 Column(
                     verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    horizontalAlignment = Alignment.Start // <-- ВОЗВРАЩАЕМ ЛЕВОЕ ВЫРАВНИВАНИЕ
                 ) {
                     Text(
                         text = "Меч",
@@ -434,7 +434,7 @@ private fun TopBarWithSwitch(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
-                modifier = Modifier.weight(1f) // <-- ВОЗВРАЩАЕМ weight, чтобы переключатель был виден
+                modifier = Modifier.weight(1f) // <-- ОСТАВЛЯЕМ weight
             ) {
                 ModeButton(
                     label = "Local",
