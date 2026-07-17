@@ -69,6 +69,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -310,15 +311,31 @@ fun ChatScreen(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
         )
 
-        ChatArea(
-            chatMessages = chatMessages,
-            generatedText = generatedText,
-            cloudGeneratedText = cloudGeneratedText,
-            state = state,
-            cloudState = cloudState,
-            scrollState = scrollState,
-            modifier = Modifier.weight(1f)
-        )
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(8.dp)
+        ) {
+            // Фон с матрицей
+            AndroidView(
+                factory = { context ->
+                    MatrixChatBackground(context)
+                },
+                modifier = Modifier.matchParentSize()
+            )
+
+            // Область чата поверх фона
+            ChatArea(
+                chatMessages = chatMessages,
+                generatedText = generatedText,
+                cloudGeneratedText = cloudGeneratedText,
+                state = state,
+                cloudState = cloudState,
+                scrollState = scrollState,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
 
         CloudStatusBar(
             state = cloudState,
