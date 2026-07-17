@@ -14,8 +14,12 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
-import java.util.UUID
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
 
 class CloudAIProvider(
     private val context: Context,
@@ -31,6 +35,18 @@ class CloudAIProvider(
         private const val PREFS_KEY_IS_GIGACHAT = "cloud_is_gigachat"
         private const val AUTH_URL = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
+        // СТАТИЧЕСКИЙ UUID для GigaChat (как в рабочей версии)
+        private const val RQ_UID = "ac5edc2e-2c74-47cb-97c1-69249136cf8b"
+    }
+
+    // Игнорируем SSL сертификаты (как в старой версии)
+    private val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
+        override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) {}
+        override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {}
+        override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+    })
+    private val sslContext = SSLContext.getInstance("TLS").apply {
+        init(null, trustAllCerts, SecureRandom())
     }
 
     private val client: OkHttpClient by lazy {
@@ -39,6 +55,8 @@ class CloudAIProvider(
             .readTimeout(90, TimeUnit.SECONDS)
             .writeTimeout(60, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
+            .sslSocketFactory(sslContext.socketFactory, trustAllCerts[0] as X509TrustManager)
+            .hostnameVerifier { _, _ -> true }
             .build()
     }
 
@@ -106,7 +124,7 @@ class CloudAIProvider(
                     .url(AUTH_URL)
                     .header("Authorization", "Basic ${config.authKey}")
                     .header("Content-Type", "application/x-www-form-urlencoded")
-                    .header("RqUID", UUID.randomUUID().toString())
+                    .header("RqUID", RQ_UID) // СТАТИЧЕСКИЙ UUID
                     .post(requestBody)
                     .build()
 
@@ -122,7 +140,7 @@ class CloudAIProvider(
                     val json = JSONObject(responseBody)
                     val token = json.optString("access_token", null)
                     val expiresIn = json.optLong("expires_in", 1800) // По умолчанию 30 минут
-                    
+
                     if (token != null) {
                         accessToken = token
                         tokenExpiresAt = System.currentTimeMillis() + (expiresIn * 1000)
@@ -198,7 +216,7 @@ class CloudAIProvider(
                         put("role", "system")
                         put("content", systemPrompt)
                     })
-                    
+
                     val historySize = minOf(chatHistory.size, 20)
                     for (i in (chatHistory.size - historySize) until chatHistory.size) {
                         val msg = chatHistory[i]
@@ -207,7 +225,7 @@ class CloudAIProvider(
                             put("content", msg.text)
                         })
                     }
-                    
+
                     put(JSONObject().apply {
                         put("role", "user")
                         put("content", prompt)
@@ -238,14 +256,14 @@ class CloudAIProvider(
                     if (!response.isSuccessful) {
                         val errorBody = response.body?.string() ?: "Unknown error"
                         Log.e(TAG, "Ошибка генерации: ${response.code}, $errorBody")
-                        
+
                         // Если 401 и это GigaChat — пробуем обновить токен и повторить
                         if (response.code == 401 && config.isGigaChat) {
                             Log.d(TAG, "Токен истек, пробуем обновить")
                             preferences.edit().remove(PREFS_KEY_ACCESS_TOKEN).apply()
                             accessToken = null
                             tokenExpiresAt = 0
-                            
+
                             val success = generateToken()
                             if (success) {
                                 val newToken = accessToken
