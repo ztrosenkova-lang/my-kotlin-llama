@@ -22,7 +22,7 @@ class VoskRecognizer(
 ) {
     companion object {
         private const val TAG = "VoskRecognizer"
-        private const val SAMPLE_RATE = 16000
+        private const val SAMPLE_RATE = 16000f
     }
 
     private var model: Model? = null
@@ -65,7 +65,7 @@ class VoskRecognizer(
         }
 
         val bufferSize = AudioRecord.getMinBufferSize(
-            SAMPLE_RATE,
+            SAMPLE_RATE.toInt(),
             AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT
         )
@@ -77,7 +77,7 @@ class VoskRecognizer(
 
         audioRecord = AudioRecord(
             MediaRecorder.AudioSource.MIC,
-            SAMPLE_RATE,
+            SAMPLE_RATE.toInt(),
             AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT,
             bufferSize * 2
