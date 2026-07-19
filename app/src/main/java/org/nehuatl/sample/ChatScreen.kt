@@ -180,6 +180,7 @@ fun ChatScreen(
                 if (currentModelPath != null) {
                     viewModel.loadModel(currentModelPath, mmprojPath)
                     currentMode = AIMode.LOCAL
+                    viewModel.setCurrentMode(AIMode.LOCAL)
                 }
             },
             onDismiss = { showModelDialog = false }
@@ -204,6 +205,7 @@ fun ChatScreen(
                 viewModel.saveCloudConfig(config)
                 showCloudDialog = false
                 currentMode = AIMode.CLOUD
+                viewModel.setCurrentMode(AIMode.CLOUD)
             },
             onClear = {
                 viewModel.clearCloudConfig()
@@ -211,7 +213,10 @@ fun ChatScreen(
                 cloudAuthKey = ""
                 cloudIsGigaChat = true
                 showCloudDialog = false
-                if (currentMode == AIMode.CLOUD) currentMode = AIMode.NEUTRAL
+                if (currentMode == AIMode.CLOUD) {
+                    currentMode = AIMode.NEUTRAL
+                    viewModel.setCurrentMode(AIMode.NEUTRAL)
+                }
             },
             onDismiss = { showCloudDialog = false },
             onGenerateToken = {
@@ -246,6 +251,7 @@ fun ChatScreen(
             currentMode = currentMode,
             onModeChange = { newMode ->
                 currentMode = newMode
+                viewModel.setCurrentMode(newMode)
                 when (newMode) {
                     AIMode.LOCAL -> {
                         if (!isModelLoaded) {
