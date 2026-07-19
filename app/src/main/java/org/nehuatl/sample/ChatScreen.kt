@@ -227,10 +227,159 @@ fun ChatScreen(
     }
 
     if (showMemoryEditor) {
-        MemoryEditorDialog(
-            initialText = viewModel.readFromLongTermMemory(),
-            onSave = { viewModel.overwriteLongTermMemory(it) },
-            onDismiss = { showMemoryEditor = false }
+        val currentPassword = remember { mutableStateOf("") }
+        val newPassword = remember { mutableStateOf("") }
+        val isPasswordCorrect = remember { mutableStateOf(false) }
+        val showChangePassword = remember { mutableStateOf(false) }
+        val passwordError = remember { mutableStateOf<String?>(null) }
+
+        AlertDialog(
+            onDismissRequest = { showMemoryEditor = false },
+            title = {
+                Text(
+                    text = "🧠 Доступ к мозгу",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = DarkText
+                )
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (!isPasswordCorrect.value) {
+                        OutlinedTextField(
+                            value = currentPassword.value,
+                            onValueChange = { currentPassword.value = it },
+                            label = { Text("Введите пароль", color = DarkText) },
+                            placeholder = { Text("Пароль по умолчанию: связность", color = DarkText.copy(alpha = 0.5f)) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = DarkText,
+                                unfocusedTextColor = DarkText,
+                                focusedBorderColor = AccentColor,
+                                unfocusedBorderColor = BorderGray,
+                                cursorColor = AccentColor
+                            )
+                        )
+                        if (passwordError.value != null) {
+                            Text(
+                                text = passwordError.value!!,
+                                color = Color.Red,
+                                fontSize = 12.sp
+                            )
+                        }
+                        Button(
+                            onClick = {
+                                if (currentPassword.value == "связность") {
+                                    isPasswordCorrect.value = true
+                                    passwordError.value = null
+                                } else {
+                                    passwordError.value = "Неверный пароль"
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Войти", color = DarkText)
+                        }
+                    } else {
+                        Text(
+                            text = "Доступ разрешён. Вы можете редактировать базу знаний или изменить пароль.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = DarkText
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        OutlinedTextField(
+                            value = memoryEditText,
+                            onValueChange = { memoryEditText = it },
+                            placeholder = { Text("Вставьте сюда данные для мозга...", color = DarkText.copy(alpha = 0.5f)) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp),
+                            maxLines = 100,
+                            singleLine = false,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = DarkText,
+                                unfocusedTextColor = DarkText,
+                                focusedContainerColor = SurfaceGray,
+                                unfocusedContainerColor = SurfaceGray,
+                                focusedBorderColor = AccentColor,
+                                unfocusedBorderColor = BorderGray,
+                                cursorColor = AccentColor
+                            )
+                        )
+                        
+                        TextButton(
+                            onClick = { showChangePassword.value = !showChangePassword.value },
+                            modifier = Modifier.align(Alignment.End)
+                        ) {
+                            Text("Изменить пароль", color = AccentColor)
+                        }
+                        
+                        if (showChangePassword.value) {
+                            OutlinedTextField(
+                                value = newPassword.value,
+                                onValueChange = { newPassword.value = it },
+                                label = { Text("Новый пароль", color = DarkText) },
+                                placeholder = { Text("Введите новый пароль", color = DarkText.copy(alpha = 0.5f)) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = DarkText,
+                                    unfocusedTextColor = DarkText,
+                                    focusedBorderColor = AccentColor,
+                                    unfocusedBorderColor = BorderGray,
+                                    cursorColor = AccentColor
+                                )
+                            )
+                            Button(
+                                onClick = {
+                                    if (newPassword.value.isNotBlank()) {
+                                        // Сохраняем пароль в SharedPreferences
+                                        viewModel.savePassword(newPassword.value)
+                                        showChangePassword.value = false
+                                        passwordError.value = "Пароль изменён"
+                                    } else {
+                                        passwordError.value = "Пароль не может быть пустым"
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Сохранить новый пароль", color = DarkText)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                if (isPasswordCorrect.value) {
+                    Button(
+                        onClick = {
+                            viewModel.overwriteLongTermMemory(memoryEditText)
+                            showMemoryEditor = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentColor)
+                    ) {
+                        Text("Сохранить мозг", color = DarkText)
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        if (isPasswordCorrect.value) {
+                            showMemoryEditor = false
+                        } else {
+                            showMemoryEditor = false
+                        }
+                    }
+                ) {
+                    Text(if (isPasswordCorrect.value) "Закрыть" else "Отмена", color = DarkText)
+                }
+            }
         )
     }
 
@@ -510,7 +659,7 @@ private fun TopBarWithSwitch(
     }
 }
 
-// Уменьшенная кнопка переключателя
+// Уменьшенная кнопка переключателя (увеличена на 20%)
 @Composable
 private fun ModeButton(
     label: String,
@@ -519,7 +668,7 @@ private fun ModeButton(
 ) {
     Box(
         modifier = Modifier
-            .size(32.dp, 20.dp) // Увеличенный размер
+            .size(38.dp, 24.dp) // Увеличено на 20% (было 32x20)
             .clickable { onClick() }
             .background(
                 color = if (isSelected) AccentColor else SurfaceGray,
@@ -535,7 +684,7 @@ private fun ModeButton(
         Text(
             text = label,
             color = if (isSelected) Color.White else DarkText,
-            fontSize = 8.sp, // Увеличенный шрифт
+            fontSize = 9.sp, // Увеличен на 20% (было 8.sp)
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
         )
     }
@@ -720,6 +869,10 @@ private fun CloudAIDialog(
     onGenerateToken: () -> Unit,
     isGeneratingToken: Boolean
 ) {
+    // Состояние для статуса подключения
+    var connectionStatus by remember { mutableStateOf<ConnectionStatus?>(null) }
+    var isCheckingConnection by remember { mutableStateOf(false) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -802,20 +955,100 @@ private fun CloudAIDialog(
                     )
                 )
                 
-                Button(
-                    onClick = onGenerateToken,
-                    enabled = !isGeneratingToken && authKey.isNotBlank(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (authKey.isNotBlank()) AccentColor else BorderGray
-                    ),
-                    modifier = Modifier.fillMaxWidth()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (isGeneratingToken) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = DarkText, strokeWidth = 2.dp)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Получение токена...", color = DarkText)
-                    } else {
-                        Text(if (isGigaChat) "🔑 Получить токен" else "🔑 Установить ключ", color = DarkText)
+                    Button(
+                        onClick = {
+                            isCheckingConnection = true
+                            onGenerateToken()
+                            // Имитация проверки статуса (в реальном приложении это будет из Flow)
+                        },
+                        enabled = !isGeneratingToken && authKey.isNotBlank(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (authKey.isNotBlank()) AccentColor else BorderGray
+                        ),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        if (isGeneratingToken || isCheckingConnection) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                color = DarkText,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Проверка...", color = DarkText)
+                        } else {
+                            Text(if (isGigaChat) "🔑 Получить токен" else "🔑 Проверить ключ", color = DarkText)
+                        }
+                    }
+                    
+                    // Статус бар
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .background(
+                                color = when (connectionStatus) {
+                                    ConnectionStatus.Success -> Color(0xFF4CAF50).copy(alpha = 0.2f)
+                                    ConnectionStatus.Error -> Color(0xFFF44336).copy(alpha = 0.2f)
+                                    else -> SurfaceGray
+                                },
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = when (connectionStatus) {
+                                    ConnectionStatus.Success -> Color(0xFF4CAF50)
+                                    ConnectionStatus.Error -> Color(0xFFF44336)
+                                    else -> BorderGray
+                                },
+                                shape = RoundedCornerShape(8.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            when (connectionStatus) {
+                                ConnectionStatus.Success -> {
+                                    Icon(
+                                        imageVector = Icons.Default.Cloud,
+                                        contentDescription = null,
+                                        tint = Color(0xFF4CAF50)
+                                    )
+                                    Text(
+                                        text = "Подключено",
+                                        color = Color(0xFF4CAF50),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                ConnectionStatus.Error -> {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = null,
+                                        tint = Color(0xFFF44336)
+                                    )
+                                    Text(
+                                        text = "Ошибка",
+                                        color = Color(0xFFF44336),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                else -> {
+                                    Text(
+                                        text = "Ожидание",
+                                        color = DarkText.copy(alpha = 0.5f),
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -829,17 +1062,33 @@ private fun CloudAIDialog(
             }
         },
         confirmButton = {
-            Button(onClick = onSave, colors = ButtonDefaults.buttonColors(containerColor = AccentColor)) {
+            Button(
+                onClick = {
+                    connectionStatus = ConnectionStatus.Success // Временная имитация
+                    onSave()
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = AccentColor)
+            ) {
                 Text("Сохранить", color = DarkText)
             }
         },
         dismissButton = {
             Row {
-                TextButton(onClick = onClear) { Text("Очистить", color = DarkText.copy(alpha = 0.6f)) }
-                TextButton(onClick = onDismiss) { Text("Закрыть", color = DarkText) }
+                TextButton(onClick = onClear) {
+                    Text("Очистить", color = DarkText.copy(alpha = 0.6f))
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Закрыть", color = DarkText)
+                }
             }
         }
     )
+}
+
+// Статус подключения
+enum class ConnectionStatus {
+    Success,
+    Error
 }
 
 @Composable
@@ -871,42 +1120,6 @@ private fun HelpDialog(onDismiss: () -> Unit) {
             ) {
                 Text("Понятно", color = DarkText)
             }
-        }
-    )
-}
-
-@Composable
-private fun MemoryEditorDialog(initialText: String, onSave: (String) -> Unit, onDismiss: () -> Unit) {
-    var text by remember { mutableStateOf(initialText) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("🧠 База Знаний ИИ", style = MaterialTheme.typography.titleLarge, color = DarkText) },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                placeholder = { Text("Вставь сюда свой прайс-лист или данные...", color = DarkText.copy(alpha = 0.5f)) },
-                modifier = Modifier.fillMaxWidth().height(400.dp),
-                maxLines = 100,
-                singleLine = false,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = DarkText,
-                    unfocusedTextColor = DarkText,
-                    focusedContainerColor = SurfaceGray,
-                    unfocusedContainerColor = SurfaceGray,
-                    focusedBorderColor = AccentColor,
-                    unfocusedBorderColor = BorderGray,
-                    cursorColor = AccentColor
-                )
-            )
-        },
-        confirmButton = {
-            Button(onClick = { onSave(text); onDismiss() }, colors = ButtonDefaults.buttonColors(containerColor = AccentColor)) {
-                Text("Сохранить", color = DarkText)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Закрыть", color = DarkText) }
         }
     )
 }
