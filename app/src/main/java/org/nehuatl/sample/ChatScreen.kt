@@ -244,6 +244,9 @@ fun ChatScreen(
             },
             text = {
                 Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(500.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     if (!isPasswordCorrect.value) {
@@ -251,7 +254,7 @@ fun ChatScreen(
                             value = currentPassword.value,
                             onValueChange = { currentPassword.value = it },
                             label = { Text("Введите пароль", color = DarkText) },
-                            placeholder = { Text("Пароль по умолчанию: связность", color = DarkText.copy(alpha = 0.5f)) },
+                            // ПОДСКАЗКА УБРАНА
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
                             colors = OutlinedTextFieldDefaults.colors(
@@ -271,7 +274,7 @@ fun ChatScreen(
                         }
                         Button(
                             onClick = {
-                                if (currentPassword.value == "связность") {
+                                if (viewModel.checkPassword(currentPassword.value)) {
                                     isPasswordCorrect.value = true
                                     passwordError.value = null
                                 } else {
@@ -297,7 +300,7 @@ fun ChatScreen(
                             placeholder = { Text("Вставьте сюда данные для мозга...", color = DarkText.copy(alpha = 0.5f)) },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(200.dp),
+                                .height(400.dp), // УВЕЛИЧЕНО С 200 ДО 400
                             maxLines = 100,
                             singleLine = false,
                             colors = OutlinedTextFieldDefaults.colors(
@@ -337,7 +340,6 @@ fun ChatScreen(
                             Button(
                                 onClick = {
                                     if (newPassword.value.isNotBlank()) {
-                                        // Сохраняем пароль в SharedPreferences
                                         viewModel.savePassword(newPassword.value)
                                         showChangePassword.value = false
                                         passwordError.value = "Пароль изменён"
@@ -659,7 +661,7 @@ private fun TopBarWithSwitch(
     }
 }
 
-// Уменьшенная кнопка переключателя (увеличена на 20%)
+// Уменьшенная кнопка переключателя (увеличена на 30%)
 @Composable
 private fun ModeButton(
     label: String,
@@ -668,7 +670,7 @@ private fun ModeButton(
 ) {
     Box(
         modifier = Modifier
-            .size(38.dp, 24.dp) // Увеличено на 20% (было 32x20)
+            .size(42.dp, 26.dp) // Увеличено на ~30% (было 32x20)
             .clickable { onClick() }
             .background(
                 color = if (isSelected) AccentColor else SurfaceGray,
@@ -684,7 +686,7 @@ private fun ModeButton(
         Text(
             text = label,
             color = if (isSelected) Color.White else DarkText,
-            fontSize = 9.sp, // Увеличен на 20% (было 8.sp)
+            fontSize = 10.sp, // Увеличен до 10.sp
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
         )
     }
@@ -869,7 +871,6 @@ private fun CloudAIDialog(
     onGenerateToken: () -> Unit,
     isGeneratingToken: Boolean
 ) {
-    // Состояние для статуса подключения
     var connectionStatus by remember { mutableStateOf<ConnectionStatus?>(null) }
     var isCheckingConnection by remember { mutableStateOf(false) }
 
@@ -955,6 +956,7 @@ private fun CloudAIDialog(
                     )
                 )
                 
+                // НОВАЯ КОМПОНОВКА: кнопки "Получить" и "Сохранить" на одном уровне
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -964,7 +966,6 @@ private fun CloudAIDialog(
                         onClick = {
                             isCheckingConnection = true
                             onGenerateToken()
-                            // Имитация проверки статуса (в реальном приложении это будет из Flow)
                         },
                         enabled = !isGeneratingToken && authKey.isNotBlank(),
                         colors = ButtonDefaults.buttonColors(
@@ -981,72 +982,83 @@ private fun CloudAIDialog(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Проверка...", color = DarkText)
                         } else {
-                            Text(if (isGigaChat) "🔑 Получить токен" else "🔑 Проверить ключ", color = DarkText)
+                            Text("Получить", color = DarkText) // БЕЗ ЗНАЧКА КЛЮЧА
                         }
                     }
-                    
-                    // Статус бар
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp)
-                            .background(
-                                color = when (connectionStatus) {
-                                    ConnectionStatus.Success -> Color(0xFF4CAF50).copy(alpha = 0.2f)
-                                    ConnectionStatus.Error -> Color(0xFFF44336).copy(alpha = 0.2f)
-                                    else -> SurfaceGray
-                                },
-                                shape = RoundedCornerShape(8.dp)
-                            )
-                            .border(
-                                width = 1.dp,
-                                color = when (connectionStatus) {
-                                    ConnectionStatus.Success -> Color(0xFF4CAF50)
-                                    ConnectionStatus.Error -> Color(0xFFF44336)
-                                    else -> BorderGray
-                                },
-                                shape = RoundedCornerShape(8.dp)
-                            ),
-                        contentAlignment = Alignment.Center
+
+                    Button(
+                        onClick = {
+                            connectionStatus = ConnectionStatus.Success
+                            onSave()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            when (connectionStatus) {
-                                ConnectionStatus.Success -> {
-                                    Icon(
-                                        imageVector = Icons.Default.Cloud,
-                                        contentDescription = null,
-                                        tint = Color(0xFF4CAF50)
-                                    )
-                                    Text(
-                                        text = "Подключено",
-                                        color = Color(0xFF4CAF50),
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                                ConnectionStatus.Error -> {
-                                    Icon(
-                                        imageVector = Icons.Default.Close,
-                                        contentDescription = null,
-                                        tint = Color(0xFFF44336)
-                                    )
-                                    Text(
-                                        text = "Ошибка",
-                                        color = Color(0xFFF44336),
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                                else -> {
-                                    Text(
-                                        text = "Ожидание",
-                                        color = DarkText.copy(alpha = 0.5f),
-                                        fontSize = 12.sp
-                                    )
-                                }
+                        Text("Сохранить", color = DarkText)
+                    }
+                }
+
+                // СТАТУС-БАР ПОД КНОПКАМИ (по центру)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .background(
+                            color = when (connectionStatus) {
+                                ConnectionStatus.Success -> Color(0xFF4CAF50).copy(alpha = 0.2f)
+                                ConnectionStatus.Error -> Color(0xFFF44336).copy(alpha = 0.2f)
+                                else -> SurfaceGray
+                            },
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = when (connectionStatus) {
+                                ConnectionStatus.Success -> Color(0xFF4CAF50)
+                                ConnectionStatus.Error -> Color(0xFFF44336)
+                                else -> BorderGray
+                            },
+                            shape = RoundedCornerShape(8.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        when (connectionStatus) {
+                            ConnectionStatus.Success -> {
+                                Icon(
+                                    imageVector = Icons.Default.Cloud,
+                                    contentDescription = null,
+                                    tint = Color(0xFF4CAF50)
+                                )
+                                Text(
+                                    text = "Подключено",
+                                    color = Color(0xFF4CAF50),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            ConnectionStatus.Error -> {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = null,
+                                    tint = Color(0xFFF44336)
+                                )
+                                Text(
+                                    text = "Ошибка",
+                                    color = Color(0xFFF44336),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            else -> {
+                                Text(
+                                    text = "Ожидание",
+                                    color = DarkText.copy(alpha = 0.5f),
+                                    fontSize = 12.sp
+                                )
                             }
                         }
                     }
@@ -1062,15 +1074,7 @@ private fun CloudAIDialog(
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    connectionStatus = ConnectionStatus.Success // Временная имитация
-                    onSave()
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = AccentColor)
-            ) {
-                Text("Сохранить", color = DarkText)
-            }
+            // Кнопка "Сохранить" теперь внутри Row, поэтому здесь она не нужна
         },
         dismissButton = {
             Row {
