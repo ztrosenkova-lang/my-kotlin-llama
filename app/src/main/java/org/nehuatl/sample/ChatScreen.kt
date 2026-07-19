@@ -69,7 +69,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -311,76 +310,15 @@ fun ChatScreen(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
         )
 
-        // Область чата с матрицей
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(8.dp)
-        ) {
-            // НИЖНИЙ СЛОЙ — МАТРИЦА (строго внутри Box)
-            AndroidView(
-                factory = { context ->
-                    MatrixChatBackground(context)
-                },
-                modifier = Modifier.matchParentSize()
-            )
-
-            // ВЕРХНИЙ СЛОЙ — ЧАТ (ПРОЗРАЧНЫЙ)
-            Card(
-                modifier = Modifier.fillMaxSize(),
-                shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.dp, BorderGray),
-                colors = CardDefaults.cardColors(
-                    containerColor = Color.Transparent
-                )
-            ) {
-                SelectionContainer {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp)
-                            .verticalScroll(scrollState)
-                    ) {
-                        chatMessages.forEach { message ->
-                            val prefix = when (message.role) {
-                                "user" -> "Вы: "
-                                "assistant" -> "ИИ: "
-                                "system" -> "📢 "
-                                else -> ""
-                            }
-                            Text(
-                                text = prefix + message.text,
-                                color = DarkText,
-                                fontFamily = ChatFontFamily,
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.padding(vertical = 2.dp)
-                            )
-                        }
-
-                        if (generatedText.isNotEmpty() && state is GenerationState.Generating) {
-                            Text(
-                                text = "ИИ: $generatedText",
-                                color = DarkText,
-                                fontFamily = ChatFontFamily,
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.padding(vertical = 2.dp)
-                            )
-                        }
-
-                        if (cloudGeneratedText.isNotEmpty() && cloudState is CloudAIState.Generating) {
-                            Text(
-                                text = "☁️ ИИ: $cloudGeneratedText",
-                                color = DarkText.copy(alpha = 0.8f),
-                                fontFamily = ChatFontFamily,
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.padding(vertical = 2.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
+        ChatArea(
+            chatMessages = chatMessages,
+            generatedText = generatedText,
+            cloudGeneratedText = cloudGeneratedText,
+            state = state,
+            cloudState = cloudState,
+            scrollState = scrollState,
+            modifier = Modifier.weight(1f)
+        )
 
         CloudStatusBar(
             state = cloudState,
@@ -703,6 +641,66 @@ private fun PromptSettingsPanel(promptText: String, onPromptChange: (String) -> 
                 colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
                 modifier = Modifier.align(Alignment.End)
             ) { Text("Сохранить", color = DarkText) }
+        }
+    }
+}
+
+@Composable
+private fun ChatArea(
+    chatMessages: List<ChatMessage>,
+    generatedText: String,
+    cloudGeneratedText: String,
+    state: GenerationState,
+    cloudState: CloudAIState,
+    scrollState: androidx.compose.foundation.ScrollState,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth().padding(8.dp),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, BorderGray),
+        colors = CardDefaults.cardColors(containerColor = AppBackground)
+    ) {
+        SelectionContainer {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(scrollState)
+            ) {
+                chatMessages.forEach { message ->
+                    val prefix = when (message.role) {
+                        "user" -> "Вы: "
+                        "assistant" -> "ИИ: "
+                        "system" -> "📢 "
+                        else -> ""
+                    }
+                    Text(
+                        text = prefix + message.text,
+                        color = DarkText,
+                        fontFamily = ChatFontFamily,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(vertical = 2.dp)
+                    )
+                }
+
+                if (generatedText.isNotEmpty() && state is GenerationState.Generating) {
+                    Text(
+                        text = "ИИ: $generatedText",
+                        color = DarkText,
+                        fontFamily = ChatFontFamily,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(vertical = 2.dp)
+                    )
+                }
+
+                if (cloudGeneratedText.isNotEmpty() && cloudState is CloudAIState.Generating) {
+                    Text(
+                        text = "☁️ ИИ: $cloudGeneratedText",
+                        color = DarkText.copy(alpha = 0.8f),
+                        fontFamily = ChatFontFamily,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(vertical = 2.dp)
+                    )
+                }
+            }
         }
     }
 }
