@@ -58,7 +58,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _generatedText = MutableStateFlow("")
     val generatedText = _generatedText.asStateFlow()
 
-    // Флаг загрузки модели
     private val _isModelLoaded = MutableStateFlow(false)
     val isModelLoaded: MutableStateFlow<Boolean> = _isModelLoaded
 
@@ -99,7 +98,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     val contextSize = MutableStateFlow(2048)
     val maxTokens = MutableStateFlow(512)
 
-    // Файлы памяти
     private val memoryFile: File by lazy {
         File(getApplication<Application>().filesDir, "memory.txt")
     }
@@ -110,6 +108,19 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private var tts: TextToSpeech? = null
     private val alarmManager by lazy {
         getApplication<Application>().getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    }
+
+    // === Vosk ===
+    private val _isRecording = MutableStateFlow(false)
+    val isRecording = _isRecording.asStateFlow()
+
+    private var voskRecognizer: VoskRecognizer? = null
+
+    private val onVoiceResult: (String) -> Unit = { recognizedText ->
+        if (recognizedText.isNotEmpty()) {
+            _chatHistory.value = _chatHistory.value + ChatMessage("user", recognizedText)
+            appendSystemMessage("🎤 Распознано: $recognizedText")
+        }
     }
 
     init {
@@ -123,7 +134,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
 
-        // Сбор событий от облачного ИИ
         scope.launch {
             _cloudFlow.collect { event ->
                 when (event) {
@@ -171,7 +181,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
 
-        // Сбор событий от локального ИИ
         scope.launch {
             _llmFlow.collect { event ->
                 when (event) {
@@ -212,6 +221,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 }
             }
         }
+
+        voskRecognizer = VoskRecognizer(
+            context = getApplication(),
+            onResult = onVoiceResult,
+            scope = scope
+        )
     }
 
     private val llamaHelper by lazy {
@@ -220,6 +235,19 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             scope = scope,
             sharedFlow = _llmFlow,
         )
+    }
+
+    // === Методы для Vosk ===
+    fun startRecording() {
+        if (_isRecording.value) return
+        voskRecognizer?.startRecording()
+        _isRecording.value = true
+    }
+
+    fun stopRecording() {
+        if (!_isRecording.value) return
+        voskRecognizer?.stopRecording()
+        _isRecording.value = false
     }
 
     // === Методы для облачного ИИ ===
@@ -249,7 +277,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     fun generateCloud(prompt: String) {
-        // Проверяем специальные команды (не требуют настройки облачного ИИ)
         if (prompt.lowercase().contains(ALARM_COMMAND) || prompt.lowercase().contains(REMIND_COMMAND)) {
             handleAlarmCommand(prompt)
             return
@@ -263,7 +290,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         val newUserMessage = ChatMessage("user", prompt)
         _chatHistory.value = _chatHistory.value + newUserMessage
 
-        // Определяем тип команды
         val isSearchCommand = prompt.contains(FIND_COMMAND, ignoreCase = true) ||
                 prompt.contains(SEARCH_COMMAND, ignoreCase = true) ||
                 prompt.contains(RECALL_COMMAND, ignoreCase = true)
@@ -309,13 +335,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     fun generateLocal(prompt: String, imagePath: String? = null) {
-        // Проверяем специальные команды (не требуют загрузки модели)
         if (prompt.lowercase().contains(ALARM_COMMAND) || prompt.lowercase().contains(REMIND_COMMAND)) {
             handleAlarmCommand(prompt)
             return
         }
 
-        // Проверяем, загружена ли модель
         if (llamaHelper.getContextId() == null) {
             _state.value = GenerationState.Error("Модель не загружена. Загрузите модель через 'движок'.")
             return
@@ -324,7 +348,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         val newUserMessage = ChatMessage("user", prompt)
         _chatHistory.value = _chatHistory.value + newUserMessage
 
-        // Определяем тип команды
         val isSearchCommand = prompt.contains(FIND_COMMAND, ignoreCase = true) ||
                 prompt.contains(SEARCH_COMMAND, ignoreCase = true) ||
                 prompt.contains(RECALL_COMMAND, ignoreCase = true)
@@ -348,11 +371,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         val basePrompt = _systemPrompt.value
 
         if (!isSearchCommand) {
-            // Для обычных вопросов — только базовый системный промпт
             return basePrompt
         }
 
-        // Для команд поиска/воспоминания — добавляем всю историю, память и мозг
         val memoryData = readFromLongTermMemory()
         val brainData = readBrain()
         val chatHistory = _chatHistory.value
@@ -554,6 +575,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _isModelLoaded.value = false
         llamaHelper.abort()
         llamaHelper.release()
+        voskRecognizer?.release()
         viewModelJob.cancel()
     }
 }
