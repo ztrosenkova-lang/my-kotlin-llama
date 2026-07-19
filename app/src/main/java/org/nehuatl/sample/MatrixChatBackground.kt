@@ -15,11 +15,11 @@ class MatrixChatBackground @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : View(context, attrs, defStyleAttr) {
 
-    private val fontSize = 30f // Размер символов
+    private val fontSize = 30f
     private val lineHeight = fontSize * 1.05f
-    private val speed = 2.5f // Скорость падения
-    private val maxLines = 15 // Количество одновременно видимых строк
-    private val maxPoolSize = 30
+    private val speed = 2.5f
+    private val maxLines = 20
+    private val maxPoolSize = 40
     private val words = arrayOf("Нео", "Батя", "Меч Правды", "Ковчег", "Иди за белым кроликом")
 
     private val paint = Paint().apply {
@@ -27,7 +27,7 @@ class MatrixChatBackground @JvmOverloads constructor(
         textSize = fontSize
         typeface = Typeface.MONOSPACE
         isAntiAlias = true
-        alpha = 40 // Очень блеклый (чем меньше число, тем прозрачнее)
+        alpha = 45
     }
 
     private var columns = 0
@@ -43,13 +43,11 @@ class MatrixChatBackground @JvmOverloads constructor(
         super.onSizeChanged(w, h, oldw, oldh)
         screenH = h.toFloat()
         columns = (w / fontSize).toInt() + 1
-        
-        // Инициализируем пул строк
+
         for (i in 0 until maxPoolSize) {
             linePool[i] = generateLine()
         }
-        
-        // Расставляем строки по экрану
+
         for (i in 0 until maxLines) {
             linePoolIndex[i] = i % maxPoolSize
             lineY[i] = i * lineHeight * 1.5f
@@ -59,7 +57,7 @@ class MatrixChatBackground @JvmOverloads constructor(
     }
 
     private fun generateLine(): String {
-        return if (Random.nextFloat() < 0.12f) {
+        return if (Random.nextFloat() < 0.15f) {
             words[Random.nextInt(words.size)]
         } else {
             CharArray(columns) { if (Random.nextFloat() > 0.5f) '0' else '1' }.joinToString("")
@@ -68,23 +66,22 @@ class MatrixChatBackground @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        canvas.drawColor(Color.WHITE) // Белый фон, как у вашего чата
+
+        // Ограничиваем область рисования размерами View
+        canvas.save()
+        canvas.clipRect(0, 0, width, height)
+
+        canvas.drawColor(Color.WHITE)
         frame++
 
-        // Обновляем состояние строк (печать и движение)
         for (i in 0 until maxLines) {
             val poolIdx = linePoolIndex[i]
             if (poolIdx < 0) continue
             val line = linePool[poolIdx] ?: continue
-            
-            // Эффект печатной машинки: постепенно открываем строку
-            if (frame % 3 == 0 && printed[i] < line.length) {
-                printed[i] += 2
-            }
+            if (frame % 3 == 0 && printed[i] < line.length) printed[i] += 2
             lineY[i] -= speed
         }
 
-        // Если первая строка ушла вверх, сдвигаем все и добавляем новую
         if (lineY[0] < -lineHeight) {
             for (i in 0 until maxLines - 1) {
                 linePoolIndex[i] = linePoolIndex[i + 1]
@@ -98,23 +95,25 @@ class MatrixChatBackground @JvmOverloads constructor(
             nextPoolSlot = (nextPoolSlot + 1) % maxPoolSize
         }
 
-        // Отрисовываем строки
         for (i in 0 until maxLines) {
             val poolIdx = linePoolIndex[i]
             if (poolIdx < 0) continue
             val line = linePool[poolIdx] ?: continue
             val y = lineY[i]
-            
-            // Пропускаем строки за пределами экрана
             if (y > screenH + lineHeight || y < -lineHeight) continue
-            
             val limit = printed[i].coerceAtMost(line.length)
             for (c in 0 until limit) {
-                canvas.drawText(line[c].toString(), c * fontSize, y, paint)
+                val x = c * fontSize
+                // Дополнительная проверка, чтобы символы не выходили за правую границу
+                if (x < width) {
+                    canvas.drawText(line[c].toString(), x, y, paint)
+                }
             }
         }
 
-        // Обновляем анимацию (100 мс — ~10 FPS)
-        postInvalidateDelayed(80)
+        // Восстанавливаем область рисования
+        canvas.restore()
+
+        postInvalidateDelayed(100)
     }
 }
