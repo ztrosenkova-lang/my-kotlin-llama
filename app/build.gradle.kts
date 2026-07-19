@@ -89,4 +89,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging.interceptor)
     implementation(libs.json)
+
+    // Vosk
+    implementation("com.alphacephei:vosk-android:0.3.47")
 }
