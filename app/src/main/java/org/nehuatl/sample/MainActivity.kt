@@ -1,7 +1,9 @@
 package org.nehuatl.sample
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -19,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import org.nehuatl.sample.ui.theme.KotlinLlamaCppTheme
@@ -65,21 +68,30 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val audioGranted = permissions[Manifest.permission.RECORD_AUDIO] ?: false
+        if (!audioGranted) {
+            Log.w("MainActivity", "Разрешение на запись audio не получено")
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         enableEdgeToEdge()
 
-        // Принудительно запрашиваем разрешение на точный будильник для Android 12+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val alarmManager = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
             if (!alarmManager.canScheduleExactAlarms()) {
                 Log.w("MainActivity", "Разрешение на точный будильник не предоставлено. Открываем настройки.")
-                // Открываем настройки, чтобы пользователь включил разрешение
                 val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
                 startActivity(intent)
             }
         }
+
+        checkAndRequestAudioPermission()
 
         setContent {
             KotlinLlamaCppTheme {
@@ -104,6 +116,20 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
+        }
+    }
+
+    private fun checkAndRequestAudioPermission() {
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.RECORD_AUDIO
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.RECORD_AUDIO
+                )
+            )
         }
     }
 }
