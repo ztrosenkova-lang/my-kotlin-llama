@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import org.nehuatl.llamacpp.LlamaHelper
 import java.io.File
 import java.text.SimpleDateFormat
@@ -41,6 +42,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         private const val RECALL_COMMAND = "вспомни"
         private const val ALARM_COMMAND = "будильник"
         private const val REMIND_COMMAND = "напомни"
+        private const val AUTO_SEND_DELAY = 5000L
     }
 
     private val viewModelJob = SupervisorJob()
@@ -110,20 +112,41 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         getApplication<Application>().getSystemService(Context.ALARM_SERVICE) as AlarmManager
     }
 
+    // === Текущий режим ИИ ===
+    private val _currentMode = MutableStateFlow(AIMode.NEUTRAL)
+    val currentMode = _currentMode.asStateFlow()
+
+    fun setCurrentMode(mode: AIMode) {
+        _currentMode.value = mode
+    }
+
     // === Vosk ===
     private val _isRecording = MutableStateFlow(false)
     val isRecording = _isRecording.asStateFlow()
 
-    // Состояние для вывода логов в чат
-    private val _logMessage = MutableStateFlow<String?>(null)
-    val logMessage = _logMessage.asStateFlow()
+    private val _recognizedText = MutableStateFlow("")
+    val recognizedText = _recognizedText.asStateFlow()
+
+    private var autoSendJob: Job? = null
 
     private var voskRecognizer: VoskRecognizer? = null
 
     private val onVoiceResult: (String) -> Unit = { recognizedText ->
         if (recognizedText.isNotEmpty()) {
-            _chatHistory.value = _chatHistory.value + ChatMessage("user", recognizedText)
+            _recognizedText.value = recognizedText
             appendSystemMessage("🎤 Распознано: $recognizedText")
+
+            autoSendJob?.cancel()
+
+            autoSendJob = scope.launch {
+                delay(AUTO_SEND_DELAY)
+                val textToSend = _recognizedText.value
+                if (textToSend.isNotEmpty()) {
+                    appendSystemMessage("⏱ Автоотправка через ${AUTO_SEND_DELAY/1000} сек")
+                    sendUserMessage(textToSend)
+                    _recognizedText.value = ""
+                }
+            }
         }
     }
 
@@ -246,9 +269,37 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         )
     }
 
+    // === Отправка сообщений ===
+    private fun sendUserMessage(text: String) {
+        if (text.isBlank()) return
+
+        _chatHistory.value = _chatHistory.value + ChatMessage("user", text)
+
+        when (_currentMode.value) {
+            AIMode.LOCAL -> {
+                if (_isModelLoaded.value) {
+                    generateLocal(text, null)
+                } else {
+                    appendSystemMessage("⚠️ Локальная модель не загружена. Загрузите модель через 'движок'.")
+                }
+            }
+            AIMode.CLOUD -> {
+                if (isCloudConfigured()) {
+                    generateCloud(text)
+                } else {
+                    appendSystemMessage("⚠️ Облачный ИИ не настроен. Настройте через 'облачный ии'.")
+                }
+            }
+            AIMode.NEUTRAL -> {
+                appendSystemMessage("⚠️ Выберите режим работы: локальный или облачный ИИ")
+            }
+        }
+    }
+
     // === Методы для Vosk ===
     fun startRecording() {
         if (_isRecording.value) return
+        _recognizedText.value = ""
         appendSystemMessage("🎤 Запуск записи...")
         voskRecognizer?.startRecording()
         _isRecording.value = true
@@ -259,6 +310,15 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         appendSystemMessage("⏹ Остановка записи")
         voskRecognizer?.stopRecording()
         _isRecording.value = false
+
+        autoSendJob?.cancel()
+
+        val textToSend = _recognizedText.value
+        if (textToSend.isNotEmpty()) {
+            appendSystemMessage("📤 Отправка текста")
+            sendUserMessage(textToSend)
+            _recognizedText.value = ""
+        }
     }
 
     // === Методы для облачного ИИ ===
@@ -298,16 +358,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             return
         }
 
-        val newUserMessage = ChatMessage("user", prompt)
-        _chatHistory.value = _chatHistory.value + newUserMessage
-
         val isSearchCommand = prompt.contains(FIND_COMMAND, ignoreCase = true) ||
                 prompt.contains(SEARCH_COMMAND, ignoreCase = true) ||
                 prompt.contains(RECALL_COMMAND, ignoreCase = true)
 
         val fullSystemPrompt = buildSystemPrompt(isSearchCommand)
 
-        val cloudHistory = _chatHistory.value.dropLast(1)
+        val cloudHistory = _chatHistory.value
         cloudAIProvider.generate(
             prompt = prompt,
             systemPrompt = fullSystemPrompt,
@@ -355,9 +412,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             _state.value = GenerationState.Error("Модель не загружена. Загрузите модель через 'движок'.")
             return
         }
-
-        val newUserMessage = ChatMessage("user", prompt)
-        _chatHistory.value = _chatHistory.value + newUserMessage
 
         val isSearchCommand = prompt.contains(FIND_COMMAND, ignoreCase = true) ||
                 prompt.contains(SEARCH_COMMAND, ignoreCase = true) ||
@@ -548,6 +602,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _chatHistory.value = emptyList()
         _generatedText.value = ""
         _cloudGeneratedText.value = ""
+        _recognizedText.value = ""
+        autoSendJob?.cancel()
         tts?.stop()
     }
 
@@ -587,6 +643,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         llamaHelper.abort()
         llamaHelper.release()
         voskRecognizer?.release()
+        autoSendJob?.cancel()
         viewModelJob.cancel()
     }
 }
