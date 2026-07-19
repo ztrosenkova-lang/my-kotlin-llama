@@ -18,6 +18,7 @@ import java.io.IOException
 class VoskRecognizer(
     private val context: Context,
     private val onResult: (String) -> Unit,
+    private val onLog: (String) -> Unit,
     private val scope: CoroutineScope
 ) {
     companion object {
@@ -32,35 +33,56 @@ class VoskRecognizer(
     private var isInitialized = false
 
     init {
+        onLog("🔄 Инициализация Vosk...")
         initModel()
     }
 
     private fun initModel() {
         try {
             val modelDir = File(context.filesDir, "vosk-model-small-ru-0.22")
+            onLog("📁 Путь к модели: ${modelDir.absolutePath}")
+            
             if (!modelDir.exists()) {
-                Log.e(TAG, "Модель не найдена: ${modelDir.absolutePath}")
+                val errorMsg = "❌ Модель не найдена: ${modelDir.absolutePath}"
+                Log.e(TAG, errorMsg)
+                onLog(errorMsg)
                 return
             }
+            
+            val files = modelDir.listFiles()
+            onLog("📄 Файлов в модели: ${files?.size ?: 0}")
+            
             model = Model(modelDir.absolutePath)
             recognizer = Recognizer(model, SAMPLE_RATE)
             isInitialized = true
-            Log.d(TAG, "Vosk модель загружена успешно")
+            val successMsg = "✅ Vosk модель загружена успешно"
+            Log.d(TAG, successMsg)
+            onLog(successMsg)
         } catch (e: IOException) {
-            Log.e(TAG, "Ошибка загрузки модели Vosk: ${e.message}")
+            val errorMsg = "❌ Ошибка загрузки модели Vosk: ${e.message}"
+            Log.e(TAG, errorMsg)
+            onLog(errorMsg)
         } catch (e: Exception) {
-            Log.e(TAG, "Неизвестная ошибка загрузки Vosk: ${e.message}")
+            val errorMsg = "❌ Неизвестная ошибка загрузки Vosk: ${e.message}"
+            Log.e(TAG, errorMsg)
+            onLog(errorMsg)
         }
     }
 
     fun startRecording() {
+        onLog("🎤 startRecording() вызван")
+        
         if (!isInitialized) {
-            Log.e(TAG, "Vosk не инициализирован")
+            val errorMsg = "❌ Vosk не инициализирован"
+            Log.e(TAG, errorMsg)
+            onLog(errorMsg)
             return
         }
 
         if (recordingJob?.isActive == true) {
-            Log.w(TAG, "Запись уже идет")
+            val warnMsg = "⚠️ Запись уже идет"
+            Log.w(TAG, warnMsg)
+            onLog(warnMsg)
             return
         }
 
@@ -70,8 +92,12 @@ class VoskRecognizer(
             AudioFormat.ENCODING_PCM_16BIT
         )
 
+        onLog("🔧 Буфер: $bufferSize")
+
         if (bufferSize == AudioRecord.ERROR || bufferSize == AudioRecord.ERROR_BAD_VALUE) {
-            Log.e(TAG, "Неверный размер буфера")
+            val errorMsg = "❌ Неверный размер буфера"
+            Log.e(TAG, errorMsg)
+            onLog(errorMsg)
             return
         }
 
@@ -84,7 +110,9 @@ class VoskRecognizer(
         )
 
         if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
-            Log.e(TAG, "AudioRecord не инициализирован")
+            val errorMsg = "❌ AudioRecord не инициализирован"
+            Log.e(TAG, errorMsg)
+            onLog(errorMsg)
             audioRecord?.release()
             audioRecord = null
             return
@@ -92,32 +120,42 @@ class VoskRecognizer(
 
         recognizer?.reset()
         audioRecord?.startRecording()
-        Log.d(TAG, "Запись запущена")
+        val successMsg = "✅ Запись запущена"
+        Log.d(TAG, successMsg)
+        onLog(successMsg)
 
         recordingJob = scope.launch(Dispatchers.IO) {
             val buffer = ByteArray(bufferSize)
+            var totalBytes = 0
             while (isActive && audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
                 val bytesRead = audioRecord?.read(buffer, 0, buffer.size) ?: 0
                 if (bytesRead > 0) {
+                    totalBytes += bytesRead
+                    if (totalBytes % 16000 == 0) {
+                        onLog("🎙 Запись: ${totalBytes/16000} сек")
+                    }
                     if (recognizer?.acceptWaveForm(buffer, bytesRead) == true) {
                         val result = recognizer?.result
                         val text = parseResult(result)
                         if (text.isNotEmpty()) {
+                            onLog("✅ Распознано: $text")
                             onResult(text)
                         }
                     } else {
                         val partial = recognizer?.partialResult
                         val partialText = parsePartialResult(partial)
                         if (partialText.isNotEmpty()) {
-                            Log.d(TAG, "Частичный результат: $partialText")
+                            onLog("⏳ Частично: $partialText")
                         }
                     }
                 }
             }
+            onLog("⏹ Запись остановлена")
         }
     }
 
     fun stopRecording() {
+        onLog("⏹ stopRecording() вызван")
         recordingJob?.cancel()
         audioRecord?.stop()
         audioRecord?.release()
@@ -126,6 +164,7 @@ class VoskRecognizer(
     }
 
     fun release() {
+        onLog("🔄 Освобождение Vosk")
         recordingJob?.cancel()
         audioRecord?.stop()
         audioRecord?.release()
