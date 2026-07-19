@@ -25,6 +25,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import org.nehuatl.sample.ui.theme.KotlinLlamaCppTheme
+import java.io.File
 
 class MainActivity : ComponentActivity() {
 
@@ -92,6 +93,7 @@ class MainActivity : ComponentActivity() {
         }
 
         checkAndRequestAudioPermission()
+        copyVoskModelIfNeeded()
 
         setContent {
             KotlinLlamaCppTheme {
@@ -130,6 +132,32 @@ class MainActivity : ComponentActivity() {
                     Manifest.permission.RECORD_AUDIO
                 )
             )
+        }
+    }
+
+    private fun copyVoskModelIfNeeded() {
+        val modelDir = File(filesDir, "vosk-model-small-ru-0.22")
+        if (!modelDir.exists()) {
+            try {
+                modelDir.mkdirs()
+                val assetFiles = assets.list("vosk-model-small-ru-0.22")
+                if (assetFiles.isNullOrEmpty()) {
+                    Log.e("MainActivity", "Модель Vosk не найдена в assets/vosk-model-small-ru-0.22/")
+                    return
+                }
+                assetFiles.forEach { fileName ->
+                    assets.open("vosk-model-small-ru-0.22/$fileName").use { input ->
+                        File(modelDir, fileName).outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                }
+                Log.d("MainActivity", "Модель Vosk скопирована успешно")
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Ошибка копирования модели Vosk: ${e.message}")
+            }
+        } else {
+            Log.d("MainActivity", "Модель Vosk уже существует")
         }
     }
 }
