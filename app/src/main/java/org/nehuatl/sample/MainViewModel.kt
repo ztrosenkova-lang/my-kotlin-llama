@@ -41,9 +41,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         private const val RECALL_COMMAND = "вспомни"
         private const val ALARM_COMMAND = "будильник"
         private const val REMIND_COMMAND = "напомни"
-        private const val PREFS_NAME = "mech_prefs"
-        private const val PASSWORD_KEY = "password"
-        private const val DEFAULT_PASSWORD = "связность"
     }
 
     private val viewModelJob = SupervisorJob()
@@ -108,9 +105,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
     private val brainFile: File by lazy {
         File(getApplication<Application>().filesDir, "brain.txt")
-    }
-    private val appPreferences: android.content.SharedPreferences by lazy {
-        getApplication<Application>().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
 
     private var tts: TextToSpeech? = null
@@ -516,20 +510,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             Log.e(TAG, "Ошибка чтения мозга: ${e.message}")
             ""
         }
-    }
-
-    // === Методы для работы с паролем ===
-    fun savePassword(newPassword: String) {
-        appPreferences.edit().putString(PASSWORD_KEY, newPassword).apply()
-        Log.d(TAG, "Пароль сохранен")
-    }
-
-    fun getPassword(): String {
-        return appPreferences.getString(PASSWORD_KEY, DEFAULT_PASSWORD) ?: DEFAULT_PASSWORD
-    }
-
-    fun checkPassword(input: String): Boolean {
-        return input == getPassword()
     }
 
     fun clearChat() {
