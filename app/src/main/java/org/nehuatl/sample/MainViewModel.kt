@@ -114,6 +114,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _isRecording = MutableStateFlow(false)
     val isRecording = _isRecording.asStateFlow()
 
+    // Состояние для вывода логов в чат
+    private val _logMessage = MutableStateFlow<String?>(null)
+    val logMessage = _logMessage.asStateFlow()
+
     private var voskRecognizer: VoskRecognizer? = null
 
     private val onVoiceResult: (String) -> Unit = { recognizedText ->
@@ -121,6 +125,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             _chatHistory.value = _chatHistory.value + ChatMessage("user", recognizedText)
             appendSystemMessage("🎤 Распознано: $recognizedText")
         }
+    }
+
+    private val onVoiceLog: (String) -> Unit = { logText ->
+        appendSystemMessage("📢 $logText")
     }
 
     init {
@@ -225,6 +233,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         voskRecognizer = VoskRecognizer(
             context = getApplication(),
             onResult = onVoiceResult,
+            onLog = onVoiceLog,
             scope = scope
         )
     }
@@ -240,12 +249,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     // === Методы для Vosk ===
     fun startRecording() {
         if (_isRecording.value) return
+        appendSystemMessage("🎤 Запуск записи...")
         voskRecognizer?.startRecording()
         _isRecording.value = true
     }
 
     fun stopRecording() {
         if (!_isRecording.value) return
+        appendSystemMessage("⏹ Остановка записи")
         voskRecognizer?.stopRecording()
         _isRecording.value = false
     }
