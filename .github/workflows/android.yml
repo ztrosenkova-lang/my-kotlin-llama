@@ -32,6 +32,17 @@ jobs:
     - name: Grant Execute Permission for Gradlew
       run: chmod +x gradlew
 
+    - name: Download Vosk model
+      run: |
+        echo "Downloading Vosk model..."
+        mkdir -p app/src/main/assets
+        cd app/src/main/assets
+        wget -O vosk-model-small-ru-0.22.zip https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip
+        unzip -q vosk-model-small-ru-0.22.zip
+        rm vosk-model-small-ru-0.22.zip
+        ls -la vosk-model-small-ru-0.22/
+        echo "Vosk model downloaded successfully"
+
     - name: Build Debug APK
       run: ./gradlew assembleDebug
 
