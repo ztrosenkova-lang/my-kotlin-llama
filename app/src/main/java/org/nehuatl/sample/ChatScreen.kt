@@ -29,6 +29,8 @@ import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
@@ -80,7 +82,6 @@ private val AccentColor = Color(0xFF74C0FC)
 private val DarkText = Color(0xFF212529)
 private val ChatFontFamily = FontFamily.Monospace
 
-// Состояния переключателя на английском
 enum class AIMode {
     LOCAL,
     NEUTRAL,
@@ -109,7 +110,6 @@ fun ChatScreen(
     val cloudState by viewModel.cloudState.collectAsStateWithLifecycle()
     val cloudGeneratedText by viewModel.cloudGeneratedText.collectAsStateWithLifecycle()
 
-    // Флаг загрузки модели из ViewModel
     val isModelLoaded by viewModel.isModelLoaded.collectAsStateWithLifecycle()
 
     var promptInput by remember { mutableStateOf("") }
@@ -133,6 +133,8 @@ fun ChatScreen(
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     val scrollState = rememberScrollState()
+
+    val isRecording by viewModel.isRecording.collectAsStateWithLifecycle()
 
     LaunchedEffect(showCloudDialog) {
         if (showCloudDialog) {
@@ -240,14 +242,12 @@ fun ChatScreen(
             .background(AppBackground)
             .imePadding()
     ) {
-        // Верхняя панель с переключателем
         TopBarWithSwitch(
             currentMode = currentMode,
             onModeChange = { newMode ->
                 currentMode = newMode
                 when (newMode) {
                     AIMode.LOCAL -> {
-                        // Используем флаг isModelLoaded вместо проверки state
                         if (!isModelLoaded) {
                             showModelDialog = true
                         }
@@ -258,11 +258,18 @@ fun ChatScreen(
                         }
                     }
                     AIMode.NEUTRAL -> {
-                        // Выгружаем модель при переходе в нейтральный режим
                         viewModel.releaseModel()
                     }
                 }
-            }
+            },
+            onVoiceInputToggle = {
+                if (isRecording) {
+                    viewModel.stopRecording()
+                } else {
+                    viewModel.startRecording()
+                }
+            },
+            isRecording = isRecording
         )
 
         ControlPanel(
@@ -317,7 +324,6 @@ fun ChatScreen(
                 .fillMaxWidth()
                 .padding(8.dp)
         ) {
-            // Нижний слой — матрица
             AndroidView(
                 factory = { context ->
                     MatrixChatBackground(context)
@@ -325,7 +331,6 @@ fun ChatScreen(
                 modifier = Modifier.matchParentSize()
             )
 
-            // Верхний слой — чат (прозрачный)
             Card(
                 modifier = Modifier.fillMaxSize(),
                 shape = RoundedCornerShape(16.dp),
@@ -434,11 +439,12 @@ fun ChatScreen(
     }
 }
 
-// === Обновленная верхняя панель с переключателем ===
 @Composable
 private fun TopBarWithSwitch(
     currentMode: AIMode,
-    onModeChange: (AIMode) -> Unit
+    onModeChange: (AIMode) -> Unit,
+    onVoiceInputToggle: () -> Unit,
+    isRecording: Boolean
 ) {
     Card(
         modifier = Modifier
@@ -454,7 +460,6 @@ private fun TopBarWithSwitch(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Логотип слева
             Image(
                 painter = painterResource(id = R.mipmap.ic_launcher),
                 contentDescription = "Лого",
@@ -464,7 +469,6 @@ private fun TopBarWithSwitch(
                     .clip(RoundedCornerShape(16.dp))
             )
 
-            // Центральная колонка с текстом и переключателем
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -483,7 +487,6 @@ private fun TopBarWithSwitch(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // Переключатель режимов — по центру
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -506,11 +509,25 @@ private fun TopBarWithSwitch(
                     )
                 }
             }
+
+            IconButton(
+                onClick = onVoiceInputToggle,
+                modifier = Modifier.size(36.dp),
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = if (isRecording) AccentColor.copy(alpha = 0.2f) else Color.Transparent
+                )
+            ) {
+                Icon(
+                    imageVector = if (isRecording) Icons.Default.Mic else Icons.Default.MicOff,
+                    contentDescription = if (isRecording) "Остановить запись" else "Начать запись",
+                    tint = if (isRecording) AccentColor else DarkText.copy(alpha = 0.6f),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
     }
 }
 
-// Уменьшенная кнопка переключателя
 @Composable
 private fun ModeButton(
     label: String,
@@ -519,7 +536,7 @@ private fun ModeButton(
 ) {
     Box(
         modifier = Modifier
-            .size(32.dp, 20.dp) // Увеличенный размер
+            .size(32.dp, 20.dp)
             .clickable { onClick() }
             .background(
                 color = if (isSelected) AccentColor else SurfaceGray,
@@ -535,13 +552,11 @@ private fun ModeButton(
         Text(
             text = label,
             color = if (isSelected) Color.White else DarkText,
-            fontSize = 8.sp, // Увеличенный шрифт
+            fontSize = 8.sp,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
         )
     }
 }
-
-// === Остальные компоненты без изменений ===
 
 @Composable
 private fun ControlPanel(
