@@ -1,5 +1,7 @@
 package org.nehuatl.sample
 
+import android.Manifest
+import android.content.pm.PackageManager
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -52,6 +54,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -65,6 +68,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
@@ -73,6 +77,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 private val AppBackground = Color(0xFFFFFFFF)
@@ -135,6 +142,23 @@ fun ChatScreen(
     val scrollState = rememberScrollState()
 
     val isRecording by viewModel.isRecording.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    // === Управление жизненным циклом: остановка записи при сворачивании ===
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP || event == Lifecycle.Event.ON_DESTROY) {
+                if (isRecording) {
+                    viewModel.stopRecording()
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     LaunchedEffect(showCloudDialog) {
         if (showCloudDialog) {
@@ -272,10 +296,22 @@ fun ChatScreen(
                 if (isRecording) {
                     viewModel.stopRecording()
                 } else {
-                    viewModel.startRecording()
+                    if (ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.RECORD_AUDIO
+                        ) == PackageManager.PERMISSION_GRANTED
+                    ) {
+                        viewModel.startRecording()
+                    } else {
+                        viewModel.appendSystemMessage("⚠️ Нет разрешения на запись аудио")
+                    }
                 }
             },
-            isRecording = isRecording
+            isRecording = isRecording,
+            hasPermission = ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED
         )
 
         ControlPanel(
@@ -450,7 +486,8 @@ private fun TopBarWithSwitch(
     currentMode: AIMode,
     onModeChange: (AIMode) -> Unit,
     onVoiceInputToggle: () -> Unit,
-    isRecording: Boolean
+    isRecording: Boolean,
+    hasPermission: Boolean
 ) {
     Card(
         modifier = Modifier
@@ -519,6 +556,7 @@ private fun TopBarWithSwitch(
             IconButton(
                 onClick = onVoiceInputToggle,
                 modifier = Modifier.size(36.dp),
+                enabled = hasPermission,
                 colors = IconButtonDefaults.iconButtonColors(
                     containerColor = if (isRecording) AccentColor.copy(alpha = 0.2f) else Color.Transparent
                 )
@@ -526,7 +564,7 @@ private fun TopBarWithSwitch(
                 Icon(
                     imageVector = if (isRecording) Icons.Default.Mic else Icons.Default.MicOff,
                     contentDescription = if (isRecording) "Остановить запись" else "Начать запись",
-                    tint = if (isRecording) AccentColor else DarkText.copy(alpha = 0.6f),
+                    tint = if (isRecording) AccentColor else if (hasPermission) DarkText.copy(alpha = 0.6f) else Color.Gray,
                     modifier = Modifier.size(20.dp)
                 )
             }
