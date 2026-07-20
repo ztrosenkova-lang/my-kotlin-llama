@@ -18,7 +18,6 @@ jobs:
         distribution: 'temurin'
         cache: 'gradle'
 
-    # НОВЫЙ ШАГ: Автоматически принимаем все лицензии Android SDK и NDK
     - name: Accept Android SDK Licenses
       run: |
         yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
@@ -32,16 +31,23 @@ jobs:
     - name: Grant Execute Permission for Gradlew
       run: chmod +x gradlew
 
-    - name: Download Vosk model
+    - name: Download and prepare Vosk model
       run: |
         echo "Downloading Vosk model..."
         mkdir -p app/src/main/assets
         cd app/src/main/assets
         wget -O vosk-model-small-ru-0.22.zip https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip
+        echo "Extracting Vosk model..."
         unzip -q vosk-model-small-ru-0.22.zip
+        echo "Moving model to flat directory structure..."
+        if [ -d "vosk-model-small-ru-0.22" ]; then
+          mv vosk-model-small-ru-0.22/* .
+          rm -rf vosk-model-small-ru-0.22
+        fi
         rm vosk-model-small-ru-0.22.zip
-        ls -la vosk-model-small-ru-0.22/
-        echo "Vosk model downloaded successfully"
+        echo "Model prepared. Contents:"
+        ls -la
+        echo "Vosk model ready"
 
     - name: Build Debug APK
       run: ./gradlew assembleDebug
