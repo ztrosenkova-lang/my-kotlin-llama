@@ -1030,12 +1030,12 @@ private fun StatusBar(
                 )
                 is GenerationState.LoadingModel -> Triple(
                     BorderGray.copy(alpha = 0.3f),
-                    "Загрузка...",
+                    "⏳ Загрузка модели...",
                     true
                 )
                 is GenerationState.ModelLoaded -> Triple(
                     SurfaceGray,
-                    "✓ ${state.path.substringAfterLast("/").replace(Regex("^primary%3AModels%"), "").replace(Regex("^primary:Models:"), "").substringBeforeLast(".")}",
+                    "✅ Модель загружена",
                     false
                 )
                 is GenerationState.AnalyzingImage -> Triple(
@@ -1045,17 +1045,17 @@ private fun StatusBar(
                 )
                 is GenerationState.Generating -> Triple(
                     AccentColor.copy(alpha = 0.15f),
-                    if (state.tokensGenerated == 0) "Думаю..." else "${state.tokensGenerated} т.",
+                    if (state.tokensGenerated == 0) "🤖 Локальный ИИ: Думает..." else "🤖 Локальный ИИ: ${state.tokensGenerated} т.",
                     true
                 )
                 is GenerationState.Completed -> Triple(
                     AccentColor.copy(alpha = 0.15f),
-                    "✓ ${state.tokenCount} т. ${state.durationMs}мс",
+                    "✅ ${state.tokenCount} т. ${state.durationMs}мс",
                     false
                 )
                 is GenerationState.Error -> Triple(
                     AccentColor.copy(alpha = 0.15f),
-                    "⚠ ${state.message}",
+                    "⚠️ Ошибка: ${state.message}",
                     false
                 )
             }
@@ -1068,28 +1068,25 @@ private fun StatusBar(
         border = BorderStroke(1.dp, BorderGray)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Start
         ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
-            ) {
-                if (showProgress) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(12.dp),
-                        color = AccentColor,
-                        strokeWidth = 2.dp
-                    )
-                }
-                Text(
-                    text = statusText,
-                    color = DarkText,
-                    fontSize = 8.sp
+            if (showProgress) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(12.dp),
+                    color = AccentColor,
+                    strokeWidth = 2.dp
                 )
+                Spacer(modifier = Modifier.width(8.dp))
             }
+            Text(
+                text = statusText,
+                color = DarkText,
+                fontSize = 8.sp
+            )
         }
     }
 }
