@@ -173,8 +173,22 @@ class VoskRecognizer(
 
     fun stopRecording() {
         onLog("⏹ stopRecording() вызван")
+
+        // 1. Забираем финальный остаток текста до остановки служб
+        val finalJson = recognizer?.finalResult
+        val finalText = parseResult(finalJson)
+        if (finalText.isNotEmpty()) {
+            onLog("✅ Финальный остаток: $finalText")
+            onResult(finalText)
+        }
+
+        // 2. Стандартная очистка потоков
         recordingJob?.cancel()
-        audioRecord?.stop()
+        try {
+            audioRecord?.stop()
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка остановки AudioRecord: ${e.message}")
+        }
         audioRecord?.release()
         audioRecord = null
         Log.d(TAG, "Запись остановлена")
@@ -183,7 +197,11 @@ class VoskRecognizer(
     fun release() {
         onLog("🔄 Освобождение Vosk")
         recordingJob?.cancel()
-        audioRecord?.stop()
+        try {
+            audioRecord?.stop()
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка остановки AudioRecord: ${e.message}")
+        }
         audioRecord?.release()
         audioRecord = null
         recognizer?.close()
