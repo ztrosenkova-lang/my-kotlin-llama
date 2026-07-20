@@ -12,7 +12,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.vosk.Model
 import org.vosk.Recognizer
-import org.vosk.android.Callback
 import org.vosk.android.StorageService
 import java.io.IOException
 import java.lang.ref.WeakReference
@@ -54,7 +53,7 @@ class VoskRecognizer(
                 context.applicationContext,
                 "model",
                 "vosk-model",
-                object : Callback<Model> {
+                object : StorageService.Callback<Model> {
                     override fun onComplete(model: Model) {
                         try {
                             onLog("✅ Модель успешно распакована")
@@ -71,7 +70,7 @@ class VoskRecognizer(
                         }
                     }
                 },
-                object : Callback<IOException> {
+                object : StorageService.Callback<IOException> {
                     override fun onComplete(exception: IOException) {
                         val errorMsg = "❌ Ошибка распаковки модели: ${exception.message}"
                         Log.e(TAG, errorMsg)
