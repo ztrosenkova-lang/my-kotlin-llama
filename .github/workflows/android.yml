@@ -33,17 +33,25 @@ jobs:
 
     - name: Download and prepare Vosk model
       run: |
-        echo "Downloading Vosk model..."
         mkdir -p app/src/main/assets
         cd app/src/main/assets
-        wget -O vosk-model-small-ru-0.22.zip https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip
-        echo "Extracting Vosk model..."
+
+        echo "Downloading Vosk model..."
+        wget -q https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip
+
+        echo "Unzipping model..."
         unzip -q vosk-model-small-ru-0.22.zip
-        echo "Renaming model directory to 'model'..."
-        mv vosk-model-small-ru-0.22 model
+
+        echo "Structuring files..."
+        mkdir model
+        mv vosk-model-small-ru-0.22/* model/
+
+        echo "Cleaning up..."
+        rm -rf vosk-model-small-ru-0.22
         rm vosk-model-small-ru-0.22.zip
-        echo "Model prepared. Contents of 'model' directory:"
-        ls -la model
+
+        echo "Verifying model layout:"
+        ls -la model/
         echo "Vosk model ready"
 
     - name: Build Debug APK
