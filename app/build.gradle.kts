@@ -59,6 +59,16 @@ android {
         compose = true
         prefab = true
     }
+
+    aaptOptions {
+        noCompress += listOf(
+            "model",
+            "graph",
+            "conf",
+            "am",
+            "ivector"
+        )
+    }
 }
 
 dependencies {
