@@ -12,7 +12,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.vosk.Model
 import org.vosk.Recognizer
-import java.io.File
+import org.vosk.android.StorageService
 import java.io.IOException
 import java.lang.ref.WeakReference
 
@@ -48,31 +48,28 @@ class VoskRecognizer(
         }
 
         try {
-            val modelDir = File(context.applicationContext.filesDir, "vosk-model-small-ru-0.22")
-            onLog("📁 Путь к модели: ${modelDir.absolutePath}")
-
-            if (!modelDir.exists()) {
-                val errorMsg = "❌ Модель не найдена: ${modelDir.absolutePath}"
-                Log.e(TAG, errorMsg)
-                onLog(errorMsg)
-                return
-            }
-
-            val files = modelDir.listFiles()
-            onLog("📄 Файлов в модели: ${files?.size ?: 0}")
-
-            model = Model(modelDir.absolutePath)
-            recognizer = Recognizer(model, SAMPLE_RATE)
-            isInitialized = true
-            val successMsg = "✅ Vosk модель загружена успешно"
-            Log.d(TAG, successMsg)
-            onLog(successMsg)
-        } catch (e: IOException) {
-            val errorMsg = "❌ Ошибка загрузки модели Vosk: ${e.message}"
-            Log.e(TAG, errorMsg)
-            onLog(errorMsg)
+            onLog("📁 Распаковка модели из assets/model в vosk-model...")
+            StorageService.unpack(
+                context.applicationContext,
+                "model",
+                "vosk-model",
+                { unpackedModel ->
+                    onLog("✅ Модель успешно распакована")
+                    model = unpackedModel
+                    recognizer = Recognizer(model, SAMPLE_RATE)
+                    isInitialized = true
+                    val successMsg = "✅ Vosk модель загружена успешно"
+                    Log.d(TAG, successMsg)
+                    onLog(successMsg)
+                },
+                { exception ->
+                    val errorMsg = "❌ Ошибка распаковки модели: ${exception.message}"
+                    Log.e(TAG, errorMsg)
+                    onLog(errorMsg)
+                }
+            )
         } catch (e: Exception) {
-            val errorMsg = "❌ Неизвестная ошибка загрузки Vosk: ${e.message}"
+            val errorMsg = "❌ Неизвестная ошибка инициализации Vosk: ${e.message}"
             Log.e(TAG, errorMsg)
             onLog(errorMsg)
         }
