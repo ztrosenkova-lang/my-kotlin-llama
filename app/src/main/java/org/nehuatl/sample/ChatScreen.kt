@@ -281,7 +281,8 @@ fun ChatScreen(
                         }
                     }
                     AIMode.CLOUD -> {
-                        if (!viewModel.isCloudConfigured()) {
+                        val config = viewModel.getCloudConfig()
+                        if (config == null || config.authKey.isEmpty()) {
                             showCloudDialog = true
                         }
                     }
