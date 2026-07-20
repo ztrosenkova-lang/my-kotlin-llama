@@ -18,8 +18,8 @@ class MatrixChatBackground @JvmOverloads constructor(
     private val fontSize = 30f
     private val lineHeight = fontSize * 1.05f
     private val speed = 2.5f
-    private val maxLines = 20
-    private val maxPoolSize = 40
+    private val maxLines = 30
+    private val maxPoolSize = 60
     private val words = arrayOf("Нео", "Батя", "Меч Правды", "Ковчег", "Иди за белым кроликом")
 
     private val paint = Paint().apply {
