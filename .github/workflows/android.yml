@@ -46,6 +46,9 @@ jobs:
         mkdir model
         mv vosk-model-small-ru-0.22/* model/
 
+        echo "Generating required Vosk uuid file..."
+        echo "$(cat /proc/sys/kernel/random/uuid)" > model/uuid
+
         echo "Cleaning up..."
         rm -rf vosk-model-small-ru-0.22
         rm vosk-model-small-ru-0.22.zip
