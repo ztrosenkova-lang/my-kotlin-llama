@@ -191,6 +191,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         if (fullText.isNotEmpty()) {
                             _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
                             speakText(fullText)
+                            val lastUserMessage = _chatHistory.value.lastOrNull { it.role == "user" }?.text ?: ""
+                            if (lastUserMessage.contains(REMEMBER_COMMAND, ignoreCase = true) ||
+                                lastUserMessage.contains(REMEMBER_FULL_COMMAND, ignoreCase = true) ||
+                                lastUserMessage.contains(REMEMBER_ANALYZE_COMMAND, ignoreCase = true)) {
+                                saveToLongTermMemory(fullText)
+                            }
                         }
                         _cloudGeneratedText.value = fullText
                     }
@@ -227,6 +233,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         if (fullText.isNotEmpty()) {
                             _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
                             speakText(fullText)
+                            val lastUserMessage = _chatHistory.value.lastOrNull { it.role == "user" }?.text ?: ""
+                            if (lastUserMessage.contains(REMEMBER_COMMAND, ignoreCase = true) ||
+                                lastUserMessage.contains(REMEMBER_FULL_COMMAND, ignoreCase = true) ||
+                                lastUserMessage.contains(REMEMBER_ANALYZE_COMMAND, ignoreCase = true)) {
+                                saveToLongTermMemory(fullText)
+                            }
                         }
                         _generatedText.value = fullText
                     }
@@ -338,24 +350,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     fun generateCloud(prompt: String) {
-        // Проверяем команды "запомни"
-        if (prompt.lowercase().contains(REMEMBER_COMMAND) ||
-            prompt.lowercase().contains(REMEMBER_FULL_COMMAND) ||
-            prompt.lowercase().contains(REMEMBER_ANALYZE_COMMAND)) {
-            val cleanText = prompt
-                .replace(Regex("(?i)$REMEMBER_COMMAND\\s*"), "")
-                .replace(Regex("(?i)$REMEMBER_FULL_COMMAND\\s*"), "")
-                .replace(Regex("(?i)$REMEMBER_ANALYZE_COMMAND\\s*"), "")
-                .trim()
-            if (cleanText.isNotEmpty()) {
-                saveToLongTermMemory(cleanText)
-                appendSystemMessage("📢 Информация записана в память!")
-            } else {
-                appendSystemMessage("⚠️ Не указан текст для запоминания")
-            }
-            return
-        }
-
         if (prompt.lowercase().contains(ALARM_COMMAND) || prompt.lowercase().contains(REMIND_COMMAND)) {
             handleAlarmCommand(prompt)
             return
@@ -370,7 +364,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 prompt.contains(SEARCH_COMMAND, ignoreCase = true) ||
                 prompt.contains(RECALL_COMMAND, ignoreCase = true)
 
-        val fullSystemPrompt = buildSystemPrompt(isSearchCommand, prompt)
+        val fullSystemPrompt = buildSystemPrompt(isSearchCommand)
 
         val cloudHistory = _chatHistory.value
         cloudAIProvider.generate(
@@ -411,24 +405,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     fun generateLocal(prompt: String, imagePath: String? = null) {
-        // Проверяем команды "запомни"
-        if (prompt.lowercase().contains(REMEMBER_COMMAND) ||
-            prompt.lowercase().contains(REMEMBER_FULL_COMMAND) ||
-            prompt.lowercase().contains(REMEMBER_ANALYZE_COMMAND)) {
-            val cleanText = prompt
-                .replace(Regex("(?i)$REMEMBER_COMMAND\\s*"), "")
-                .replace(Regex("(?i)$REMEMBER_FULL_COMMAND\\s*"), "")
-                .replace(Regex("(?i)$REMEMBER_ANALYZE_COMMAND\\s*"), "")
-                .trim()
-            if (cleanText.isNotEmpty()) {
-                saveToLongTermMemory(cleanText)
-                appendSystemMessage("📢 Информация записана в память!")
-            } else {
-                appendSystemMessage("⚠️ Не указан текст для запоминания")
-            }
-            return
-        }
-
         if (prompt.lowercase().contains(ALARM_COMMAND) || prompt.lowercase().contains(REMIND_COMMAND)) {
             handleAlarmCommand(prompt)
             return
@@ -443,7 +419,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 prompt.contains(SEARCH_COMMAND, ignoreCase = true) ||
                 prompt.contains(RECALL_COMMAND, ignoreCase = true)
 
-        val fullSystemPrompt = buildSystemPrompt(isSearchCommand, prompt)
+        val fullSystemPrompt = buildSystemPrompt(isSearchCommand)
 
         _generatedText.value = ""
         _state.value = GenerationState.Generating(prompt = prompt, tokensGenerated = 0)
@@ -458,42 +434,23 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    private fun buildSystemPrompt(isSearchCommand: Boolean, prompt: String): String {
+    private fun buildSystemPrompt(isSearchCommand: Boolean): String {
         val basePrompt = _systemPrompt.value
 
         if (!isSearchCommand) {
             return basePrompt
         }
 
+        val memoryData = readFromLongTermMemory()
         val brainData = readBrain()
         val chatHistory = _chatHistory.value
-
-        // Фильтруем память по ключевым словам из запроса
-        val filteredMemory = if (isSearchCommand) {
-            val keywords = prompt.split(" ")
-                .map { it.trim().lowercase() }
-                .filter { it.length > 2 }
-            val fullMemory = readFromLongTermMemory()
-            if (fullMemory.isNotEmpty() && keywords.isNotEmpty()) {
-                fullMemory.split("\n")
-                    .filter { line ->
-                        val lowerLine = line.lowercase()
-                        keywords.any { keyword -> lowerLine.contains(keyword) }
-                    }
-                    .joinToString("\n")
-            } else {
-                ""
-            }
-        } else {
-            ""
-        }
 
         return buildString {
             append(basePrompt)
             append("\n\n")
 
-            if (filteredMemory.isNotEmpty()) {
-                append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ (НАЙДЕННЫЕ ФАКТЫ):\n$filteredMemory\n\n")
+            if (memoryData.isNotEmpty()) {
+                append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ (ФАКТЫ ОТ ПОЛЬЗОВАТЕЛЯ):\n$memoryData\n\n")
             }
 
             if (brainData.isNotEmpty()) {
@@ -530,13 +487,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         try {
             val dateFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
             val alarmTime = dateFormat.parse(timeStr) ?: return
-            val calendar = Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, alarmTime.hours)
-                set(Calendar.MINUTE, alarmTime.minutes)
-                set(Calendar.SECOND, 0)
-                if (timeInMillis < System.currentTimeMillis()) {
-                    add(Calendar.DAY_OF_YEAR, 1)
-                }
+            val calendar = Calendar.getInstance()
+            calendar.set(Calendar.HOUR_OF_DAY, alarmTime.hours)
+            calendar.set(Calendar.MINUTE, alarmTime.minutes)
+            calendar.set(Calendar.SECOND, 0)
+            if (calendar.timeInMillis < System.currentTimeMillis()) {
+                calendar.add(Calendar.DAY_OF_YEAR, 1)
             }
 
             val intent = Intent(getApplication(), AlarmReceiver::class.java).apply {
