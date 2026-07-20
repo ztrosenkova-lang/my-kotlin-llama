@@ -330,6 +330,8 @@ fun ChatScreen(
                 maxTokens = maxTokens,
                 onMaxTokensChange = { viewModel.updateMaxTokens(it) },
                 onModelChangeClick = { showModelDialog = true },
+                voskDelay = viewModel.voskDelay.collectAsStateWithLifecycle().value,
+                onVoskDelayChange = { viewModel.updateVoskDelay(it) },
                 onSave = {
                     viewModel.updateTemperature(tempTemperature)
                     showSettings = false
@@ -512,7 +514,7 @@ private fun TopBarWithSwitch(
                 verticalArrangement = Arrangement.Center
             ) {
                 Text(
-                    text = "Меч Правды v2.0",
+                    text = "ИИ-Друг",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = DarkText,
@@ -669,9 +671,13 @@ private fun SettingsPanel(
     maxTokens: Int,
     onMaxTokensChange: (Int) -> Unit,
     onModelChangeClick: () -> Unit,
+    voskDelay: Int,
+    onVoskDelayChange: (Int) -> Unit,
     onSave: () -> Unit,
     onClose: () -> Unit
 ) {
+    var tempVoskDelay by remember { mutableStateOf(voskDelay) }
+
     Card(
         colors = CardDefaults.cardColors(containerColor = SurfaceGray),
         modifier = Modifier.fillMaxWidth().padding(8.dp),
@@ -703,6 +709,17 @@ private fun SettingsPanel(
             )
             Spacer(modifier = Modifier.height(12.dp))
 
+            Text(text = "Таймаут тишины Vosk (мс): ${tempVoskDelay} мс", color = DarkText)
+            Slider(
+                value = tempVoskDelay.toFloat(),
+                onValueChange = { tempVoskDelay = it.toInt() },
+                valueRange = 500f..2500f,
+                steps = 20,
+                modifier = Modifier.fillMaxWidth(),
+                colors = SliderDefaults.colors(thumbColor = AccentColor, activeTrackColor = AccentColor, inactiveTrackColor = BorderGray)
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
             Button(
                 onClick = onModelChangeClick,
                 colors = ButtonDefaults.buttonColors(containerColor = BorderGray),
@@ -714,7 +731,10 @@ private fun SettingsPanel(
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
-                    onClick = onSave,
+                    onClick = {
+                        onSave()
+                        onVoskDelayChange(tempVoskDelay)
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
                     modifier = Modifier.weight(1f)
                 ) { Text("Сохранить", color = DarkText) }
