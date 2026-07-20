@@ -136,17 +136,17 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun copyVoskModelIfNeeded() {
-        val modelDir = File(filesDir, "vosk-model-small-ru-0.22")
+        val modelDir = File(filesDir, "model")
         if (!modelDir.exists()) {
             try {
                 modelDir.mkdirs()
-                val assetFiles = assets.list("vosk-model-small-ru-0.22")
+                val assetFiles = assets.list("model")
                 if (assetFiles.isNullOrEmpty()) {
-                    Log.e("MainActivity", "Модель Vosk не найдена в assets/vosk-model-small-ru-0.22/")
+                    Log.e("MainActivity", "Модель Vosk не найдена в assets/model/")
                     return
                 }
                 assetFiles.forEach { fileName ->
-                    assets.open("vosk-model-small-ru-0.22/$fileName").use { input ->
+                    assets.open("model/$fileName").use { input ->
                         File(modelDir, fileName).outputStream().use { output ->
                             input.copyTo(output)
                         }
