@@ -12,6 +12,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.vosk.Model
 import org.vosk.Recognizer
+import org.vosk.android.Callback
 import org.vosk.android.StorageService
 import java.io.IOException
 import java.lang.ref.WeakReference
@@ -53,19 +54,29 @@ class VoskRecognizer(
                 context.applicationContext,
                 "model",
                 "vosk-model",
-                { unpackedModel ->
-                    onLog("✅ Модель успешно распакована")
-                    model = unpackedModel
-                    recognizer = Recognizer(model, SAMPLE_RATE)
-                    isInitialized = true
-                    val successMsg = "✅ Vosk модель загружена успешно"
-                    Log.d(TAG, successMsg)
-                    onLog(successMsg)
+                object : Callback<Model> {
+                    override fun onComplete(model: Model) {
+                        try {
+                            onLog("✅ Модель успешно распакована")
+                            this@VoskRecognizer.model = model
+                            recognizer = Recognizer(model, SAMPLE_RATE)
+                            isInitialized = true
+                            val successMsg = "✅ Vosk модель загружена успешно"
+                            Log.d(TAG, successMsg)
+                            onLog(successMsg)
+                        } catch (e: Exception) {
+                            val errorMsg = "❌ Ошибка создания Recognizer: ${e.message}"
+                            Log.e(TAG, errorMsg)
+                            onLog(errorMsg)
+                        }
+                    }
                 },
-                { exception ->
-                    val errorMsg = "❌ Ошибка распаковки модели: ${exception.message}"
-                    Log.e(TAG, errorMsg)
-                    onLog(errorMsg)
+                object : Callback<IOException> {
+                    override fun onComplete(exception: IOException) {
+                        val errorMsg = "❌ Ошибка распаковки модели: ${exception.message}"
+                        Log.e(TAG, errorMsg)
+                        onLog(errorMsg)
+                    }
                 }
             )
         } catch (e: Exception) {
