@@ -27,7 +27,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Memory
@@ -291,7 +290,17 @@ fun ChatScreen(
                         viewModel.releaseModel()
                     }
                 }
+            }
+        )
+
+        ControlPanel(
+            onMemoryClick = {
+                memoryEditText = viewModel.readFromLongTermMemory()
+                showMemoryEditor = true
             },
+            onSettingsClick = { showSettings = !showSettings },
+            onPromptSettingsClick = { showPromptSettings = !showPromptSettings },
+            onHelpClick = { showHelpDialog = true },
             onVoiceInputToggle = {
                 if (isRecording) {
                     viewModel.stopRecording()
@@ -312,17 +321,6 @@ fun ChatScreen(
                 context,
                 Manifest.permission.RECORD_AUDIO
             ) == PackageManager.PERMISSION_GRANTED
-        )
-
-        ControlPanel(
-            onMemoryClick = {
-                memoryEditText = viewModel.readFromLongTermMemory()
-                showMemoryEditor = true
-            },
-            onSettingsClick = { showSettings = !showSettings },
-            onPromptSettingsClick = { showPromptSettings = !showPromptSettings },
-            onCloudClick = { showCloudDialog = true },
-            onHelpClick = { showHelpDialog = true }
         )
 
         if (showSettings) {
@@ -484,10 +482,7 @@ fun ChatScreen(
 @Composable
 private fun TopBarWithSwitch(
     currentMode: AIMode,
-    onModeChange: (AIMode) -> Unit,
-    onVoiceInputToggle: () -> Unit,
-    isRecording: Boolean,
-    hasPermission: Boolean
+    onModeChange: (AIMode) -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -552,22 +547,6 @@ private fun TopBarWithSwitch(
                     )
                 }
             }
-
-            IconButton(
-                onClick = onVoiceInputToggle,
-                modifier = Modifier.size(36.dp),
-                enabled = hasPermission,
-                colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = if (isRecording) AccentColor.copy(alpha = 0.2f) else Color.Transparent
-                )
-            ) {
-                Icon(
-                    imageVector = if (isRecording) Icons.Default.Mic else Icons.Default.MicOff,
-                    contentDescription = if (isRecording) "Остановить запись" else "Начать запись",
-                    tint = if (isRecording) AccentColor else if (hasPermission) DarkText.copy(alpha = 0.6f) else Color.Gray,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
         }
     }
 }
@@ -607,8 +586,10 @@ private fun ControlPanel(
     onMemoryClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onPromptSettingsClick: () -> Unit,
-    onCloudClick: () -> Unit,
-    onHelpClick: () -> Unit
+    onHelpClick: () -> Unit,
+    onVoiceInputToggle: () -> Unit,
+    isRecording: Boolean,
+    hasPermission: Boolean
 ) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
@@ -637,15 +618,26 @@ private fun ControlPanel(
                 onClick = onPromptSettingsClick
             )
             IconButtonWithLabel(
-                icon = Icons.Default.Cloud,
-                label = "облачный ии",
-                onClick = onCloudClick
-            )
-            IconButtonWithLabel(
                 icon = Icons.Default.Info,
                 label = "справка",
                 onClick = onHelpClick
             )
+            // Микрофон - последний в списке
+            IconButton(
+                onClick = onVoiceInputToggle,
+                modifier = Modifier.size(36.dp),
+                enabled = hasPermission,
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = if (isRecording) AccentColor.copy(alpha = 0.2f) else Color.Transparent
+                )
+            ) {
+                Icon(
+                    imageVector = if (isRecording) Icons.Default.Mic else Icons.Default.MicOff,
+                    contentDescription = if (isRecording) "Остановить запись" else "Начать запись",
+                    tint = if (isRecording) AccentColor else if (hasPermission) DarkText.copy(alpha = 0.6f) else Color.Gray,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
     }
 }
