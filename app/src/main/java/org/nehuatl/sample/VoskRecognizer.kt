@@ -14,9 +14,10 @@ import org.vosk.Model
 import org.vosk.Recognizer
 import java.io.File
 import java.io.IOException
+import java.lang.ref.WeakReference
 
 class VoskRecognizer(
-    private val context: Context,
+    private val contextRef: WeakReference<Context>,
     private val onResult: (String) -> Unit,
     private val onLog: (String) -> Unit,
     private val scope: CoroutineScope
@@ -38,20 +39,28 @@ class VoskRecognizer(
     }
 
     private fun initModel() {
+        val context = contextRef.get()
+        if (context == null) {
+            val errorMsg = "❌ Context is null"
+            Log.e(TAG, errorMsg)
+            onLog(errorMsg)
+            return
+        }
+
         try {
-            val modelDir = File(context.filesDir, "vosk-model-small-ru-0.22")
+            val modelDir = File(context.applicationContext.filesDir, "vosk-model-small-ru-0.22")
             onLog("📁 Путь к модели: ${modelDir.absolutePath}")
-            
+
             if (!modelDir.exists()) {
                 val errorMsg = "❌ Модель не найдена: ${modelDir.absolutePath}"
                 Log.e(TAG, errorMsg)
                 onLog(errorMsg)
                 return
             }
-            
+
             val files = modelDir.listFiles()
             onLog("📄 Файлов в модели: ${files?.size ?: 0}")
-            
+
             model = Model(modelDir.absolutePath)
             recognizer = Recognizer(model, SAMPLE_RATE)
             isInitialized = true
@@ -71,7 +80,7 @@ class VoskRecognizer(
 
     fun startRecording() {
         onLog("🎤 startRecording() вызван")
-        
+
         if (!isInitialized) {
             val errorMsg = "❌ Vosk не инициализирован"
             Log.e(TAG, errorMsg)
