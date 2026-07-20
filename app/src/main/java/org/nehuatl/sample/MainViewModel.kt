@@ -27,6 +27,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
+import java.lang.ref.WeakReference
 
 data class ChatMessage(val role: String, val text: String)
 
@@ -254,8 +255,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
 
+        val weakContext = WeakReference(getApplication())
         voskRecognizer = VoskRecognizer(
-            context = getApplication(),
+            contextRef = weakContext,
             onResult = onVoiceResult,
             onLog = onVoiceLog,
             scope = scope
