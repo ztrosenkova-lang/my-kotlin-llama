@@ -353,6 +353,8 @@ fun ChatScreen(
 
         StatusBar(
             state = state,
+            cloudState = cloudState,
+            currentMode = currentMode,
             currentModel = currentModelPath,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
         )
@@ -424,11 +426,6 @@ fun ChatScreen(
                 }
             }
         }
-
-        CloudStatusBar(
-            state = cloudState,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-        )
 
         if (imagePath != null) {
             ImagePreview(imagePath = imagePath)
@@ -987,74 +984,87 @@ private fun ImagePreview(imagePath: String) {
 }
 
 @Composable
-private fun StatusBar(state: GenerationState, currentModel: String?, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = when (state) {
-                is GenerationState.Error -> AccentColor.copy(alpha = 0.15f)
-                is GenerationState.Generating -> AccentColor.copy(alpha = 0.15f)
-                is GenerationState.AnalyzingImage -> AccentColor.copy(alpha = 0.15f)
-                is GenerationState.LoadingModel -> BorderGray.copy(alpha = 0.3f)
-                else -> SurfaceGray
+private fun StatusBar(
+    state: GenerationState,
+    cloudState: CloudAIState,
+    currentMode: AIMode,
+    currentModel: String?,
+    modifier: Modifier = Modifier
+) {
+    val (containerColor, statusText, showProgress) = when (currentMode) {
+        AIMode.CLOUD -> {
+            when (cloudState) {
+                is CloudAIState.Idle -> Triple(
+                    SurfaceGray,
+                    "☁️ Облако: Готово к работе",
+                    false
+                )
+                is CloudAIState.Ready -> Triple(
+                    SurfaceGray,
+                    "☁️ Облако: Готов (${cloudState.modelId})",
+                    false
+                )
+                is CloudAIState.Generating -> Triple(
+                    AccentColor.copy(alpha = 0.15f),
+                    if (cloudState.tokensGenerated == 0) "☁️ Облако: Думает..." else "☁️ Облако: ${cloudState.tokensGenerated} т.",
+                    true
+                )
+                is CloudAIState.Completed -> Triple(
+                    AccentColor.copy(alpha = 0.15f),
+                    "☁️ Облако: ${cloudState.tokenCount} т. ${cloudState.durationMs}мс",
+                    false
+                )
+                is CloudAIState.Error -> Triple(
+                    AccentColor.copy(alpha = 0.15f),
+                    "⚠️ Облако: ${cloudState.message}",
+                    false
+                )
             }
-        ),
-        border = BorderStroke(1.dp, BorderGray)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                when (state) {
-                    is GenerationState.Idle -> {
-                        Text(if (currentModel == null) "Выберите модель" else "Готов", color = if (currentModel == null) DarkText.copy(alpha = 0.5f) else AccentColor, fontSize = 8.sp)
-                    }
-                    is GenerationState.LoadingModel -> {
-                        CircularProgressIndicator(modifier = Modifier.size(12.dp), color = AccentColor, strokeWidth = 2.dp)
-                        Text("Загрузка...", color = DarkText, fontSize = 8.sp)
-                    }
-                    is GenerationState.ModelLoaded -> {
-                        val modelName = state.path.substringAfterLast("/")
-                            .replace(Regex("^primary%3AModels%"), "")
-                            .replace(Regex("^primary:Models:"), "")
-                        val displayName = modelName.substringBeforeLast(".")
-                        Text("✓ $displayName", color = AccentColor, fontSize = 8.sp)
-                    }
-                    is GenerationState.AnalyzingImage -> {
-                        CircularProgressIndicator(modifier = Modifier.size(12.dp), color = AccentColor, strokeWidth = 2.dp)
-                        Text("🧐 Анализ...", color = DarkText, fontSize = 8.sp)
-                    }
-                    is GenerationState.Generating -> {
-                        CircularProgressIndicator(modifier = Modifier.size(12.dp), color = AccentColor, strokeWidth = 2.dp)
-                        val label = if (state.tokensGenerated == 0) "Думаю..." else "${state.tokensGenerated} т."
-                        Text(label, color = DarkText, fontSize = 8.sp)
-                    }
-                    is GenerationState.Completed -> {
-                        Text("✓ ${state.tokenCount} т. ${state.durationMs}мс", color = AccentColor, fontSize = 8.sp)
-                    }
-                    is GenerationState.Error -> {
-                        Text("⚠ ${state.message}", color = AccentColor, fontSize = 8.sp)
-                    }
-                }
+        }
+        else -> {
+            when (state) {
+                is GenerationState.Idle -> Triple(
+                    if (currentModel == null) SurfaceGray else SurfaceGray,
+                    if (currentModel == null) "Выберите модель" else "Готов",
+                    false
+                )
+                is GenerationState.LoadingModel -> Triple(
+                    BorderGray.copy(alpha = 0.3f),
+                    "Загрузка...",
+                    true
+                )
+                is GenerationState.ModelLoaded -> Triple(
+                    SurfaceGray,
+                    "✓ ${state.path.substringAfterLast("/").replace(Regex("^primary%3AModels%"), "").replace(Regex("^primary:Models:"), "").substringBeforeLast(".")}",
+                    false
+                )
+                is GenerationState.AnalyzingImage -> Triple(
+                    AccentColor.copy(alpha = 0.15f),
+                    "🧐 Анализ...",
+                    true
+                )
+                is GenerationState.Generating -> Triple(
+                    AccentColor.copy(alpha = 0.15f),
+                    if (state.tokensGenerated == 0) "Думаю..." else "${state.tokensGenerated} т.",
+                    true
+                )
+                is GenerationState.Completed -> Triple(
+                    AccentColor.copy(alpha = 0.15f),
+                    "✓ ${state.tokenCount} т. ${state.durationMs}мс",
+                    false
+                )
+                is GenerationState.Error -> Triple(
+                    AccentColor.copy(alpha = 0.15f),
+                    "⚠ ${state.message}",
+                    false
+                )
             }
         }
     }
-}
 
-@Composable
-private fun CloudStatusBar(state: CloudAIState, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = when (state) {
-                is CloudAIState.Error -> AccentColor.copy(alpha = 0.15f)
-                is CloudAIState.Generating -> AccentColor.copy(alpha = 0.15f)
-                is CloudAIState.Ready -> SurfaceGray
-                else -> SurfaceGray
-            }
-        ),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
         border = BorderStroke(1.dp, BorderGray)
     ) {
         Row(
@@ -1062,18 +1072,23 @@ private fun CloudStatusBar(state: CloudAIState, modifier: Modifier = Modifier) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                when (state) {
-                    is CloudAIState.Idle -> Text("☁️ не настроен", color = DarkText.copy(alpha = 0.5f), fontSize = 8.sp)
-                    is CloudAIState.Ready -> Text("☁️ готов (${state.modelId})", color = AccentColor, fontSize = 8.sp)
-                    is CloudAIState.Generating -> {
-                        CircularProgressIndicator(modifier = Modifier.size(12.dp), color = AccentColor, strokeWidth = 2.dp)
-                        val label = if (state.tokensGenerated == 0) "☁️ Думаю..." else "${state.tokensGenerated} т."
-                        Text(label, color = DarkText, fontSize = 8.sp)
-                    }
-                    is CloudAIState.Completed -> Text("☁️ ${state.tokenCount} т. ${state.durationMs}мс", color = AccentColor, fontSize = 8.sp)
-                    is CloudAIState.Error -> Text("⚠️ ${state.message}", color = AccentColor, fontSize = 8.sp)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                if (showProgress) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(12.dp),
+                        color = AccentColor,
+                        strokeWidth = 2.dp
+                    )
                 }
+                Text(
+                    text = statusText,
+                    color = DarkText,
+                    fontSize = 8.sp
+                )
             }
         }
     }
