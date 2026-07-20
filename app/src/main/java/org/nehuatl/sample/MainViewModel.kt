@@ -255,9 +255,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
 
-        val weakContext = WeakReference(getApplication())
         voskRecognizer = VoskRecognizer(
-            contextRef = weakContext,
+            contextRef = WeakReference<Context>(getApplication<Application>().applicationContext),
             onResult = onVoiceResult,
             onLog = onVoiceLog,
             scope = scope
