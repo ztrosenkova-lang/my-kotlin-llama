@@ -144,7 +144,6 @@ fun ChatScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // === Управление жизненным циклом: остановка записи при сворачивании ===
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_STOP || event == Lifecycle.Event.ON_DESTROY) {
@@ -533,17 +532,20 @@ private fun TopBarWithSwitch(
                     ModeButton(
                         label = "Local",
                         isSelected = currentMode == AIMode.LOCAL,
-                        onClick = { onModeChange(AIMode.LOCAL) }
+                        onClick = { onModeChange(AIMode.LOCAL) },
+                        modifier = Modifier.size(38.dp, 24.dp)
                     )
                     ModeButton(
                         label = "Neutral",
                         isSelected = currentMode == AIMode.NEUTRAL,
-                        onClick = { onModeChange(AIMode.NEUTRAL) }
+                        onClick = { onModeChange(AIMode.NEUTRAL) },
+                        modifier = Modifier.size(38.dp, 24.dp)
                     )
                     ModeButton(
                         label = "Cloud",
                         isSelected = currentMode == AIMode.CLOUD,
-                        onClick = { onModeChange(AIMode.CLOUD) }
+                        onClick = { onModeChange(AIMode.CLOUD) },
+                        modifier = Modifier.size(38.dp, 24.dp)
                     )
                 }
             }
@@ -555,11 +557,11 @@ private fun TopBarWithSwitch(
 private fun ModeButton(
     label: String,
     isSelected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Box(
-        modifier = Modifier
-            .size(32.dp, 20.dp)
+        modifier = modifier
             .clickable { onClick() }
             .background(
                 color = if (isSelected) AccentColor else SurfaceGray,
@@ -622,20 +624,30 @@ private fun ControlPanel(
                 label = "справка",
                 onClick = onHelpClick
             )
-            // Микрофон - последний в списке
-            IconButton(
-                onClick = onVoiceInputToggle,
-                modifier = Modifier.size(36.dp),
-                enabled = hasPermission,
-                colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = if (isRecording) AccentColor.copy(alpha = 0.2f) else Color.Transparent
-                )
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                Icon(
-                    imageVector = if (isRecording) Icons.Default.Mic else Icons.Default.MicOff,
-                    contentDescription = if (isRecording) "Остановить запись" else "Начать запись",
-                    tint = if (isRecording) AccentColor else if (hasPermission) DarkText.copy(alpha = 0.6f) else Color.Gray,
-                    modifier = Modifier.size(20.dp)
+                IconButton(
+                    onClick = onVoiceInputToggle,
+                    modifier = Modifier.size(36.dp),
+                    enabled = hasPermission,
+                    colors = IconButtonDefaults.iconButtonColors(
+                        containerColor = if (isRecording) AccentColor.copy(alpha = 0.2f) else Color.Transparent
+                    )
+                ) {
+                    Icon(
+                        imageVector = if (isRecording) Icons.Default.Mic else Icons.Default.MicOff,
+                        contentDescription = if (isRecording) "Остановить запись" else "Начать запись",
+                        tint = if (isRecording) AccentColor else if (hasPermission) DarkText.copy(alpha = 0.6f) else Color.Gray,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Text(
+                    text = "микрофон",
+                    color = DarkText,
+                    fontSize = 8.sp
                 )
             }
         }
