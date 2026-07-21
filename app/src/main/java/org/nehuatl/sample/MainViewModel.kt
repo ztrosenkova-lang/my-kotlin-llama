@@ -445,57 +445,52 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     private fun buildSystemPrompt(isSearchCommand: Boolean, prompt: String): String {
-        val basePrompt = _systemPrompt.value
+        val sb = StringBuilder()
 
-        if (!isSearchCommand) {
-            return basePrompt
-        }
+        // 1. Берем базовую роль (характер из меню)
+        sb.append("${_systemPrompt.value}\n\n")
 
-        val brainData = readBrain()
-        val chatHistory = _chatHistory.value
-
-        val filteredMemory = if (isSearchCommand) {
-            val keywords = prompt.split(" ")
-                .map { it.trim().lowercase() }
-                .filter { it.length > 2 }
+        if (isSearchCommand) {
             val fullMemory = readFromLongTermMemory()
-            if (fullMemory.isNotEmpty() && keywords.isNotEmpty()) {
-                fullMemory.split("\n")
-                    .filter { line ->
-                        val lowerLine = line.lowercase()
-                        keywords.any { keyword -> lowerLine.contains(keyword) }
+            if (fullMemory.isNotBlank()) {
+                // Очищаем запрос от служебных слов-триггеров, чтобы они не ломали поиск
+                val cleanSearchQuery = prompt.lowercase()
+                    .replace("вспомни", "")
+                    .replace("найди", "")
+                    .replace("поищи", "")
+                    .trim()
+
+                // Выделяем ключевые слова и берем их основы (минимум 3 символа)
+                val keywords = cleanSearchQuery.split(" ")
+                    .map { it.trim() }
+                    .filter { it.length > 2 }
+                    // Берем первые 4 символа слова для защиты от падежей (плитк-а / плитк-и)
+                    .map { if (it.length > 4) it.substring(0, 4) else it }
+
+                if (keywords.isNotEmpty()) {
+                    val filteredMemory = fullMemory.split("\n")
+                        .filter { line ->
+                            val lowerLine = line.lowercase()
+                            // Строка подходит, если в ней есть хотя бы одна основа ключевого слова
+                            keywords.any { keyword -> lowerLine.contains(keyword) }
+                        }
+                        .joinToString("\n")
+
+                    if (filteredMemory.isNotBlank()) {
+                        sb.append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ (НАЙДЕННЫЕ ФАКТЫ):\n$filteredMemory\n\n")
+                        sb.append("Используй эти факты для ответа на вопрос пользователя.\n\n")
                     }
-                    .joinToString("\n")
-            } else {
-                ""
-            }
-        } else {
-            ""
-        }
-
-        return buildString {
-            append(basePrompt)
-            append("\n\n")
-
-            if (filteredMemory.isNotEmpty()) {
-                append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ (НАЙДЕННЫЕ ФАКТЫ):\n$filteredMemory\n\n")
-            }
-
-            if (brainData.isNotEmpty()) {
-                append("КРАТКИЕ ВЫВОДЫ ИЗ ПРОШЛЫХ РАЗГОВОРОВ (МОЗГ):\n$brainData\n\n")
-            }
-
-            if (chatHistory.isNotEmpty()) {
-                append("ИСТОРИЯ ЧАТА (ВЕСЬ ДИАЛОГ):\n")
-                chatHistory.forEach { message ->
-                    val prefix = if (message.role == "user") "Пользователь" else "Ассистент"
-                    append("$prefix: ${message.text}\n")
                 }
-                append("\n")
             }
-
-            append("Пользователь просит найти, вспомнить или поискать информацию в истории или базе знаний. Внимательно проанализируй весь диалог, базу знаний и выводы. Найди нужную информацию и дай точный, конкретный ответ. Если информация не найдена — честно скажи об этом.")
         }
+
+        // Подмешиваем выводы мозга
+        val brainData = readBrain()
+        if (brainData.isNotBlank()) {
+            sb.append("АНАЛИТИЧЕСКИЕ ВЫВОДЫ:\n$brainData\n\n")
+        }
+
+        return sb.toString()
     }
 
     private fun handleAlarmCommand(prompt: String) {
