@@ -61,9 +61,12 @@ class VoskRecognizer(
                         try {
                             onLog("✅ Модель успешно распакована")
                             this@VoskRecognizer.model = model
-                            recognizer = Recognizer(model, SAMPLE_RATE)
-                            speechService = SpeechService(model, SAMPLE_RATE)
-                            speechService?.setEndpointDelay(delayMs)
+
+                            val rec = Recognizer(model, SAMPLE_RATE)
+                            rec.setEndpointDelay(delayMs)
+                            this@VoskRecognizer.recognizer = rec
+
+                            speechService = SpeechService(rec, SAMPLE_RATE)
                             isInitialized = true
                             val successMsg = "✅ Vosk модель загружена успешно (задержка: ${delayMs}мс)"
                             Log.d(TAG, successMsg)
@@ -93,7 +96,7 @@ class VoskRecognizer(
     fun updateDelay(ms: Int) {
         delayMs = ms.coerceIn(100, 5000)
         onLog("⏱ Задержка обновлена: ${delayMs}мс")
-        speechService?.setEndpointDelay(delayMs)
+        recognizer?.setEndpointDelay(delayMs)
     }
 
     fun startRecording() {
@@ -113,7 +116,7 @@ class VoskRecognizer(
             return
         }
 
-        speechService?.setEndpointDelay(delayMs)
+        recognizer?.setEndpointDelay(delayMs)
 
         val bufferSize = AudioRecord.getMinBufferSize(
             SAMPLE_RATE.toInt(),
@@ -218,7 +221,7 @@ class VoskRecognizer(
         audioRecord = null
         recognizer?.close()
         recognizer = null
-        speechService?.close()
+        speechService?.stop()
         speechService = null
         model?.close()
         model = null
