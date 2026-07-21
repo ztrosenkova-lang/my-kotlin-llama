@@ -348,6 +348,17 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     fun generateCloud(prompt: String) {
+        val lowerPrompt = prompt.trim().lowercase()
+        if (lowerPrompt.startsWith(REMEMBER_COMMAND)) {
+            val cleanText = prompt.substringAfter(REMEMBER_COMMAND).trim()
+            if (cleanText.isNotEmpty()) {
+                saveToLongTermMemory(cleanText)
+            } else {
+                appendSystemMessage("⚠️ Что именно мне нужно запомнить?")
+            }
+            return
+        }
+
         if (prompt.lowercase().contains(ALARM_COMMAND) || prompt.lowercase().contains(REMIND_COMMAND)) {
             handleAlarmCommand(prompt)
             return
@@ -403,6 +414,17 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     fun generateLocal(prompt: String, imagePath: String? = null) {
+        val lowerPrompt = prompt.trim().lowercase()
+        if (lowerPrompt.startsWith(REMEMBER_COMMAND)) {
+            val cleanText = prompt.substringAfter(REMEMBER_COMMAND).trim()
+            if (cleanText.isNotEmpty()) {
+                saveToLongTermMemory(cleanText)
+            } else {
+                appendSystemMessage("⚠️ Что именно мне нужно запомнить?")
+            }
+            return
+        }
+
         if (prompt.lowercase().contains(ALARM_COMMAND) || prompt.lowercase().contains(REMIND_COMMAND)) {
             handleAlarmCommand(prompt)
             return
@@ -443,14 +465,25 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         val chatHistory = _chatHistory.value
 
         val filteredMemory = if (isSearchCommand) {
-            val keywords = prompt.split(" ")
-                .map { it.trim().lowercase() }
+            // Чистим запрос от служебных слов, чтобы они не ломали поиск
+            val cleanSearchQuery = prompt.lowercase()
+                .replace("вспомни", "")
+                .replace("найди", "")
+                .replace("поищи", "")
+                .trim()
+
+            // Берем только основы слов (первые 4 символа) для защиты от падежей (плитк-а / плитк-и)
+            val keywords = cleanSearchQuery.split(" ")
+                .map { it.trim() }
                 .filter { it.length > 2 }
+                .map { if (it.length > 4) it.substring(0, 4) else it }
+
             val fullMemory = readFromLongTermMemory()
             if (fullMemory.isNotEmpty() && keywords.isNotEmpty()) {
                 fullMemory.split("\n")
                     .filter { line ->
                         val lowerLine = line.lowercase()
+                        // Строка подходит, если содержит хотя бы один корень слова из запроса
                         keywords.any { keyword -> lowerLine.contains(keyword) }
                     }
                     .joinToString("\n")
@@ -510,10 +543,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
 
             val calendar = Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, alarmTime.hours)
-                set(Calendar.MINUTE, alarmTime.minutes)
+                // Безопасно извлекаем часы и минуты из объекта Date с помощью Calendar
+                val timeCal = Calendar.getInstance().apply { time = alarmTime }
+
+                set(Calendar.HOUR_OF_DAY, timeCal.get(Calendar.HOUR_OF_DAY))
+                set(Calendar.MINUTE, timeCal.get(Calendar.MINUTE))
                 set(Calendar.SECOND, 0)
                 set(Calendar.MILLISECOND, 0)
+
                 if (timeInMillis < System.currentTimeMillis()) {
                     add(Calendar.DAY_OF_YEAR, 1)
                 }
