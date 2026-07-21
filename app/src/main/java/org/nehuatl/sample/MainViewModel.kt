@@ -195,6 +195,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         if (fullText.isNotEmpty()) {
                             _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
                             speakText(fullText)
+                            val lastUserMessage = _chatHistory.value.lastOrNull { it.role == "user" }?.text ?: ""
+                            if (lastUserMessage.contains(REMEMBER_COMMAND, ignoreCase = true) ||
+                                lastUserMessage.contains(REMEMBER_FULL_COMMAND, ignoreCase = true) ||
+                                lastUserMessage.contains(REMEMBER_ANALYZE_COMMAND, ignoreCase = true)) {
+                                saveToLongTermMemory(fullText)
+                            }
                         }
                         _cloudGeneratedText.value = fullText
                     }
@@ -231,6 +237,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         if (fullText.isNotEmpty()) {
                             _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
                             speakText(fullText)
+                            val lastUserMessage = _chatHistory.value.lastOrNull { it.role == "user" }?.text ?: ""
+                            if (lastUserMessage.contains(REMEMBER_COMMAND, ignoreCase = true) ||
+                                lastUserMessage.contains(REMEMBER_FULL_COMMAND, ignoreCase = true) ||
+                                lastUserMessage.contains(REMEMBER_ANALYZE_COMMAND, ignoreCase = true)) {
+                                saveToLongTermMemory(fullText)
+                            }
                         }
                         _generatedText.value = fullText
                     }
@@ -348,18 +360,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     fun generateCloud(prompt: String) {
-        // Прямой перехват команды "запомни"
-        val lowerPrompt = prompt.trim().lowercase()
-        if (lowerPrompt.startsWith(REMEMBER_COMMAND)) {
-            val cleanText = prompt.substringAfter(REMEMBER_COMMAND).trim()
-            if (cleanText.isNotEmpty()) {
-                saveToLongTermMemory(cleanText)
-            } else {
-                appendSystemMessage("⚠️ Что именно мне нужно запомнить?")
-            }
-            return
-        }
-
         if (prompt.lowercase().contains(ALARM_COMMAND) || prompt.lowercase().contains(REMIND_COMMAND)) {
             handleAlarmCommand(prompt)
             return
@@ -415,18 +415,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     fun generateLocal(prompt: String, imagePath: String? = null) {
-        // Прямой перехват команды "запомни"
-        val lowerPrompt = prompt.trim().lowercase()
-        if (lowerPrompt.startsWith(REMEMBER_COMMAND)) {
-            val cleanText = prompt.substringAfter(REMEMBER_COMMAND).trim()
-            if (cleanText.isNotEmpty()) {
-                saveToLongTermMemory(cleanText)
-            } else {
-                appendSystemMessage("⚠️ Что именно мне нужно запомнить?")
-            }
-            return
-        }
-
         if (prompt.lowercase().contains(ALARM_COMMAND) || prompt.lowercase().contains(REMIND_COMMAND)) {
             handleAlarmCommand(prompt)
             return
@@ -457,53 +445,57 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     private fun buildSystemPrompt(isSearchCommand: Boolean, prompt: String): String {
-        val sb = StringBuilder()
+        val basePrompt = _systemPrompt.value
 
-        // 1. Берем базовую роль (характер из меню)
-        sb.append("${_systemPrompt.value}\n\n")
-
-        if (isSearchCommand) {
-            val fullMemory = readFromLongTermMemory()
-            if (fullMemory.isNotBlank()) {
-                // Очищаем запрос от служебных слов-триггеров, чтобы они не ломали поиск
-                val cleanSearchQuery = prompt.lowercase()
-                    .replace("вспомни", "")
-                    .replace("найди", "")
-                    .replace("поищи", "")
-                    .trim()
-
-                // Выделяем ключевые слова и берем их основы (минимум 3 символа)
-                val keywords = cleanSearchQuery.split(" ")
-                    .map { it.trim() }
-                    .filter { it.length > 2 }
-                    // Берем первые 4 символа слова для защиты от падежей (плитк-а / плитк-и)
-                    .map { if (it.length > 4) it.substring(0, 4) else it }
-
-                if (keywords.isNotEmpty()) {
-                    val filteredMemory = fullMemory.split("\n")
-                        .filter { line ->
-                            val lowerLine = line.lowercase()
-                            // Строка подходит, если в ней есть хотя бы одна основа ключевого слова
-                            keywords.any { keyword -> lowerLine.contains(keyword) }
-                        }
-                        .joinToString("\n")
-
-                    if (filteredMemory.isNotBlank()) {
-                        sb.append("ИНСТРУКЦИЯ: Пользователь просит вспомнить факт. Ниже приведены строчки из его личной базы знаний.\n")
-                        sb.append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ (НАЙДЕННЫЕ ФАКТЫ):\n$filteredMemory\n\n")
-                        sb.append("Сформулируй живой, лаконичный ответ на основе этих фактов на русском языке.\n\n")
-                    }
-                }
-            }
+        if (!isSearchCommand) {
+            return basePrompt
         }
 
-        // Подмешиваем выводы мозга
         val brainData = readBrain()
-        if (brainData.isNotBlank()) {
-            sb.append("АНАЛИТИЧЕСКИЕ ВЫВОДЫ:\n$brainData\n\n")
+        val chatHistory = _chatHistory.value
+
+        val filteredMemory = if (isSearchCommand) {
+            val keywords = prompt.split(" ")
+                .map { it.trim().lowercase() }
+                .filter { it.length > 2 }
+            val fullMemory = readFromLongTermMemory()
+            if (fullMemory.isNotEmpty() && keywords.isNotEmpty()) {
+                fullMemory.split("\n")
+                    .filter { line ->
+                        val lowerLine = line.lowercase()
+                        keywords.any { keyword -> lowerLine.contains(keyword) }
+                    }
+                    .joinToString("\n")
+            } else {
+                ""
+            }
+        } else {
+            ""
         }
 
-        return sb.toString()
+        return buildString {
+            append(basePrompt)
+            append("\n\n")
+
+            if (filteredMemory.isNotEmpty()) {
+                append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ (НАЙДЕННЫЕ ФАКТЫ):\n$filteredMemory\n\n")
+            }
+
+            if (brainData.isNotEmpty()) {
+                append("КРАТКИЕ ВЫВОДЫ ИЗ ПРОШЛЫХ РАЗГОВОРОВ (МОЗГ):\n$brainData\n\n")
+            }
+
+            if (chatHistory.isNotEmpty()) {
+                append("ИСТОРИЯ ЧАТА (ВЕСЬ ДИАЛОГ):\n")
+                chatHistory.forEach { message ->
+                    val prefix = if (message.role == "user") "Пользователь" else "Ассистент"
+                    append("$prefix: ${message.text}\n")
+                }
+                append("\n")
+            }
+
+            append("Пользователь просит найти, вспомнить или поискать информацию в истории или базе знаний. Внимательно проанализируй весь диалог, базу знаний и выводы. Найди нужную информацию и дай точный, конкретный ответ. Если информация не найдена — честно скажи об этом.")
+        }
     }
 
     private fun handleAlarmCommand(prompt: String) {
@@ -522,28 +514,45 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private fun setAlarm(timeStr: String, message: String) {
         try {
             val dateFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
-            val alarmTime = dateFormat.parse(timeStr) ?: return
-            val calendar = Calendar.getInstance()
-            calendar.set(Calendar.HOUR_OF_DAY, alarmTime.hours)
-            calendar.set(Calendar.MINUTE, alarmTime.minutes)
-            calendar.set(Calendar.SECOND, 0)
-            if (calendar.timeInMillis < System.currentTimeMillis()) {
-                calendar.add(Calendar.DAY_OF_YEAR, 1)
+            val alarmTime = dateFormat.parse(timeStr)
+            if (alarmTime == null) {
+                Log.e(TAG, "Не удалось распарсить время: $timeStr")
+                appendSystemMessage("⚠️ Не удалось распознать время: $timeStr")
+                return
+            }
+
+            val calendar = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, alarmTime.hours)
+                set(Calendar.MINUTE, alarmTime.minutes)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+                if (timeInMillis < System.currentTimeMillis()) {
+                    add(Calendar.DAY_OF_YEAR, 1)
+                }
             }
 
             val intent = Intent(getApplication(), AlarmReceiver::class.java).apply {
                 putExtra("MESSAGE", message)
                 putExtra("TIME", timeStr)
             }
+
+            // Создаем уникальный requestCode для каждого будильника
+            val requestCode = System.currentTimeMillis().toInt()
+
             val pendingIntent = PendingIntent.getBroadcast(
                 getApplication(),
-                System.currentTimeMillis().toInt(),
+                requestCode,
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            alarmManager.setExact(AlarmManager.RTC_WAKEUP, calendar.timeInMillis, pendingIntent)
-            Log.d(TAG, "Будильник установлен на $timeStr: $message")
+            alarmManager.setExact(
+                AlarmManager.RTC_WAKEUP,
+                calendar.timeInMillis,
+                pendingIntent
+            )
+
+            Log.d(TAG, "Будильник установлен на ${calendar.time} (${timeStr}): $message")
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка установки будильника: ${e.message}")
             appendSystemMessage("⚠️ Ошибка установки будильника: ${e.message}")
