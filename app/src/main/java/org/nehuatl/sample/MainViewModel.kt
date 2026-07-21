@@ -576,7 +576,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     // === Работа с памятью ===
-    private fun saveToLongTermMemory(text: String) {
+    fun saveToLongTermMemory(text: String) {
         try {
             if (!memoryFile.exists()) {
                 memoryFile.createNewFile()
