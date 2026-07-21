@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -87,6 +88,8 @@ private val BorderGray = Color(0xFFCED4DA)
 private val AccentColor = Color(0xFF74C0FC)
 private val DarkText = Color(0xFF212529)
 private val ChatFontFamily = FontFamily.Monospace
+private val GreenColor = Color(0xFF4CD964)
+private val PaleYellowColor = Color(0xFFFFF9DB)
 
 enum class AIMode {
     LOCAL,
@@ -290,7 +293,9 @@ fun ChatScreen(
                         viewModel.releaseModel()
                     }
                 }
-            }
+            },
+            isModelLoaded = isModelLoaded,
+            cloudConfig = viewModel.getCloudConfig()
         )
 
         ControlPanel(
@@ -481,8 +486,16 @@ fun ChatScreen(
 @Composable
 private fun TopBarWithSwitch(
     currentMode: AIMode,
-    onModeChange: (AIMode) -> Unit
+    onModeChange: (AIMode) -> Unit,
+    isModelLoaded: Boolean,
+    cloudConfig: CloudAIConfig?
 ) {
+    val isLocalReady = isModelLoaded
+    val isCloudReady = cloudConfig?.authKey?.isNotEmpty() == true
+
+    val localIndicatorColor = if (isLocalReady) GreenColor else PaleYellowColor
+    val cloudIndicatorColor = if (isCloudReady) GreenColor else PaleYellowColor
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -547,6 +560,32 @@ private fun TopBarWithSwitch(
                         onClick = { onModeChange(AIMode.CLOUD) },
                         modifier = Modifier.size(38.dp, 24.dp)
                     )
+                }
+            }
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(start = 8.dp)
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .background(localIndicatorColor, shape = CircleShape)
+                            .border(0.5.dp, BorderGray, CircleShape)
+                    )
+                    Text(text = "локальный ИИ", fontSize = 6.sp, color = DarkText)
+                }
+
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .background(cloudIndicatorColor, shape = CircleShape)
+                            .border(0.5.dp, BorderGray, CircleShape)
+                    )
+                    Text(text = "Облачный ИИ", fontSize = 6.sp, color = DarkText)
                 }
             }
         }
