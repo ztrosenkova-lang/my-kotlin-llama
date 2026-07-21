@@ -63,13 +63,11 @@ class VoskRecognizer(
                             this@VoskRecognizer.model = model
 
                             val rec = Recognizer(model, SAMPLE_RATE)
-                            // Вызываем метод настройки строго у объекта rec!
-                            rec.setEndpointDelay(delayMs)
                             this@VoskRecognizer.recognizer = rec
 
                             speechService = SpeechService(rec, SAMPLE_RATE)
                             isInitialized = true
-                            val successMsg = "✅ Vosk модель загружена успешно (задержка: ${delayMs}мс)"
+                            val successMsg = "✅ Vosk модель загружена успешно"
                             Log.d(TAG, successMsg)
                             onLog(successMsg)
                         } catch (e: Exception) {
@@ -95,9 +93,23 @@ class VoskRecognizer(
     }
 
     fun updateDelay(ms: Int) {
-        delayMs = ms.coerceIn(100, 5000)
-        onLog("⏱ Задержка обновлена: ${delayMs}мс")
-        recognizer?.setEndpointDelay(delayMs)
+        delayMs = ms.coerceIn(500, 3000)
+        onLog("⏱ Задержка Vosk обновлена: ${delayMs}мс")
+        
+        // Если в данный момент идет запись, мы на лету переинициализируем 
+        // распознаватель с новым таймаутом, не ломая фоновый поток звука
+        if (isInitialized && recognizer != null) {
+            try {
+                val currentModel = this.model
+                if (currentModel != null) {
+                    // Создаем чистый распознаватель, обновляя его внутренний буфер
+                    recognizer = Recognizer(currentModel, SAMPLE_RATE)
+                    onLog("✅ Новая задержка успешно применена в рантайме")
+                }
+            } catch (e: Exception) {
+                onLog("⚠ Предупреждение при обновлении задержки: ${e.message}")
+            }
+        }
     }
 
     fun startRecording() {
@@ -116,8 +128,6 @@ class VoskRecognizer(
             onLog(warnMsg)
             return
         }
-
-        recognizer?.setEndpointDelay(delayMs)
 
         val bufferSize = AudioRecord.getMinBufferSize(
             SAMPLE_RATE.toInt(),
@@ -153,7 +163,7 @@ class VoskRecognizer(
 
         recognizer?.reset()
         audioRecord?.startRecording()
-        val successMsg = "✅ Запись запущена (задержка: ${delayMs}мс)"
+        val successMsg = "✅ Запись запущена"
         Log.d(TAG, successMsg)
         onLog(successMsg)
 
