@@ -445,23 +445,35 @@ fun ChatScreen(
             onGenerate = {
                 if (promptInput.isNotBlank()) {
                     keyboardController?.hide()
-                    when (currentMode) {
-                        AIMode.LOCAL -> {
-                            if (isModelLoaded) {
-                                viewModel.generateLocal(promptInput, imagePath)
-                            } else {
-                                showModelDialog = true
-                            }
+                    val cleanInput = promptInput.trim().lowercase()
+
+                    if (cleanInput.startsWith("запомни")) {
+                        val textToSave = promptInput.substringAfter("запомни").trim()
+                        if (textToSave.isNotEmpty()) {
+                            viewModel.saveToLongTermMemory(textToSave)
+                            viewModel.appendSystemMessage("🧠 Запомнено: $textToSave")
+                        } else {
+                            viewModel.appendSystemMessage("⚠️ Не указан текст для запоминания")
                         }
-                        AIMode.CLOUD -> {
-                            if (viewModel.isCloudConfigured()) {
-                                viewModel.generateCloud(promptInput)
-                            } else {
-                                showCloudDialog = true
+                    } else {
+                        when (currentMode) {
+                            AIMode.LOCAL -> {
+                                if (isModelLoaded) {
+                                    viewModel.generateLocal(promptInput, imagePath)
+                                } else {
+                                    showModelDialog = true
+                                }
                             }
-                        }
-                        AIMode.NEUTRAL -> {
-                            viewModel.appendSystemMessage("Выберите режим работы: локальный или облачный ИИ")
+                            AIMode.CLOUD -> {
+                                if (viewModel.isCloudConfigured()) {
+                                    viewModel.generateCloud(promptInput)
+                                } else {
+                                    showCloudDialog = true
+                                }
+                            }
+                            AIMode.NEUTRAL -> {
+                                viewModel.appendSystemMessage("Выберите режим работы: локальный или облачный ИИ")
+                            }
                         }
                     }
                     promptInput = ""
