@@ -12,6 +12,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.vosk.Model
 import org.vosk.Recognizer
+import org.vosk.android.SpeechService
 import org.vosk.android.StorageService
 import java.io.IOException
 import java.lang.ref.WeakReference
@@ -30,6 +31,7 @@ class VoskRecognizer(
 
     private var model: Model? = null
     private var recognizer: Recognizer? = null
+    private var speechService: SpeechService? = null
     private var audioRecord: AudioRecord? = null
     private var recordingJob: Job? = null
     private var isInitialized = false
@@ -60,13 +62,14 @@ class VoskRecognizer(
                             onLog("✅ Модель успешно распакована")
                             this@VoskRecognizer.model = model
                             recognizer = Recognizer(model, SAMPLE_RATE)
-                            recognizer?.setEndpointDelay(delayMs)
+                            speechService = SpeechService(model, SAMPLE_RATE)
+                            speechService?.setEndpointDelay(delayMs)
                             isInitialized = true
                             val successMsg = "✅ Vosk модель загружена успешно (задержка: ${delayMs}мс)"
                             Log.d(TAG, successMsg)
                             onLog(successMsg)
                         } catch (e: Exception) {
-                            val errorMsg = "❌ Ошибка создания Recognizer: ${e.message}"
+                            val errorMsg = "❌ Ошибка создания Recognizer/SpeechService: ${e.message}"
                             Log.e(TAG, errorMsg)
                             onLog(errorMsg)
                         }
@@ -90,7 +93,7 @@ class VoskRecognizer(
     fun updateDelay(ms: Int) {
         delayMs = ms.coerceIn(100, 5000)
         onLog("⏱ Задержка обновлена: ${delayMs}мс")
-        recognizer?.setEndpointDelay(delayMs)
+        speechService?.setEndpointDelay(delayMs)
     }
 
     fun startRecording() {
@@ -110,7 +113,7 @@ class VoskRecognizer(
             return
         }
 
-        recognizer?.setEndpointDelay(delayMs)
+        speechService?.setEndpointDelay(delayMs)
 
         val bufferSize = AudioRecord.getMinBufferSize(
             SAMPLE_RATE.toInt(),
@@ -215,6 +218,8 @@ class VoskRecognizer(
         audioRecord = null
         recognizer?.close()
         recognizer = null
+        speechService?.close()
+        speechService = null
         model?.close()
         model = null
         isInitialized = false
