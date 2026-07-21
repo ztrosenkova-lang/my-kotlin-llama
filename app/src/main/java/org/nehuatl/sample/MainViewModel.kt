@@ -195,12 +195,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         if (fullText.isNotEmpty()) {
                             _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
                             speakText(fullText)
-                            val lastUserMessage = _chatHistory.value.lastOrNull { it.role == "user" }?.text ?: ""
-                            if (lastUserMessage.contains(REMEMBER_COMMAND, ignoreCase = true) ||
-                                lastUserMessage.contains(REMEMBER_FULL_COMMAND, ignoreCase = true) ||
-                                lastUserMessage.contains(REMEMBER_ANALYZE_COMMAND, ignoreCase = true)) {
-                                saveToLongTermMemory(fullText)
-                            }
                         }
                         _cloudGeneratedText.value = fullText
                     }
@@ -237,12 +231,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         if (fullText.isNotEmpty()) {
                             _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
                             speakText(fullText)
-                            val lastUserMessage = _chatHistory.value.lastOrNull { it.role == "user" }?.text ?: ""
-                            if (lastUserMessage.contains(REMEMBER_COMMAND, ignoreCase = true) ||
-                                lastUserMessage.contains(REMEMBER_FULL_COMMAND, ignoreCase = true) ||
-                                lastUserMessage.contains(REMEMBER_ANALYZE_COMMAND, ignoreCase = true)) {
-                                saveToLongTermMemory(fullText)
-                            }
                         }
                         _generatedText.value = fullText
                     }
@@ -360,6 +348,18 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     fun generateCloud(prompt: String) {
+        // Прямой перехват команды "запомни"
+        val lowerPrompt = prompt.trim().lowercase()
+        if (lowerPrompt.startsWith(REMEMBER_COMMAND)) {
+            val cleanText = prompt.substringAfter(REMEMBER_COMMAND).trim()
+            if (cleanText.isNotEmpty()) {
+                saveToLongTermMemory(cleanText)
+            } else {
+                appendSystemMessage("⚠️ Что именно мне нужно запомнить?")
+            }
+            return
+        }
+
         if (prompt.lowercase().contains(ALARM_COMMAND) || prompt.lowercase().contains(REMIND_COMMAND)) {
             handleAlarmCommand(prompt)
             return
@@ -415,6 +415,18 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     fun generateLocal(prompt: String, imagePath: String? = null) {
+        // Прямой перехват команды "запомни"
+        val lowerPrompt = prompt.trim().lowercase()
+        if (lowerPrompt.startsWith(REMEMBER_COMMAND)) {
+            val cleanText = prompt.substringAfter(REMEMBER_COMMAND).trim()
+            if (cleanText.isNotEmpty()) {
+                saveToLongTermMemory(cleanText)
+            } else {
+                appendSystemMessage("⚠️ Что именно мне нужно запомнить?")
+            }
+            return
+        }
+
         if (prompt.lowercase().contains(ALARM_COMMAND) || prompt.lowercase().contains(REMIND_COMMAND)) {
             handleAlarmCommand(prompt)
             return
@@ -477,8 +489,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         .joinToString("\n")
 
                     if (filteredMemory.isNotBlank()) {
+                        sb.append("ИНСТРУКЦИЯ: Пользователь просит вспомнить факт. Ниже приведены строчки из его личной базы знаний.\n")
                         sb.append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ (НАЙДЕННЫЕ ФАКТЫ):\n$filteredMemory\n\n")
-                        sb.append("Используй эти факты для ответа на вопрос пользователя.\n\n")
+                        sb.append("Сформулируй живой, лаконичный ответ на основе этих фактов на русском языке.\n\n")
                     }
                 }
             }
