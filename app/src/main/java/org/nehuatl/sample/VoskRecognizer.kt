@@ -20,7 +20,8 @@ class VoskRecognizer(
     private val contextRef: WeakReference<Context>,
     private val onResult: (String) -> Unit,
     private val onLog: (String) -> Unit,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    private var delayMs: Int = 1200
 ) {
     companion object {
         private const val TAG = "VoskRecognizer"
@@ -59,8 +60,9 @@ class VoskRecognizer(
                             onLog("✅ Модель успешно распакована")
                             this@VoskRecognizer.model = model
                             recognizer = Recognizer(model, SAMPLE_RATE)
+                            recognizer?.setEndpointDelay(delayMs)
                             isInitialized = true
-                            val successMsg = "✅ Vosk модель загружена успешно"
+                            val successMsg = "✅ Vosk модель загружена успешно (задержка: ${delayMs}мс)"
                             Log.d(TAG, successMsg)
                             onLog(successMsg)
                         } catch (e: Exception) {
@@ -85,6 +87,12 @@ class VoskRecognizer(
         }
     }
 
+    fun updateDelay(ms: Int) {
+        delayMs = ms.coerceIn(100, 5000)
+        onLog("⏱ Задержка обновлена: ${delayMs}мс")
+        recognizer?.setEndpointDelay(delayMs)
+    }
+
     fun startRecording() {
         onLog("🎤 startRecording() вызван")
 
@@ -101,6 +109,8 @@ class VoskRecognizer(
             onLog(warnMsg)
             return
         }
+
+        recognizer?.setEndpointDelay(delayMs)
 
         val bufferSize = AudioRecord.getMinBufferSize(
             SAMPLE_RATE.toInt(),
@@ -136,7 +146,7 @@ class VoskRecognizer(
 
         recognizer?.reset()
         audioRecord?.startRecording()
-        val successMsg = "✅ Запись запущена"
+        val successMsg = "✅ Запись запущена (задержка: ${delayMs}мс)"
         Log.d(TAG, successMsg)
         onLog(successMsg)
 
