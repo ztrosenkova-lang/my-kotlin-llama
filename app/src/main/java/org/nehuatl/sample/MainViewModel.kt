@@ -195,12 +195,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         if (fullText.isNotEmpty()) {
                             _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
                             speakText(fullText)
-                            val lastUserMessage = _chatHistory.value.lastOrNull { it.role == "user" }?.text ?: ""
-                            if (lastUserMessage.contains(REMEMBER_COMMAND, ignoreCase = true) ||
-                                lastUserMessage.contains(REMEMBER_FULL_COMMAND, ignoreCase = true) ||
-                                lastUserMessage.contains(REMEMBER_ANALYZE_COMMAND, ignoreCase = true)) {
-                                saveToLongTermMemory(fullText)
-                            }
                         }
                         _cloudGeneratedText.value = fullText
                     }
@@ -237,12 +231,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         if (fullText.isNotEmpty()) {
                             _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
                             speakText(fullText)
-                            val lastUserMessage = _chatHistory.value.lastOrNull { it.role == "user" }?.text ?: ""
-                            if (lastUserMessage.contains(REMEMBER_COMMAND, ignoreCase = true) ||
-                                lastUserMessage.contains(REMEMBER_FULL_COMMAND, ignoreCase = true) ||
-                                lastUserMessage.contains(REMEMBER_ANALYZE_COMMAND, ignoreCase = true)) {
-                                saveToLongTermMemory(fullText)
-                            }
                         }
                         _generatedText.value = fullText
                     }
