@@ -333,7 +333,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     fun updateVoskDelay(ms: Int) {
         _voskDelay.value = ms.coerceIn(100, 5000)
-        voskRecognizer?.updateDelay(ms) // Только один аргумент, без лишних флагов
+        voskRecognizer?.updateDelay(ms) // Удалить отсюда любые вторые аргументы или флаги типа ", true"!
     }
 
     // === Методы для облачного ИИ ===
