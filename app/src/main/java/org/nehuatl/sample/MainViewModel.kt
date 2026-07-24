@@ -413,10 +413,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _isModelLoaded.value = false
         scope.launch {
             try {
-                // Исправленный позиционный вызов llamaHelper.load
                 llamaHelper.load(
                     path,
-                    true,
                     contextSize.value,
                     if (mmprojPath.isNullOrEmpty()) null else mmprojPath,
                     { id ->
