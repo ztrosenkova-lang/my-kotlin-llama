@@ -280,7 +280,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     // === Отправка сообщений ===
-    private fun sendUserMessage(text: String) {
+    fun sendUserMessage(text: String) {
         if (text.isBlank()) return
 
         _chatHistory.value = _chatHistory.value + ChatMessage("user", text)
@@ -397,8 +397,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         cloudAIProvider.generate(
             prompt = prompt,
             systemPrompt = fullSystemPrompt,
-            chatHistory = cloudHistory,
-            maxTokens = maxTokens.value
+            chatHistory = cloudHistory
         )
     }
 
@@ -752,19 +751,4 @@ private fun getFileNameFromUri(contentResolver: ContentResolver, uri: Uri): Stri
     }
     val cleanName = name.replace(Regex("^primary%3AModels%"), "").replace(Regex("^primary:Models:"), "")
     return cleanName
-}
-
-class AlarmReceiver : android.content.BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
-        val message = intent.getStringExtra("message") ?: "Напоминание!"
-        val notificationText = "⏰ Будильник: $message"
-        
-        MainViewModel.instance?.let { vm ->
-            vm.appendSystemMessage(notificationText)
-            repeat(5) {
-                vm.speakText(notificationText)
-                Thread.sleep(1000)
-            }
-        }
-    }
 }
