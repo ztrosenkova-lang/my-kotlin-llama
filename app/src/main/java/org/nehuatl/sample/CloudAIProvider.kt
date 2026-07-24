@@ -193,7 +193,7 @@ class CloudAIProvider(
         return if (success) accessToken else null
     }
 
-    fun generate(prompt: String, systemPrompt: String, chatHistory: List<ChatMessage>) {
+    fun generate(prompt: String, systemPrompt: String, chatHistory: List<ChatMessage>, maxTokens: Int) {
         val config = getConfig()
         if (config == null) {
             sharedFlow.tryEmit(CloudAIEvent.Error("Облачный ИИ не настроен"))
@@ -236,7 +236,7 @@ class CloudAIProvider(
                     put("model", config.modelId)
                     put("messages", messages)
                     put("temperature", 0.7)
-                    put("max_tokens", 2048)
+                    put("max_tokens", maxTokens)
                 }.toString().toRequestBody(JSON_MEDIA_TYPE)
 
                 val request = Request.Builder()
