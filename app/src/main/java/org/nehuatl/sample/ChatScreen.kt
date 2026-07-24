@@ -436,38 +436,9 @@ fun ChatScreen(
             onGenerate = {
                 if (promptInput.isNotBlank()) {
                     keyboardController?.hide()
-                    val cleanInput = promptInput.trim().lowercase()
-
-                    if (cleanInput.startsWith("запомни")) {
-                        val textToSave = promptInput.substringAfter("запомни").trim()
-                        if (textToSave.isNotEmpty()) {
-                            viewModel.saveToLongTermMemory(textToSave)
-                            viewModel.appendSystemMessage("🧠 Запомнено: $textToSave")
-                        } else {
-                            viewModel.appendSystemMessage("⚠️ Не указан текст для запоминания")
-                        }
-                    } else {
-                        when (currentMode) {
-                            AIMode.LOCAL -> {
-                                if (isModelLoaded) {
-                                    // Передаём imagePath в generateLocal для поддержки мультимодальности
-                                    viewModel.generateLocal(promptInput, imagePath)
-                                } else {
-                                    showModelDialog = true
-                                }
-                            }
-                            AIMode.CLOUD -> {
-                                if (viewModel.isCloudConfigured()) {
-                                    viewModel.generateCloud(promptInput)
-                                } else {
-                                    showCloudDialog = true
-                                }
-                            }
-                            AIMode.NEUTRAL -> {
-                                viewModel.appendSystemMessage("Выберите режим работы: локальный или облачный ИИ")
-                            }
-                        }
-                    }
+                    // ВМЕСТО СЛОМАННОГО КОДА ВЫЗЫВАЕМ ПРАВИЛЬНЫЙ МЕТОД VIEWMODEL!
+                    // Это гарантирует отображение "Вы: ..."
+                    viewModel.sendUserMessage(promptInput)
                     promptInput = ""
                     onImageUsed()
                 }
@@ -1198,8 +1169,17 @@ private fun PromptInput(
     modifier: Modifier = Modifier
 ) {
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onPickImage, enabled = enabled && !isGenerating) {
-            Icon(imageVector = Icons.Default.Add, contentDescription = "Добавить изображение", tint = if (enabled && !isGenerating) AccentColor else BorderGray)
+        // Кнопка ДОБАВИТЬ ИЗОБРАЖЕНИЕ (с AccentColor)
+        IconButton(
+            onClick = onPickImage,
+            enabled = enabled && !isGenerating,
+            colors = IconButtonDefaults.iconButtonColors(containerColor = SurfaceGray)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = "Добавить изображение",
+                tint = if (enabled && !isGenerating) AccentColor else DarkText.copy(alpha = 0.4f)
+            )
         }
 
         OutlinedTextField(
@@ -1220,18 +1200,48 @@ private fun PromptInput(
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            // Кнопка СТОП/ОТПРАВИТЬ (с AccentColor)
             if (isGenerating) {
-                IconButton(onClick = onAbort, modifier = Modifier.size(48.dp), colors = IconButtonDefaults.iconButtonColors(containerColor = SurfaceGray)) {
-                    Icon(imageVector = Icons.Default.Close, contentDescription = "Стоп", tint = DarkText)
+                IconButton(
+                    onClick = onAbort,
+                    modifier = Modifier.size(48.dp),
+                    colors = IconButtonDefaults.iconButtonColors(containerColor = AccentColor.copy(alpha = 0.15f))
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Стоп",
+                        tint = AccentColor
+                    )
                 }
             } else {
-                IconButton(onClick = onGenerate, enabled = enabled && prompt.isNotBlank(), modifier = Modifier.size(48.dp), colors = IconButtonDefaults.iconButtonColors(containerColor = if (enabled && prompt.isNotBlank()) SurfaceGray else BorderGray)) {
-                    Icon(imageVector = Icons.Default.ArrowUpward, contentDescription = "Отправить", tint = if (enabled && prompt.isNotBlank()) DarkText else DarkText.copy(alpha = 0.4f))
+                IconButton(
+                    onClick = onGenerate,
+                    enabled = enabled && prompt.isNotBlank(),
+                    modifier = Modifier.size(48.dp),
+                    colors = IconButtonDefaults.iconButtonColors(
+                        containerColor = if (enabled && prompt.isNotBlank()) AccentColor.copy(alpha = 0.15f) else SurfaceGray
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowUpward,
+                        contentDescription = "Отправить",
+                        tint = if (enabled && prompt.isNotBlank()) AccentColor else DarkText.copy(alpha = 0.4f)
+                    )
                 }
             }
 
-            IconButton(onClick = onClearChat, enabled = true, modifier = Modifier.size(48.dp), colors = IconButtonDefaults.iconButtonColors(containerColor = SurfaceGray)) {
-                Icon(imageVector = Icons.Default.Delete, contentDescription = "Очистить чат", tint = DarkText)
+            // Кнопка ОЧИСТИТЬ (с AccentColor)
+            IconButton(
+                onClick = onClearChat,
+                enabled = true,
+                modifier = Modifier.size(48.dp),
+                colors = IconButtonDefaults.iconButtonColors(containerColor = SurfaceGray)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Очистить чат",
+                    tint = AccentColor
+                )
             }
         }
     }
