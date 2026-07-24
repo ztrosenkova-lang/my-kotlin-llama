@@ -576,27 +576,23 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
 
             val intent = Intent(getApplication(), AlarmReceiver::class.java).apply {
-                putExtra("MESSAGE", message)
-                putExtra("TIME", timeStr)
+                putExtra("message", message)
             }
-
-            // Создаем уникальный requestCode для каждого будильника
-            val requestCode = System.currentTimeMillis().toInt()
 
             val pendingIntent = PendingIntent.getBroadcast(
                 getApplication(),
-                requestCode,
+                System.currentTimeMillis().toInt(), // Уникальный ID для каждого напоминания
                 intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE // Обязательный флаг для Android 13/14
             )
 
-            alarmManager.setExact(
-                AlarmManager.RTC_WAKEUP,
-                calendar.timeInMillis,
-                pendingIntent
-            )
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, calendar.timeInMillis, pendingIntent)
+            } else {
+                alarmManager.setExact(AlarmManager.RTC_WAKEUP, calendar.timeInMillis, pendingIntent)
+            }
 
-            Log.d(TAG, "Будильник установлен на ${calendar.time} (${timeStr}): $message")
+            Log.d(TAG, "Будильник установлен на ${calendar.time} ($timeStr): $message")
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка установки будильника: ${e.message}")
             appendSystemMessage("⚠️ Ошибка установки будильника: ${e.message}")
@@ -760,9 +756,8 @@ private fun getFileNameFromUri(contentResolver: ContentResolver, uri: Uri): Stri
 
 class AlarmReceiver : android.content.BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val message = intent.getStringExtra("MESSAGE") ?: "Напоминание!"
-        val time = intent.getStringExtra("TIME") ?: ""
-        val notificationText = "⏰ Будильник ($time): $message"
+        val message = intent.getStringExtra("message") ?: "Напоминание!"
+        val notificationText = "⏰ Будильник: $message"
         
         MainViewModel.instance?.let { vm ->
             vm.appendSystemMessage(notificationText)
