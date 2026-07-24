@@ -333,7 +333,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     fun updateVoskDelay(ms: Int) {
         _voskDelay.value = ms.coerceIn(100, 5000)
-        voskRecognizer?.updateDelay(ms)
+        voskRecognizer?.updateDelay(ms) // Только один аргумент, без лишних флагов
     }
 
     // === Методы для облачного ИИ ===
@@ -397,7 +397,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         cloudAIProvider.generate(
             prompt = prompt,
             systemPrompt = fullSystemPrompt,
-            chatHistory = cloudHistory
+            chatHistory = cloudHistory,
+            maxTokens = maxTokens.value // Добавлен параметр maxTokens
         )
     }
 
