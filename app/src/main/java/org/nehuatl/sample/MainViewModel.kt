@@ -124,6 +124,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     fun setCurrentMode(mode: AIMode) {
         _currentMode.value = mode
+        if (mode == AIMode.NEUTRAL) {
+            stopRecording()
+        }
     }
 
     // === Vosk ===
@@ -158,7 +161,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     private val onVoiceLog: (String) -> Unit = { logText ->
-        appendSystemMessage("📢 $logText")
+        Log.d("VoskLog", logText)
     }
 
     init {
@@ -194,6 +197,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         _cloudState.value = CloudAIState.Completed(event.tokenCount, event.duration)
                         val fullText = event.fullText
                         if (fullText.isNotEmpty()) {
+                            stopRecording()
                             _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
                             speakText(fullText)
                         }
@@ -230,6 +234,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         _state.value = GenerationState.Completed(event.tokenCount, event.duration)
                         val fullText = event.fullText
                         if (fullText.isNotEmpty()) {
+                            stopRecording()
                             _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
                             speakText(fullText)
                         }
@@ -392,7 +397,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         cloudAIProvider.generate(
             prompt = prompt,
             systemPrompt = fullSystemPrompt,
-            chatHistory = cloudHistory
+            chatHistory = cloudHistory,
+            maxTokens = maxTokens.value
         )
     }
 
@@ -459,7 +465,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         scope.launch {
             try {
-                llamaHelper.predict(prompt, imagePath, fullSystemPrompt)
+                llamaHelper.predict(prompt, imagePath, fullSystemPrompt, maxTokens.value)
             } catch (e: Exception) {
                 _state.value = GenerationState.Error(e.message ?: "Unknown error")
                 _isModelLoaded.value = false
