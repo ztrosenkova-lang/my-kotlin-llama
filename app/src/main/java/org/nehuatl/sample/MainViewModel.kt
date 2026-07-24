@@ -136,6 +136,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private var autoSendJob: Job? = null
 
     private var voskRecognizer: VoskRecognizer? = null
+    private var isVoskLoaded = false
 
     private val onVoiceResult: (String) -> Unit = { recognizedText ->
         if (recognizedText.isNotEmpty()) {
@@ -247,13 +248,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
 
-        voskRecognizer = VoskRecognizer(
-            contextRef = WeakReference<Context>(getApplication<Application>().applicationContext),
-            onResult = onVoiceResult,
-            onLog = onVoiceLog,
-            scope = scope,
-            delayMs = _voskDelay.value
-        )
+        // Vosk теперь инициализируется лениво, при первом нажатии на микрофон
     }
 
     private val llamaHelper by lazy {
@@ -262,6 +257,21 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             scope = scope,
             sharedFlow = _llmFlow,
         )
+    }
+
+    fun isVoskInitialized(): Boolean = isVoskLoaded
+
+    fun initVoskLazily(context: Context) {
+        if (!isVoskLoaded) {
+            voskRecognizer = VoskRecognizer(
+                contextRef = WeakReference<Context>(context.applicationContext),
+                onResult = onVoiceResult,
+                onLog = onVoiceLog,
+                scope = scope,
+                delayMs = _voskDelay.value
+            )
+            isVoskLoaded = true
+        }
     }
 
     // === Отправка сообщений ===
@@ -337,7 +347,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     fun clearCloudConfig() {
         cloudAIProvider.clearConfig()
+        // Принудительно сбрасываем стейты в дефолт, чтобы мгновенно потушить зеленый фонарик
         _cloudState.value = CloudAIState.Idle
+        _cloudGeneratedText.value = ""
+        appendSystemMessage("🔄 Настройки облачного ИИ успешно сброшены")
     }
 
     fun generateCloudToken(callback: (Boolean) -> Unit) {
