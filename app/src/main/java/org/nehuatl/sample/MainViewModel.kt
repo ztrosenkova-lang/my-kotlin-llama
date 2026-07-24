@@ -333,7 +333,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     fun updateVoskDelay(ms: Int) {
         _voskDelay.value = ms.coerceIn(100, 5000)
-        voskRecognizer?.updateDelay(ms) // Удалить отсюда любые вторые аргументы или флаги типа ", true"!
+        voskRecognizer?.updateDelay(ms)
     }
 
     // === Методы для облачного ИИ ===
@@ -352,7 +352,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     fun clearCloudConfig() {
         cloudAIProvider.clearConfig()
-        // Принудительно сбрасываем стейты в дефолт, чтобы мгновенно потушить зеленый фонарик
         _cloudState.value = CloudAIState.Idle
         _cloudGeneratedText.value = ""
         appendSystemMessage("🔄 Настройки облачного ИИ успешно сброшены")
@@ -398,7 +397,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             prompt = prompt,
             systemPrompt = fullSystemPrompt,
             chatHistory = cloudHistory,
-            maxTokens = maxTokens.value // Добавлен параметр maxTokens
+            maxTokens = maxTokens.value
         )
     }
 
@@ -414,11 +413,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _isModelLoaded.value = false
         scope.launch {
             try {
+                // Исправленный позиционный вызов llamaHelper.load
                 llamaHelper.load(
-                    path = path,
-                    contextLength = contextSize.value,
-                    mmprojPath = if (mmprojPath.isNullOrEmpty()) null else mmprojPath,
-                    loaded = { id ->
+                    path,
+                    true,
+                    contextSize.value,
+                    if (mmprojPath.isNullOrEmpty()) null else mmprojPath,
+                    { id ->
                         _state.value = GenerationState.ModelLoaded(path)
                         _isModelLoaded.value = true
                         val uri = Uri.parse(path)
@@ -484,14 +485,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         val chatHistory = _chatHistory.value
 
         val filteredMemory = if (isSearchCommand) {
-            // Чистим запрос от служебных слов, чтобы они не ломали поиск
             val cleanSearchQuery = prompt.lowercase()
                 .replace("вспомни", "")
                 .replace("найди", "")
                 .replace("поищи", "")
                 .trim()
 
-            // Берем только основы слов (первые 4 символа) для защиты от падежей (плитк-а / плитк-и)
             val keywords = cleanSearchQuery.split(" ")
                 .map { it.trim() }
                 .filter { it.length > 2 }
@@ -502,7 +501,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 fullMemory.split("\n")
                     .filter { line ->
                         val lowerLine = line.lowercase()
-                        // Строка подходит, если содержит хотя бы один корень слова из запроса
                         keywords.any { keyword -> lowerLine.contains(keyword) }
                     }
                     .joinToString("\n")
@@ -562,7 +560,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
 
             val calendar = Calendar.getInstance().apply {
-                // Безопасно извлекаем часы и минуты из объекта Date с помощью Calendar
                 val timeCal = Calendar.getInstance().apply { time = alarmTime }
 
                 set(Calendar.HOUR_OF_DAY, timeCal.get(Calendar.HOUR_OF_DAY))
@@ -581,9 +578,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
             val pendingIntent = PendingIntent.getBroadcast(
                 getApplication(),
-                System.currentTimeMillis().toInt(), // Уникальный ID для каждого напоминания
+                System.currentTimeMillis().toInt(),
                 intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE // Обязательный флаг для Android 13/14
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
             )
 
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
