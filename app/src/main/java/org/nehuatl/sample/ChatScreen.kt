@@ -277,25 +277,14 @@ fun ChatScreen(
             onModeChange = { newMode ->
                 currentMode = newMode
                 viewModel.setCurrentMode(newMode)
-                when (newMode) {
-                    AIMode.LOCAL -> {
-                        if (!isModelLoaded) {
-                            showModelDialog = true
-                        }
-                    }
-                    AIMode.CLOUD -> {
-                        val config = viewModel.getCloudConfig()
-                        if (config == null || config.authKey.isEmpty()) {
-                            showCloudDialog = true
-                        }
-                    }
-                    AIMode.NEUTRAL -> {
-                        viewModel.releaseModel()
-                    }
+                if (newMode == AIMode.NEUTRAL) {
+                    viewModel.releaseModel()
+                    viewModel.clearCloudConfig()
                 }
             },
             isModelLoaded = isModelLoaded,
-            cloudConfig = viewModel.getCloudConfig()
+            cloudConfig = viewModel.getCloudConfig(),
+            onCloudForceDialog = { showCloudDialog = true }
         )
 
         ControlPanel(
@@ -325,7 +314,9 @@ fun ChatScreen(
             hasPermission = ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.RECORD_AUDIO
-            ) == PackageManager.PERMISSION_GRANTED
+            ) == PackageManager.PERMISSION_GRANTED,
+            viewModel = viewModel,
+            context = context
         )
 
         if (showSettings) {
@@ -500,7 +491,8 @@ private fun TopBarWithSwitch(
     currentMode: AIMode,
     onModeChange: (AIMode) -> Unit,
     isModelLoaded: Boolean,
-    cloudConfig: CloudAIConfig?
+    cloudConfig: CloudAIConfig?,
+    onCloudForceDialog: () -> Unit
 ) {
     val isLocalReady = isModelLoaded
     val isCloudReady = cloudConfig?.authKey?.isNotEmpty() == true
@@ -569,7 +561,7 @@ private fun TopBarWithSwitch(
                     ModeButton(
                         label = "Cloud",
                         isSelected = currentMode == AIMode.CLOUD,
-                        onClick = { onModeChange(AIMode.CLOUD) },
+                        onClick = { onCloudForceDialog() },
                         modifier = Modifier.size(38.dp, 24.dp)
                     )
                 }
@@ -642,7 +634,9 @@ private fun ControlPanel(
     onHelpClick: () -> Unit,
     onVoiceInputToggle: () -> Unit,
     isRecording: Boolean,
-    hasPermission: Boolean
+    hasPermission: Boolean,
+    viewModel: MainViewModel,
+    context: android.content.Context
 ) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
@@ -676,31 +670,20 @@ private fun ControlPanel(
                 onClick = onHelpClick
             )
 
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                IconButton(
-                    onClick = onVoiceInputToggle,
-                    modifier = Modifier.size(36.dp),
-                    enabled = hasPermission,
-                    colors = IconButtonDefaults.iconButtonColors(
-                        containerColor = if (isRecording) AccentColor.copy(alpha = 0.2f) else Color.Transparent
-                    )
-                ) {
-                    Icon(
-                        imageVector = if (isRecording) Icons.Default.Mic else Icons.Default.MicOff,
-                        contentDescription = if (isRecording) "Остановить запись" else "Начать запись",
-                        tint = if (isRecording) AccentColor else if (hasPermission) DarkText.copy(alpha = 0.6f) else Color.Gray,
-                        modifier = Modifier.size(20.dp)
-                    )
+            IconButtonWithLabel(
+                icon = if (isRecording) Icons.Default.Mic else Icons.Default.MicOff,
+                label = "микрофон",
+                onClick = {
+                    if (!hasPermission) {
+                        viewModel.appendSystemMessage("⚠️ Нет разрешения на запись аудио")
+                        return@IconButtonWithLabel
+                    }
+                    if (!viewModel.isVoskInitialized()) {
+                        viewModel.initVoskLazily(context)
+                    }
+                    onVoiceInputToggle()
                 }
-                Text(
-                    text = "микрофон",
-                    color = DarkText,
-                    fontSize = 8.sp
-                )
-            }
+            )
         }
     }
 }
