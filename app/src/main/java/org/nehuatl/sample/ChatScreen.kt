@@ -450,6 +450,7 @@ fun ChatScreen(
                         when (currentMode) {
                             AIMode.LOCAL -> {
                                 if (isModelLoaded) {
+                                    // Передаём imagePath в generateLocal для поддержки мультимодальности
                                     viewModel.generateLocal(promptInput, imagePath)
                                 } else {
                                     showModelDialog = true
