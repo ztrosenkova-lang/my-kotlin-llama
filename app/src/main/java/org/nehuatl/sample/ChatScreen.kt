@@ -73,6 +73,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -272,6 +273,7 @@ fun ChatScreen(
             .background(AppBackground)
             .imePadding()
     ) {
+        // *** ИСПРАВЛЕНИЕ 1: Добавлен параметр onLocalForceDialog ***
         TopBarWithSwitch(
             currentMode = currentMode,
             onModeChange = { newMode ->
@@ -284,7 +286,8 @@ fun ChatScreen(
             },
             isModelLoaded = isModelLoaded,
             cloudConfig = viewModel.getCloudConfig(),
-            onCloudForceDialog = { showCloudDialog = true }
+            onCloudForceDialog = { showCloudDialog = true },
+            onLocalForceDialog = { showModelDialog = true } // Исправляет неработающую кнопку
         )
 
         ControlPanel(
@@ -460,7 +463,8 @@ private fun TopBarWithSwitch(
     onModeChange: (AIMode) -> Unit,
     isModelLoaded: Boolean,
     cloudConfig: CloudAIConfig?,
-    onCloudForceDialog: () -> Unit
+    onCloudForceDialog: () -> Unit,
+    onLocalForceDialog: () -> Unit // Добавлен недостающий параметр
 ) {
     val isLocalReady = isModelLoaded
     val isCloudReady = cloudConfig?.authKey?.isNotEmpty() == true
@@ -491,33 +495,60 @@ private fun TopBarWithSwitch(
                     .clip(RoundedCornerShape(16.dp))
             )
 
-            Column(
+            // *** ИСПРАВЛЕНИЕ 2: Правильное центрирование текста ***
+            Text(
+                text = "ИИ-Друг",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = DarkText,
+                fontSize = 16.sp,
+                textAlign = TextAlign.Center, // Центрирование текста
                 modifier = Modifier
                     .weight(1f)
-                    .padding(horizontal = 8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                    .padding(horizontal = 8.dp) // Убирает баг вёрстки
+            )
+
+            // Правая часть: Фонарики и кнопки
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.padding(start = 8.dp)
             ) {
-                Text(
-                    text = "ИИ-Друг",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = DarkText,
-                    fontSize = 16.sp,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                // Верхний ряд: Фонарики
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .background(localIndicatorColor, shape = CircleShape)
+                                .border(0.5.dp, BorderGray, CircleShape)
+                        )
+                        Text(text = "локальный ИИ", fontSize = 6.sp, color = DarkText)
+                    }
 
-                Spacer(modifier = Modifier.height(4.dp))
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .background(cloudIndicatorColor, shape = CircleShape)
+                                .border(0.5.dp, BorderGray, CircleShape)
+                        )
+                        Text(text = "Облачный ИИ", fontSize = 6.sp, color = DarkText)
+                    }
+                }
 
+                // Нижний ряд: Кнопки режимов
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.fillMaxWidth()
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     ModeButton(
                         label = "Local",
                         isSelected = currentMode == AIMode.LOCAL,
-                        onClick = { onModeChange(AIMode.LOCAL) },
+                        onClick = { onLocalForceDialog() }, // Теперь открывает диалог
                         modifier = Modifier.size(38.dp, 24.dp)
                     )
                     ModeButton(
@@ -532,32 +563,6 @@ private fun TopBarWithSwitch(
                         onClick = { onCloudForceDialog() },
                         modifier = Modifier.size(38.dp, 24.dp)
                     )
-                }
-            }
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(start = 8.dp)
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .background(localIndicatorColor, shape = CircleShape)
-                            .border(0.5.dp, BorderGray, CircleShape)
-                    )
-                    Text(text = "локальный ИИ", fontSize = 6.sp, color = DarkText)
-                }
-
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .background(cloudIndicatorColor, shape = CircleShape)
-                            .border(0.5.dp, BorderGray, CircleShape)
-                    )
-                    Text(text = "Облачный ИИ", fontSize = 6.sp, color = DarkText)
                 }
             }
         }
