@@ -102,10 +102,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     val contextSize = MutableStateFlow(2048)
     val maxTokens = MutableStateFlow(512)
 
-    // === Настройки Vosk ===
-    private val _voskDelay = MutableStateFlow(1200)
-    val voskDelay = _voskDelay.asStateFlow()
-
     private val memoryFile: File by lazy {
         File(getApplication<Application>().filesDir, "memory.txt")
     }
@@ -273,7 +269,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 onResult = onVoiceResult,
                 onLog = onVoiceLog,
                 scope = scope,
-                delayMs = _voskDelay.value
+                delayMs = 1200 // Жестко задаем значение, так как настройка удалена
             )
             isVoskLoaded = true
         }
@@ -329,11 +325,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             sendUserMessage(textToSend)
             _recognizedText.value = ""
         }
-    }
-
-    fun updateVoskDelay(ms: Int) {
-        _voskDelay.value = ms.coerceIn(100, 5000)
-        voskRecognizer?.updateDelay(ms)
     }
 
     // === Методы для облачного ИИ ===
