@@ -268,8 +268,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 contextRef = WeakReference<Context>(context.applicationContext),
                 onResult = onVoiceResult,
                 onLog = onVoiceLog,
-                scope = scope,
-                delayMs = 1200 // Жестко задаем значение, так как настройка удалена
+                scope = scope
             )
             isVoskLoaded = true
         }
