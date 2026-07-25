@@ -21,8 +21,7 @@ class VoskRecognizer(
     private val contextRef: WeakReference<Context>,
     private val onResult: (String) -> Unit,
     private val onLog: (String) -> Unit,
-    private val scope: CoroutineScope,
-    private var delayMs: Int = 1200
+    private val scope: CoroutineScope
 ) {
     companion object {
         private const val TAG = "VoskRecognizer"
@@ -89,26 +88,6 @@ class VoskRecognizer(
             val errorMsg = "❌ Неизвестная ошибка инициализации Vosk: ${e.message}"
             Log.e(TAG, errorMsg)
             onLog(errorMsg)
-        }
-    }
-
-    fun updateDelay(ms: Int) {
-        delayMs = ms.coerceIn(500, 3000)
-        onLog("⏱ Задержка Vosk обновлена: ${delayMs}мс")
-        
-        // Если в данный момент идет запись, мы на лету переинициализируем 
-        // распознаватель с новым таймаутом, не ломая фоновый поток звука
-        if (isInitialized && recognizer != null) {
-            try {
-                val currentModel = this.model
-                if (currentModel != null) {
-                    // Создаем чистый распознаватель, обновляя его внутренний буфер
-                    recognizer = Recognizer(currentModel, SAMPLE_RATE)
-                    onLog("✅ Новая задержка успешно применена в рантайме")
-                }
-            } catch (e: Exception) {
-                onLog("⚠ Предупреждение при обновлении задержки: ${e.message}")
-            }
         }
     }
 
