@@ -326,8 +326,6 @@ fun ChatScreen(
                 maxTokens = maxTokens,
                 onMaxTokensChange = { viewModel.updateMaxTokens(it) },
                 onModelChangeClick = { showModelDialog = true },
-                voskDelay = viewModel.voskDelay.collectAsStateWithLifecycle().value,
-                onVoskDelayChange = { viewModel.updateVoskDelay(it) },
                 onSave = {
                     viewModel.updateTemperature(tempTemperature)
                     showSettings = false
@@ -436,8 +434,6 @@ fun ChatScreen(
             onGenerate = {
                 if (promptInput.isNotBlank()) {
                     keyboardController?.hide()
-                    // ВМЕСТО СЛОМАННОГО КОДА ВЫЗЫВАЕМ ПРАВИЛЬНЫЙ МЕТОД VIEWMODEL!
-                    // Это гарантирует отображение "Вы: ..."
                     viewModel.sendUserMessage(promptInput)
                     promptInput = ""
                     onImageUsed()
@@ -677,13 +673,9 @@ private fun SettingsPanel(
     maxTokens: Int,
     onMaxTokensChange: (Int) -> Unit,
     onModelChangeClick: () -> Unit,
-    voskDelay: Int,
-    onVoskDelayChange: (Int) -> Unit,
     onSave: () -> Unit,
     onClose: () -> Unit
 ) {
-    var tempVoskDelay by remember { mutableStateOf(voskDelay) }
-
     Card(
         colors = CardDefaults.cardColors(containerColor = SurfaceGray),
         modifier = Modifier.fillMaxWidth().padding(8.dp),
@@ -715,17 +707,6 @@ private fun SettingsPanel(
             )
             Spacer(modifier = Modifier.height(12.dp))
 
-            Text(text = "Таймаут тишины Vosk (мс): ${tempVoskDelay} мс", color = DarkText)
-            Slider(
-                value = tempVoskDelay.toFloat(),
-                onValueChange = { tempVoskDelay = it.toInt() },
-                valueRange = 500f..2500f,
-                steps = 20,
-                modifier = Modifier.fillMaxWidth(),
-                colors = SliderDefaults.colors(thumbColor = AccentColor, activeTrackColor = AccentColor, inactiveTrackColor = BorderGray)
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-
             Button(
                 onClick = onModelChangeClick,
                 colors = ButtonDefaults.buttonColors(containerColor = BorderGray),
@@ -739,7 +720,6 @@ private fun SettingsPanel(
                 Button(
                     onClick = {
                         onSave()
-                        onVoskDelayChange(tempVoskDelay)
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
                     modifier = Modifier.weight(1f)
@@ -1169,7 +1149,6 @@ private fun PromptInput(
     modifier: Modifier = Modifier
 ) {
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        // Кнопка ДОБАВИТЬ ИЗОБРАЖЕНИЕ (с AccentColor)
         IconButton(
             onClick = onPickImage,
             enabled = enabled && !isGenerating,
@@ -1200,7 +1179,6 @@ private fun PromptInput(
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            // Кнопка СТОП/ОТПРАВИТЬ (с AccentColor)
             if (isGenerating) {
                 IconButton(
                     onClick = onAbort,
@@ -1230,7 +1208,6 @@ private fun PromptInput(
                 }
             }
 
-            // Кнопка ОЧИСТИТЬ (с AccentColor)
             IconButton(
                 onClick = onClearChat,
                 enabled = true,
