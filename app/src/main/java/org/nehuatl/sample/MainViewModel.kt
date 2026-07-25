@@ -405,7 +405,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             try {
                 llamaHelper.load(
                     path,
-                    true,
                     contextSize.value,
                     if (mmprojPath.isNullOrEmpty()) null else mmprojPath,
                     { id ->
