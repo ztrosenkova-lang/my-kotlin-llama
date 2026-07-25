@@ -106,7 +106,7 @@ class LlamaHelper(
         }
     }
 
-    fun predict(prompt: String, imagePath: String? = null, systemPrompt: String? = null, partialCompletion: Boolean = true) {
+    fun predict(prompt: String, imagePath: String? = null, systemPrompt: String? = null, maxTokens: Int = 512) {
         val context = currentContext ?: throw Exception("Model was not loaded yet")
         val startTime = System.currentTimeMillis()
         tokenCount = 0
@@ -122,9 +122,9 @@ class LlamaHelper(
         
         val params = mutableMapOf<String, Any>(
             "prompt" to fullPrompt,
-            "emit_partial_completion" to partialCompletion,
+            "emit_partial_completion" to true,
             "temperature" to 0.7,
-            "n_predict" to 512,
+            "n_predict" to maxTokens,
             "top_k" to 40,
             "top_p" to 0.95,
             "stop" to listOf(
