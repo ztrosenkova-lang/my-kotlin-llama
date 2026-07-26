@@ -169,6 +169,29 @@ fun ChatScreen(
         }
     }
 
+    // Блок приветствия при запуске (отсчет 3 секунды)
+    LaunchedEffect(Unit) {
+        // Асинхронная задержка в 3 секунды (3000 миллисекунд)
+        kotlinx.coroutines.delay(3000)
+        
+        val welcomeMessage = """
+            ✨ Добро пожаловать в ИИ-Друг! ✨
+            
+            🚀 Это лучшая локальная запоминалка паролей и умный собеседник.
+            
+            📋 Ключевые голосовые и текстовые команды:
+            🧠 «Запомни [факт/пароль]» — сохранить в базу знаний.
+            🔍 «Вспомни [ключевое слово]» — извлечь данные из памяти.
+            ⏰ «Будильник/Напомни в [время]» — поставить точный таймер.
+            
+            💬 Пиши запросы в поле ввода или активируй верхнюю кнопку «голос»!
+            (Вы можете очистить этот экран в любой момент кнопкой корзины справа).
+        """.trimIndent()
+        
+        // Вывод краткой инструкции напрямую в интерфейс чата
+        viewModel.appendSystemMessage(welcomeMessage)
+    }
+
     LaunchedEffect(showCloudDialog) {
         if (showCloudDialog) {
             val config = viewModel.getCloudConfig()
@@ -220,11 +243,15 @@ fun ChatScreen(
         )
     }
 
+    // Вычисляем флаг готовности облачного ИИ для передачи в диалог
+    val isCloudReady = viewModel.getCloudConfig()?.authKey?.isNotEmpty() == true || cloudState is CloudAIState.Ready
+
     if (showCloudDialog) {
         CloudAIDialog(
             apiUrl = cloudApiUrl,
             authKey = cloudAuthKey,
             isGigaChat = cloudIsGigaChat,
+            isCloudReady = isCloudReady,
             onApiUrlChange = { cloudApiUrl = it },
             onAuthKeyChange = { cloudAuthKey = it },
             onIsGigaChatChange = { cloudIsGigaChat = it },
@@ -476,7 +503,7 @@ private fun TopBarWithSwitch(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             // Первая строка: логотип, заголовок, кнопки режимов
             Row(
@@ -801,6 +828,7 @@ private fun CloudAIDialog(
     apiUrl: String,
     authKey: String,
     isGigaChat: Boolean,
+    isCloudReady: Boolean,
     onApiUrlChange: (String) -> Unit,
     onAuthKeyChange: (String) -> Unit,
     onIsGigaChatChange: (Boolean) -> Unit,
@@ -905,7 +933,11 @@ private fun CloudAIDialog(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Получение токена...", color = DarkText)
                     } else {
-                        Text(if (isGigaChat) "🔑 Получить токен" else "🔑 Установить ключ", color = DarkText)
+                        Text(
+                            text = if (isCloudReady) "✅ Токен подключен" else if (isGigaChat) "🔑 Получить токен" else "🔑 Установить ключ",
+                            color = if (isCloudReady) GreenColor else DarkText,
+                            fontWeight = if (isCloudReady) FontWeight.Bold else FontWeight.Normal
+                        )
                     }
                 }
 
