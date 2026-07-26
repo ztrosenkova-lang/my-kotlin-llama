@@ -1136,25 +1136,72 @@ private fun ModelPickerDialog(
         Card(colors = CardDefaults.cardColors(containerColor = SurfaceGray)) {
             Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("Настройка ИИ", style = MaterialTheme.typography.headlineSmall, color = DarkText)
+
+                // Блок выбора языковой модели
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Языковая модель", color = DarkText)
-                    if (currentModelPath != null) Text(text = "[Файл модели]", style = MaterialTheme.typography.bodySmall, color = DarkText.copy(alpha = 0.6f))
-                    Button(onClick = onPickModel, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = BorderGray)) {
-                        Text(if (currentModelPath == null) "Выбрать модель" else "Изменить модель", color = DarkText)
+                    if (currentModelPath != null) {
+                        val modelName = currentModelPath.substringAfterLast("/")
+                        Text(text = "✅ $modelName", style = MaterialTheme.typography.bodySmall, color = GreenColor)
+                    }
+                    Button(
+                        onClick = onPickModel,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = BorderGray)
+                    ) {
+                        val buttonText = if (currentModelPath != null) {
+                            val modelName = currentModelPath.substringAfterLast("/")
+                            "📁 $modelName"
+                        } else {
+                            "Выбрать модель"
+                        }
+                        Text(
+                            text = buttonText,
+                            color = if (currentModelPath != null) GreenColor else DarkText
+                        )
                     }
                 }
+
+                // Блок выбора мультимодального проектора (опционально)
                 Column(modifier = Modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("(опционально)", style = MaterialTheme.typography.bodySmall, color = DarkText.copy(alpha = 0.6f))
                     Text("Мультимодальный проектор (mmproj)", color = DarkText)
-                    if (mmprojPath != null) Text(text = "[Файл проектора]", style = MaterialTheme.typography.bodySmall, color = DarkText.copy(alpha = 0.6f))
-                    Button(onClick = onPickMmproj, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = BorderGray)) {
-                        Text(if (mmprojPath == null) "Выбрать проектор" else "Изменить проектор", color = DarkText)
+                    if (mmprojPath != null) {
+                        val projName = mmprojPath.substringAfterLast("/")
+                        Text(text = "✅ $projName", style = MaterialTheme.typography.bodySmall, color = GreenColor)
+                    }
+                    Button(
+                        onClick = onPickMmproj,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = BorderGray)
+                    ) {
+                        val buttonText = if (mmprojPath != null) {
+                            val projName = mmprojPath.substringAfterLast("/")
+                            "📁 $projName"
+                        } else {
+                            "Выбрать проектор"
+                        }
+                        Text(
+                            text = buttonText,
+                            color = if (mmprojPath != null) GreenColor else DarkText
+                        )
                     }
                 }
-                Button(onClick = onLoad, enabled = currentModelPath != null, modifier = Modifier.fillMaxWidth().padding(top = 8.dp), colors = ButtonDefaults.buttonColors(containerColor = AccentColor)) {
+
+                // Кнопка запуска
+                Button(
+                    onClick = onLoad,
+                    enabled = currentModelPath != null,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentColor)
+                ) {
                     Text("Запустить нейросеть", color = DarkText)
                 }
-                TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Отмена", color = DarkText) }
+
+                // Кнопка отмены
+                TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                    Text("Отмена", color = DarkText)
+                }
             }
         }
     }
