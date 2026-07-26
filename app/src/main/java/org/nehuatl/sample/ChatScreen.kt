@@ -273,7 +273,6 @@ fun ChatScreen(
             .background(AppBackground)
             .imePadding()
     ) {
-        // *** ИСПРАВЛЕНИЕ 1: Добавлен параметр onLocalForceDialog ***
         TopBarWithSwitch(
             currentMode = currentMode,
             onModeChange = { newMode ->
@@ -287,7 +286,7 @@ fun ChatScreen(
             isModelLoaded = isModelLoaded,
             cloudConfig = viewModel.getCloudConfig(),
             onCloudForceDialog = { showCloudDialog = true },
-            onLocalForceDialog = { showModelDialog = true } // Исправляет неработающую кнопку
+            onLocalForceDialog = { showModelDialog = true }
         )
 
         ControlPanel(
@@ -464,7 +463,7 @@ private fun TopBarWithSwitch(
     isModelLoaded: Boolean,
     cloudConfig: CloudAIConfig?,
     onCloudForceDialog: () -> Unit,
-    onLocalForceDialog: () -> Unit // Добавлен недостающий параметр
+    onLocalForceDialog: () -> Unit
 ) {
     val isLocalReady = isModelLoaded
     val isCloudReady = cloudConfig?.authKey?.isNotEmpty() == true
@@ -480,43 +479,71 @@ private fun TopBarWithSwitch(
         border = BorderStroke(1.dp, BorderGray),
         colors = CardDefaults.cardColors(containerColor = SurfaceGray)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Image(
-                painter = painterResource(id = R.mipmap.ic_launcher),
-                contentDescription = "Лого",
-                contentScale = ContentScale.FillBounds,
-                modifier = Modifier
-                    .size(72.dp)
-                    .clip(RoundedCornerShape(16.dp))
-            )
-
-            // *** ИСПРАВЛЕНИЕ 2: Правильное центрирование текста ***
-            Text(
-                text = "ИИ-Друг",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = DarkText,
-                fontSize = 16.sp,
-                textAlign = TextAlign.Center, // Центрирование текста
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 8.dp) // Убирает баг вёрстки
-            )
-
-            // Правая часть: Фонарики и кнопки
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.padding(start = 8.dp)
+            // Первая строка: логотип, заголовок, кнопки режимов
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Верхний ряд: Фонарики
+                Image(
+                    painter = painterResource(id = R.mipmap.ic_launcher),
+                    contentDescription = "Лого",
+                    contentScale = ContentScale.FillBounds,
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                )
+
+                Text(
+                    text = "ИИ-Друг",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = DarkText,
+                    fontSize = 16.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 8.dp)
+                )
+
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    ModeButton(
+                        label = "Local",
+                        isSelected = currentMode == AIMode.LOCAL,
+                        onClick = { onLocalForceDialog() },
+                        modifier = Modifier.size(38.dp, 24.dp)
+                    )
+                    ModeButton(
+                        label = "Neutral",
+                        isSelected = currentMode == AIMode.NEUTRAL,
+                        onClick = { onModeChange(AIMode.NEUTRAL) },
+                        modifier = Modifier.size(38.dp, 24.dp)
+                    )
+                    ModeButton(
+                        label = "Cloud",
+                        isSelected = currentMode == AIMode.CLOUD,
+                        onClick = { onCloudForceDialog() },
+                        modifier = Modifier.size(38.dp, 24.dp)
+                    )
+                }
+            }
+
+            // Вторая строка: индикаторы состояния по центру
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -538,31 +565,6 @@ private fun TopBarWithSwitch(
                         )
                         Text(text = "Облачный ИИ", fontSize = 6.sp, color = DarkText)
                     }
-                }
-
-                // Нижний ряд: Кнопки режимов
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    ModeButton(
-                        label = "Local",
-                        isSelected = currentMode == AIMode.LOCAL,
-                        onClick = { onLocalForceDialog() }, // Теперь открывает диалог
-                        modifier = Modifier.size(38.dp, 24.dp)
-                    )
-                    ModeButton(
-                        label = "Neutral",
-                        isSelected = currentMode == AIMode.NEUTRAL,
-                        onClick = { onModeChange(AIMode.NEUTRAL) },
-                        modifier = Modifier.size(38.dp, 24.dp)
-                    )
-                    ModeButton(
-                        label = "Cloud",
-                        isSelected = currentMode == AIMode.CLOUD,
-                        onClick = { onCloudForceDialog() },
-                        modifier = Modifier.size(38.dp, 24.dp)
-                    )
                 }
             }
         }
