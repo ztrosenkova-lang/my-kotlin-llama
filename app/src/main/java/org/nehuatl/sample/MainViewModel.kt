@@ -274,6 +274,23 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
+    // === НОВЫЙ МЕТОД: Полная выгрузка Vosk из памяти ===
+    fun releaseVosk() {
+        try {
+            if (_isRecording.value) {
+                stopRecording()
+            }
+            voskRecognizer?.release()
+            voskRecognizer = null
+            isVoskLoaded = false
+            appendSystemMessage("🔄 Голосовой движок Vosk полностью выгружен из памяти")
+            Log.d(TAG, "Vosk модель успешно освобождена из ОЗУ")
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка при выгрузке Vosk: ${e.message}")
+            appendSystemMessage("⚠ Ошибка при выгрузке голосового движка")
+        }
+    }
+
     // === Отправка сообщений ===
     fun sendUserMessage(text: String) {
         if (text.isBlank()) return
