@@ -287,6 +287,7 @@ fun ChatScreen(
                 if (newMode == AIMode.NEUTRAL) {
                     viewModel.releaseModel()
                     viewModel.clearCloudConfig()
+                    viewModel.appendSystemMessage("📢 ИИ выгружен из памяти")
                 }
             },
             isModelLoaded = isModelLoaded,
@@ -473,8 +474,8 @@ private fun TopBarWithSwitch(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             // Первая строка: логотип, заголовок, кнопки режимов
             Row(
@@ -1063,7 +1064,10 @@ private fun StatusBar(
                 )
                 is GenerationState.ModelLoaded -> Triple(
                     SurfaceGray,
-                    "✅ Модель загружена",
+                    run {
+                        val modelName = currentModel?.substringAfterLast("/") ?: "нейросеть"
+                        "🤖 Модель $modelName успешно загружена"
+                    },
                     false
                 )
                 is GenerationState.AnalyzingImage -> Triple(
