@@ -93,6 +93,7 @@ private val DarkText = Color(0xFF212529)
 private val ChatFontFamily = FontFamily.Monospace
 private val GreenColor = Color(0xFF4CD964)
 private val PaleYellowColor = Color(0xFFFFF9DB)
+private val FriendlyRobotColor = Color(0xFF00B4D8) // Уникальный бирюзовый цвет дружелюбного ИИ
 
 enum class AIMode {
     LOCAL,
@@ -487,9 +488,10 @@ private fun TopBarWithSwitch(
                 Text(
                     text = "ИИ-Друг",
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = DarkText,
-                    fontSize = 16.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = FriendlyRobotColor,
+                    fontSize = 20.sp,
+                    fontFamily = FontFamily.Monospace,
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .weight(1f)
