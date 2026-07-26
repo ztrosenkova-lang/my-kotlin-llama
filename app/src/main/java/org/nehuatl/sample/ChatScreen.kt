@@ -640,6 +640,7 @@ private fun ControlPanel(
                 icon = if (isVoskInitialized) Icons.Default.VolumeUp else Icons.Default.VolumeMute,
                 label = "голос",
                 onClick = {
+                    // Стандартная проверка разрешения на запись аудио
                     if (ContextCompat.checkSelfPermission(
                             context,
                             Manifest.permission.RECORD_AUDIO
@@ -648,12 +649,22 @@ private fun ControlPanel(
                         viewModel.appendSystemMessage("⚠️ Нет разрешения на запись аудио")
                         return@IconButtonWithLabel
                     }
+
                     if (isVoskInitialized) {
+                        // Выгрузка движка из памяти
                         viewModel.releaseVosk()
-                        viewModel.appendSystemMessage("🔇 Голосовой движок выгружен")
+                        viewModel.appendSystemMessage("📢 Голосовой движок Vosk успешно выгружен из ОЗУ.")
                     } else {
+                        // Логика загрузки с информированием пользователя
+                        viewModel.appendSystemMessage("⏳ Запуск Vosk... Пожалуйста, подождите, идет распаковка аудио-модели...")
                         viewModel.initVoskLazily(context)
-                        viewModel.appendSystemMessage("🎤 Голосовой движок загружается...")
+
+                        // Проверка и финальный лог об успехе
+                        if (viewModel.isVoskInitialized()) {
+                            viewModel.appendSystemMessage("✅ Голосовой движок Vosk успешно загружен! Нижний микрофон под кнопкой [+] активирован.")
+                        } else {
+                            viewModel.appendSystemMessage("⚠️ Ошибка при загрузке Vosk. Попробуйте еще раз.")
+                        }
                     }
                 }
             )
