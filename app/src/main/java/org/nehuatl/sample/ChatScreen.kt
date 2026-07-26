@@ -125,8 +125,10 @@ fun ChatScreen(
 
     val isModelLoaded by viewModel.isModelLoaded.collectAsStateWithLifecycle()
 
-    // Подписка на реактивное состояние готовности Vosk
-    val isVoskReady by viewModel.isVoskInitialized.collectAsStateWithLifecycle(initialValue = false)
+    // Исправленная строка 129: реактивная подписка на состояние записи
+    val isRecording by viewModel.isRecording.collectAsStateWithLifecycle()
+    // ИСПРАВЛЕННАЯ СТРОКА 129: Без конфликта типов и без падения компилятора
+    val isVoskReady = remember(isRecording) { viewModel.isVoskInitialized() }
 
     var promptInput by remember { mutableStateOf("") }
     var showModelDialog by remember { mutableStateOf(false) }
@@ -150,7 +152,6 @@ fun ChatScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val scrollState = rememberScrollState()
 
-    val isRecording by viewModel.isRecording.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
