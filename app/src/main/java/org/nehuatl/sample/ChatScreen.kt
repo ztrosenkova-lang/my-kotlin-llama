@@ -127,8 +127,8 @@ fun ChatScreen(
 
     // Исправленная строка 129: реактивная подписка на состояние записи
     val isRecording by viewModel.isRecording.collectAsStateWithLifecycle()
-    // ИСПРАВЛЕННАЯ СТРОКА 129: Без конфликта типов и без падения компилятора
-    val isVoskReady = remember(isRecording) { viewModel.isVoskInitialized() }
+    // ИСПРАВЛЕННЫЙ ЖИВОЙ ПОТОК: Интерфейс реактивно слушает бэкенд Vosk
+    val isVoskReady by viewModel.isVoskLoaded.collectAsStateWithLifecycle(initialValue = false)
 
     var promptInput by remember { mutableStateOf("") }
     var showModelDialog by remember { mutableStateOf(false) }
