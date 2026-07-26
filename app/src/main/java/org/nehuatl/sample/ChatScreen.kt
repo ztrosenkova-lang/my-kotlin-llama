@@ -343,7 +343,7 @@ fun ChatScreen(
             state = state,
             cloudState = cloudState,
             currentMode = currentMode,
-            currentModel = currentModelPath,
+            currentModel = if (isModelLoaded) currentModelPath else null,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
         )
 
@@ -1054,8 +1054,8 @@ private fun StatusBar(
         else -> {
             when (state) {
                 is GenerationState.Idle -> Triple(
-                    if (currentModel == null) SurfaceGray else SurfaceGray,
-                    if (currentModel == null) "Выберите модель" else "Готов",
+                    SurfaceGray,
+                    if (currentModel == null) "🤖 Локальный ИИ: выгружен из памяти" else "🤖 Локальный ИИ: Готов к работе",
                     false
                 )
                 is GenerationState.LoadingModel -> Triple(
@@ -1068,7 +1068,7 @@ private fun StatusBar(
                     run {
                         val modelName = (currentModel?.substringAfterLast("/") ?: "нейросеть")
                             .replace("primary%3AModels%", "")
-                        "🤖 Модель $modelName успешно загружена"
+                        if (currentModel == null) "🤖 Локальный ИИ: выгружен из памяти" else "🤖 Модель $modelName успешно загружена"
                     },
                     false
                 )
