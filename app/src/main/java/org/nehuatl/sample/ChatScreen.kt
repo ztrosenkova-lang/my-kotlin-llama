@@ -531,7 +531,11 @@ private fun TopBarWithSwitch(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    // Индикатор локального ИИ (горизонтальный ряд)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
                         Box(
                             modifier = Modifier
                                 .size(10.dp)
@@ -541,7 +545,11 @@ private fun TopBarWithSwitch(
                         Text(text = "локальный ИИ", fontSize = 6.sp, color = DarkText)
                     }
 
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    // Индикатор облачного ИИ (горизонтальный ряд)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
                         Box(
                             modifier = Modifier
                                 .size(10.dp)
@@ -627,7 +635,6 @@ private fun ControlPanel(
                 onClick = onHelpClick
             )
 
-            // Новая кнопка управления голосовым движком
             val isVoskInitialized = viewModel.isVoskInitialized()
             IconButtonWithLabel(
                 icon = if (isVoskInitialized) Icons.Default.VolumeUp else Icons.Default.VolumeMute,
@@ -642,7 +649,6 @@ private fun ControlPanel(
                         return@IconButtonWithLabel
                     }
                     if (isVoskInitialized) {
-                        // Логика выгрузки Vosk (если метод доступен)
                         viewModel.releaseVosk()
                         viewModel.appendSystemMessage("🔇 Голосовой движок выгружен")
                     } else {
@@ -1151,12 +1157,10 @@ private fun PromptInput(
     modifier: Modifier = Modifier
 ) {
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        // Левая колонка с кнопками
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            // Кнопка добавления изображения
             IconButton(
                 onClick = onPickImage,
                 enabled = enabled && !isGenerating,
@@ -1169,7 +1173,6 @@ private fun PromptInput(
                 )
             }
 
-            // Кнопка управления записью (переехала сюда)
             val isVoskInitialized = viewModel.isVoskInitialized()
             IconButton(
                 onClick = {
