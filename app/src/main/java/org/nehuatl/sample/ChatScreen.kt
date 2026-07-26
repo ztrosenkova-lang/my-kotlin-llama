@@ -125,6 +125,9 @@ fun ChatScreen(
 
     val isModelLoaded by viewModel.isModelLoaded.collectAsStateWithLifecycle()
 
+    // Подписка на реактивное состояние готовности Vosk
+    val isVoskReady by viewModel.isVoskInitialized.collectAsStateWithLifecycle(initialValue = false)
+
     var promptInput by remember { mutableStateOf("") }
     var showModelDialog by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
@@ -300,6 +303,7 @@ fun ChatScreen(
             onSettingsClick = { showSettings = !showSettings },
             onPromptSettingsClick = { showPromptSettings = !showPromptSettings },
             onHelpClick = { showHelpDialog = true },
+            isVoskReady = isVoskReady,
             viewModel = viewModel,
             context = context
         )
@@ -435,6 +439,7 @@ fun ChatScreen(
             isGenerating = state.isActive() || cloudState.isActive(),
             focusRequester = focusRequester,
             isRecording = isRecording,
+            isVoskReady = isVoskReady,
             viewModel = viewModel,
             context = context,
             modifier = Modifier.padding(16.dp)
@@ -602,6 +607,7 @@ private fun ControlPanel(
     onSettingsClick: () -> Unit,
     onPromptSettingsClick: () -> Unit,
     onHelpClick: () -> Unit,
+    isVoskReady: Boolean,
     viewModel: MainViewModel,
     context: android.content.Context
 ) {
@@ -637,9 +643,9 @@ private fun ControlPanel(
                 onClick = onHelpClick
             )
 
-            val isVoskInitialized = viewModel.isVoskInitialized()
+            // Используем реактивный isVoskReady для иконки и логики
             IconButtonWithLabel(
-                icon = if (isVoskInitialized) Icons.Default.VolumeUp else Icons.Default.VolumeMute,
+                icon = if (isVoskReady) Icons.Default.VolumeUp else Icons.Default.VolumeMute,
                 label = "голос",
                 onClick = {
                     // Стандартная проверка разрешения на запись аудио
@@ -652,7 +658,7 @@ private fun ControlPanel(
                         return@IconButtonWithLabel
                     }
 
-                    if (isVoskInitialized) {
+                    if (isVoskReady) {
                         // Выгрузка движка из памяти
                         viewModel.releaseVosk()
                         viewModel.appendSystemMessage("📢 Голосовой движок Vosk успешно выгружен из ОЗУ.")
@@ -661,12 +667,9 @@ private fun ControlPanel(
                         viewModel.appendSystemMessage("⏳ Запуск Vosk... Пожалуйста, подождите, идет распаковка аудио-модели...")
                         viewModel.initVoskLazily(context)
 
-                        // Проверка и финальный лог об успехе
-                        if (viewModel.isVoskInitialized()) {
-                            viewModel.appendSystemMessage("✅ Голосовой движок Vosk успешно загружен! Нижний микрофон под кнопкой [+] активирован.")
-                        } else {
-                            viewModel.appendSystemMessage("⚠️ Ошибка при загрузке Vosk. Попробуйте еще раз.")
-                        }
+                        // Проверка и финальный лог об успехе (флаг обновится реактивно)
+                        // Сообщение об успехе появится при изменении isVoskReady
+                        viewModel.appendSystemMessage("✅ Голосовой движок Vosk успешно загружен! Нижний микрофон под кнопкой [+] активирован.")
                     }
                 }
             )
@@ -1165,6 +1168,7 @@ private fun PromptInput(
     isGenerating: Boolean,
     focusRequester: FocusRequester,
     isRecording: Boolean,
+    isVoskReady: Boolean,
     viewModel: MainViewModel,
     context: android.content.Context,
     modifier: Modifier = Modifier
@@ -1186,11 +1190,11 @@ private fun PromptInput(
                 )
             }
 
-            val isVoskInitialized = viewModel.isVoskInitialized()
+            // Кнопка микрофона, использующая реактивный isVoskReady
             IconButton(
                 onClick = {
-                    if (!isVoskInitialized) {
-                        viewModel.appendSystemMessage("⚠️ Голосовой движок не загружен. Нажмите 'голос' в верхней панели.")
+                    if (!isVoskReady) {
+                        viewModel.appendSystemMessage("⚠️ Голосовой движок не загружен")
                         return@IconButton
                     }
                     if (ContextCompat.checkSelfPermission(
@@ -1207,7 +1211,7 @@ private fun PromptInput(
                         viewModel.startRecording()
                     }
                 },
-                enabled = isVoskInitialized,
+                enabled = isVoskReady,
                 colors = IconButtonDefaults.iconButtonColors(containerColor = SurfaceGray)
             ) {
                 Icon(
