@@ -35,6 +35,8 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.VolumeMute
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -297,26 +299,6 @@ fun ChatScreen(
             onSettingsClick = { showSettings = !showSettings },
             onPromptSettingsClick = { showPromptSettings = !showPromptSettings },
             onHelpClick = { showHelpDialog = true },
-            onVoiceInputToggle = {
-                if (isRecording) {
-                    viewModel.stopRecording()
-                } else {
-                    if (ContextCompat.checkSelfPermission(
-                            context,
-                            Manifest.permission.RECORD_AUDIO
-                        ) == PackageManager.PERMISSION_GRANTED
-                    ) {
-                        viewModel.startRecording()
-                    } else {
-                        viewModel.appendSystemMessage("⚠️ Нет разрешения на запись аудио")
-                    }
-                }
-            },
-            isRecording = isRecording,
-            hasPermission = ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.RECORD_AUDIO
-            ) == PackageManager.PERMISSION_GRANTED,
             viewModel = viewModel,
             context = context
         )
@@ -451,6 +433,9 @@ fun ChatScreen(
             enabled = true,
             isGenerating = state.isActive() || cloudState.isActive(),
             focusRequester = focusRequester,
+            isRecording = isRecording,
+            viewModel = viewModel,
+            context = context,
             modifier = Modifier.padding(16.dp)
         )
     }
@@ -607,9 +592,6 @@ private fun ControlPanel(
     onSettingsClick: () -> Unit,
     onPromptSettingsClick: () -> Unit,
     onHelpClick: () -> Unit,
-    onVoiceInputToggle: () -> Unit,
-    isRecording: Boolean,
-    hasPermission: Boolean,
     viewModel: MainViewModel,
     context: android.content.Context
 ) {
@@ -645,18 +627,28 @@ private fun ControlPanel(
                 onClick = onHelpClick
             )
 
+            // Новая кнопка управления голосовым движком
+            val isVoskInitialized = viewModel.isVoskInitialized()
             IconButtonWithLabel(
-                icon = if (isRecording) Icons.Default.Mic else Icons.Default.MicOff,
-                label = "микрофон",
+                icon = if (isVoskInitialized) Icons.Default.VolumeUp else Icons.Default.VolumeMute,
+                label = "голос",
                 onClick = {
-                    if (!hasPermission) {
+                    if (ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.RECORD_AUDIO
+                        ) != PackageManager.PERMISSION_GRANTED
+                    ) {
                         viewModel.appendSystemMessage("⚠️ Нет разрешения на запись аудио")
                         return@IconButtonWithLabel
                     }
-                    if (!viewModel.isVoskInitialized()) {
+                    if (isVoskInitialized) {
+                        // Логика выгрузки Vosk (если метод доступен)
+                        viewModel.releaseVosk()
+                        viewModel.appendSystemMessage("🔇 Голосовой движок выгружен")
+                    } else {
                         viewModel.initVoskLazily(context)
+                        viewModel.appendSystemMessage("🎤 Голосовой движок загружается...")
                     }
-                    onVoiceInputToggle()
                 }
             )
         }
@@ -1153,19 +1145,61 @@ private fun PromptInput(
     enabled: Boolean,
     isGenerating: Boolean,
     focusRequester: FocusRequester,
+    isRecording: Boolean,
+    viewModel: MainViewModel,
+    context: android.content.Context,
     modifier: Modifier = Modifier
 ) {
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(
-            onClick = onPickImage,
-            enabled = enabled && !isGenerating,
-            colors = IconButtonDefaults.iconButtonColors(containerColor = SurfaceGray)
+        // Левая колонка с кнопками
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = "Добавить изображение",
-                tint = if (enabled && !isGenerating) AccentColor else DarkText.copy(alpha = 0.4f)
-            )
+            // Кнопка добавления изображения
+            IconButton(
+                onClick = onPickImage,
+                enabled = enabled && !isGenerating,
+                colors = IconButtonDefaults.iconButtonColors(containerColor = SurfaceGray)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Добавить изображение",
+                    tint = if (enabled && !isGenerating) AccentColor else DarkText.copy(alpha = 0.4f)
+                )
+            }
+
+            // Кнопка управления записью (переехала сюда)
+            val isVoskInitialized = viewModel.isVoskInitialized()
+            IconButton(
+                onClick = {
+                    if (!isVoskInitialized) {
+                        viewModel.appendSystemMessage("⚠️ Голосовой движок не загружен. Нажмите 'голос' в верхней панели.")
+                        return@IconButton
+                    }
+                    if (ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.RECORD_AUDIO
+                        ) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        viewModel.appendSystemMessage("⚠️ Нет разрешения на запись аудио")
+                        return@IconButton
+                    }
+                    if (isRecording) {
+                        viewModel.stopRecording()
+                    } else {
+                        viewModel.startRecording()
+                    }
+                },
+                enabled = isVoskInitialized,
+                colors = IconButtonDefaults.iconButtonColors(containerColor = SurfaceGray)
+            ) {
+                Icon(
+                    imageVector = if (isRecording) Icons.Default.Mic else Icons.Default.MicOff,
+                    contentDescription = if (isRecording) "Остановить запись" else "Начать запись",
+                    tint = if (isRecording) AccentColor else DarkText.copy(alpha = 0.4f)
+                )
+            }
         }
 
         OutlinedTextField(
