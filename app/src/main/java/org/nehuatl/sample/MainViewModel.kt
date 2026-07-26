@@ -135,7 +135,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private var autoSendJob: Job? = null
 
     private var voskRecognizer: VoskRecognizer? = null
-    private var isVoskLoaded = false
+    // Реактивный поток состояния Vosk
+    private val _isVoskLoaded = MutableStateFlow(false)
+    val isVoskLoaded = _isVoskLoaded.asStateFlow()
 
     private val onVoiceResult: (String) -> Unit = { recognizedText ->
         if (recognizedText.isNotEmpty()) {
@@ -260,17 +262,17 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         )
     }
 
-    fun isVoskInitialized(): Boolean = isVoskLoaded
+    fun isVoskInitialized(): Boolean = _isVoskLoaded.value
 
     fun initVoskLazily(context: Context) {
-        if (!isVoskLoaded) {
+        if (!_isVoskLoaded.value) {
             voskRecognizer = VoskRecognizer(
                 contextRef = WeakReference<Context>(context.applicationContext),
                 onResult = onVoiceResult,
                 onLog = onVoiceLog,
                 scope = scope
             )
-            isVoskLoaded = true
+            _isVoskLoaded.value = true
         }
     }
 
@@ -282,7 +284,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
             voskRecognizer?.release()
             voskRecognizer = null
-            isVoskLoaded = false
+            _isVoskLoaded.value = false
             appendSystemMessage("🔄 Голосовой движок Vosk полностью выгружен из памяти")
             Log.d(TAG, "Vosk модель успешно освобождена из ОЗУ")
         } catch (e: Exception) {
