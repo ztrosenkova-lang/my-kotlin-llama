@@ -1066,7 +1066,8 @@ private fun StatusBar(
                 is GenerationState.ModelLoaded -> Triple(
                     SurfaceGray,
                     run {
-                        val modelName = currentModel?.substringAfterLast("/") ?: "нейросеть"
+                        val modelName = (currentModel?.substringAfterLast("/") ?: "нейросеть")
+                            .replace("primary%3AModels%", "")
                         "🤖 Модель $modelName успешно загружена"
                     },
                     false
@@ -1141,23 +1142,16 @@ private fun ModelPickerDialog(
                 // Блок выбора языковой модели
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Языковая модель", color = DarkText)
-                    if (currentModelPath != null) {
-                        val modelName = currentModelPath.substringAfterLast("/")
-                        Text(text = "✅ $modelName", style = MaterialTheme.typography.bodySmall, color = GreenColor)
-                    }
+                    val displayModelPath = currentModelPath?.substringAfterLast("/")?.replace("primary%3AModels%", "") ?: "Не выбрана"
+                    Text(text = "Текущая модель: $displayModelPath", style = MaterialTheme.typography.bodySmall, color = DarkText.copy(alpha = 0.7f))
+                    
                     Button(
                         onClick = onPickModel,
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = BorderGray)
                     ) {
-                        val buttonText = if (currentModelPath != null) {
-                            val modelName = currentModelPath.substringAfterLast("/")
-                            "📁 $modelName"
-                        } else {
-                            "Выбрать модель"
-                        }
                         Text(
-                            text = buttonText,
+                            text = if (currentModelPath != null) "Изменить модель" else "Выбрать модель",
                             color = if (currentModelPath != null) GreenColor else DarkText
                         )
                     }
@@ -1167,23 +1161,16 @@ private fun ModelPickerDialog(
                 Column(modifier = Modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("(опционально)", style = MaterialTheme.typography.bodySmall, color = DarkText.copy(alpha = 0.6f))
                     Text("Мультимодальный проектор (mmproj)", color = DarkText)
-                    if (mmprojPath != null) {
-                        val projName = mmprojPath.substringAfterLast("/")
-                        Text(text = "✅ $projName", style = MaterialTheme.typography.bodySmall, color = GreenColor)
-                    }
+                    val displayMmprojPath = mmprojPath?.substringAfterLast("/")?.replace("primary%3AModels%", "") ?: "Не выбран"
+                    Text(text = "Текущий проектор: $displayMmprojPath", style = MaterialTheme.typography.bodySmall, color = DarkText.copy(alpha = 0.7f))
+                    
                     Button(
                         onClick = onPickMmproj,
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = BorderGray)
                     ) {
-                        val buttonText = if (mmprojPath != null) {
-                            val projName = mmprojPath.substringAfterLast("/")
-                            "📁 $projName"
-                        } else {
-                            "Выбрать проектор"
-                        }
                         Text(
-                            text = buttonText,
+                            text = if (mmprojPath != null) "Изменить проектор" else "Выбрать проектор",
                             color = if (mmprojPath != null) GreenColor else DarkText
                         )
                     }
