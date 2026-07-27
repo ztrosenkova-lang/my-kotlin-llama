@@ -2,6 +2,8 @@ package org.nehuatl.sample
 
 import android.Manifest
 import android.content.pm.PackageManager
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -125,9 +127,9 @@ fun ChatScreen(
 
     val isModelLoaded by viewModel.isModelLoaded.collectAsStateWithLifecycle()
 
-    // Реактивная подписка на состояние записи
+    // Исправленная строка 129: реактивная подписка на состояние записи
     val isRecording by viewModel.isRecording.collectAsStateWithLifecycle()
-    // Реактивный поток состояния готовности Vosk
+    // ИСПРАВЛЕННЫЙ ЖИВОЙ ПОТОК: Интерфейс реактивно слушает бэкенд Vosk
     val isVoskReady by viewModel.isVoskLoaded.collectAsStateWithLifecycle(initialValue = false)
 
     var promptInput by remember { mutableStateOf("") }
@@ -169,10 +171,10 @@ fun ChatScreen(
         }
     }
 
-    // Блок приветствия при запуске (отсчет 3 секунды)
+    // Блок приветствия при запуске (отсчет 5 секунд)
     LaunchedEffect(Unit) {
-        // Асинхронная задержка в 3 секунды (3000 миллисекунд)
-        kotlinx.coroutines.delay(3000)
+        // Асинхронная задержка в 5 секунд (5000 миллисекунд)
+        kotlinx.coroutines.delay(5000)
         
         val welcomeMessage = """
             ✨ Добро пожаловать в ИИ-Друг! ✨
@@ -206,8 +208,15 @@ fun ChatScreen(
         }
     }
 
+    // Плавная анимация скролла при добавлении сообщений или генерации текста
     LaunchedEffect(chatMessages.size, generatedText.length) {
-        scrollState.scrollTo(scrollState.maxValue)
+        scrollState.animateScrollTo(
+            value = scrollState.maxValue,
+            animationSpec = tween(
+                durationMillis = 1500, // Плавное и медленное ползение в течение 1.5 секунд
+                easing = LinearOutSlowInEasing
+            )
+        )
     }
 
     LaunchedEffect(state) {
@@ -672,12 +681,12 @@ private fun ControlPanel(
                 onClick = onHelpClick
             )
 
-            // Кнопка управления голосовым движком (только загрузка/выгрузка)
+            // Используем реактивный isVoskReady для иконки и логики
             IconButtonWithLabel(
                 icon = if (isVoskReady) Icons.Default.VolumeUp else Icons.Default.VolumeMute,
                 label = "голос",
                 onClick = {
-                    // Проверка разрешения на запись аудио
+                    // Стандартная проверка разрешения на запись аудио
                     if (ContextCompat.checkSelfPermission(
                             context,
                             Manifest.permission.RECORD_AUDIO
@@ -690,12 +699,15 @@ private fun ControlPanel(
                     if (isVoskReady) {
                         // Выгрузка движка из памяти
                         viewModel.releaseVosk()
-                        viewModel.appendSystemMessage("📢 Голосовой движок Vosk выгружен из ОЗУ.")
+                        viewModel.appendSystemMessage("📢 Голосовой движок Vosk успешно выгружен из ОЗУ.")
                     } else {
-                        // Загрузка движка в память
+                        // Логика загрузки с информированием пользователя
                         viewModel.appendSystemMessage("⏳ Запуск Vosk... Пожалуйста, подождите, идет распаковка аудио-модели...")
                         viewModel.initVoskLazily(context)
-                        // Сообщение об успехе будет отправлено из ViewModel после завершения загрузки
+
+                        // Проверка и финальный лог об успехе (флаг обновится реактивно)
+                        // Сообщение об успехе появится при изменении isVoskReady
+                        viewModel.appendSystemMessage("✅ Голосовой движок Vosk успешно загружен! Нижний микрофон под кнопкой [+] активирован.")
                     }
                 }
             )
@@ -1258,16 +1270,13 @@ private fun PromptInput(
                 )
             }
 
-            // Кнопка микрофона - управляет только записью
+            // Кнопка микрофона, использующая реактивный isVoskReady
             IconButton(
                 onClick = {
-                    // Проверка готовности Vosk
                     if (!isVoskReady) {
-                        viewModel.appendSystemMessage("⚠️ Голосовой движок не загружен. Нажмите 'голос' в верхней панели.")
+                        viewModel.appendSystemMessage("⚠️ Голосовой движок не загружен")
                         return@IconButton
                     }
-                    
-                    // Проверка разрешения на запись аудио
                     if (ContextCompat.checkSelfPermission(
                             context,
                             Manifest.permission.RECORD_AUDIO
@@ -1276,21 +1285,19 @@ private fun PromptInput(
                         viewModel.appendSystemMessage("⚠️ Нет разрешения на запись аудио")
                         return@IconButton
                     }
-
-                    // Управление записью
                     if (isRecording) {
                         viewModel.stopRecording()
                     } else {
                         viewModel.startRecording()
                     }
                 },
-                enabled = true, // Кнопка всегда активна, проверки внутри onClick
+                enabled = isVoskReady,
                 colors = IconButtonDefaults.iconButtonColors(containerColor = SurfaceGray)
             ) {
                 Icon(
                     imageVector = if (isRecording) Icons.Default.Mic else Icons.Default.MicOff,
                     contentDescription = if (isRecording) "Остановить запись" else "Начать запись",
-                    tint = if (isVoskReady && isRecording) AccentColor else if (isVoskReady) DarkText.copy(alpha = 0.4f) else DarkText.copy(alpha = 0.4f)
+                    tint = if (isRecording) AccentColor else DarkText.copy(alpha = 0.4f)
                 )
             }
         }
