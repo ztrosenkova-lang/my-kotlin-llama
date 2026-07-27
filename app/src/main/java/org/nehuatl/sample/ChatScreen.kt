@@ -216,20 +216,13 @@ fun ChatScreen(
         scrollState.animateScrollTo(
             value = scrollState.maxValue,
             animationSpec = tween(
-                durationMillis = 1500, // Плавное и медленное ползение в течение 1.5 секунд
+                durationMillis = 1500,
                 easing = LinearOutSlowInEasing
             )
         )
     }
 
-    LaunchedEffect(state) {
-        if (state is GenerationState.ModelLoaded) {
-            try {
-                focusRequester.requestFocus()
-                keyboardController?.show()
-            } catch (_: Exception) {}
-        }
-    }
+    // Удален автозапрос фокуса для клавиатуры
 
     LaunchedEffect(showSettings) {
         if (showSettings) {
@@ -507,105 +500,111 @@ private fun TopBarWithSwitch(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(4.dp), // Уменьшено с 8.dp до 4.dp
+            .padding(4.dp),
         shape = MaterialTheme.shapes.medium,
         border = BorderStroke(1.dp, BorderGray),
         colors = CardDefaults.cardColors(containerColor = SurfaceGray)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 2.dp), // Уменьшено с vertical = 4.dp до 2.dp
-            verticalArrangement = Arrangement.spacedBy(0.dp) // Установлено 0.dp для устранения зазора
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Первая строка: логотип, заголовок, кнопки режимов
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            // Левая часть: Логотип (80.dp)
+            Image(
+                painter = painterResource(id = R.mipmap.ic_launcher),
+                contentDescription = "Лого",
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(RoundedCornerShape(16.dp))
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // Правая часть: Колонка без фона
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Image(
-                    painter = painterResource(id = R.mipmap.ic_launcher),
-                    contentDescription = "Лого",
-                    contentScale = ContentScale.FillBounds,
-                    modifier = Modifier
-                        .size(40.dp) // Уменьшено с 72.dp до 40.dp
-                        .clip(RoundedCornerShape(16.dp))
-                )
-
-                Text(
-                    text = "ИИ-Друг",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = FriendlyRobotColor,
-                    fontSize = 20.sp,
-                    fontFamily = FontFamily.Monospace,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 8.dp)
-                )
-
+                // Первая строка: Заголовок и кнопки режимов
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    ModeButton(
-                        label = "Local",
-                        isSelected = currentMode == AIMode.LOCAL,
-                        onClick = { onLocalForceDialog() },
-                        modifier = Modifier.size(38.dp, 24.dp)
+                    Text(
+                        text = "ИИ-Друг",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = FriendlyRobotColor,
+                        fontSize = 18.sp,
+                        fontFamily = FontFamily.Monospace,
+                        textAlign = TextAlign.Start,
+                        modifier = Modifier.weight(1f)
                     )
-                    ModeButton(
-                        label = "Neutral",
-                        isSelected = currentMode == AIMode.NEUTRAL,
-                        onClick = { onModeChange(AIMode.NEUTRAL) },
-                        modifier = Modifier.size(38.dp, 24.dp)
-                    )
-                    ModeButton(
-                        label = "Cloud",
-                        isSelected = currentMode == AIMode.CLOUD,
-                        onClick = { onCloudForceDialog() },
-                        modifier = Modifier.size(38.dp, 24.dp)
-                    )
-                }
-            }
 
-            // Вторая строка: индикаторы состояния по центру
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        ModeButton(
+                            label = "Local",
+                            isSelected = currentMode == AIMode.LOCAL,
+                            onClick = { onLocalForceDialog() },
+                            modifier = Modifier.size(36.dp, 22.dp)
+                        )
+                        ModeButton(
+                            label = "Neutral",
+                            isSelected = currentMode == AIMode.NEUTRAL,
+                            onClick = { onModeChange(AIMode.NEUTRAL) },
+                            modifier = Modifier.size(36.dp, 22.dp)
+                        )
+                        ModeButton(
+                            label = "Cloud",
+                            isSelected = currentMode == AIMode.CLOUD,
+                            onClick = { onCloudForceDialog() },
+                            modifier = Modifier.size(36.dp, 22.dp)
+                        )
+                    }
+                }
+
+                // Вторая строка: Индикаторы состояния по центру
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Индикатор локального ИИ (горизонтальный ряд)
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(10.dp)
-                                .background(localIndicatorColor, shape = CircleShape)
-                                .border(0.5.dp, BorderGray, CircleShape)
-                        )
-                        Text(text = "локальный ИИ", fontSize = 6.sp, color = DarkText)
-                    }
+                        // Индикатор локального ИИ
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .background(localIndicatorColor, shape = CircleShape)
+                                    .border(0.5.dp, BorderGray, CircleShape)
+                            )
+                            Text(text = "локальный ИИ", fontSize = 6.sp, color = DarkText)
+                        }
 
-                    // Индикатор облачного ИИ (горизонтальный ряд)
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(10.dp)
-                                .background(cloudIndicatorColor, shape = CircleShape)
-                                .border(0.5.dp, BorderGray, CircleShape)
-                        )
-                        Text(text = "Облачный ИИ", fontSize = 6.sp, color = DarkText)
+                        // Индикатор облачного ИИ
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .background(cloudIndicatorColor, shape = CircleShape)
+                                    .border(0.5.dp, BorderGray, CircleShape)
+                            )
+                            Text(text = "Облачный ИИ", fontSize = 6.sp, color = DarkText)
+                        }
                     }
                 }
             }
@@ -637,7 +636,7 @@ private fun ModeButton(
         Text(
             text = label,
             color = if (isSelected) Color.White else DarkText,
-            fontSize = 8.sp,
+            fontSize = 7.sp,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
         )
     }
@@ -1255,15 +1254,26 @@ private fun PromptInput(
     context: android.content.Context,
     modifier: Modifier = Modifier
 ) {
-    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(24.dp),
+        border = BorderStroke(1.dp, BorderGray),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF9DB))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            // Левая группа: Plus и Delete
             IconButton(
                 onClick = onPickImage,
                 enabled = enabled && !isGenerating,
-                colors = IconButtonDefaults.iconButtonColors(containerColor = SurfaceGray)
+                colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Transparent)
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
@@ -1272,11 +1282,45 @@ private fun PromptInput(
                 )
             }
 
-            // Кнопка микрофона, использующая реактивный isVoskReady
+            IconButton(
+                onClick = onClearChat,
+                enabled = true,
+                colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Transparent)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Очистить чат",
+                    tint = AccentColor
+                )
+            }
+
+            // Центр: Поле ввода
+            OutlinedTextField(
+                value = prompt,
+                onValueChange = onPromptChange,
+                modifier = Modifier
+                    .weight(1f)
+                    .focusRequester(focusRequester),
+                enabled = enabled && !isGenerating,
+                placeholder = { Text("Введите запрос...", color = DarkText.copy(alpha = 0.5f)) },
+                maxLines = 3,
+                singleLine = false,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = DarkText,
+                    unfocusedTextColor = DarkText,
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent,
+                    cursorColor = AccentColor
+                )
+            )
+
+            // Правая группа: Микрофон и Отправить/Стоп
             IconButton(
                 onClick = {
                     if (!isVoskReady) {
-                        viewModel.appendSystemMessage("⚠️ Голосовой движок не загружен")
+                        viewModel.appendSystemMessage("⚠️ Голосовой движок не загружен. Нажмите кнопку «голос» в верхней панели управления, чтобы активировать высокоточное распознавание.")
                         return@IconButton
                     }
                     if (ContextCompat.checkSelfPermission(
@@ -1293,35 +1337,16 @@ private fun PromptInput(
                         viewModel.startRecording()
                     }
                 },
-                enabled = isVoskReady,
-                colors = IconButtonDefaults.iconButtonColors(containerColor = SurfaceGray)
+                enabled = true,
+                colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Transparent)
             ) {
                 Icon(
                     imageVector = if (isRecording) Icons.Default.Mic else Icons.Default.MicOff,
                     contentDescription = if (isRecording) "Остановить запись" else "Начать запись",
-                    tint = if (isRecording) AccentColor else DarkText.copy(alpha = 0.4f)
+                    tint = if (isVoskReady && isRecording) AccentColor else if (isVoskReady) DarkText.copy(alpha = 0.4f) else DarkText.copy(alpha = 0.4f)
                 )
             }
-        }
 
-        OutlinedTextField(
-            value = prompt,
-            onValueChange = onPromptChange,
-            modifier = Modifier.weight(1f).focusRequester(focusRequester),
-            enabled = enabled && !isGenerating,
-            placeholder = { Text("Введите запрос...", color = DarkText.copy(alpha = 0.5f)) },
-            maxLines = 3,
-            singleLine = false,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = DarkText,
-                unfocusedTextColor = DarkText,
-                focusedBorderColor = AccentColor,
-                unfocusedBorderColor = BorderGray,
-                cursorColor = AccentColor
-            )
-        )
-
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             if (isGenerating) {
                 IconButton(
                     onClick = onAbort,
@@ -1338,9 +1363,8 @@ private fun PromptInput(
                 IconButton(
                     onClick = onGenerate,
                     enabled = enabled && prompt.isNotBlank(),
-                    modifier = Modifier.size(48.dp),
                     colors = IconButtonDefaults.iconButtonColors(
-                        containerColor = if (enabled && prompt.isNotBlank()) AccentColor.copy(alpha = 0.15f) else SurfaceGray
+                        containerColor = if (enabled && prompt.isNotBlank()) AccentColor.copy(alpha = 0.15f) else Color.Transparent
                     )
                 ) {
                     Icon(
@@ -1349,19 +1373,6 @@ private fun PromptInput(
                         tint = if (enabled && prompt.isNotBlank()) AccentColor else DarkText.copy(alpha = 0.4f)
                     )
                 }
-            }
-
-            IconButton(
-                onClick = onClearChat,
-                enabled = true,
-                modifier = Modifier.size(48.dp),
-                colors = IconButtonDefaults.iconButtonColors(containerColor = SurfaceGray)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Очистить чат",
-                    tint = AccentColor
-                )
             }
         }
     }
