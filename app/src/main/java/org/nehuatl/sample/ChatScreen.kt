@@ -125,9 +125,9 @@ fun ChatScreen(
 
     val isModelLoaded by viewModel.isModelLoaded.collectAsStateWithLifecycle()
 
-    // Исправленная строка 129: реактивная подписка на состояние записи
+    // Реактивная подписка на состояние записи
     val isRecording by viewModel.isRecording.collectAsStateWithLifecycle()
-    // ИСПРАВЛЕННЫЙ ЖИВОЙ ПОТОК: Интерфейс реактивно слушает бэкенд Vosk
+    // Реактивный поток состояния готовности Vosk
     val isVoskReady by viewModel.isVoskLoaded.collectAsStateWithLifecycle(initialValue = false)
 
     var promptInput by remember { mutableStateOf("") }
@@ -672,12 +672,12 @@ private fun ControlPanel(
                 onClick = onHelpClick
             )
 
-            // Используем реактивный isVoskReady для иконки и логики
+            // Кнопка управления голосовым движком (только загрузка/выгрузка)
             IconButtonWithLabel(
                 icon = if (isVoskReady) Icons.Default.VolumeUp else Icons.Default.VolumeMute,
                 label = "голос",
                 onClick = {
-                    // Стандартная проверка разрешения на запись аудио
+                    // Проверка разрешения на запись аудио
                     if (ContextCompat.checkSelfPermission(
                             context,
                             Manifest.permission.RECORD_AUDIO
@@ -690,15 +690,12 @@ private fun ControlPanel(
                     if (isVoskReady) {
                         // Выгрузка движка из памяти
                         viewModel.releaseVosk()
-                        viewModel.appendSystemMessage("📢 Голосовой движок Vosk успешно выгружен из ОЗУ.")
+                        viewModel.appendSystemMessage("📢 Голосовой движок Vosk выгружен из ОЗУ.")
                     } else {
-                        // Логика загрузки с информированием пользователя
+                        // Загрузка движка в память
                         viewModel.appendSystemMessage("⏳ Запуск Vosk... Пожалуйста, подождите, идет распаковка аудио-модели...")
                         viewModel.initVoskLazily(context)
-
-                        // Проверка и финальный лог об успехе (флаг обновится реактивно)
-                        // Сообщение об успехе появится при изменении isVoskReady
-                        viewModel.appendSystemMessage("✅ Голосовой движок Vosk успешно загружен! Нижний микрофон под кнопкой [+] активирован.")
+                        // Сообщение об успехе будет отправлено из ViewModel после завершения загрузки
                     }
                 }
             )
@@ -1261,13 +1258,16 @@ private fun PromptInput(
                 )
             }
 
-            // Кнопка микрофона, использующая реактивный isVoskReady
+            // Кнопка микрофона - управляет только записью
             IconButton(
                 onClick = {
+                    // Проверка готовности Vosk
                     if (!isVoskReady) {
-                        viewModel.appendSystemMessage("⚠️ Голосовой движок не загружен")
+                        viewModel.appendSystemMessage("⚠️ Голосовой движок не загружен. Нажмите 'голос' в верхней панели.")
                         return@IconButton
                     }
+                    
+                    // Проверка разрешения на запись аудио
                     if (ContextCompat.checkSelfPermission(
                             context,
                             Manifest.permission.RECORD_AUDIO
@@ -1276,19 +1276,21 @@ private fun PromptInput(
                         viewModel.appendSystemMessage("⚠️ Нет разрешения на запись аудио")
                         return@IconButton
                     }
+
+                    // Управление записью
                     if (isRecording) {
                         viewModel.stopRecording()
                     } else {
                         viewModel.startRecording()
                     }
                 },
-                enabled = isVoskReady,
+                enabled = true, // Кнопка всегда активна, проверки внутри onClick
                 colors = IconButtonDefaults.iconButtonColors(containerColor = SurfaceGray)
             ) {
                 Icon(
                     imageVector = if (isRecording) Icons.Default.Mic else Icons.Default.MicOff,
                     contentDescription = if (isRecording) "Остановить запись" else "Начать запись",
-                    tint = if (isRecording) AccentColor else DarkText.copy(alpha = 0.4f)
+                    tint = if (isVoskReady && isRecording) AccentColor else if (isVoskReady) DarkText.copy(alpha = 0.4f) else DarkText.copy(alpha = 0.4f)
                 )
             }
         }
