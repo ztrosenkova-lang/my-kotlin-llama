@@ -12,16 +12,15 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.vosk.Model
 import org.vosk.Recognizer
-import org.vosk.android.SpeechService
-import org.vosk.android.StorageService
-import java.io.IOException
+import java.io.File
 import java.lang.ref.WeakReference
 
 class VoskRecognizer(
     private val contextRef: WeakReference<Context>,
     private val onResult: (String) -> Unit,
     private val onLog: (String) -> Unit,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    private val externalModelPath: String? // Абсолютный путь к файлу модели (1.5 ГБ)
 ) {
     companion object {
         private const val TAG = "VoskRecognizer"
@@ -30,16 +29,18 @@ class VoskRecognizer(
 
     private var model: Model? = null
     private var recognizer: Recognizer? = null
-    private var speechService: SpeechService? = null
     private var audioRecord: AudioRecord? = null
     private var recordingJob: Job? = null
     private var isInitialized = false
 
     init {
-        onLog("🔄 Инициализация Vosk...")
+        onLog("🔄 Инициализация Vosk с прямым путем к модели...")
         initModel()
     }
 
+    /**
+     * Инициализация модели синхронно по абсолютному пути.
+     */
     private fun initModel() {
         val context = contextRef.get()
         if (context == null) {
@@ -49,45 +50,53 @@ class VoskRecognizer(
             return
         }
 
-        try {
-            onLog("📁 Распаковка модели из assets/model в vosk-model...")
-            StorageService.unpack(
-                context.applicationContext,
-                "model",
-                "vosk-model",
-                object : StorageService.Callback<Model> {
-                    override fun onComplete(model: Model) {
-                        try {
-                            onLog("✅ Модель успешно распакована")
-                            this@VoskRecognizer.model = model
-
-                            val rec = Recognizer(model, SAMPLE_RATE)
-                            this@VoskRecognizer.recognizer = rec
-
-                            speechService = SpeechService(rec, SAMPLE_RATE)
-                            isInitialized = true
-                            val successMsg = "✅ Vosk модель загружена успешно"
-                            Log.d(TAG, successMsg)
-                            onLog(successMsg)
-                        } catch (e: Exception) {
-                            val errorMsg = "❌ Ошибка создания Recognizer/SpeechService: ${e.message}"
-                            Log.e(TAG, errorMsg)
-                            onLog(errorMsg)
-                        }
-                    }
-                },
-                object : StorageService.Callback<IOException> {
-                    override fun onComplete(exception: IOException) {
-                        val errorMsg = "❌ Ошибка распаковки модели: ${exception.message}"
-                        Log.e(TAG, errorMsg)
-                        onLog(errorMsg)
-                    }
-                }
-            )
-        } catch (e: Exception) {
-            val errorMsg = "❌ Неизвестная ошибка инициализации Vosk: ${e.message}"
+        if (externalModelPath.isNullOrEmpty()) {
+            val errorMsg = "❌ Путь к модели не указан. Необходимо передать absolutePath к файлу модели (1.5 ГБ)."
             Log.e(TAG, errorMsg)
             onLog(errorMsg)
+            return
+        }
+
+        val modelFile = File(externalModelPath)
+        if (!modelFile.exists()) {
+            val errorMsg = "❌ Модель не найдена по пути: $externalModelPath"
+            Log.e(TAG, errorMsg)
+            onLog(errorMsg)
+            return
+        }
+
+        try {
+            onLog("📁 Загрузка модели из: $externalModelPath")
+            val startTime = System.currentTimeMillis()
+
+            // Инициализация модели синхронно по пути
+            val loadedModel = Model(externalModelPath)
+            this.model = loadedModel
+
+            val duration = System.currentTimeMillis() - startTime
+            onLog("✅ Модель успешно загружена за ${duration}мс")
+
+            // Создание распознавателя
+            val rec = Recognizer(loadedModel, SAMPLE_RATE)
+            this.recognizer = rec
+            this.isInitialized = true
+
+            val successMsg = "✅ Vosk модель успешно инициализирована"
+            Log.d(TAG, successMsg)
+            onLog(successMsg)
+
+        } catch (e: Exception) {
+            val errorMsg = "❌ Ошибка инициализации Vosk: ${e.message}"
+            Log.e(TAG, errorMsg)
+            onLog(errorMsg)
+
+            // Очистка при ошибке
+            try {
+                model?.close()
+            } catch (_: Exception) {}
+            model = null
+            recognizer = null
+            isInitialized = false
         }
     }
 
@@ -199,8 +208,13 @@ class VoskRecognizer(
         Log.d(TAG, "Запись остановлена")
     }
 
+    /**
+     * Полное освобождение ресурсов с гарантированным .close() для native-объектов.
+     */
     fun release() {
-        onLog("🔄 Освобождение Vosk")
+        onLog("🔄 Освобождение Vosk (принудительное закрытие native-объектов)")
+
+        // 1. Остановка записи
         recordingJob?.cancel()
         try {
             audioRecord?.stop()
@@ -209,14 +223,28 @@ class VoskRecognizer(
         }
         audioRecord?.release()
         audioRecord = null
-        recognizer?.close()
+
+        // 2. Принудительное закрытие распознавателя
+        try {
+            recognizer?.close()
+            onLog("✅ Recognizer закрыт")
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка закрытия Recognizer: ${e.message}")
+        }
         recognizer = null
-        speechService?.stop()
-        speechService = null
-        model?.close()
+
+        // 3. Принудительное закрытие модели (освобождение C++ памяти)
+        try {
+            model?.close()
+            onLog("✅ Model закрыта (C++ память освобождена)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка закрытия Model: ${e.message}")
+        }
         model = null
+
         isInitialized = false
-        Log.d(TAG, "Vosk освобожден")
+        Log.d(TAG, "Vosk полностью освобожден")
+        onLog("🔄 Vosk полностью освобожден")
     }
 
     private fun parseResult(json: String?): String {
