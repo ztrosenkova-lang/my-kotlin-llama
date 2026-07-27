@@ -68,12 +68,22 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // Универсальный лаунчер для множественных разрешений
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         val audioGranted = permissions[Manifest.permission.RECORD_AUDIO] ?: false
         if (!audioGranted) {
             Log.w("MainActivity", "Разрешение на запись audio не получено")
+        }
+
+        val storageGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions[Manifest.permission.READ_MEDIA_IMAGES] ?: false
+        } else {
+            permissions[Manifest.permission.READ_EXTERNAL_STORAGE] ?: false
+        }
+        if (!storageGranted) {
+            Log.w("MainActivity", "Разрешение на чтение хранилища не получено")
         }
     }
 
@@ -82,16 +92,17 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
 
+        // Проверка и запрос всех необходимых разрешений
+        checkAndRequestAllPermissions()
+
+        // Логирование состояния точного будильника без принудительного открытия настроек
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val alarmManager = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
             if (!alarmManager.canScheduleExactAlarms()) {
-                Log.w("MainActivity", "Разрешение на точный будильник не предоставлено. Открываем настройки.")
-                val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
-                startActivity(intent)
+                Log.w("MainActivity", "Разрешение на точный будильник не предоставлено. Пользователь сможет установить его при создании первого будильника.")
+                // Запрос разрешения будет выполнен при установке будильника через AlarmReceiver
             }
         }
-
-        checkAndRequestAudioPermission()
 
         setContent {
             KotlinLlamaCppTheme {
@@ -119,17 +130,30 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun checkAndRequestAudioPermission() {
-        if (ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.RECORD_AUDIO
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissionLauncher.launch(
-                arrayOf(
-                    Manifest.permission.RECORD_AUDIO
-                )
-            )
+    /**
+     * Запрашивает все необходимые разрешения в зависимости от версии Android:
+     * - RECORD_AUDIO всегда
+     * - Для Android 13+ (Tiramisu): READ_MEDIA_IMAGES и READ_MEDIA_VIDEO
+     * - Для Android 12 и ниже: READ_EXTERNAL_STORAGE
+     */
+    private fun checkAndRequestAllPermissions() {
+        val permissions = mutableListOf(
+            Manifest.permission.RECORD_AUDIO
+        )
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.READ_MEDIA_IMAGES)
+            permissions.add(Manifest.permission.READ_MEDIA_VIDEO)
+        } else {
+            permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+
+        val missingPermissions = permissions.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (missingPermissions.isNotEmpty()) {
+            requestPermissionLauncher.launch(missingPermissions.toTypedArray())
         }
     }
 }
