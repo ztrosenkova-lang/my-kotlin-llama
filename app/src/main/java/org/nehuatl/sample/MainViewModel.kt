@@ -18,6 +18,7 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -147,6 +148,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _isVoskLoaded = MutableStateFlow(false)
     val isVoskLoaded = _isVoskLoaded.asStateFlow()
 
+    // === RAM Memory Info State Flow ===
+    private val _memoryInfoText = MutableStateFlow("Всего доступно: 0.0 ГБ / Занято: 0.0 ГБ")
+    val memoryInfoText: StateFlow<String> = _memoryInfoText.asStateFlow()
+
     private val onVoiceResult: (String) -> Unit = { recognizedText ->
         if (recognizedText.isNotEmpty()) {
             _recognizedText.value = recognizedText
@@ -256,6 +261,37 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         _isModelLoaded.value = true
                     }
                 }
+            }
+        }
+
+        // Запуск фоновой корутины для мониторинга RAM
+        scope.launch(Dispatchers.Default) {
+            val context = getApplication<Application>().applicationContext
+            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+            val memoryInfo = android.app.ActivityManager.MemoryInfo()
+
+            while (true) {
+                if (activityManager != null) {
+                    activityManager.getMemoryInfo(memoryInfo)
+
+                    // Конвертируем байты в гигабайты (1 ГБ = 1024 * 1024 * 1024 байт)
+                    val totalGb = memoryInfo.totalMem.toDouble() / (1024.0 * 1024.0 * 1024.0)
+                    val availGb = memoryInfo.availMem.toDouble() / (1024.0 * 1024.0 * 1024.0)
+                    val usedGb = totalGb - availGb
+
+                    // Форматируем строку до одного знака после запятой
+                    val formattedString = String.format(
+                        java.util.Locale.US,
+                        "Всего доступно %.1f ГБ / Занято %.1f ГБ",
+                        totalGb,
+                        usedGb
+                    )
+
+                    // Перенаправляем обновление стейта в поток данных
+                    _memoryInfoText.value = formattedString
+                }
+                // Задержка ровно в 1 секунду (1000мс) перед следующим замером
+                delay(1000)
             }
         }
 
@@ -446,20 +482,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
             voskRecognizer?.release()
             voskRecognizer = null
-            scope.launch {
-                withContext(Dispatchers.Main) {
-                    _isVoskLoaded.value = false
-                    appendSystemMessage("🔄 Голосовой движок Vosk полностью выгружен из памяти")
-                }
-            }
+
+            _isVoskLoaded.value = false
+            appendSystemMessage("🔄 Голосовой движок Vosk полностью выгружен из памяти")
             Log.d(TAG, "Vosk модель успешно освобождена из ОЗУ")
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка при выгрузке Vosk: ${e.message}")
-            scope.launch {
-                withContext(Dispatchers.Main) {
-                    appendSystemMessage("⚠ Ошибка при выгрузке голосового движка")
-                }
-            }
+            appendSystemMessage("⚠ Ошибка при выгрузке голосового движка")
         }
     }
 
