@@ -63,6 +63,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -86,6 +87,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 
 private val AppBackground = Color(0xFFFFFFFF)
 private val SurfaceGray = Color(0xFFF1F3F5)
@@ -156,6 +158,7 @@ fun ChatScreen(
 
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val coroutineScope = rememberCoroutineScope()
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -343,7 +346,8 @@ fun ChatScreen(
             onHelpClick = { showHelpDialog = true },
             isVoskReady = isVoskReady,
             viewModel = viewModel,
-            context = context
+            context = context,
+            coroutineScope = coroutineScope
         )
 
         if (showSettings) {
@@ -647,7 +651,8 @@ private fun ControlPanel(
     onHelpClick: () -> Unit,
     isVoskReady: Boolean,
     viewModel: MainViewModel,
-    context: android.content.Context
+    context: android.content.Context,
+    coroutineScope: kotlinx.coroutines.CoroutineScope
 ) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
@@ -701,13 +706,10 @@ private fun ControlPanel(
                         viewModel.releaseVosk()
                         viewModel.appendSystemMessage("📢 Голосовой движок Vosk успешно выгружен из ОЗУ.")
                     } else {
-                        // Логика загрузки с информированием пользователя
-                        viewModel.appendSystemMessage("⏳ Запуск Vosk... Пожалуйста, подождите, идет распаковка аудио-модели...")
-                        viewModel.initVoskLazily(context)
-
-                        // Проверка и финальный лог об успехе (флаг обновится реактивно)
-                        // Сообщение об успехе появится при изменении isVoskReady
-                        viewModel.appendSystemMessage("✅ Голосовой движок Vosk успешно загружен! Нижний микрофон под кнопкой [+] активирован.")
+                        // Запуск инициализации внутри корутины
+                        coroutineScope.launch {
+                            viewModel.initVoskLazily(context)
+                        }
                     }
                 }
             )
