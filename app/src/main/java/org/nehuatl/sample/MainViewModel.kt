@@ -287,13 +287,15 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
             scope.launch {
                 withContext(Dispatchers.IO) {
+                    var tempFile: File? = null
+                    var animationJob: Job? = null
                     try {
                         val url = URL(VOSK_MODEL_URL)
                         val connection = url.openConnection() as HttpURLConnection
                         connection.connect()
                         val fileLength = connection.contentLength
                         val inputStream = connection.inputStream
-                        val tempFile = File(context.cacheDir, "vosk-model-temp.zip")
+                        tempFile = File(context.cacheDir, "vosk-model-temp.zip")
 
                         withContext(Dispatchers.Main) {
                             appendSystemMessage("📥 Начинаю загрузку модели...")
@@ -334,6 +336,16 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
                         withContext(Dispatchers.Main) {
                             appendSystemMessage("⏳ Распаковка модели...")
+                            // Запуск анимации распаковки
+                            animationJob = launch {
+                                var dots = 1
+                                while (true) {
+                                    val dotsString = ".".repeat(dots)
+                                    appendSystemMessage("⏳ Распаковка модели$dotsString")
+                                    delay(500)
+                                    dots = (dots % 3) + 1
+                                }
+                            }
                         }
 
                         // Распаковка архива
@@ -359,13 +371,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             }
                         }
 
-                        // Удаление временного ZIP-файла
-                        tempFile.delete()
-
                         // Помечаем модель как готовую
                         prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, true).apply()
 
                         withContext(Dispatchers.Main) {
+                            animationJob?.cancel()
                             appendSystemMessage("✅ Голосовой движок успешно настроен и распакован!")
                         }
 
@@ -375,7 +385,16 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     } catch (e: Exception) {
                         Log.e(TAG, "Ошибка загрузки/распаковки модели Vosk: ${e.message}")
                         withContext(Dispatchers.Main) {
+                            animationJob?.cancel()
                             appendSystemMessage("⚠️ Ошибка загрузки голосовой модели: ${e.message}. Попробуйте перезапустить приложение.")
+                        }
+                    } finally {
+                        // Гарантированное удаление временного ZIP-файла
+                        tempFile?.let {
+                            if (it.exists()) {
+                                it.delete()
+                                Log.d(TAG, "Временный ZIP-файл успешно удален: ${it.absolutePath}")
+                            }
                         }
                     }
                 }
@@ -386,13 +405,15 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    private fun initializeVoskModel(context: Context) {
+    private suspend fun initializeVoskModel(context: Context) {
         try {
             val targetDir = File(context.filesDir, VOSK_MODEL_DIR)
             val modelPath = File(targetDir, "vosk-model-ru-0.42").absolutePath
 
             if (!File(modelPath).exists()) {
-                appendSystemMessage("⚠️ Модель не найдена по пути: $modelPath. Попробуйте перезапустить приложение.")
+                withContext(Dispatchers.Main) {
+                    appendSystemMessage("⚠️ Модель не найдена по пути: $modelPath. Попробуйте перезапустить приложение.")
+                }
                 return
             }
 
@@ -403,12 +424,17 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 scope = scope,
                 externalModelPath = modelPath
             )
-            _isVoskLoaded.value = true
-            appendSystemMessage("✅ Голосовой движок Vosk загружен!")
+
+            withContext(Dispatchers.Main) {
+                _isVoskLoaded.value = true
+                appendSystemMessage("✅ Голосовой движок Vosk полностью загружен и готов в ОЗУ!")
+            }
 
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка инициализации Vosk: ${e.message}")
-            appendSystemMessage("⚠️ Ошибка инициализации Vosk: ${e.message}")
+            withContext(Dispatchers.Main) {
+                appendSystemMessage("⚠️ Ошибка инициализации Vosk: ${e.message}")
+            }
         }
     }
 
@@ -420,12 +446,20 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
             voskRecognizer?.release()
             voskRecognizer = null
-            _isVoskLoaded.value = false
-            appendSystemMessage("🔄 Голосовой движок Vosk полностью выгружен из памяти")
+            scope.launch {
+                withContext(Dispatchers.Main) {
+                    _isVoskLoaded.value = false
+                    appendSystemMessage("🔄 Голосовой движок Vosk полностью выгружен из памяти")
+                }
+            }
             Log.d(TAG, "Vosk модель успешно освобождена из ОЗУ")
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка при выгрузке Vosk: ${e.message}")
-            appendSystemMessage("⚠ Ошибка при выгрузке голосового движка")
+            scope.launch {
+                withContext(Dispatchers.Main) {
+                    appendSystemMessage("⚠ Ошибка при выгрузке голосового движка")
+                }
+            }
         }
     }
 
@@ -452,7 +486,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 return
             }
             lowerText.contains(RECALL_COMMAND) || lowerText.contains(FIND_COMMAND) || lowerText.contains(SEARCH_COMMAND) -> {
-                // Локальный поиск без LLM для NEUTRAL режима
+                // Для NEUTRAL режима выполняем локальный поиск и выводим результат
                 if (_currentMode.value == AIMode.NEUTRAL) {
                     val searchResult = buildSystemPrompt(true, text)
                     val memoryData = readFromLongTermMemory()
@@ -485,7 +519,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     }
                     return
                 }
-                // Для LOCAL/CLOUD режимов передаем в LLM
+                // Для LOCAL/CLOUD режимов пропускаем блок и передаем управление дальше для обработки LLM
             }
         }
 
@@ -682,29 +716,35 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         val brainData = readBrain()
         val chatHistory = _chatHistory.value
 
-        val filteredMemory = if (isSearchCommand) {
-            val cleanSearchQuery = prompt.lowercase()
-                .replace("вспомни", "")
-                .replace("найди", "")
-                .replace("поищи", "")
-                .trim()
+        // Извлечение ключевых слов из запроса для поиска в памяти
+        val cleanSearchQuery = prompt.lowercase()
+            .replace("вспомни", "")
+            .replace("найди", "")
+            .replace("поищи", "")
+            .trim()
 
-            val keywords = cleanSearchQuery.split(" ")
-                .map { it.trim() }
-                .filter { it.length > 2 }
-                .map { if (it.length > 4) it.substring(0, 4) else it }
-
-            val fullMemory = readFromLongTermMemory()
-            if (fullMemory.isNotEmpty() && keywords.isNotEmpty()) {
-                fullMemory.split("\n")
-                    .filter { line ->
-                        val lowerLine = line.lowercase()
-                        keywords.any { keyword -> lowerLine.contains(keyword) }
-                    }
-                    .joinToString("\n")
-            } else {
-                ""
+        val keywords = cleanSearchQuery.split(" ")
+            .map { it.trim() }
+            .filter { it.length > 2 }
+            .flatMap { word ->
+                // Извлекаем корни слов для более широкого поиска
+                val roots = mutableListOf<String>()
+                if (word.length > 4) {
+                    roots.add(word.substring(0, 4))
+                }
+                roots.add(word)
+                roots
             }
+            .distinct()
+
+        val fullMemory = readFromLongTermMemory()
+        val filteredMemory = if (fullMemory.isNotEmpty() && keywords.isNotEmpty()) {
+            fullMemory.split("\n")
+                .filter { line ->
+                    val lowerLine = line.lowercase()
+                    keywords.any { keyword -> lowerLine.contains(keyword) }
+                }
+                .joinToString("\n")
         } else {
             ""
         }
@@ -730,7 +770,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 append("\n")
             }
 
-            append("Пользователь просит найти, вспомнить или поискать информацию в истории или базе знаний. Внимательно проанализируй весь диалог, базу знаний и выводы. Найди нужную информацию и дай точный, конкретный ответ. Если информация не найдена — честно скажи об этом.")
+            append("Пользователь просит тебя НАЙТИ ИЛИ ВСПОМНИТЬ информацию из его личной базы знаний, а также ВЫПОЛНИТЬ МАТЕМАТИЧЕСКИЙ ИЛИ ЛОГИЧЕСКИЙ РАСЧЕТ на основе найденных фактов. Внимательно изучи предоставленные строки ЛОКАЛЬНОЙ БАЗЫ ЗНАНИЙ. Если там указана цена, тариф или условие (например, цена плитки за квадратный метр), используй эти точные цифры для выполнения математического действия, запрошенного пользователем (например, умножь площадь на стоимость). Дай развернутый, понятный и дружелюбный ответ с демонстрацией хода вычислений. Если нужных данных в памяти нет — честно скажи об этом.")
         }
     }
 
