@@ -416,7 +416,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         }
 
                         // После успешной распаковки инициализируем модель
-                        initializeVoskModel(context)
+                        scope.launch {
+                            initializeVoskModel(context)
+                        }
 
                     } catch (e: Exception) {
                         Log.e(TAG, "Ошибка загрузки/распаковки модели Vosk: ${e.message}")
@@ -437,7 +439,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         } else {
             // Модель уже готова - инициализируем синхронно
-            initializeVoskModel(context)
+            scope.launch {
+                initializeVoskModel(context)
+            }
         }
     }
 
@@ -482,7 +486,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
             voskRecognizer?.release()
             voskRecognizer = null
-
             _isVoskLoaded.value = false
             appendSystemMessage("🔄 Голосовой движок Vosk полностью выгружен из памяти")
             Log.d(TAG, "Vosk модель успешно освобождена из ОЗУ")
