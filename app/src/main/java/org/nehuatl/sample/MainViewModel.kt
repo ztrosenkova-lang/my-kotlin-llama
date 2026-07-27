@@ -24,10 +24,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import org.nehuatl.llamacpp.LlamaHelper
 import java.io.File
+import java.io.FileOutputStream
+import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
 import java.lang.ref.WeakReference
+import java.util.zip.ZipInputStream
 
 data class ChatMessage(val role: String, val text: String)
 
@@ -45,6 +48,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         private const val ALARM_COMMAND = "будильник"
         private const val REMIND_COMMAND = "напомни"
         private const val AUTO_SEND_DELAY = 5000L
+        private const val VOSK_MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-ru-0.42.zip"
+        private const val VOSK_MODEL_DIR = "vosk-model-large"
+        private const val VOSK_MODEL_READY_FLAG = "is_vosk_large_ready"
     }
 
     private val viewModelJob = SupervisorJob()
@@ -265,14 +271,108 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     fun isVoskInitialized(): Boolean = _isVoskLoaded.value
 
     fun initVoskLazily(context: Context) {
-        if (!_isVoskLoaded.value) {
+        if (_isVoskLoaded.value) {
+            return
+        }
+
+        val prefs = context.getSharedPreferences("cloud_ai", Context.MODE_PRIVATE)
+        val isReady = prefs.getBoolean(VOSK_MODEL_READY_FLAG, false)
+
+        val targetDir = File(context.filesDir, VOSK_MODEL_DIR)
+
+        if (!isReady) {
+            appendSystemMessage("⏳ Высокоточная голосовая модель не найдена. Начинаю безопасную загрузку (~1.2 ГБ)... Пожалуйста, не закрывайте приложение.")
+
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val zipUrl = URL(VOSK_MODEL_URL)
+                    val tempFile = File(context.cacheDir, "vosk-model-temp.zip")
+
+                    // Скачивание ZIP-архива
+                    zipUrl.openStream().use { input ->
+                        FileOutputStream(tempFile).use { output ->
+                            val buffer = ByteArray(8192)
+                            var bytesRead: Int
+                            var totalBytes = 0L
+                            while (input.read(buffer).also { bytesRead = it } != -1) {
+                                output.write(buffer, 0, bytesRead)
+                                totalBytes += bytesRead
+                                if (totalBytes % (1024 * 1024) == 0L) {
+                                    appendSystemMessage("⏳ Загружено: ${totalBytes / (1024 * 1024)} МБ")
+                                }
+                            }
+                        }
+                    }
+
+                    appendSystemMessage("⏳ Распаковка модели...")
+
+                    // Распаковка архива
+                    targetDir.mkdirs()
+                    ZipInputStream(tempFile.inputStream()).use { zis ->
+                        var entry = zis.nextEntry
+                        while (entry != null) {
+                            val entryFile = File(targetDir, entry.name)
+                            if (entry.isDirectory) {
+                                entryFile.mkdirs()
+                            } else {
+                                entryFile.parentFile?.mkdirs()
+                                FileOutputStream(entryFile).use { fos ->
+                                    val buffer = ByteArray(8192)
+                                    var len: Int
+                                    while (zis.read(buffer).also { len = it } != -1) {
+                                        fos.write(buffer, 0, len)
+                                    }
+                                }
+                            }
+                            zis.closeEntry()
+                            entry = zis.nextEntry
+                        }
+                    }
+
+                    // Удаление временного ZIP-файла
+                    tempFile.delete()
+
+                    // Помечаем модель как готовую
+                    prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, true).apply()
+                    appendSystemMessage("✅ Голосовой движок успешно настроен и распакован!")
+
+                    // После успешной распаковки инициализируем модель
+                    initializeVoskModel(context)
+
+                } catch (e: Exception) {
+                    Log.e(TAG, "Ошибка загрузки/распаковки модели Vosk: ${e.message}")
+                    appendSystemMessage("⚠️ Ошибка загрузки голосовой модели: ${e.message}. Попробуйте перезапустить приложение.")
+                }
+            }
+        } else {
+            // Модель уже готова - инициализируем синхронно
+            initializeVoskModel(context)
+        }
+    }
+
+    private fun initializeVoskModel(context: Context) {
+        try {
+            val targetDir = File(context.filesDir, VOSK_MODEL_DIR)
+            val modelPath = File(targetDir, "vosk-model-ru-0.42").absolutePath
+
+            if (!File(modelPath).exists()) {
+                appendSystemMessage("⚠️ Модель не найдена по пути: $modelPath. Попробуйте перезапустить приложение.")
+                return
+            }
+
             voskRecognizer = VoskRecognizer(
-                contextRef = WeakReference<Context>(context.applicationContext),
+                contextRef = WeakReference(context.applicationContext),
                 onResult = onVoiceResult,
                 onLog = onVoiceLog,
-                scope = scope
+                scope = scope,
+                externalModelPath = modelPath
             )
             _isVoskLoaded.value = true
+            appendSystemMessage("✅ Голосовой движок Vosk загружен!")
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка инициализации Vosk: ${e.message}")
+            appendSystemMessage("⚠️ Ошибка инициализации Vosk: ${e.message}")
         }
     }
 
@@ -299,6 +399,61 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         _chatHistory.value = _chatHistory.value + ChatMessage("user", text)
 
+        // Обработка локальных команд в любом режиме
+        val lowerText = text.lowercase()
+        when {
+            lowerText.contains(REMEMBER_COMMAND) -> {
+                val cleanText = text.substringAfter(REMEMBER_COMMAND).trim()
+                if (cleanText.isNotEmpty()) {
+                    saveToLongTermMemory(cleanText)
+                } else {
+                    appendSystemMessage("⚠️ Что именно мне нужно запомнить?")
+                }
+                return
+            }
+            lowerText.contains(ALARM_COMMAND) || lowerText.contains(REMIND_COMMAND) -> {
+                handleAlarmCommand(text)
+                return
+            }
+            lowerText.contains(RECALL_COMMAND) || lowerText.contains(FIND_COMMAND) || lowerText.contains(SEARCH_COMMAND) -> {
+                // Локальный поиск без LLM для NEUTRAL режима
+                if (_currentMode.value == AIMode.NEUTRAL) {
+                    val searchResult = buildSystemPrompt(true, text)
+                    val memoryData = readFromLongTermMemory()
+                    if (memoryData.isNotEmpty()) {
+                        val cleanSearchQuery = text.lowercase()
+                            .replace(RECALL_COMMAND, "")
+                            .replace(FIND_COMMAND, "")
+                            .replace(SEARCH_COMMAND, "")
+                            .trim()
+                        
+                        val keywords = cleanSearchQuery.split(" ")
+                            .map { it.trim() }
+                            .filter { it.length > 2 }
+                            .map { if (it.length > 4) it.substring(0, 4) else it }
+
+                        val filteredLines = memoryData.split("\n")
+                            .filter { line ->
+                                val lowerLine = line.lowercase()
+                                keywords.any { keyword -> lowerLine.contains(keyword) }
+                            }
+                            .joinToString("\n")
+
+                        if (filteredLines.isNotEmpty()) {
+                            appendSystemMessage("🔍 Найдено в памяти:\n$filteredLines")
+                        } else {
+                            appendSystemMessage("🔍 Ничего не найдено по запросу '$cleanSearchQuery'")
+                        }
+                    } else {
+                        appendSystemMessage("🔍 База знаний пуста. Сохраните что-нибудь через 'запомни'")
+                    }
+                    return
+                }
+                // Для LOCAL/CLOUD режимов передаем в LLM
+            }
+        }
+
+        // Обычная обработка режимов
         when (_currentMode.value) {
             AIMode.LOCAL -> {
                 if (_isModelLoaded.value) {
