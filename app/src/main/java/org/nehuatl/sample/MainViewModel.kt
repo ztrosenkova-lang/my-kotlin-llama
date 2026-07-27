@@ -22,9 +22,11 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import org.nehuatl.llamacpp.LlamaHelper
 import java.io.File
 import java.io.FileOutputStream
+import java.net.HttpURLConnection
 import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.*
@@ -283,65 +285,99 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         if (!isReady) {
             appendSystemMessage("⏳ Высокоточная голосовая модель не найдена. Начинаю безопасную загрузку (~1.2 ГБ)... Пожалуйста, не закрывайте приложение.")
 
-            scope.launch(Dispatchers.IO) {
-                try {
-                    val zipUrl = URL(VOSK_MODEL_URL)
-                    val tempFile = File(context.cacheDir, "vosk-model-temp.zip")
+            scope.launch {
+                withContext(Dispatchers.IO) {
+                    try {
+                        val url = URL(VOSK_MODEL_URL)
+                        val connection = url.openConnection() as HttpURLConnection
+                        connection.connect()
+                        val fileLength = connection.contentLength
+                        val inputStream = connection.inputStream
+                        val tempFile = File(context.cacheDir, "vosk-model-temp.zip")
 
-                    // Скачивание ZIP-архива
-                    zipUrl.openStream().use { input ->
+                        withContext(Dispatchers.Main) {
+                            appendSystemMessage("📥 Начинаю загрузку модели...")
+                        }
+
+                        // Скачивание ZIP-архива с прогрессом
                         FileOutputStream(tempFile).use { output ->
                             val buffer = ByteArray(8192)
                             var bytesRead: Int
-                            var totalBytes = 0L
-                            while (input.read(buffer).also { bytesRead = it } != -1) {
+                            var totalBytesRead = 0L
+                            var lastLoggedBytes = 0L
+                            val stepSize = 25L * 1024 * 1024 // Логируем строго каждые 25 МБ
+
+                            while (inputStream.read(buffer).also { bytesRead = it } != -1) {
                                 output.write(buffer, 0, bytesRead)
-                                totalBytes += bytesRead
-                                if (totalBytes % (1024 * 1024) == 0L) {
-                                    appendSystemMessage("⏳ Загружено: ${totalBytes / (1024 * 1024)} МБ")
-                                }
-                            }
-                        }
-                    }
+                                totalBytesRead += bytesRead
 
-                    appendSystemMessage("⏳ Распаковка модели...")
-
-                    // Распаковка архива
-                    targetDir.mkdirs()
-                    ZipInputStream(tempFile.inputStream()).use { zis ->
-                        var entry = zis.nextEntry
-                        while (entry != null) {
-                            val entryFile = File(targetDir, entry.name)
-                            if (entry.isDirectory) {
-                                entryFile.mkdirs()
-                            } else {
-                                entryFile.parentFile?.mkdirs()
-                                FileOutputStream(entryFile).use { fos ->
-                                    val buffer = ByteArray(8192)
-                                    var len: Int
-                                    while (zis.read(buffer).also { len = it } != -1) {
-                                        fos.write(buffer, 0, len)
+                                // Логирование с контролируемой частотой
+                                if (fileLength > 0) {
+                                    val progressPercent = (totalBytesRead * 100 / fileLength).toInt()
+                                    if (progressPercent % 5 == 0 && progressPercent != (lastLoggedBytes * 100 / fileLength).toInt()) {
+                                        lastLoggedBytes = totalBytesRead
+                                        withContext(Dispatchers.Main) {
+                                            appendSystemMessage("📥 Загрузка голосового движка: $progressPercent%")
+                                        }
+                                    }
+                                } else {
+                                    if (totalBytesRead - lastLoggedBytes >= stepSize) {
+                                        lastLoggedBytes = totalBytesRead
+                                        val currentMB = totalBytesRead / (1024 * 1024)
+                                        withContext(Dispatchers.Main) {
+                                            appendSystemMessage("📥 Загружено: $currentMB МБ")
+                                        }
                                     }
                                 }
                             }
-                            zis.closeEntry()
-                            entry = zis.nextEntry
+                        }
+
+                        withContext(Dispatchers.Main) {
+                            appendSystemMessage("⏳ Распаковка модели...")
+                        }
+
+                        // Распаковка архива
+                        targetDir.mkdirs()
+                        ZipInputStream(tempFile.inputStream()).use { zis ->
+                            var entry = zis.nextEntry
+                            while (entry != null) {
+                                val entryFile = File(targetDir, entry.name)
+                                if (entry.isDirectory) {
+                                    entryFile.mkdirs()
+                                } else {
+                                    entryFile.parentFile?.mkdirs()
+                                    FileOutputStream(entryFile).use { fos ->
+                                        val buffer = ByteArray(8192)
+                                        var len: Int
+                                        while (zis.read(buffer).also { len = it } != -1) {
+                                            fos.write(buffer, 0, len)
+                                        }
+                                    }
+                                }
+                                zis.closeEntry()
+                                entry = zis.nextEntry
+                            }
+                        }
+
+                        // Удаление временного ZIP-файла
+                        tempFile.delete()
+
+                        // Помечаем модель как готовую
+                        prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, true).apply()
+
+                        withContext(Dispatchers.Main) {
+                            appendSystemMessage("✅ Голосовой движок успешно настроен и распакован!")
+                        }
+
+                        // После успешной распаковки инициализируем модель
+                        initializeVoskModel(context)
+
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Ошибка загрузки/распаковки модели Vosk: ${e.message}")
+                        withContext(Dispatchers.Main) {
+                            appendSystemMessage("⚠️ Ошибка загрузки голосовой модели: ${e.message}. Попробуйте перезапустить приложение.")
                         }
                     }
-
-                    // Удаление временного ZIP-файла
-                    tempFile.delete()
-
-                    // Помечаем модель как готовую
-                    prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, true).apply()
-                    appendSystemMessage("✅ Голосовой движок успешно настроен и распакован!")
-
-                    // После успешной распаковки инициализируем модель
-                    initializeVoskModel(context)
-
-                } catch (e: Exception) {
-                    Log.e(TAG, "Ошибка загрузки/распаковки модели Vosk: ${e.message}")
-                    appendSystemMessage("⚠️ Ошибка загрузки голосовой модели: ${e.message}. Попробуйте перезапустить приложение.")
                 }
             }
         } else {
