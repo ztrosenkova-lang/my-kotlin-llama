@@ -494,7 +494,7 @@ private fun TopBarWithSwitch(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(8.dp),
+            .padding(4.dp), // Уменьшено с 8.dp до 4.dp
         shape = MaterialTheme.shapes.medium,
         border = BorderStroke(1.dp, BorderGray),
         colors = CardDefaults.cardColors(containerColor = SurfaceGray)
@@ -502,8 +502,8 @@ private fun TopBarWithSwitch(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+                .padding(horizontal = 12.dp, vertical = 2.dp), // Уменьшено с vertical = 4.dp до 2.dp
+            verticalArrangement = Arrangement.spacedBy(0.dp) // Установлено 0.dp для устранения зазора
         ) {
             // Первая строка: логотип, заголовок, кнопки режимов
             Row(
@@ -515,7 +515,7 @@ private fun TopBarWithSwitch(
                     contentDescription = "Лого",
                     contentScale = ContentScale.FillBounds,
                     modifier = Modifier
-                        .size(72.dp)
+                        .size(40.dp) // Уменьшено с 72.dp до 40.dp
                         .clip(RoundedCornerShape(16.dp))
                 )
 
