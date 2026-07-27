@@ -704,6 +704,25 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         if (match != null) {
             val timeStr = match.groupValues[1].replace(".", ":")
             val message = prompt.replace(Regex("(?:в\\s+|напомни\\s+в\\s+)\\d{1,2}[:.]\\d{2}\\s*"), "").trim()
+
+            // Безопасная проверка разрешения на точные будильники для Android 12+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                val context = getApplication<Application>().applicationContext
+                val alarmManagerSystem = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+                if (alarmManagerSystem?.canScheduleExactAlarms() == false) {
+                    appendSystemMessage("⚠️ Для установки точных напоминаний ИИ-Другу требуется специальное разрешение. Пожалуйста, включите тумблер в открывшихся настройках.")
+                    try {
+                        val intent = Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        appendSystemMessage("❌ Не удалось автоматически открыть системные настройки разрешений: ${e.message}")
+                    }
+                    return // Мгновенно прерываем поток выполнения, предотвращая вызов setAlarm и краш процесса
+                }
+            }
+
             setAlarm(timeStr, message)
             appendSystemMessage("⏰ Будильник установлен на $timeStr: '$message'")
         } else {
