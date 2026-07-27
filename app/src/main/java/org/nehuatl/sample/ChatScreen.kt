@@ -1254,6 +1254,9 @@ private fun PromptInput(
     context: android.content.Context,
     modifier: Modifier = Modifier
 ) {
+    // Подписка на поток информации о памяти
+    val memoryInfoText by viewModel.memoryInfoText.collectAsStateWithLifecycle(initialValue = "Загрузка памяти...")
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -1262,118 +1265,138 @@ private fun PromptInput(
         border = BorderStroke(1.dp, BorderGray),
         colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF9DB))
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 8.dp, vertical = 4.dp)
         ) {
-            // Левая группа: Plus и Delete
-            IconButton(
-                onClick = onPickImage,
-                enabled = enabled && !isGenerating,
-                colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Transparent)
+            // Существующий горизонтальный ряд с кнопками и полем ввода
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Добавить изображение",
-                    tint = if (enabled && !isGenerating) AccentColor else DarkText.copy(alpha = 0.4f)
-                )
-            }
-
-            IconButton(
-                onClick = onClearChat,
-                enabled = true,
-                colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Transparent)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Очистить чат",
-                    tint = AccentColor
-                )
-            }
-
-            // Центр: Поле ввода
-            OutlinedTextField(
-                value = prompt,
-                onValueChange = onPromptChange,
-                modifier = Modifier
-                    .weight(1f)
-                    .focusRequester(focusRequester),
-                enabled = enabled && !isGenerating,
-                placeholder = { Text("Введите запрос...", color = DarkText.copy(alpha = 0.5f)) },
-                maxLines = 3,
-                singleLine = false,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = DarkText,
-                    unfocusedTextColor = DarkText,
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedBorderColor = Color.Transparent,
-                    unfocusedBorderColor = Color.Transparent,
-                    cursorColor = AccentColor
-                )
-            )
-
-            // Правая группа: Микрофон и Отправить/Стоп
-            IconButton(
-                onClick = {
-                    if (!isVoskReady) {
-                        viewModel.appendSystemMessage("⚠️ Голосовой движок не загружен. Нажмите кнопку «голос» в верхней панели управления, чтобы активировать высокоточное распознавание.")
-                        return@IconButton
-                    }
-                    if (ContextCompat.checkSelfPermission(
-                            context,
-                            Manifest.permission.RECORD_AUDIO
-                        ) != PackageManager.PERMISSION_GRANTED
-                    ) {
-                        viewModel.appendSystemMessage("⚠️ Нет разрешения на запись аудио")
-                        return@IconButton
-                    }
-                    if (isRecording) {
-                        viewModel.stopRecording()
-                    } else {
-                        viewModel.startRecording()
-                    }
-                },
-                enabled = true,
-                colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Transparent)
-            ) {
-                Icon(
-                    imageVector = if (isRecording) Icons.Default.Mic else Icons.Default.MicOff,
-                    contentDescription = if (isRecording) "Остановить запись" else "Начать запись",
-                    tint = if (isVoskReady && isRecording) AccentColor else if (isVoskReady) DarkText.copy(alpha = 0.4f) else DarkText.copy(alpha = 0.4f)
-                )
-            }
-
-            if (isGenerating) {
+                // Левая группа: Plus и Delete
                 IconButton(
-                    onClick = onAbort,
-                    modifier = Modifier.size(48.dp),
-                    colors = IconButtonDefaults.iconButtonColors(containerColor = AccentColor.copy(alpha = 0.15f))
+                    onClick = onPickImage,
+                    enabled = enabled && !isGenerating,
+                    colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Transparent)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Стоп",
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Добавить изображение",
+                        tint = if (enabled && !isGenerating) AccentColor else DarkText.copy(alpha = 0.4f)
+                    )
+                }
+
+                IconButton(
+                    onClick = onClearChat,
+                    enabled = true,
+                    colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Transparent)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Очистить чат",
                         tint = AccentColor
                     )
                 }
-            } else {
-                IconButton(
-                    onClick = onGenerate,
-                    enabled = enabled && prompt.isNotBlank(),
-                    colors = IconButtonDefaults.iconButtonColors(
-                        containerColor = if (enabled && prompt.isNotBlank()) AccentColor.copy(alpha = 0.15f) else Color.Transparent
+
+                // Центр: Поле ввода
+                OutlinedTextField(
+                    value = prompt,
+                    onValueChange = onPromptChange,
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(focusRequester),
+                    enabled = enabled && !isGenerating,
+                    placeholder = { Text("Введите запрос...", color = DarkText.copy(alpha = 0.5f)) },
+                    maxLines = 3,
+                    singleLine = false,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = DarkText,
+                        unfocusedTextColor = DarkText,
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedBorderColor = Color.Transparent,
+                        unfocusedBorderColor = Color.Transparent,
+                        cursorColor = AccentColor
                     )
+                )
+
+                // Правая группа: Микрофон и Отправить/Стоп
+                IconButton(
+                    onClick = {
+                        if (!isVoskReady) {
+                            viewModel.appendSystemMessage("⚠️ Голосовой движок не загружен. Нажмите кнопку «голос» в верхней панели управления, чтобы активировать высокоточное распознавание.")
+                            return@IconButton
+                        }
+                        if (ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.RECORD_AUDIO
+                            ) != PackageManager.PERMISSION_GRANTED
+                        ) {
+                            viewModel.appendSystemMessage("⚠️ Нет разрешения на запись аудио")
+                            return@IconButton
+                        }
+                        if (isRecording) {
+                            viewModel.stopRecording()
+                        } else {
+                            viewModel.startRecording()
+                        }
+                    },
+                    enabled = true,
+                    colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Transparent)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.ArrowUpward,
-                        contentDescription = "Отправить",
-                        tint = if (enabled && prompt.isNotBlank()) AccentColor else DarkText.copy(alpha = 0.4f)
+                        imageVector = if (isRecording) Icons.Default.Mic else Icons.Default.MicOff,
+                        contentDescription = if (isRecording) "Остановить запись" else "Начать запись",
+                        tint = if (isVoskReady && isRecording) AccentColor else if (isVoskReady) DarkText.copy(alpha = 0.4f) else DarkText.copy(alpha = 0.4f)
                     )
                 }
+
+                if (isGenerating) {
+                    IconButton(
+                        onClick = onAbort,
+                        modifier = Modifier.size(48.dp),
+                        colors = IconButtonDefaults.iconButtonColors(containerColor = AccentColor.copy(alpha = 0.15f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Стоп",
+                            tint = AccentColor
+                        )
+                    }
+                } else {
+                    IconButton(
+                        onClick = onGenerate,
+                        enabled = enabled && prompt.isNotBlank(),
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = if (enabled && prompt.isNotBlank()) AccentColor.copy(alpha = 0.15f) else Color.Transparent
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowUpward,
+                            contentDescription = "Отправить",
+                            tint = if (enabled && prompt.isNotBlank()) AccentColor else DarkText.copy(alpha = 0.4f)
+                        )
+                    }
+                }
             }
+
+            // Отступ перед счетчиком памяти
+            Spacer(modifier = Modifier.height(2.dp))
+
+            // Счетчик состояния памяти
+            Text(
+                text = memoryInfoText,
+                color = DarkText.copy(alpha = 0.6f),
+                fontSize = 8.sp,
+                fontFamily = ChatFontFamily,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 2.dp, start = 12.dp),
+                textAlign = TextAlign.Start
+            )
         }
     }
 }
