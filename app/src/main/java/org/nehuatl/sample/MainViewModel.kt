@@ -162,6 +162,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _memoryInfoText = MutableStateFlow("Всего доступно: 0.0 ГБ / Занято: 0.0 ГБ")
     val memoryInfoText: StateFlow<String> = _memoryInfoText.asStateFlow()
 
+    // === Vosk File Picker Event Flow ===
+    private val _voskFilePickerEvent = MutableSharedFlow<Unit>(
+        replay = 0,
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val voskFilePickerEvent = _voskFilePickerEvent.asSharedFlow()
+
     private val onVoiceResult: (String) -> Unit = { recognizedText ->
         if (recognizedText.isNotEmpty()) {
             _recognizedText.value = recognizedText
@@ -413,8 +421,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
                     } catch (e: Exception) {
                         Log.e(TAG, "Ошибка загрузки/распаковки модели Vosk: ${e.message}")
+
+                        // Network failure - trigger offline mode with file picker
                         withContext(Dispatchers.Main) {
-                            appendSystemMessage("⚠️ Ошибка загрузки голосовой модели: ${e.message}. Попробуйте перезапустить приложение.")
+                            appendSystemMessage("⚠ Сеть заблокирована или отсутствует подключение к интернету. Перехожу в автономный режим.")
+                            appendSystemMessage("📂 Пожалуйста, выберите скачанный архив 'vosk-model-ru-0.42.zip' из памяти вашего телефона или флешки.")
+                            _voskFilePickerEvent.tryEmit(Unit)
                         }
                     } finally {
                         // 1. File Purge
@@ -442,6 +454,73 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             // Модель уже готова - инициализируем синхронно
             scope.launch {
                 initializeVoskModel(getApplication<Application>().applicationContext)
+            }
+        }
+    }
+
+    // === Offline Unzipping Routine ===
+    fun processLocalVoskZip(uri: Uri, context: Context) {
+        if (_isVoskLoaded.value) {
+            return
+        }
+
+        val prefs = context.getSharedPreferences("cloud_ai", Context.MODE_PRIVATE)
+        val targetDir = File(context.filesDir, VOSK_MODEL_DIR)
+
+        scope.launch(Dispatchers.IO) {
+            withContext(Dispatchers.Main) {
+                appendSystemMessage("⏳ Начинаю локальную распаковку архива с диска... Пожалуйста, подождите.")
+            }
+
+            try {
+                // Open secure input stream from content resolver
+                context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                    // Create target directory if it doesn't exist
+                    targetDir.mkdirs()
+
+                    // Extract archive silently
+                    ZipInputStream(inputStream).use { zis ->
+                        var entry = zis.nextEntry
+                        while (entry != null) {
+                            val entryFile = File(targetDir, entry.name)
+                            if (entry.isDirectory) {
+                                entryFile.mkdirs()
+                            } else {
+                                entryFile.parentFile?.mkdirs()
+                                FileOutputStream(entryFile).use { fos ->
+                                    val buffer = ByteArray(8192)
+                                    var len: Int
+                                    while (zis.read(buffer).also { len = it } != -1) {
+                                        fos.write(buffer, 0, len)
+                                    }
+                                }
+                            }
+                            zis.closeEntry()
+                            entry = zis.nextEntry
+                        }
+                    }
+                } ?: run {
+                    withContext(Dispatchers.Main) {
+                        appendSystemMessage("⚠️ Не удалось открыть выбранный файл. Убедитесь, что это корректный ZIP-архив.")
+                    }
+                    return@launch
+                }
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Ошибка локальной распаковки Vosk: ${e.message}")
+                withContext(Dispatchers.Main) {
+                    appendSystemMessage("⚠️ Ошибка при распаковке архива: ${e.message}")
+                }
+            } finally {
+                // Commit state flag
+                prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, true).apply()
+
+                withContext(Dispatchers.Main) {
+                    appendSystemMessage("✅ Голосовой движок успешно настроен автономно!")
+                }
+
+                // Initialize Vosk model
+                initializeVoskModel(context.applicationContext)
             }
         }
     }
