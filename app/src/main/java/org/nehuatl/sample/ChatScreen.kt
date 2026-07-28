@@ -511,12 +511,14 @@ private fun TopBarWithSwitch(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                // Top Row: Status indicators with Arrangement.spacedBy(12.dp)
+                // Line 1 (Top Row - LED Indicators):
+                // Parent container with centering
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Child row holding the indicator blocks
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -550,17 +552,18 @@ private fun TopBarWithSwitch(
                     }
                 }
 
-                // Bottom Row (Critical Fix): Parent Row(horizontalArrangement = Arrangement.Center)
+                // Line 2 (Bottom Row - Unified Center Combo):
+                // Parent container that spans full width and centers its content
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Child Row to tightly pack: Text, Spacer, ModeButtons
+                    // Crucial Packaging Inner Container - wraps tightly around children
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // 1. The Title Element
                         Text(
                             text = "ИИ-Друг",
                             style = MaterialTheme.typography.titleLarge,
@@ -570,6 +573,9 @@ private fun TopBarWithSwitch(
                             fontFamily = FontFamily.Monospace,
                             textAlign = TextAlign.Start
                         )
+                        // 2. The 3-Character Gap Element
+                        Spacer(modifier = Modifier.width(14.dp))
+                        // 3. The Switch Controls Element
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(2.dp)
@@ -1414,7 +1420,7 @@ private fun PromptInput(
                 fontFamily = ChatFontFamily,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 2.dp, horizontal = 4.dp), // UPDATED: padding changed from (bottom = 2.dp, start = 12.dp) to (bottom = 2.dp, horizontal = 4.dp)
+                    .padding(start = 4.dp, end = 4.dp, bottom = 2.dp), // FIXED: proper padding syntax
                 textAlign = TextAlign.Center // UPDATED: textAlign changed from TextAlign.Start to TextAlign.Center
             )
         }
