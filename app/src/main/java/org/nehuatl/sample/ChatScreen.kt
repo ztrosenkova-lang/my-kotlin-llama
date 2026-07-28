@@ -146,7 +146,6 @@ fun ChatScreen(
     var cloudIsGigaChat by remember { mutableStateOf(true) }
     var isGeneratingToken by remember { mutableStateOf(false) }
     var currentMode by remember { mutableStateOf(AIMode.NEUTRAL) }
-
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     val scrollState = rememberScrollState()
@@ -380,6 +379,7 @@ fun ChatScreen(
                 },
                 modifier = Modifier.matchParentSize()
             )
+
             Card(
                 modifier = Modifier.fillMaxSize(),
                 shape = RoundedCornerShape(16.dp),
@@ -410,6 +410,7 @@ fun ChatScreen(
                                 modifier = Modifier.padding(vertical = 2.dp)
                             )
                         }
+
                         if (generatedText.isNotEmpty() && state is GenerationState.Generating) {
                             Text(
                                 text = "ИИ: $generatedText",
@@ -419,6 +420,7 @@ fun ChatScreen(
                                 modifier = Modifier.padding(vertical = 2.dp)
                             )
                         }
+
                         if (cloudGeneratedText.isNotEmpty() && cloudState is CloudAIState.Generating) {
                             Text(
                                 text = "☁️ ИИ: $cloudGeneratedText",
@@ -462,7 +464,7 @@ fun ChatScreen(
             isVoskReady = isVoskReady,
             viewModel = viewModel,
             context = context,
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.padding(8.dp) // UPDATED: padding changed from 16.dp to 8.dp
         )
     }
 }
@@ -509,7 +511,7 @@ private fun TopBarWithSwitch(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                // Line 1 (Top Row): Mode switches strictly centered horizontally
+                // Top Row: Status indicators with Arrangement.spacedBy(12.dp)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center,
@@ -517,48 +519,7 @@ private fun TopBarWithSwitch(
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        ModeButton(
-                            label = "Local",
-                            isSelected = currentMode == AIMode.LOCAL,
-                            onClick = { onLocalForceDialog() },
-                            modifier = Modifier.size(36.dp, 22.dp)
-                        )
-                        ModeButton(
-                            label = "Neutral",
-                            isSelected = currentMode == AIMode.NEUTRAL,
-                            onClick = { onModeChange(AIMode.NEUTRAL) },
-                            modifier = Modifier.size(36.dp, 22.dp)
-                        )
-                        ModeButton(
-                            label = "Cloud",
-                            isSelected = currentMode == AIMode.CLOUD,
-                            onClick = { onCloudForceDialog() },
-                            modifier = Modifier.size(36.dp, 22.dp)
-                        )
-                    }
-                }
-
-                // Line 2 (Bottom Row): Title left-aligned, indicators immediately to the right
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "ИИ-Друг",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = FriendlyRobotColor,
-                        fontSize = 18.sp,
-                        fontFamily = FontFamily.Monospace,
-                        textAlign = TextAlign.Start,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         // Индикатор локального ИИ
                         Row(
@@ -585,6 +546,52 @@ private fun TopBarWithSwitch(
                                     .border(0.5.dp, BorderGray, CircleShape)
                             )
                             Text(text = "Облачный ИИ", fontSize = 6.sp, color = DarkText)
+                        }
+                    }
+                }
+
+                // Bottom Row (Critical Fix): Parent Row(horizontalArrangement = Arrangement.Center)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Child Row to tightly pack: Text, Spacer, ModeButtons
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Text(
+                            text = "ИИ-Друг",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = FriendlyRobotColor,
+                            fontSize = 18.sp,
+                            fontFamily = FontFamily.Monospace,
+                            textAlign = TextAlign.Start
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            ModeButton(
+                                label = "Local",
+                                isSelected = currentMode == AIMode.LOCAL,
+                                onClick = { onLocalForceDialog() },
+                                modifier = Modifier.size(36.dp, 22.dp)
+                            )
+                            ModeButton(
+                                label = "Neutral",
+                                isSelected = currentMode == AIMode.NEUTRAL,
+                                onClick = { onModeChange(AIMode.NEUTRAL) },
+                                modifier = Modifier.size(36.dp, 22.dp)
+                            )
+                            ModeButton(
+                                label = "Cloud",
+                                isSelected = currentMode == AIMode.CLOUD,
+                                onClick = { onCloudForceDialog() },
+                                modifier = Modifier.size(36.dp, 22.dp)
+                            )
                         }
                     }
                 }
@@ -837,6 +844,7 @@ private fun CloudAIDialog(
                     style = MaterialTheme.typography.bodyMedium,
                     color = DarkText
                 )
+
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("🔵 GigaChat", color = DarkText)
                     Switch(
@@ -851,6 +859,7 @@ private fun CloudAIDialog(
                     )
                     Text("🌐 Другой провайдер", color = DarkText)
                 }
+
                 OutlinedTextField(
                     value = apiUrl,
                     onValueChange = onApiUrlChange,
@@ -872,6 +881,7 @@ private fun CloudAIDialog(
                         cursorColor = AccentColor
                     )
                 )
+
                 OutlinedTextField(
                     value = authKey,
                     onValueChange = onAuthKeyChange,
@@ -899,6 +909,7 @@ private fun CloudAIDialog(
                         cursorColor = AccentColor
                     )
                 )
+
                 Button(
                     onClick = onGenerateToken,
                     enabled = !isGeneratingToken && authKey.isNotBlank(),
@@ -919,6 +930,7 @@ private fun CloudAIDialog(
                         )
                     }
                 }
+
                 if (!isGigaChat) {
                     Text(
                         text = "ℹ️ Для обычных провайдеров ключ используется как токен",
@@ -978,6 +990,7 @@ private fun HelpDialog(onDismiss: () -> Unit) {
 @Composable
 private fun MemoryEditorDialog(initialText: String, onSave: (String) -> Unit, onDismiss: () -> Unit) {
     var text by remember { mutableStateOf(initialText) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("🧠 База Знаний ИИ", style = MaterialTheme.typography.titleLarge, color = DarkText) },
@@ -1148,6 +1161,7 @@ private fun ModelPickerDialog(
         Card(colors = CardDefaults.cardColors(containerColor = SurfaceGray)) {
             Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("Настройка ИИ", style = MaterialTheme.typography.headlineSmall, color = DarkText)
+
                 // Блок выбора языковой модели
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Языковая модель", color = DarkText)
@@ -1164,6 +1178,7 @@ private fun ModelPickerDialog(
                         )
                     }
                 }
+
                 // Блок выбора мультимодального проектора (опционально)
                 Column(modifier = Modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("(опционально)", style = MaterialTheme.typography.bodySmall, color = DarkText.copy(alpha = 0.6f))
@@ -1181,6 +1196,7 @@ private fun ModelPickerDialog(
                         )
                     }
                 }
+
                 // Кнопка запуска
                 Button(
                     onClick = onLoad,
@@ -1190,6 +1206,7 @@ private fun ModelPickerDialog(
                 ) {
                     Text("Запустить нейросеть", color = DarkText)
                 }
+
                 // Кнопка отмены
                 TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
                     Text("Отмена", color = DarkText)
@@ -1221,8 +1238,7 @@ private fun PromptInput(
 
     Card(
         modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .fillMaxWidth(), // UPDATED: removed padding(horizontal = 12.dp, vertical = 6.dp)
         shape = RoundedCornerShape(24.dp),
         border = BorderStroke(1.dp, BorderGray),
         colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF9DB))
@@ -1245,7 +1261,7 @@ private fun PromptInput(
                     // Plus Button
                     Box(
                         modifier = Modifier
-                            .size(48.dp)
+                            .size(41.dp) // UPDATED: size changed from 48.dp to 41.dp
                             .background(Color(0xFFF1F3F5), shape = CircleShape)
                             .border(1.dp, BorderGray, CircleShape),
                         contentAlignment = Alignment.Center
@@ -1253,7 +1269,7 @@ private fun PromptInput(
                         IconButton(
                             onClick = onPickImage,
                             enabled = enabled && !isGenerating,
-                            modifier = Modifier.size(48.dp)
+                            modifier = Modifier.size(41.dp) // UPDATED: size changed from 48.dp to 41.dp
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Add,
@@ -1266,7 +1282,7 @@ private fun PromptInput(
                     // Delete Button
                     Box(
                         modifier = Modifier
-                            .size(48.dp)
+                            .size(41.dp) // UPDATED: size changed from 48.dp to 41.dp
                             .background(Color(0xFFF1F3F5), shape = CircleShape)
                             .border(1.dp, BorderGray, CircleShape),
                         contentAlignment = Alignment.Center
@@ -1274,7 +1290,7 @@ private fun PromptInput(
                         IconButton(
                             onClick = onClearChat,
                             enabled = true,
-                            modifier = Modifier.size(48.dp)
+                            modifier = Modifier.size(41.dp) // UPDATED: size changed from 48.dp to 41.dp
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Delete,
@@ -1315,7 +1331,7 @@ private fun PromptInput(
                     // Microphone Button
                     Box(
                         modifier = Modifier
-                            .size(48.dp)
+                            .size(41.dp) // UPDATED: size changed from 48.dp to 41.dp
                             .background(Color(0xFFF1F3F5), shape = CircleShape)
                             .border(1.dp, BorderGray, CircleShape),
                         contentAlignment = Alignment.Center
@@ -1341,7 +1357,7 @@ private fun PromptInput(
                                 }
                             },
                             enabled = true,
-                            modifier = Modifier.size(48.dp)
+                            modifier = Modifier.size(41.dp) // UPDATED: size changed from 48.dp to 41.dp
                         ) {
                             Icon(
                                 imageVector = if (isRecording) Icons.Default.Mic else Icons.Default.MicOff,
@@ -1354,7 +1370,7 @@ private fun PromptInput(
                     // Send/Stop Button
                     Box(
                         modifier = Modifier
-                            .size(48.dp)
+                            .size(41.dp) // UPDATED: size changed from 48.dp to 41.dp
                             .background(Color(0xFFF1F3F5), shape = CircleShape)
                             .border(1.dp, BorderGray, CircleShape),
                         contentAlignment = Alignment.Center
@@ -1362,7 +1378,7 @@ private fun PromptInput(
                         if (isGenerating) {
                             IconButton(
                                 onClick = onAbort,
-                                modifier = Modifier.size(48.dp)
+                                modifier = Modifier.size(41.dp) // UPDATED: size changed from 48.dp to 41.dp
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
@@ -1374,7 +1390,7 @@ private fun PromptInput(
                             IconButton(
                                 onClick = onGenerate,
                                 enabled = enabled && prompt.isNotBlank(),
-                                modifier = Modifier.size(48.dp)
+                                modifier = Modifier.size(41.dp) // UPDATED: size changed from 48.dp to 41.dp
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.ArrowUpward,
@@ -1398,8 +1414,8 @@ private fun PromptInput(
                 fontFamily = ChatFontFamily,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 2.dp, start = 12.dp),
-                textAlign = TextAlign.Start
+                    .padding(bottom = 2.dp, horizontal = 4.dp), // UPDATED: padding changed from (bottom = 2.dp, start = 12.dp) to (bottom = 2.dp, horizontal = 4.dp)
+                textAlign = TextAlign.Center // UPDATED: textAlign changed from TextAlign.Start to TextAlign.Center
             )
         }
     }
