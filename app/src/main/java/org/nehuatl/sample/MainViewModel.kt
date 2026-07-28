@@ -38,18 +38,23 @@ import java.util.zip.ZipInputStream
 data class ChatMessage(val role: String, val text: String)
 
 class MainViewModel(application: Application, val contentResolver: ContentResolver) : AndroidViewModel(application) {
+
     companion object {
         @Volatile var instance: MainViewModel? = null
         private const val TAG = "MainViewModel"
+
         private const val REMEMBER_COMMAND = "запомни"
         private const val REMEMBER_FULL_COMMAND = "сделай выводы и запомни"
         private const val REMEMBER_ANALYZE_COMMAND = "проанализируй и запомни"
         private const val FIND_COMMAND = "найди"
         private const val SEARCH_COMMAND = "поищи"
         private const val RECALL_COMMAND = "вспомни"
+
         private const val ALARM_COMMAND = "будильник"
         private const val REMIND_COMMAND = "напомни"
+
         private const val AUTO_SEND_DELAY = 5000L
+
         private const val VOSK_MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-ru-0.42.zip"
         private const val VOSK_MODEL_DIR = "vosk-model-large"
         private const val VOSK_MODEL_READY_FLAG = "is_vosk_large_ready"
@@ -319,25 +324,22 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         if (!isReady) {
             appendSystemMessage("⏳ Высокоточная голосовая модель не найдена. Начинаю безопасную загрузку (~1.2 ГБ)... Пожалуйста, не закрывайте приложение.")
+
             scope.launch {
                 withContext(Dispatchers.IO) {
                     var tempFile: File? = null
-                    var animationJob: Job? = null
+
                     try {
                         val url = URL(VOSK_MODEL_URL)
                         val connection = url.openConnection() as HttpURLConnection
-
-                        // FIX: Apply anti-blocking User-Agent headers and network timeouts
                         connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
                         connection.connectTimeout = 15000
                         connection.readTimeout = 15000
-
                         connection.connect()
+
                         val fileLength = connection.contentLength
                         val inputStream = connection.inputStream
                         tempFile = File(context.cacheDir, "vosk-model-temp.zip")
-
-                        // FIX: Force directory structures and instantiate physical empty file payload on disk to prevent FileNotFoundException
                         tempFile?.parentFile?.let {
                             if (!it.exists()) it.mkdirs()
                         }
@@ -362,7 +364,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                 output.write(buffer, 0, bytesRead)
                                 totalBytesRead += bytesRead
 
-                                // Логирование с контролируемой частотой
                                 if (fileLength > 0) {
                                     val progressPercent = (totalBytesRead * 100 / fileLength).toInt()
                                     if (progressPercent % 5 == 0 && progressPercent != lastLoggedPercent) {
@@ -372,7 +373,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                         }
                                     }
                                 } else {
-                                    val stepSize = 25L * 1024 * 1024
                                     val currentMB = totalBytesRead / (1024 * 1024)
                                     if (currentMB % 25 == 0L && currentMB > 0) {
                                         withContext(Dispatchers.Main) {
@@ -383,21 +383,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             }
                         }
 
+                        // Single clear message before unzip starts
                         withContext(Dispatchers.Main) {
-                            appendSystemMessage("⏳ Распаковка модели...")
-                            // Запуск анимации распаковки
-                            animationJob = launch {
-                                var dots = 1
-                                while (true) {
-                                    val dotsString = ".".repeat(dots)
-                                    appendSystemMessage("⏳ Распаковка модели$dotsString")
-                                    delay(500)
-                                    dots = (dots % 3) + 1
-                                }
-                            }
+                            appendSystemMessage("⏳ Начинаю распаковку голосового движка Vosk... Это займет около 30-40 секунд, пожалуйста, подождите.")
                         }
 
-                        // Распаковка архива
+                        // Распаковка архива - COMPLETELY SILENT for maximum performance
                         targetDir.mkdirs()
                         ZipInputStream(tempFile.inputStream()).use { zis ->
                             var entry = zis.nextEntry
@@ -420,39 +411,31 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             }
                         }
 
-                        // CRITICAL: Cancel animation BEFORE updating prefs
-                        animationJob?.cancel()
-                        animationJob = null
-
-                        // Помечаем модель как готовую
-                        prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, true).apply()
-
-                        withContext(Dispatchers.Main) {
-                            appendSystemMessage("✅ Голосовой движок успешно настроен и распакован!")
-                        }
-
-                        // REMOVED: initializeVoskModel(context) - moved outside IO context
-
                     } catch (e: Exception) {
                         Log.e(TAG, "Ошибка загрузки/распаковки модели Vosk: ${e.message}")
                         withContext(Dispatchers.Main) {
-                            animationJob?.cancel()
                             appendSystemMessage("⚠️ Ошибка загрузки голосовой модели: ${e.message}. Попробуйте перезапустить приложение.")
                         }
                     } finally {
-                        // Гарантированное удаление временного ZIP-файла
+                        // 1. File Purge
                         tempFile?.let {
                             if (it.exists()) {
                                 it.delete()
-                                Log.d(TAG, "Временный ZIP-файл успешно удален: ${it.absolutePath}")
+                                Log.d(TAG, "Временный ZIP-файл успешно удален")
                             }
                         }
-                    }
-                }
 
-                // FIX: Pass the safe global application context instead of the local method variable
-                scope.launch {
-                    initializeVoskModel(getApplication<Application>().applicationContext)
+                        // 2. State Commit
+                        prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, true).apply()
+
+                        // 3. Completion Notice on Main thread
+                        withContext(Dispatchers.Main) {
+                            appendSystemMessage("✅ Голосовой движок успешно настроен, архив очищен!")
+                        }
+
+                        // 4. RAM Memory Allocation (synchronous flow)
+                        initializeVoskModel(getApplication<Application>().applicationContext)
+                    }
                 }
             }
         } else {
@@ -466,7 +449,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private suspend fun initializeVoskModel(context: Context) {
         try {
             val targetDir = File(context.filesDir, VOSK_MODEL_DIR)
-
             // Intelligent path detection: find the directory containing the "am" folder
             val modelPath = findModelPath(targetDir)
 
@@ -549,7 +531,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         // Обработка локальных команд в любом режиме
         val lowerText = text.lowercase()
-
         when {
             lowerText.contains(REMEMBER_COMMAND) -> {
                 val cleanText = text.substringAfter(REMEMBER_COMMAND).trim()
@@ -677,7 +658,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     fun generateCloud(prompt: String) {
         val lowerPrompt = prompt.trim().lowercase()
-
         if (lowerPrompt.startsWith(REMEMBER_COMMAND)) {
             val cleanText = prompt.substringAfter(REMEMBER_COMMAND).trim()
             if (cleanText.isNotEmpty()) {
@@ -746,7 +726,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     fun generateLocal(prompt: String, imagePath: String? = null) {
         val lowerPrompt = prompt.trim().lowercase()
-
         if (lowerPrompt.startsWith(REMEMBER_COMMAND)) {
             val cleanText = prompt.substringAfter(REMEMBER_COMMAND).trim()
             if (cleanText.isNotEmpty()) {
@@ -788,7 +767,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     private fun buildSystemPrompt(isSearchCommand: Boolean, prompt: String): String {
         val basePrompt = _systemPrompt.value
-
         if (!isSearchCommand) {
             return basePrompt
         }
@@ -818,7 +796,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             .distinct()
 
         val fullMemory = readFromLongTermMemory()
-
         val filteredMemory = if (fullMemory.isNotEmpty() && keywords.isNotEmpty()) {
             fullMemory.split("\n")
                 .filter { line ->
@@ -905,7 +882,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 set(Calendar.MINUTE, timeCal.get(Calendar.MINUTE))
                 set(Calendar.SECOND, 0)
                 set(Calendar.MILLISECOND, 0)
-
                 if (timeInMillis < System.currentTimeMillis()) {
                     add(Calendar.DAY_OF_YEAR, 1)
                 }
