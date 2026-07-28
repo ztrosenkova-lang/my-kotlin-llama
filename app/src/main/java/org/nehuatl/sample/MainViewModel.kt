@@ -55,7 +55,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         private const val AUTO_SEND_DELAY = 5000L
 
-        private const val VOSK_MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-ru-0.42.zip"
+        // FIXED: Changed from HTTPS to HTTP to bypass geoblocking
+        private const val VOSK_MODEL_URL = "http://alphacephei.com/vosk/models/vosk-model-ru-0.42.zip"
         private const val VOSK_MODEL_DIR = "vosk-model-large"
         private const val VOSK_MODEL_READY_FLAG = "is_vosk_large_ready"
     }
