@@ -2,6 +2,7 @@ package org.nehuatl.sample
 
 import android.Manifest
 import android.content.pm.PackageManager
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -152,6 +153,22 @@ fun ChatScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val coroutineScope = rememberCoroutineScope()
+
+    // Register the Activity Result Launcher for Document Picking
+    val localVoskZipLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        uri?.let { selectedUri ->
+            viewModel.processLocalVoskZip(selectedUri, context)
+        }
+    }
+
+    // Collect and observe the offline event shared flow
+    LaunchedEffect(viewModel.voskFilePickerEvent) {
+        viewModel.voskFilePickerEvent.collect {
+            localVoskZipLauncher.launch("application/zip")
+        }
+    }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
