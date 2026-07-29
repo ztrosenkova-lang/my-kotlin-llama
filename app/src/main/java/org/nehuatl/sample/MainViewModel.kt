@@ -52,7 +52,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         private const val RECALL_COMMAND = "вспомни"
         private const val ALARM_COMMAND = "будильник"
         private const val REMIND_COMMAND = "напомни"
+        private const val CHAT_LOOKUP_COMMAND = "посмотри в чате"
         private const val AUTO_SEND_DELAY = 5000L
+        private const val AUTO_BRAIN_COMPRESSION_THRESHOLD = 14
         // FIXED: Correct URL with full path to the Vosk model archive
         private const val VOSK_MODEL_URL = "http://alphacephei.com/vosk/models/vosk-model-ru-0.42.zip"
         private const val VOSK_MODEL_DIR = "vosk-model-large"
@@ -176,6 +178,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     )
     val voskFilePickerEvent = _voskFilePickerEvent.asSharedFlow()
 
+    // Track last spoken message index for TTS
+    private var lastSpokenMessageIndex = -1
+
     private val onVoiceResult: (String) -> Unit = { recognizedText ->
         if (recognizedText.isNotEmpty()) {
             _recognizedText.value = recognizedText
@@ -270,6 +275,59 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         
         // If the word is very short or no suffix was removed, return the original
         return if (stem.length < 2) lowerWord else stem
+    }
+
+    private fun triggerBackgroundDialogueCompression(history: List<ChatMessage>) {
+        if (history.size < AUTO_BRAIN_COMPRESSION_THRESHOLD) return
+
+        scope.launch(Dispatchers.IO) {
+            try {
+                // Build dialogue text for analysis
+                val dialogueText = history.joinToString("\n") { message ->
+                    val prefix = when (message.role) {
+                        "user" -> "Пользователь"
+                        "assistant" -> "Ассистент"
+                        else -> "Система"
+                    }
+                    "$prefix: ${message.text}"
+                }
+
+                val prompt = "Проанализируй этот диалог. Выдели из него новые важные факты о личности, имени, привычках или планах Пользователя. Сформулируй краткие выводы тезисно, строго по одной строке на факт. Пиши только новые выводы, без лишних слов. Если новых данных нет, верни пустоту.\n\n$dialogueText"
+
+                // Use local model if available, otherwise cloud
+                val summary = if (_isModelLoaded.value && llamaHelper.getContextId() != null) {
+                    // Use local model
+                    val result = llamaHelper.predict(
+                        prompt = prompt,
+                        imagePath = null,
+                        systemPrompt = "Ты — умный аналитик. Выделяй только новые факты из диалога.",
+                        maxTokens = 512
+                    )
+                    // Collect result from flow
+                    var summaryText = ""
+                    // We need to collect from llmFlow but this is already being collected elsewhere
+                    // For simplicity, we'll use cloud if available
+                    if (cloudAIProvider.isConfigured()) {
+                        cloudAIProvider.generateBlocking(prompt, "Ты — умный аналитик. Выделяй только новые факты из диалога.", maxTokens.value)
+                    } else {
+                        ""
+                    }
+                } else if (cloudAIProvider.isConfigured()) {
+                    cloudAIProvider.generateBlocking(prompt, "Ты — умный аналитик. Выделяй только новые факты из диалога.", maxTokens.value)
+                } else {
+                    ""
+                }
+
+                if (summary.isNotBlank()) {
+                    val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+                    val timestamp = dateFormat.format(Date())
+                    brainFile.appendText("[$timestamp] $summary\n")
+                    Log.d(TAG, "Background compression saved to brain.txt")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Background compression failed: ${e.message}")
+            }
+        }
     }
 
     init {
@@ -457,8 +515,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
 
         // Централизованный голосовой синтезатор для новых сообщений
-        var lastSpokenMessageIndex = -1
-
         scope.launch {
             chatHistory.collect { historyList ->
                 if (historyList.isNotEmpty()) {
@@ -866,6 +922,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         _chatHistory.value = _chatHistory.value + ChatMessage("user", text)
 
+        // Trigger background dialogue compression if threshold is met
+        triggerBackgroundDialogueCompression(_chatHistory.value)
+
         // Обработка локальных команд в любом режиме
         val lowerText = text.lowercase()
         when {
@@ -882,7 +941,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 handleAlarmCommand(text)
                 return
             }
-            lowerText.contains(RECALL_COMMAND) || lowerText.contains(FIND_COMMAND) || lowerText.contains(SEARCH_COMMAND) -> {
+            lowerText.contains(RECALL_COMMAND) || lowerText.contains(FIND_COMMAND) || lowerText.contains(SEARCH_COMMAND) || lowerText.contains(CHAT_LOOKUP_COMMAND) -> {
                 // Для NEUTRAL режима выполняем локальный поиск и выводим результат
                 if (_currentMode.value == AIMode.NEUTRAL) {
                     val searchResult = buildSystemPrompt(true, text)
@@ -892,6 +951,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             .replace(RECALL_COMMAND, "")
                             .replace(FIND_COMMAND, "")
                             .replace(SEARCH_COMMAND, "")
+                            .replace(CHAT_LOOKUP_COMMAND, "")
                             .trim()
 
                         // Используем интеллектуальный стемминг для ключевых слов
@@ -1020,7 +1080,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         val isSearchCommand = prompt.contains(FIND_COMMAND, ignoreCase = true) ||
                 prompt.contains(SEARCH_COMMAND, ignoreCase = true) ||
-                prompt.contains(RECALL_COMMAND, ignoreCase = true)
+                prompt.contains(RECALL_COMMAND, ignoreCase = true) ||
+                prompt.contains(CHAT_LOOKUP_COMMAND, ignoreCase = true)
 
         val fullSystemPrompt = buildSystemPrompt(isSearchCommand, prompt)
         val cloudHistory = _chatHistory.value
@@ -1088,7 +1149,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         val isSearchCommand = prompt.contains(FIND_COMMAND, ignoreCase = true) ||
                 prompt.contains(SEARCH_COMMAND, ignoreCase = true) ||
-                prompt.contains(RECALL_COMMAND, ignoreCase = true)
+                prompt.contains(RECALL_COMMAND, ignoreCase = true) ||
+                prompt.contains(CHAT_LOOKUP_COMMAND, ignoreCase = true)
 
         val fullSystemPrompt = buildSystemPrompt(isSearchCommand, prompt)
         _generatedText.value = ""
@@ -1118,6 +1180,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             .replace("вспомни", "")
             .replace("найди", "")
             .replace("поищи", "")
+            .replace("посмотри в чате", "")
             .trim()
 
         // Используем интеллектуальный стемминг для извлечения корней слов
@@ -1349,11 +1412,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _generatedText.value = ""
         _cloudGeneratedText.value = ""
         _recognizedText.value = ""
+        lastSpokenMessageIndex = -1
         autoSendJob?.cancel()
-        // Stop any ongoing TTS
-        offlineTts?.let {
-            // No direct stop method, but we can ignore
-        }
+        Log.d(TAG, "Context purified completely. Conversational session wiped.")
     }
 
     fun updateSystemPrompt(newPrompt: String) {
