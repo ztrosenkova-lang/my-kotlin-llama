@@ -8,60 +8,50 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-        cache: 'gradle'
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
 
-    - name: Accept Android SDK Licenses
-      run: |
-        yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
+      - name: Accept Android SDK Licenses
+        run: |
+          yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
-    - name: Fix Line Endings (CRLF to LF)
-      run: |
-        sudo apt-get update && sudo apt-get install -y dos2unix
-        dos2unix gradlew
-        dos2unix gradle/wrapper/gradle-wrapper.properties
+      - name: Fix Line Endings (CRLF to LF)
+        run: |
+          sudo apt-get update && sudo apt-get install -y dos2unix
+          dos2unix gradlew
+          dos2unix gradle/wrapper/gradle-wrapper.properties
 
-    - name: Grant Execute Permission for Gradlew
-      run: chmod +x gradlew
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
 
-    - name: Download and prepare Vosk model
-      run: |
-        mkdir -p app/src/main/assets
-        cd app/src/main/assets
+      - name: Pre-Download and Embed Neural TTS Model Assets
+        run: |
+          mkdir -p app/src/main/assets/tts-model
+          cd app/src/main/assets/tts-model
+          echo "Downloading Dasha Neural TTS Voice Model Asset..."
+          wget -q https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-ru-hf-dasha-medium.zip
+          echo "Extracting Neural Voice Assets Layer..."
+          unzip -q vits-ru-hf-dasha-medium.zip
+          echo "Flattening model directory tree..."
+          mv vits-ru-hf-dasha-medium/* . || true
+          echo "Cleaning up compilation cache metadata..."
+          rm -rf vits-ru-hf-dasha-medium vits-ru-hf-dasha-medium.zip
+          echo "Verifying local assets target location mapping content:"
+          ls -la
+          echo "Sherpa-ONNX Neural Speech Package ready inside assets"
 
-        echo "Downloading Vosk model..."
-        wget -q https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug
 
-        echo "Unzipping model..."
-        unzip -q vosk-model-small-ru-0.22.zip
-
-        echo "Structuring files..."
-        mkdir model
-        mv vosk-model-small-ru-0.22/* model/
-
-        echo "Generating required Vosk uuid file..."
-        echo "$(cat /proc/sys/kernel/random/uuid)" > model/uuid
-
-        echo "Cleaning up..."
-        rm -rf vosk-model-small-ru-0.22
-        rm vosk-model-small-ru-0.22.zip
-
-        echo "Verifying model layout:"
-        ls -la model/
-        echo "Vosk model ready"
-
-    - name: Build Debug APK
-      run: ./gradlew assembleDebug
-
-    - name: Upload APK Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: app-debug-apk
-        path: app/build/outputs/apk/debug/app-debug.apk
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
