@@ -244,6 +244,34 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
+    /**
+     * Extracts the stem from a Russian word by removing common suffixes.
+     * Case-insensitive and handles common grammatical variations.
+     */
+    private fun extractRussianRoot(word: String): String {
+        val lowerWord = word.lowercase()
+        
+        // List of common Russian suffixes to remove (longest first)
+        val suffixes = listOf(
+            "ами", "ые", "ой", "ых", "ого", "его", "ому", "ему", "им", "ым",
+            "ая", "яя", "ое", "ее", "ие", "ые", "ий", "ый", "ой", "ей",
+            "ам", "ям", "ом", "ем", "ах", "ях", "ов", "ев", "ин", "ын",
+            "а", "я", "о", "е", "и", "ы", "у", "ю"
+        )
+        
+        // Try to remove suffixes from the end
+        var stem = lowerWord
+        for (suffix in suffixes) {
+            if (stem.endsWith(suffix) && stem.length > suffix.length + 1) {
+                stem = stem.substring(0, stem.length - suffix.length)
+                break
+            }
+        }
+        
+        // If the word is very short or no suffix was removed, return the original
+        return if (stem.length < 2) lowerWord else stem
+    }
+
     init {
         instance = this
 
@@ -866,10 +894,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             .replace(SEARCH_COMMAND, "")
                             .trim()
 
+                        // Используем интеллектуальный стемминг для ключевых слов
                         val keywords = cleanSearchQuery.split(" ")
                             .map { it.trim() }
                             .filter { it.length > 2 }
-                            .map { if (it.length > 4) it.substring(0, 4) else it }
+                            .map { extractRussianRoot(it) }
+                            .distinct()
 
                         val filteredLines = memoryData.split("\n")
                             .filter { line ->
@@ -1083,24 +1113,24 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         val brainData = readBrain()
         val chatHistory = _chatHistory.value
 
-        // Извлечение ключевых слов из запроса для поиска в памяти
+        // Извлечение ключевых слов из запроса для поиска в памяти с использованием стемминга
         val cleanSearchQuery = prompt.lowercase()
             .replace("вспомни", "")
             .replace("найди", "")
             .replace("поищи", "")
             .trim()
 
+        // Используем интеллектуальный стемминг для извлечения корней слов
         val keywords = cleanSearchQuery.split(" ")
             .map { it.trim() }
             .filter { it.length > 2 }
             .flatMap { word ->
-                // Извлекаем корни слов для более широкого поиска
-                val roots = mutableListOf<String>()
-                if (word.length > 4) {
-                    roots.add(word.substring(0, 4))
+                // Извлекаем корень слова с помощью стеммера
+                val root = extractRussianRoot(word)
+                mutableListOf(root).also {
+                    // Добавляем оригинальное слово для более точного поиска
+                    it.add(word)
                 }
-                roots.add(word)
-                roots
             }
             .distinct()
 
