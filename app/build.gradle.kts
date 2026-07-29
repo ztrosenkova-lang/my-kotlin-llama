@@ -101,8 +101,8 @@ dependencies {
     // Sherpa-ONNX for TTS
     implementation("com.k2fsa.sherpa.onnx:sherpa-onnx-android:1.10.8")
 
-    // Llama.cpp
-    implementation("com.github.guillaumegallois:llama.cpp:0.0.3")
+    // Llama.cpp - Local module reference
+    implementation(project(":llamaCpp"))
 
     // Testing
     testImplementation("junit:junit:4.13.2")
