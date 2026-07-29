@@ -69,7 +69,6 @@ android {
         jniLibs {
             useLegacyPackaging = true
         }
-        // Prevent compression of model files
         androidResources {
             noCompress.addAll(listOf("bin", "gguf", "onnx", "txt"))
         }
@@ -98,7 +97,7 @@ dependencies {
     // Vosk
     implementation("com.alphacephei:vosk-android:0.3.47")
 
-    // Sherpa-ONNX for TTS - через JitPack (актуальная версия)
+    // Sherpa-ONNX for TTS - через JitPack (исправлено)
     implementation("com.github.k2-fsa:sherpa-onnx:v1.12.9")
 
     // Llama.cpp - Local module reference
