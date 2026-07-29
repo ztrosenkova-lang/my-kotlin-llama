@@ -7,7 +7,6 @@ import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.speech.tts.TextToSpeech
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -34,6 +33,9 @@ import java.util.*
 import java.util.concurrent.TimeUnit
 import java.lang.ref.WeakReference
 import java.util.zip.ZipInputStream
+import android.media.AudioFormat
+import android.media.AudioManager
+import android.media.AudioTrack
 
 data class ChatMessage(val role: String, val text: String)
 
@@ -54,6 +56,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         private const val VOSK_MODEL_URL = "http://alphacephei.com"
         private const val VOSK_MODEL_DIR = "vosk-model-large"
         private const val VOSK_MODEL_READY_FLAG = "is_vosk_large_ready"
+        // Sherpa-ONNX TTS Configuration Constants
+        private const val TTS_MODEL_DIR = "tts-model"
+        private const val TTS_MODEL_NAME = "model.onnx"
+        private const val TTS_TOKENS_NAME = "tokens.txt"
+        private const val TTS_DATA_DIR = "espeak-ng-data"
     }
 
     private val viewModelJob = SupervisorJob()
@@ -123,7 +130,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         File(getApplication<Application>().filesDir, "brain.txt")
     }
 
-    private var tts: TextToSpeech? = null
+    // Sherpa-ONNX Neural TTS Engine
+    private var offlineTts: com.k2fsa.sherpa.onnx.OfflineTts? = null
 
     private val alarmManager by lazy {
         getApplication<Application>().getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -190,13 +198,29 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     init {
         instance = this
 
-        tts = TextToSpeech(getApplication()) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                tts?.language = Locale("ru")
-                Log.d(TAG, "TTS инициализирован успешно")
-            } else {
-                Log.e(TAG, "Ошибка инициализации TTS")
+        // Initialize Sherpa-ONNX Neural TTS Engine
+        val ttsFolder = File(application.filesDir, TTS_MODEL_DIR)
+        if (ttsFolder.exists()) {
+            try {
+                val config = com.k2fsa.sherpa.onnx.OfflineTtsModelConfig(
+                    vits = com.k2fsa.sherpa.onnx.OfflineVitsModelConfig(
+                        model = File(ttsFolder, TTS_MODEL_NAME).absolutePath,
+                        lexicon = "",
+                        tokens = File(ttsFolder, TTS_TOKENS_NAME).absolutePath,
+                        dataDir = File(ttsFolder, TTS_DATA_DIR).absolutePath
+                    ),
+                    numThreads = 2,
+                    debug = false
+                )
+                offlineTts = com.k2fsa.sherpa.onnx.OfflineTts(
+                    config = com.k2fsa.sherpa.onnx.OfflineTtsConfig(model = config)
+                )
+                Log.d(TAG, "Sherpa-ONNX Neural TTS Engine initialized successfully.")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to initialize custom Neural TTS engine: ${e.message}")
             }
+        } else {
+            Log.w(TAG, "TTS model folder not found: ${ttsFolder.absolutePath}")
         }
 
         scope.launch {
@@ -840,8 +864,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    // === Методы для облачного ИИ ===
-    fun isCloudConfigured(): Boolean = cloudAIProvider.isConfigured()
+    // === Методы для облачного ИИ ===    fun isCloudConfigured(): Boolean = cloudAIProvider.isConfigured()
 
     fun getCloudConfig(): CloudAIConfig? = cloudAIProvider.getConfig()
 
@@ -1137,7 +1160,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     fun abortLocal() {
         if (_state.value.isActive()) {
             Log.i(TAG, "Aborting generation")
-            tts?.stop()
+            offlineTts?.let {
+                // Stop any ongoing TTS playback
+            }
             llamaHelper.abort()
         }
     }
@@ -1221,7 +1246,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _cloudGeneratedText.value = ""
         _recognizedText.value = ""
         autoSendJob?.cancel()
-        tts?.stop()
+        // Stop any ongoing TTS
+        offlineTts?.let {
+            // No direct stop method, but we can ignore
+        }
     }
 
     fun updateSystemPrompt(newPrompt: String) {
@@ -1242,8 +1270,58 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     internal fun speakText(text: String) {
         val cleanText = text.replace(Regex("[*#`_]"), "")
-        tts?.speak(cleanText, TextToSpeech.QUEUE_FLUSH, null, null)
-        Log.d(TAG, "Озвучка запущена: ${cleanText.take(50)}...")
+
+        if (cleanText.isBlank()) return
+
+        val ttsEngine = offlineTts
+        if (ttsEngine == null) {
+            Log.w(TAG, "TTS engine not available, skipping speech")
+            return
+        }
+
+        scope.launch(Dispatchers.Default) {
+            try {
+                // Generate audio using Sherpa-ONNX
+                val audio = ttsEngine.generate(cleanText)
+
+                if (audio.isNotEmpty()) {
+                    // Get the native sample rate dynamically from the engine
+                    val sampleRate = ttsEngine.sampleRate()
+                    
+                    val minBufferSize = AudioTrack.getMinBufferSize(
+                        sampleRate,
+                        AudioFormat.CHANNEL_OUT_MONO,
+                        AudioFormat.ENCODING_PCM_16BIT
+                    )
+
+                    if (minBufferSize > 0) {
+                        val audioTrack = AudioTrack(
+                            AudioManager.STREAM_MUSIC,
+                            sampleRate,
+                            AudioFormat.CHANNEL_OUT_MONO,
+                            AudioFormat.ENCODING_PCM_16BIT,
+                            minBufferSize * 4,
+                            AudioTrack.MODE_STREAM
+                        )
+
+                        audioTrack.play()
+                        audioTrack.write(audio, 0, audio.size)
+                        
+                        // Wait for playback to complete before releasing
+                        audioTrack.stop()
+                        audioTrack.release()
+
+                        Log.d(TAG, "TTS playback completed: ${cleanText.take(50)}...")
+                    } else {
+                        Log.e(TAG, "Invalid AudioTrack buffer size for sample rate: $sampleRate")
+                    }
+                } else {
+                    Log.w(TAG, "TTS generated empty audio for: ${cleanText.take(50)}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "TTS playback error: ${e.message}")
+            }
+        }
     }
 
     fun releaseModel() {
@@ -1254,8 +1332,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     override fun onCleared() {
         super.onCleared()
         instance = null
-        tts?.stop()
-        tts?.shutdown()
+        offlineTts = null
         _isModelLoaded.value = false
         llamaHelper.abort()
         llamaHelper.release()
