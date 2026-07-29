@@ -303,7 +303,10 @@ fun ChatScreen(
     }
 
     if (showHelpDialog) {
-        HelpDialog(onDismiss = { showHelpDialog = false })
+        HelpDialog(
+            onDismiss = { showHelpDialog = false },
+            viewModel = viewModel
+        )
     }
 
     if (showMemoryEditor) {
@@ -998,9 +1001,19 @@ private fun CloudAIDialog(
 }
 
 @Composable
-private fun HelpDialog(onDismiss: () -> Unit) {
+private fun HelpDialog(
+    onDismiss: () -> Unit,
+    viewModel: MainViewModel
+) {
+    LaunchedEffect(Unit) {
+        viewModel.speakText("Открываю руководство пользователя. Здесь вы можете прочитать инструкции по управлению моими локальными движками, настройке раздельной памяти и командам умного поиска по корням слов.")
+    }
+
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            viewModel.abortLocal()
+            onDismiss()
+        },
         title = { Text("🛡️ Руководство пользователя", style = MaterialTheme.typography.titleLarge, color = DarkText) },
         text = {
             Column(
@@ -1021,7 +1034,10 @@ private fun HelpDialog(onDismiss: () -> Unit) {
         },
         confirmButton = {
             Button(
-                onClick = onDismiss,
+                onClick = {
+                    viewModel.abortLocal()
+                    onDismiss()
+                },
                 colors = ButtonDefaults.buttonColors(containerColor = AccentColor)
             ) {
                 Text("Понятно", color = DarkText)
