@@ -5,21 +5,21 @@
     <!-- Разрешения для работы с файлами (до Android 12) -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
-    
+
     <!-- Разрешения для Android 13+ (API 33+) для доступа к медиафайлам -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-    
+
     <!-- Сетевые разрешения -->
     <uses-permission android:name="android.permission.INTERNET" />
-    
+
     <!-- Разрешения для работы с будильниками и точным временем -->
     <uses-permission android:name="android.permission.SET_ALARM" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    
+
     <!-- Разрешение на запись аудио (для микрофона) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
@@ -35,6 +35,7 @@
         android:usesCleartextTraffic="true"
         android:largeHeap="true"
         tools:targetApi="31">
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -46,10 +47,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
         <receiver
             android:name=".AlarmReceiver"
             android:enabled="true"
             android:exported="false" />
+
     </application>
 
 </manifest>
