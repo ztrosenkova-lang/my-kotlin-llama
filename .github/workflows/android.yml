@@ -34,17 +34,18 @@ jobs:
       - name: Pre-Download and Embed Neural TTS Model Assets
         run: |
           mkdir -p app/src/main/assets/tts-model
-          cd app/src/main/assets/tts-model
-          echo "Downloading Dasha Neural TTS from Next-gen Kaldi CDN..."
-          curl -L -o vits-ru-hf-dasha-medium.zip "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-ru-hf-dasha-medium.zip"
-          echo "Extracting Neural Voice Assets Layer..."
-          unzip -q vits-ru-hf-dasha-medium.zip
-          echo "Flattening model directory tree..."
-          mv vits-ru-hf-dasha-medium/* . || true
-          echo "Cleaning up compilation cache metadata..."
-          rm -rf vits-ru-hf-dasha-medium vits-ru-hf-dasha-medium.zip
+          echo "Downloading raw speech model assets via official HuggingFace Client Toolkit..."
+          
+          # Secure direct pull of single model and token layers straight to target directory layout
+          curl -L -o app/src/main/assets/tts-model/model.onnx "https://huggingface.co/csukuangfj/sherpa-onnx-tts-vits-ru-hf-dasha-medium/resolve/main/model.onnx"
+          curl -L -o app/src/main/assets/tts-model/tokens.txt "https://huggingface.co/csukuangfj/sherpa-onnx-tts-vits-ru-hf-dasha-medium/resolve/main/tokens.txt"
+          
+          # Pull configuration dependencies mapping blocks
+          mkdir -p app/src/main/assets/tts-model/espeak-ng-data
+          curl -L -o app/src/main/assets/tts-model/espeak-ng-data/ru_dict "https://huggingface.co/csukuangfj/sherpa-onnx-tts-vits-ru-hf-dasha-medium/resolve/main/espeak-ng-data/ru_dict" || true
+          
           echo "Verifying local assets target location mapping content:"
-          ls -la
+          ls -la app/src/main/assets/tts-model
           echo "Sherpa-ONNX Neural Speech Package ready inside assets"
 
       - name: Build Debug APK
