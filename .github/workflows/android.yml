@@ -35,8 +35,8 @@ jobs:
         run: |
           mkdir -p app/src/main/assets/tts-model
           cd app/src/main/assets/tts-model
-          echo "Downloading Dasha Neural TTS Voice Model Asset..."
-          curl -L -o vits-ru-hf-dasha-medium.zip "https://huggingface.co/csukuangfj/sherpa-onnx-tts-vits-ru-hf-dasha-medium/resolve/main/vits-ru-hf-dasha-medium.zip?download=true"
+          echo "Downloading Dasha Neural TTS from Next-gen Kaldi CDN..."
+          curl -L -o vits-ru-hf-dasha-medium.zip "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-ru-hf-dasha-medium.zip"
           echo "Extracting Neural Voice Assets Layer..."
           unzip -q vits-ru-hf-dasha-medium.zip
           echo "Flattening model directory tree..."
