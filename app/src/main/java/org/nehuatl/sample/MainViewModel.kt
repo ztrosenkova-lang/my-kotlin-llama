@@ -315,6 +315,16 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         )
     }
 
+    private fun updateLastSystemMessage(newText: String) {
+        val currentList = _chatHistory.value.toMutableList()
+        if (currentList.isNotEmpty() && currentList.last().role == "system") {
+            currentList[currentList.lastIndex] = ChatMessage("system", newText)
+            _chatHistory.value = currentList
+        } else {
+            _chatHistory.value = currentList + ChatMessage("system", newText)
+        }
+    }
+
     fun isVoskInitialized(): Boolean = _isVoskLoaded.value
 
     fun initVoskLazily(context: Context) {
@@ -390,7 +400,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             appendSystemMessage("⏳ Начинаю распаковку голосового движка Vosk... Это займет около 30-40 секунд, пожалуйста, подождите.")
                         }
 
-                        // Распаковка архива - with 250-file progress tracking
+                        // Распаковка архива - with 250-file progress tracking and in-place updates
                         targetDir.mkdirs()
                         ZipInputStream(tempFile.inputStream()).use { zis ->
                             var entry = zis.nextEntry
@@ -399,7 +409,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                 entryCounter++
                                 if (entryCounter % 250 == 0) {
                                     withContext(Dispatchers.Main) {
-                                        appendSystemMessage("⏳ Распаковка... $entryCounter")
+                                        updateLastSystemMessage("⏳ Распаковка архива (разворачивание 3.7 ГБ на диске): извлечено $entryCounter файлов...")
                                     }
                                 }
                                 val entryFile = File(targetDir, entry.name)
@@ -420,7 +430,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             }
                         }
                         withContext(Dispatchers.Main) {
-                            appendSystemMessage("📦 Всего распаковано файлов: $entryCounter")
+                            updateLastSystemMessage("📦 Всего распаковано файлов: $entryCounter")
                         }
 
                     } catch (e: Exception) {
@@ -478,7 +488,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     // Create target directory if it doesn't exist
                     targetDir.mkdirs()
 
-                    // Extract archive with 250-file progress tracking
+                    // Extract archive with 250-file progress tracking and in-place updates
                     ZipInputStream(inputStream).use { zis ->
                         var entry = zis.nextEntry
                         var entryCounter = 0
@@ -486,7 +496,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             entryCounter++
                             if (entryCounter % 250 == 0) {
                                 withContext(Dispatchers.Main) {
-                                    appendSystemMessage("⏳ Распаковка... $entryCounter")
+                                    updateLastSystemMessage("⏳ Распаковка архива (разворачивание 3.7 ГБ на диске): извлечено $entryCounter файлов...")
                                 }
                             }
                             val entryFile = File(targetDir, entry.name)
@@ -507,7 +517,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         }
                     }
                     withContext(Dispatchers.Main) {
-                        appendSystemMessage("📦 Всего распаковано файлов: $entryCounter")
+                        updateLastSystemMessage("📦 Всего распаковано файлов: $entryCounter")
                     }
                 } ?: run {
                     withContext(Dispatchers.Main) {
@@ -533,6 +543,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     private suspend fun initializeVoskModel(context: Context) {
+        var ramProgressJob: Job? = null
+
         try {
             val targetDir = File(context.filesDir, VOSK_MODEL_DIR)
 
@@ -549,12 +561,22 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
             // OOM Protection: Clear memory before initializing VoskRecognizer
             withContext(Dispatchers.Main) {
-                appendSystemMessage("🧹 Очистка памяти перед загрузкой Vosk...")
+                updateLastSystemMessage("🧹 Очистка памяти перед загрузкой Vosk...")
             }
             Log.d(TAG, "OOM Protection: Running GC before VoskRecognizer init")
             System.gc()
             Runtime.getRuntime().gc()
             delay(200)
+
+            // Start RAM loading animation
+            ramProgressJob = scope.launch(Dispatchers.Main) {
+                var dots = 1
+                while (true) {
+                    updateLastSystemMessage("⚙️ Инициализация ядра Vosk... Загрузка весов модели в ОЗУ" + ".".repeat(dots))
+                    delay(600)
+                    dots = (dots % 3) + 1
+                }
+            }
 
             // Wrap VoskRecognizer initialization in try-catch for OutOfMemoryError
             try {
@@ -566,11 +588,19 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     externalModelPath = modelPath
                 )
 
+                // Cancel RAM loading animation on success
+                ramProgressJob?.cancel()
+                ramProgressJob = null
+
                 withContext(Dispatchers.Main) {
                     _isVoskLoaded.value = true
                     appendSystemMessage("✅ Голосовой движок Vosk полностью загружен и готов в ОЗУ!")
                 }
             } catch (t: Throwable) {
+                // Cancel RAM loading animation on error
+                ramProgressJob?.cancel()
+                ramProgressJob = null
+
                 if (t is OutOfMemoryError || t.message?.contains("OutOfMemoryError") == true) {
                     Log.e(TAG, "OutOfMemoryError при инициализации Vosk", t)
                     withContext(Dispatchers.Main) {
@@ -588,10 +618,18 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
 
         } catch (e: Exception) {
+            // Cancel RAM loading animation if still running
+            ramProgressJob?.cancel()
+            ramProgressJob = null
+
             Log.e(TAG, "Ошибка инициализации Vosk: ${e.message}")
             withContext(Dispatchers.Main) {
                 appendSystemMessage("⚠️ Ошибка инициализации Vosk: ${e.message}")
             }
+        } finally {
+            // Ensure RAM loading animation is cancelled in all cases
+            ramProgressJob?.cancel()
+            ramProgressJob = null
         }
     }
 
@@ -860,8 +898,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         if (llamaHelper.getContextId() == null) {
             _state.value = GenerationState.Error("Модель не загружена. Загрузите модель через 'движок'.")
-            return
-        }
+            return        }
 
         val isSearchCommand = prompt.contains(FIND_COMMAND, ignoreCase = true) ||
                 prompt.contains(SEARCH_COMMAND, ignoreCase = true) ||
