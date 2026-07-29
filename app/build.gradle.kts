@@ -98,8 +98,8 @@ dependencies {
     // Vosk
     implementation("com.alphacephei:vosk-android:0.3.47")
 
-    // Sherpa-ONNX for TTS
-    implementation("com.k2fsa.sherpa.onnx:sherpa-onnx-android:1.10.8")
+    // Sherpa-ONNX for TTS - через JitPack (исправлено)
+    implementation("com.github.k2-fsa:sherpa-onnx:v1.10.8")
 
     // Llama.cpp - Local module reference
     implementation(project(":llamaCpp"))
