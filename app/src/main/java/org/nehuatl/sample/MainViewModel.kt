@@ -38,25 +38,20 @@ import java.util.zip.ZipInputStream
 data class ChatMessage(val role: String, val text: String)
 
 class MainViewModel(application: Application, val contentResolver: ContentResolver) : AndroidViewModel(application) {
-
     companion object {
         @Volatile var instance: MainViewModel? = null
         private const val TAG = "MainViewModel"
-
         private const val REMEMBER_COMMAND = "запомни"
         private const val REMEMBER_FULL_COMMAND = "сделай выводы и запомни"
         private const val REMEMBER_ANALYZE_COMMAND = "проанализируй и запомни"
         private const val FIND_COMMAND = "найди"
         private const val SEARCH_COMMAND = "поищи"
         private const val RECALL_COMMAND = "вспомни"
-
         private const val ALARM_COMMAND = "будильник"
         private const val REMIND_COMMAND = "напомни"
-
         private const val AUTO_SEND_DELAY = 5000L
-
-        // FIXED: Changed from HTTPS to HTTP to bypass geoblocking
-        private const val VOSK_MODEL_URL = "http://alphacephei.com/vosk/models/vosk-model-ru-0.42.zip"
+        // FIXED: Correct URL
+        private const val VOSK_MODEL_URL = "http://alphacephei.com"
         private const val VOSK_MODEL_DIR = "vosk-model-large"
         private const val VOSK_MODEL_READY_FLAG = "is_vosk_large_ready"
     }
@@ -333,11 +328,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         if (!isReady) {
             appendSystemMessage("⏳ Высокоточная голосовая модель не найдена. Начинаю безопасную загрузку (~1.2 ГБ)... Пожалуйста, не закрывайте приложение.")
-
             scope.launch {
                 withContext(Dispatchers.IO) {
                     var tempFile: File? = null
-
                     try {
                         val url = URL(VOSK_MODEL_URL)
                         val connection = url.openConnection() as HttpURLConnection
@@ -397,11 +390,18 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             appendSystemMessage("⏳ Начинаю распаковку голосового движка Vosk... Это займет около 30-40 секунд, пожалуйста, подождите.")
                         }
 
-                        // Распаковка архива - COMPLETELY SILENT for maximum performance
+                        // Распаковка архива - with 250-file progress tracking
                         targetDir.mkdirs()
                         ZipInputStream(tempFile.inputStream()).use { zis ->
                             var entry = zis.nextEntry
+                            var entryCounter = 0
                             while (entry != null) {
+                                entryCounter++
+                                if (entryCounter % 250 == 0) {
+                                    withContext(Dispatchers.Main) {
+                                        appendSystemMessage("⏳ Распаковка... $entryCounter")
+                                    }
+                                }
                                 val entryFile = File(targetDir, entry.name)
                                 if (entry.isDirectory) {
                                     entryFile.mkdirs()
@@ -419,10 +419,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                 entry = zis.nextEntry
                             }
                         }
+                        withContext(Dispatchers.Main) {
+                            appendSystemMessage("📦 Всего распаковано файлов: $entryCounter")
+                        }
 
                     } catch (e: Exception) {
                         Log.e(TAG, "Ошибка загрузки/распаковки модели Vosk: ${e.message}")
-
                         // Network failure - trigger offline mode with file picker
                         withContext(Dispatchers.Main) {
                             appendSystemMessage("⚠ Сеть заблокирована или отсутствует подключение к интернету. Перехожу в автономный режим.")
@@ -437,16 +439,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                 Log.d(TAG, "Временный ZIP-файл успешно удален")
                             }
                         }
-
                         // 2. State Commit
                         prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, true).apply()
-
                         // 3. Completion Notice on Main thread
                         withContext(Dispatchers.Main) {
                             appendSystemMessage("✅ Голосовой движок успешно настроен, архив очищен!")
                         }
-
-                        // 4. RAM Memory Allocation (synchronous flow)
+                        // 4. RAM Memory Allocation (synchronous flow) with OOM protection
                         initializeVoskModel(getApplication<Application>().applicationContext)
                     }
                 }
@@ -479,10 +478,17 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     // Create target directory if it doesn't exist
                     targetDir.mkdirs()
 
-                    // Extract archive silently
+                    // Extract archive with 250-file progress tracking
                     ZipInputStream(inputStream).use { zis ->
                         var entry = zis.nextEntry
+                        var entryCounter = 0
                         while (entry != null) {
+                            entryCounter++
+                            if (entryCounter % 250 == 0) {
+                                withContext(Dispatchers.Main) {
+                                    appendSystemMessage("⏳ Распаковка... $entryCounter")
+                                }
+                            }
                             val entryFile = File(targetDir, entry.name)
                             if (entry.isDirectory) {
                                 entryFile.mkdirs()
@@ -500,13 +506,15 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             entry = zis.nextEntry
                         }
                     }
+                    withContext(Dispatchers.Main) {
+                        appendSystemMessage("📦 Всего распаковано файлов: $entryCounter")
+                    }
                 } ?: run {
                     withContext(Dispatchers.Main) {
                         appendSystemMessage("⚠️ Не удалось открыть выбранный файл. Убедитесь, что это корректный ZIP-архив.")
                     }
                     return@launch
                 }
-
             } catch (e: Exception) {
                 Log.e(TAG, "Ошибка локальной распаковки Vosk: ${e.message}")
                 withContext(Dispatchers.Main) {
@@ -515,12 +523,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             } finally {
                 // Commit state flag
                 prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, true).apply()
-
                 withContext(Dispatchers.Main) {
                     appendSystemMessage("✅ Голосовой движок успешно настроен автономно!")
                 }
-
-                // Initialize Vosk model
+                // Initialize Vosk model with OOM protection
                 initializeVoskModel(context.applicationContext)
             }
         }
@@ -529,6 +535,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private suspend fun initializeVoskModel(context: Context) {
         try {
             val targetDir = File(context.filesDir, VOSK_MODEL_DIR)
+
             // Intelligent path detection: find the directory containing the "am" folder
             val modelPath = findModelPath(targetDir)
 
@@ -540,18 +547,46 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 return
             }
 
-            voskRecognizer = VoskRecognizer(
-                contextRef = WeakReference(context.applicationContext),
-                onResult = onVoiceResult,
-                onLog = onVoiceLog,
-                scope = scope,
-                externalModelPath = modelPath
-            )
-
+            // OOM Protection: Clear memory before initializing VoskRecognizer
             withContext(Dispatchers.Main) {
-                _isVoskLoaded.value = true
-                appendSystemMessage("✅ Голосовой движок Vosk полностью загружен и готов в ОЗУ!")
+                appendSystemMessage("🧹 Очистка памяти перед загрузкой Vosk...")
             }
+            Log.d(TAG, "OOM Protection: Running GC before VoskRecognizer init")
+            System.gc()
+            Runtime.getRuntime().gc()
+            delay(200)
+
+            // Wrap VoskRecognizer initialization in try-catch for OutOfMemoryError
+            try {
+                voskRecognizer = VoskRecognizer(
+                    contextRef = WeakReference(context.applicationContext),
+                    onResult = onVoiceResult,
+                    onLog = onVoiceLog,
+                    scope = scope,
+                    externalModelPath = modelPath
+                )
+
+                withContext(Dispatchers.Main) {
+                    _isVoskLoaded.value = true
+                    appendSystemMessage("✅ Голосовой движок Vosk полностью загружен и готов в ОЗУ!")
+                }
+            } catch (t: Throwable) {
+                if (t is OutOfMemoryError || t.message?.contains("OutOfMemoryError") == true) {
+                    Log.e(TAG, "OutOfMemoryError при инициализации Vosk", t)
+                    withContext(Dispatchers.Main) {
+                        appendSystemMessage("⚠️ Недостаточно оперативной памяти для загрузки голосовой модели. Попробуйте освободить память или перезапустить приложение.")
+                        appendSystemMessage("💡 Для работы Vosk требуется ~500 МБ свободной RAM.")
+                    }
+                } else {
+                    Log.e(TAG, "Ошибка инициализации Vosk: ${t.message}", t)
+                    withContext(Dispatchers.Main) {
+                        appendSystemMessage("⚠️ Ошибка инициализации Vosk: ${t.message}")
+                    }
+                }
+                // Re-throw to allow caller to handle, but we already logged and notified user
+                throw t
+            }
+
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка инициализации Vosk: ${e.message}")
             withContext(Dispatchers.Main) {
@@ -738,6 +773,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     fun generateCloud(prompt: String) {
         val lowerPrompt = prompt.trim().lowercase()
+
         if (lowerPrompt.startsWith(REMEMBER_COMMAND)) {
             val cleanText = prompt.substringAfter(REMEMBER_COMMAND).trim()
             if (cleanText.isNotEmpty()) {
@@ -806,6 +842,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     fun generateLocal(prompt: String, imagePath: String? = null) {
         val lowerPrompt = prompt.trim().lowercase()
+
         if (lowerPrompt.startsWith(REMEMBER_COMMAND)) {
             val cleanText = prompt.substringAfter(REMEMBER_COMMAND).trim()
             if (cleanText.isNotEmpty()) {
@@ -831,7 +868,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 prompt.contains(RECALL_COMMAND, ignoreCase = true)
 
         val fullSystemPrompt = buildSystemPrompt(isSearchCommand, prompt)
-
         _generatedText.value = ""
         _state.value = GenerationState.Generating(prompt = prompt, tokensGenerated = 0)
 
@@ -876,6 +912,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             .distinct()
 
         val fullMemory = readFromLongTermMemory()
+
         val filteredMemory = if (fullMemory.isNotEmpty() && keywords.isNotEmpty()) {
             fullMemory.split("\n")
                 .filter { line ->
@@ -962,6 +999,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 set(Calendar.MINUTE, timeCal.get(Calendar.MINUTE))
                 set(Calendar.SECOND, 0)
                 set(Calendar.MILLISECOND, 0)
+
                 if (timeInMillis < System.currentTimeMillis()) {
                     add(Calendar.DAY_OF_YEAR, 1)
                 }
@@ -985,6 +1023,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
 
             Log.d(TAG, "Будильник установлен на ${calendar.time} ($timeStr): $message")
+
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка установки будильника: ${e.message}")
             appendSystemMessage("⚠️ Ошибка установки будильника: ${e.message}")
@@ -1013,8 +1052,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             if (!memoryFile.exists()) {
                 memoryFile.createNewFile()
             }
+
             val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
             val timestamp = dateFormat.format(Date())
+
             memoryFile.appendText("[$timestamp] $text\n")
             Log.d(TAG, "Записано в долговременную память: $text")
             appendSystemMessage("🧠 Запомнено: $text")
@@ -1054,8 +1095,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             if (!brainFile.exists()) {
                 brainFile.createNewFile()
             }
+
             val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
             val timestamp = dateFormat.format(Date())
+
             brainFile.appendText("[$timestamp] $text\n")
             Log.d(TAG, "Записано в мозг: $text")
         } catch (e: Exception) {
@@ -1139,9 +1182,11 @@ private fun getFileNameFromUri(contentResolver: ContentResolver, uri: Uri): Stri
     } catch (e: Exception) {
         Log.e("MainViewModel", "Ошибка чтения имени файла: ${e.message}")
     }
+
     if (name.isEmpty()) {
         name = uri.lastPathSegment ?: ""
     }
+
     val cleanName = name.replace(Regex("^primary%3AModels%"), "").replace(Regex("^primary:Models:"), "")
     return cleanName
 }
