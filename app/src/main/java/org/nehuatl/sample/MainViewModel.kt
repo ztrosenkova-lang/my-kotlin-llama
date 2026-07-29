@@ -26,6 +26,7 @@ import kotlinx.coroutines.withContext
 import org.nehuatl.llamacpp.LlamaHelper
 import java.io.File
 import java.io.FileOutputStream
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.text.SimpleDateFormat
@@ -52,8 +53,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         private const val ALARM_COMMAND = "будильник"
         private const val REMIND_COMMAND = "напомни"
         private const val AUTO_SEND_DELAY = 5000L
-        // FIXED: Correct URL
-        private const val VOSK_MODEL_URL = "http://alphacephei.com"
+        // FIXED: Correct URL with full path to the Vosk model archive
+        private const val VOSK_MODEL_URL = "http://alphacephei.com/vosk/models/vosk-model-ru-0.42.zip"
         private const val VOSK_MODEL_DIR = "vosk-model-large"
         private const val VOSK_MODEL_READY_FLAG = "is_vosk_large_ready"
         // Sherpa-ONNX TTS Configuration Constants
@@ -61,6 +62,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         private const val TTS_MODEL_NAME = "model.onnx"
         private const val TTS_TOKENS_NAME = "tokens.txt"
         private const val TTS_DATA_DIR = "espeak-ng-data"
+        private const val TTS_ASSETS_PREFIX = "tts-model"
     }
 
     private val viewModelJob = SupervisorJob()
@@ -195,19 +197,89 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         Log.d("VoskLog", logText)
     }
 
+    private fun copyAssetFile(assetPath: String, destinationFile: File, context: Context): Boolean {
+        return try {
+            val inputStream: InputStream = context.assets.open(assetPath)
+            FileOutputStream(destinationFile).use { outputStream ->
+                val buffer = ByteArray(8192)
+                var length: Int
+                while (inputStream.read(buffer).also { length = it } > 0) {
+                    outputStream.write(buffer, 0, length)
+                }
+            }
+            inputStream.close()
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to copy asset: $assetPath - ${e.message}")
+            false
+        }
+    }
+
+    private fun copyAssetDirectory(assetDir: String, targetDir: File, context: Context) {
+        try {
+            val files = context.assets.list(assetDir) ?: return
+            targetDir.mkdirs()
+
+            for (file in files) {
+                val assetPath = if (assetDir.isEmpty()) file else "$assetDir/$file"
+                val targetFile = File(targetDir, file)
+
+                // Check if it's a directory by trying to list it
+                try {
+                    val subFiles = context.assets.list(assetPath)
+                    if (subFiles != null && subFiles.isNotEmpty()) {
+                        // It's a directory - recursively copy
+                        copyAssetDirectory(assetPath, targetFile, context)
+                    } else {
+                        // It's a file
+                        copyAssetFile(assetPath, targetFile, context)
+                    }
+                } catch (e: Exception) {
+                    // If listing fails, treat as file
+                    copyAssetFile(assetPath, targetFile, context)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to copy asset directory: $assetDir - ${e.message}")
+        }
+    }
+
     init {
         instance = this
 
+        // Copy TTS assets from assets to filesDir if not present
+        val ttsTargetDir = File(application.filesDir, TTS_MODEL_DIR)
+
+        if (!ttsTargetDir.exists() || !File(ttsTargetDir, TTS_MODEL_NAME).exists()) {
+            appendSystemMessage("⏳ Настраиваю собственный приятный нейроголос ИИ-Друга...")
+
+            try {
+                // Delete existing directory if it exists but is incomplete
+                if (ttsTargetDir.exists()) {
+                    ttsTargetDir.deleteRecursively()
+                }
+
+                // Create target directory
+                ttsTargetDir.mkdirs()
+
+                // Copy all assets from tts-model to filesDir
+                copyAssetDirectory(TTS_ASSETS_PREFIX, ttsTargetDir, application)
+
+                Log.d(TAG, "TTS assets copied successfully to: ${ttsTargetDir.absolutePath}")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to copy TTS assets: ${e.message}")
+            }
+        }
+
         // Initialize Sherpa-ONNX Neural TTS Engine
-        val ttsFolder = File(application.filesDir, TTS_MODEL_DIR)
-        if (ttsFolder.exists()) {
+        if (ttsTargetDir.exists()) {
             try {
                 val config = com.k2fsa.sherpa.onnx.OfflineTtsModelConfig(
                     vits = com.k2fsa.sherpa.onnx.OfflineVitsModelConfig(
-                        model = File(ttsFolder, TTS_MODEL_NAME).absolutePath,
+                        model = File(ttsTargetDir, TTS_MODEL_NAME).absolutePath,
                         lexicon = "",
-                        tokens = File(ttsFolder, TTS_TOKENS_NAME).absolutePath,
-                        dataDir = File(ttsFolder, TTS_DATA_DIR).absolutePath
+                        tokens = File(ttsTargetDir, TTS_TOKENS_NAME).absolutePath,
+                        dataDir = File(ttsTargetDir, TTS_DATA_DIR).absolutePath
                     ),
                     numThreads = 2,
                     debug = false
@@ -220,7 +292,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 Log.e(TAG, "Failed to initialize custom Neural TTS engine: ${e.message}")
             }
         } else {
-            Log.w(TAG, "TTS model folder not found: ${ttsFolder.absolutePath}")
+            Log.w(TAG, "TTS model folder not found: ${ttsTargetDir.absolutePath}")
         }
 
         scope.launch {
@@ -373,7 +445,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                         newlyArrivedItem.text.startsWith("⚙️ Инициализация") ||
                                         newlyArrivedItem.text.startsWith("📥 Загрузка") ||
                                         newlyArrivedItem.text.startsWith("📦") ||
-                                        newlyArrivedItem.text.startsWith("🧹"))
+                                        newlyArrivedItem.text.startsWith("🧹") ||
+                                        newlyArrivedItem.text.startsWith("⏳ Настраиваю"))
 
                         val isAssistant = newlyArrivedItem.role == "assistant"
 
@@ -864,7 +937,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    // === Методы для облачного ИИ ===    fun isCloudConfigured(): Boolean = cloudAIProvider.isConfigured()
+    // === Методы для облачного ИИ ===
+    fun isCloudConfigured(): Boolean = cloudAIProvider.isConfigured()
 
     fun getCloudConfig(): CloudAIConfig? = cloudAIProvider.getConfig()
 
@@ -1287,7 +1361,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 if (audio.isNotEmpty()) {
                     // Get the native sample rate dynamically from the engine
                     val sampleRate = ttsEngine.sampleRate()
-                    
+
                     val minBufferSize = AudioTrack.getMinBufferSize(
                         sampleRate,
                         AudioFormat.CHANNEL_OUT_MONO,
@@ -1306,7 +1380,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
                         audioTrack.play()
                         audioTrack.write(audio, 0, audio.size)
-                        
+
                         // Wait for playback to complete before releasing
                         audioTrack.stop()
                         audioTrack.release()
