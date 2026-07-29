@@ -222,8 +222,22 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         val fullText = event.fullText
                         if (fullText.isNotEmpty()) {
                             stopRecording()
-                            _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
+                            // Speak the complete text once before typewriter
                             speakText(fullText)
+                            // Add empty assistant message and type it out
+                            _chatHistory.value = _chatHistory.value + ChatMessage("assistant", "")
+                            scope.launch(Dispatchers.Main) {
+                                var typedText = ""
+                                for (char in fullText) {
+                                    typedText += char
+                                    val currentList = _chatHistory.value.toMutableList()
+                                    if (currentList.isNotEmpty() && currentList.last().role == "assistant") {
+                                        currentList[currentList.lastIndex] = ChatMessage("assistant", typedText)
+                                        _chatHistory.value = currentList
+                                    }
+                                    delay(30) // Typing speed
+                                }
+                            }
                         }
                         _cloudGeneratedText.value = fullText
                     }
@@ -259,8 +273,22 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         val fullText = event.fullText
                         if (fullText.isNotEmpty()) {
                             stopRecording()
-                            _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
+                            // Speak the complete text once before typewriter
                             speakText(fullText)
+                            // Add empty assistant message and type it out
+                            _chatHistory.value = _chatHistory.value + ChatMessage("assistant", "")
+                            scope.launch(Dispatchers.Main) {
+                                var typedText = ""
+                                for (char in fullText) {
+                                    typedText += char
+                                    val currentList = _chatHistory.value.toMutableList()
+                                    if (currentList.isNotEmpty() && currentList.last().role == "assistant") {
+                                        currentList[currentList.lastIndex] = ChatMessage("assistant", typedText)
+                                        _chatHistory.value = currentList
+                                    }
+                                    delay(30) // Typing speed
+                                }
+                            }
                         }
                         _generatedText.value = fullText
                     }
@@ -301,6 +329,37 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 }
                 // Задержка ровно в 1 секунду (1000мс) перед следующим замером
                 delay(1000)
+            }
+        }
+
+        // Централизованный голосовой синтезатор для новых сообщений
+        var lastSpokenMessageIndex = -1
+
+        scope.launch {
+            chatHistory.collect { historyList ->
+                if (historyList.isNotEmpty()) {
+                    val lastIndex = historyList.lastIndex
+                    if (lastIndex > lastSpokenMessageIndex) {
+                        val newlyArrivedItem = historyList.last()
+                        lastSpokenMessageIndex = lastIndex
+
+                        // Пропускаем assistant (уже обработано в Done) и системные индикаторы прогресса
+                        val isTypewriterActive = newlyArrivedItem.role == "system" &&
+                                (newlyArrivedItem.text.startsWith("⏳ Распаковка") ||
+                                        newlyArrivedItem.text.startsWith("⚙️ Инициализация") ||
+                                        newlyArrivedItem.text.startsWith("📥 Загрузка") ||
+                                        newlyArrivedItem.text.startsWith("📦") ||
+                                        newlyArrivedItem.text.startsWith("🧹"))
+
+                        val isAssistant = newlyArrivedItem.role == "assistant"
+
+                        if (newlyArrivedItem.text.isNotEmpty() && !isTypewriterActive && !isAssistant) {
+                            speakText(newlyArrivedItem.text)
+                        }
+                    }
+                } else {
+                    lastSpokenMessageIndex = -1 // Полный сброс индекса при очистке чата
+                }
             }
         }
 
