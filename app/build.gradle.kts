@@ -43,8 +43,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
     }
 
     externalNativeBuild {
@@ -71,12 +73,9 @@ android {
             useLegacyPackaging = true
         }
         // Prevent compression of model files
-        noCompress += listOf(
-            "bin",
-            "gguf",
-            "onnx",
-            "txt"
-        )
+        aaptOptions {
+            noCompress.addAll(listOf("bin", "gguf", "onnx", "txt"))
+        }
     }
 }
 
