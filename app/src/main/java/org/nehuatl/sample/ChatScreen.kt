@@ -128,8 +128,10 @@ fun ChatScreen(
     val cloudState by viewModel.cloudState.collectAsStateWithLifecycle()
     val cloudGeneratedText by viewModel.cloudGeneratedText.collectAsStateWithLifecycle()
     val isModelLoaded by viewModel.isModelLoaded.collectAsStateWithLifecycle()
+
     // Исправленная строка 129: реактивная подписка на состояние записи
     val isRecording by viewModel.isRecording.collectAsStateWithLifecycle()
+
     // ИСПРАВЛЕННЫЙ ЖИВОЙ ПОТОК: Интерфейс реактивно слушает бэкенд Vosk
     val isVoskReady by viewModel.isVoskLoaded.collectAsStateWithLifecycle(initialValue = false)
 
@@ -185,22 +187,32 @@ fun ChatScreen(
         }
     }
 
-    // Блок приветствия при запуске (отсчет 5 секунд)
+    // Блок приветствия при запуске (отсчет 5 секунд) с typewriter эффектом
+    val fullWelcomeString = """
+        ✨ Добро пожаловать в ИИ-Друг! ✨
+        🚀 Это лучшая локальная запоминалка паролей и умный собеседник.
+        📋 Ключевые голосовые и текстовые команды:
+        🧠 «Запомни [факт/пароль]» — сохранить в базу знаний.
+        🔍 «Вспомни [ключевое слово]» — извлечь данные из памяти.
+        ⏰ «Будильник/Напомни в [время]» — поставить точный таймер.
+        💬 Пиши запросы в поле ввода или активируй верхнюю кнопку «голос»!
+        (Вы можете очистить этот экран в любой момент кнопкой корзины справа).
+    """.trimIndent()
+
     LaunchedEffect(Unit) {
         // Асинхронная задержка в 5 секунд (5000 миллисекунд)
         kotlinx.coroutines.delay(5000)
-        val welcomeMessage = """
-            ✨ Добро пожаловать в ИИ-Друг! ✨
-            🚀 Это лучшая локальная запоминалка паролей и умный собеседник.
-            📋 Ключевые голосовые и текстовые команды:
-            🧠 «Запомни [факт/пароль]» — сохранить в базу знаний.
-            🔍 «Вспомни [ключевое слово]» — извлечь данные из памяти.
-            ⏰ «Будильник/Напомни в [время]» — поставить точный таймер.
-            💬 Пиши запросы в поле ввода или активируй верхнюю кнопку «голос»!
-            (Вы можете очистить этот экран в любой момент кнопкой корзины справа).
-        """.trimIndent()
-        // Вывод краткой инструкции напрямую в интерфейс чата
-        viewModel.appendSystemMessage(welcomeMessage)
+
+        // Мгновенный запуск озвучки полного текста
+        viewModel.speakText(fullWelcomeString)
+
+        // Динамическая печать инструкции посимвольно через updateLastSystemMessage
+        var runningText = ""
+        for (i in fullWelcomeString.indices) {
+            runningText += fullWelcomeString[i]
+            viewModel.updateLastSystemMessage(runningText)
+            delay(35) // Плавный механический ритм печати с интервалом 35 мс
+        }
     }
 
     LaunchedEffect(showCloudDialog) {
@@ -522,6 +534,7 @@ private fun TopBarWithSwitch(
                     .size(80.dp)
                     .clip(RoundedCornerShape(16.dp))
             )
+
             Spacer(modifier = Modifier.width(12.dp))
 
             // Правая часть: Колонка без фона
@@ -554,6 +567,7 @@ private fun TopBarWithSwitch(
                             )
                             Text(text = "локальный ИИ", fontSize = 6.sp, color = DarkText)
                         }
+
                         // Индикатор облачного ИИ
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -591,8 +605,10 @@ private fun TopBarWithSwitch(
                             fontFamily = FontFamily.Monospace,
                             textAlign = TextAlign.Start
                         )
+
                         // 2. The 3-Character Gap Element
                         Spacer(modifier = Modifier.width(14.dp))
+
                         // 3. The Switch Controls Element
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -710,6 +726,7 @@ private fun ControlPanel(
                         viewModel.appendSystemMessage("⚠️ Нет разрешения на запись аудио")
                         return@IconButtonWithLabel
                     }
+
                     if (isVoskReady) {
                         // Выгрузка движка из памяти
                         viewModel.releaseVosk()
@@ -754,6 +771,7 @@ private fun SettingsPanel(
         Column(modifier = Modifier.padding(16.dp)) {
             Text("🌡️ Настройки движка ИИ", color = DarkText, style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
+
             Text(text = "Креативность (Температура): ${String.format("%.1f", temperature)}", color = DarkText)
             Slider(
                 value = temperature,
@@ -763,7 +781,9 @@ private fun SettingsPanel(
                 modifier = Modifier.fillMaxWidth(),
                 colors = SliderDefaults.colors(thumbColor = AccentColor, activeTrackColor = AccentColor, inactiveTrackColor = BorderGray)
             )
+
             Spacer(modifier = Modifier.height(12.dp))
+
             Text(text = "Максимум токенов: $maxTokens", color = DarkText)
             Slider(
                 value = maxTokens.toFloat(),
@@ -773,7 +793,9 @@ private fun SettingsPanel(
                 modifier = Modifier.fillMaxWidth(),
                 colors = SliderDefaults.colors(thumbColor = AccentColor, activeTrackColor = AccentColor, inactiveTrackColor = BorderGray)
             )
+
             Spacer(modifier = Modifier.height(12.dp))
+
             Button(
                 onClick = onModelChangeClick,
                 colors = ButtonDefaults.buttonColors(containerColor = BorderGray),
@@ -781,7 +803,9 @@ private fun SettingsPanel(
             ) {
                 Text("Сменить или перезагрузить модель", color = DarkText)
             }
+
             Spacer(modifier = Modifier.height(8.dp))
+
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = {
@@ -790,6 +814,7 @@ private fun SettingsPanel(
                     colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
                     modifier = Modifier.weight(1f)
                 ) { Text("Сохранить", color = DarkText) }
+
                 Button(
                     onClick = onClose,
                     colors = ButtonDefaults.buttonColors(containerColor = BorderGray),
@@ -810,6 +835,7 @@ private fun PromptSettingsPanel(promptText: String, onPromptChange: (String) -> 
         Column(modifier = Modifier.padding(16.dp)) {
             Text("🧠 Роль ИИ (Системный промпт)", color = DarkText, style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
+
             OutlinedTextField(
                 value = promptText,
                 onValueChange = onPromptChange,
@@ -827,7 +853,9 @@ private fun PromptSettingsPanel(promptText: String, onPromptChange: (String) -> 
                     cursorColor = AccentColor
                 )
             )
+
             Spacer(modifier = Modifier.height(12.dp))
+
             Button(
                 onClick = onSave,
                 colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
@@ -1191,6 +1219,7 @@ private fun ModelPickerDialog(
                     Text("Языковая модель", color = DarkText)
                     val displayModelPath = currentModelPath?.substringAfterLast("/")?.replace("primary%3AModels%", "") ?: "Не выбрана"
                     Text(text = "Текущая модель: $displayModelPath", style = MaterialTheme.typography.bodySmall, color = DarkText.copy(alpha = 0.7f))
+
                     Button(
                         onClick = onPickModel,
                         modifier = Modifier.fillMaxWidth(),
@@ -1209,6 +1238,7 @@ private fun ModelPickerDialog(
                     Text("Мультимодальный проектор (mmproj)", color = DarkText)
                     val displayMmprojPath = mmprojPath?.substringAfterLast("/")?.replace("primary%3AModels%", "") ?: "Не выбран"
                     Text(text = "Текущий проектор: $displayMmprojPath", style = MaterialTheme.typography.bodySmall, color = DarkText.copy(alpha = 0.7f))
+
                     Button(
                         onClick = onPickMmproj,
                         modifier = Modifier.fillMaxWidth(),
