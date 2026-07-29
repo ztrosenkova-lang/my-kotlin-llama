@@ -36,7 +36,7 @@ jobs:
           mkdir -p app/src/main/assets/tts-model
           cd app/src/main/assets/tts-model
           echo "Downloading Dasha Neural TTS Voice Model Asset..."
-          wget -q https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-ru-hf-dasha-medium.zip
+          wget -q https://huggingface.co/k2-fsa/sherpa-onnx-tts/resolve/main/vits-ru-hf-dasha-medium.zip
           echo "Extracting Neural Voice Assets Layer..."
           unzip -q vits-ru-hf-dasha-medium.zip
           echo "Flattening model directory tree..."
