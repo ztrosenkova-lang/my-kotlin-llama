@@ -1263,17 +1263,22 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             return
         }
         scope.launch(Dispatchers.Default) {
+            var textTensor: OnnxTensor? = null
+            var textLengthsTensor: OnnxTensor? = null
+            var scalesTensor: OnnxTensor? = null
+            var sidTensor: OnnxTensor? = null
             try {
-                // Словарь соответствия кириллических символов ID токенов для VITS/PocketPal
+                // Официальная карта символов Piper для модели ru_RU-robot-medium
                 val tokenMap = mapOf(
-                    'а' to 1, 'б' to 2, 'в' to 3, 'г' to 4, 'д' to 5,
-                    'е' to 6, 'ё' to 7, 'ж' to 8, 'з' to 9, 'и' to 10,
-                    'й' to 11, 'к' to 12, 'л' to 13, 'м' to 14, 'н' to 15,
-                    'о' to 16, 'п' to 17, 'р' to 18, 'с' to 19, 'т' to 20,
-                    'у' to 21, 'ф' to 22, 'х' to 23, 'ц' to 24, 'ч' to 25,
-                    'ш' to 26, 'щ' to 27, 'ъ' to 28, 'ы' to 29, 'ь' to 30,
-                    'э' to 31, 'ю' to 32, 'я' to 33, ' ' to 34, '.' to 35,
-                    ',' to 36, '!' to 37, '?' to 38, '-' to 39
+                    ' ' to 11, '!' to 12, '"' to 13, '#' to 14, '$' to 15, '%' to 16, '&' to 17, '\'' to 18,
+                    '(' to 19, ')' to 20, '*' to 21, '+' to 22, ',' to 23, '-' to 24, '.' to 25, '/' to 26,
+                    '0' to 27, '1' to 28, '2' to 29, '3' to 30, '4' to 31, '5' to 32, '6' to 33, '7' to 34,
+                    '8' to 35, '9' to 36, ':' to 37, ';' to 38, '<' to 39, '=' to 40, '>' to 41, '?' to 42,
+                    '@' to 43, 'а' to 44, 'б' to 45, 'в' to 46, 'г' to 47, 'д' to 48, 'е' to 49, 'ж' to 50,
+                    'з' to 51, 'и' to 52, 'й' to 53, 'к' to 54, 'л' to 55, 'м' to 56, 'н' to 57, 'о' to 58,
+                    'п' to 59, 'р' to 60, 'с' to 61, 'т' to 62, 'у' to 63, 'ф' to 64, 'х' to 65, 'ц' to 66,
+                    'ч' to 67, 'ш' to 68, 'щ' to 69, 'ъ' to 70, 'ы' to 71, 'ь' to 72, 'э' to 73, 'ю' to 74,
+                    'я' to 75, 'ё' to 76
                 )
                 // Формирование последовательности токенов с обязательными BOS (2) и EOS (3)
                 val bosToken = 2L
@@ -1296,13 +1301,26 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     tokenIds.add(padToken)
                 }
                 val finalTokenIds = tokenIds.toLongArray()
-                // Create input tensor
-                val inputTensor = OnnxTensor.createTensor(env, arrayOf(finalTokenIds))
-                // Run inference
-                val result = session.run(mapOf("input" to inputTensor))
+                val shape = longArrayOf(1, finalTokenIds.size.toLong())
+                textTensor = OnnxTensor.createTensor(env, java.nio.LongBuffer.wrap(finalTokenIds), shape)
+                textLengthsTensor = OnnxTensor.createTensor(env, longArrayOf(finalTokenIds.size.toLong()), longArrayOf(1))
+                scalesTensor = OnnxTensor.createTensor(env, floatArrayOf(0.667f, 1.0f, 0.8f), longArrayOf(3))
+                sidTensor = OnnxTensor.createTensor(env, longArrayOf(0L), longArrayOf(1))
+                // Формируем полную легитимную карту входов для графа Piper/PocketPal
+                val inputs = mapOf(
+                    "text" to textTensor,
+                    "input_lengths" to textLengthsTensor,
+                    "scales" to scalesTensor,
+                    "sid" to sidTensor
+                )
+                // Запускаем инференс нативного слоя Microsoft ONNX Runtime
+                val result = session.run(inputs)
                 // Extract output tensor (assuming it contains float audio data)
                 val outputTensor = result.get("output").get() as OnnxTensor
-                val audioData = outputTensor.floatBuffer.array()
+                // Безопасное чтение Direct Buffer
+                val floatBuffer = outputTensor.floatBuffer
+                val audioData = FloatArray(floatBuffer.remaining())
+                floatBuffer.get(audioData)
                 if (audioData.isNotEmpty()) {
                     // Convert float to 16-bit PCM
                     val pcmData = audioData.map { (it * 32767).toInt().coerceIn(-32768, 32767).toShort() }
@@ -1312,7 +1330,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                 ((short.toInt() shr 8) and 0xFF).toByte()
                             )
                         }.toByteArray()
-                    // Play audio using AudioTrack with loop to prevent premature stop
+                    // Play audio using AudioTrack with STREAM mode and chunked writing
                     val sampleRate = 22050 // Standard sample rate for TTS
                     val minBufferSize = AudioTrack.getMinBufferSize(
                         sampleRate,
@@ -1349,9 +1367,16 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 } else {
                     Log.w(TAG, "ONNX TTS generated empty audio for: ${cleanText.take(50)}")
                 }
-                inputTensor.close()
+                outputTensor.close()
+                result.close()
             } catch (e: Exception) {
                 Log.e(TAG, "ONNX TTS playback error: ${e.message}")
+            } finally {
+                // Закрываем все созданные тензоры для предотвращения утечек памяти
+                textTensor?.close()
+                textLengthsTensor?.close()
+                scalesTensor?.close()
+                sidTensor?.close()
             }
         }
     }
