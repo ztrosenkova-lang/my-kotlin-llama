@@ -37,7 +37,7 @@ import java.util.zip.ZipInputStream
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
-import com.github.rhasspy.piper.PiperTts
+import com.github.olga_yakovleva.rhvoice.RHVoiceEngine
 
 data class ChatMessage(val role: String, val text: String)
 
@@ -60,7 +60,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         private const val VOSK_MODEL_URL = "http://alphacephei.com/vosk/models/vosk-model-ru-0.42.zip"
         private const val VOSK_MODEL_DIR = "vosk-model-large"
         private const val VOSK_MODEL_READY_FLAG = "is_vosk_large_ready"
-        // Piper TTS Configuration Constants
+        // RHVoice TTS Configuration Constants
         private const val TTS_MODEL_DIR = "tts-model"
         private const val TTS_MODEL_NAME = "ru_RU-robot-medium.onnx"
         private const val TTS_CONFIG_NAME = "ru_RU-robot-medium.onnx.json"
@@ -134,8 +134,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         File(getApplication<Application>().filesDir, "brain.txt")
     }
 
-    // Piper TTS Engine
-    private var piperTts: PiperTts? = null
+    // RHVoice TTS Engine
+    private var rhVoiceEngine: RHVoiceEngine? = null
+    private var isTtsReady = false
 
     private val alarmManager by lazy {
         getApplication<Application>().getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -333,50 +334,18 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     init {
         instance = this
 
-        // Copy TTS assets from assets to filesDir if not present
-        val ttsTargetDir = File(application.filesDir, TTS_MODEL_DIR)
-
-        if (!ttsTargetDir.exists() || !File(ttsTargetDir, TTS_MODEL_NAME).exists()) {
-            appendSystemMessage("⏳ Настраиваю собственный приятный нейроголос ИИ-Друга...")
-
-            try {
-                // Delete existing directory if it exists but is incomplete
-                if (ttsTargetDir.exists()) {
-                    ttsTargetDir.deleteRecursively()
-                }
-
-                // Create target directory
-                ttsTargetDir.mkdirs()
-
-                // Copy all assets from tts-model to filesDir
-                copyAssetDirectory(TTS_ASSETS_PREFIX, ttsTargetDir, application)
-
-                Log.d(TAG, "TTS assets copied successfully to: ${ttsTargetDir.absolutePath}")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to copy TTS assets: ${e.message}")
+        // Initialize RHVoice Engine
+        try {
+            rhVoiceEngine = RHVoiceEngine(application)
+            // Set Russian voice "Aleksandr"
+            rhVoiceEngine?.let {
+                it.setVoice("Aleksandr")
+                isTtsReady = true
+                Log.d(TAG, "RHVoice Engine initialized successfully with voice Aleksandr.")
             }
-        }
-
-        // Initialize Piper TTS Engine
-        if (ttsTargetDir.exists()) {
-            try {
-                val modelFile = File(ttsTargetDir, TTS_MODEL_NAME)
-                val configFile = File(ttsTargetDir, TTS_CONFIG_NAME)
-
-                if (modelFile.exists() && configFile.exists()) {
-                    piperTts = PiperTts(
-                        modelPath = modelFile.absolutePath,
-                        configPath = configFile.absolutePath
-                    )
-                    Log.d(TAG, "Piper TTS Engine initialized successfully.")
-                } else {
-                    Log.w(TAG, "Piper TTS model or config file missing")
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to initialize Piper TTS engine: ${e.message}")
-            }
-        } else {
-            Log.w(TAG, "TTS model folder not found: ${ttsTargetDir.absolutePath}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to initialize RHVoice engine: ${e.message}")
+            isTtsReady = false
         }
 
         scope.launch {
@@ -1325,7 +1294,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     fun abortLocal() {
         if (_state.value.isActive()) {
             Log.i(TAG, "Aborting generation")
-            piperTts?.let {
+            rhVoiceEngine?.let {
                 // Stop any ongoing TTS playback
             }
             llamaHelper.abort()
@@ -1436,53 +1405,19 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         if (cleanText.isBlank()) return
 
-        val ttsEngine = piperTts
-        if (ttsEngine == null) {
-            Log.w(TAG, "Piper TTS engine not available, skipping speech")
+        val engine = rhVoiceEngine
+        if (engine == null || !isTtsReady) {
+            Log.w(TAG, "RHVoice engine not available, skipping speech")
             return
         }
 
         scope.launch(Dispatchers.Default) {
             try {
-                // Generate audio using Piper TTS
-                val audio = ttsEngine.synthesize(cleanText)
-
-                if (audio.isNotEmpty()) {
-                    // Piper TTS uses 22050 Hz sample rate
-                    val sampleRate = 22050
-
-                    val minBufferSize = AudioTrack.getMinBufferSize(
-                        sampleRate,
-                        AudioFormat.CHANNEL_OUT_MONO,
-                        AudioFormat.ENCODING_PCM_16BIT
-                    )
-
-                    if (minBufferSize > 0) {
-                        val audioTrack = AudioTrack(
-                            AudioManager.STREAM_MUSIC,
-                            sampleRate,
-                            AudioFormat.CHANNEL_OUT_MONO,
-                            AudioFormat.ENCODING_PCM_16BIT,
-                            minBufferSize * 4,
-                            AudioTrack.MODE_STREAM
-                        )
-
-                        audioTrack.play()
-                        audioTrack.write(audio, 0, audio.size)
-
-                        // Wait for playback to complete before releasing
-                        audioTrack.stop()
-                        audioTrack.release()
-
-                        Log.d(TAG, "Piper TTS playback completed: ${cleanText.take(50)}...")
-                    } else {
-                        Log.e(TAG, "Invalid AudioTrack buffer size for sample rate: $sampleRate")
-                    }
-                } else {
-                    Log.w(TAG, "Piper TTS generated empty audio for: ${cleanText.take(50)}")
-                }
+                // Speak using RHVoice
+                engine.speak(cleanText, RHVoiceEngine.QUEUE_FLUSH, null)
+                Log.d(TAG, "RHVoice TTS playback started: ${cleanText.take(50)}...")
             } catch (e: Exception) {
-                Log.e(TAG, "Piper TTS playback error: ${e.message}")
+                Log.e(TAG, "RHVoice TTS playback error: ${e.message}")
             }
         }
     }
@@ -1495,8 +1430,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     override fun onCleared() {
         super.onCleared()
         instance = null
-        piperTts?.close()
-        piperTts = null
+        rhVoiceEngine?.stop()
+        rhVoiceEngine = null
+        isTtsReady = false
         _isModelLoaded.value = false
         llamaHelper.abort()
         llamaHelper.release()
