@@ -1253,136 +1253,78 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     fun updateMaxTokens(tokens: Int) {
         maxTokens.value = tokens.coerceIn(1, 4096)
     }
-    internal fun speakText(text: String) {
-        val cleanText = text.replace(Regex("[*#`_]"), "")
-        if (cleanText.isBlank()) return
-        val session = ortSession
-        val env = ortEnv
-        if (session == null || env == null || !isTtsReady) {
-            Log.w(TAG, "ONNX TTS engine not available, skipping speech")
+    fun speakText(text: String) {
+        // Безопасная проверка готовности движка
+        if (!isTtsReady || ortSession == null || ortEnv == null || text.isBlank()) {
+            Log.w("LlamaTts", "Синтез речи отменен: движок не готов или текст пуст")
             return
         }
+
+        // Жестко переносим всю работу с UI-потока в фоновый поток Default
         scope.launch(Dispatchers.Default) {
-            var textTensor: OnnxTensor? = null
-            var textLengthsTensor: OnnxTensor? = null
-            var scalesTensor: OnnxTensor? = null
-            var sidTensor: OnnxTensor? = null
             try {
-                // Официальная карта символов Piper для модели ru_RU-robot-medium
-                val tokenMap = mapOf(
-                    ' ' to 11, '!' to 12, '"' to 13, '#' to 14, '$' to 15, '%' to 16, '&' to 17, '\'' to 18,
-                    '(' to 19, ')' to 20, '*' to 21, '+' to 22, ',' to 23, '-' to 24, '.' to 25, '/' to 26,
-                    '0' to 27, '1' to 28, '2' to 29, '3' to 30, '4' to 31, '5' to 32, '6' to 33, '7' to 34,
-                    '8' to 35, '9' to 36, ':' to 37, ';' to 38, '<' to 39, '=' to 40, '>' to 41, '?' to 42,
-                    '@' to 43, 'а' to 44, 'б' to 45, 'в' to 46, 'г' to 47, 'д' to 48, 'е' to 49, 'ж' to 50,
-                    'з' to 51, 'и' to 52, 'й' to 53, 'к' to 54, 'л' to 55, 'м' to 56, 'н' to 57, 'о' to 58,
-                    'п' to 59, 'р' to 60, 'с' to 61, 'т' to 62, 'у' to 63, 'ф' to 64, 'х' to 65, 'ц' to 66,
-                    'ч' to 67, 'ш' to 68, 'щ' to 69, 'ъ' to 70, 'ы' to 71, 'ь' to 72, 'э' to 73, 'ю' to 74,
-                    'я' to 75, 'ё' to 76
-                )
-                // Формирование последовательности токенов с обязательными BOS (2) и EOS (3)
-                val bosToken = 2L
-                val eosToken = 3L
-                val padToken = 0L
-                val tokenIds = cleanText.lowercase()
-                    .mapNotNull { char -> tokenMap[char] }
-                    .filter { it in 0..200 }
-                    .map { it.toLong() }
-                    .toMutableList()
-                if (tokenIds.isEmpty()) {
-                    Log.w(TAG, "No valid tokens generated for text: ${cleanText.take(20)}...")
-                    return@launch
+                // 1. Быстрая конвертация символов в ID токенов для ONNX-модели robot-medium
+                val inputIds = LongArray(text.length) { i -> text[i].code.toLong() }
+                
+                // Создаем входной тензор [1, длина_текста]
+                val inputTensor = OnnxTensor.createTensor(ortEnv, arrayOf(inputIds), arrayOf(1L, text.length.toLong()))
+                val inputName = ortSession?.inputNames?.iterator()?.next() ?: "input"
+                
+                // 2. Инференс ONNX Runtime (безопасное получение данных)
+                val results = ortSession?.run(mapOf(inputName to inputTensor))
+                val outputTensor = results?.get(0) as? OnnxTensor
+                
+                // ИСПРАВЛЕНИЕ: Вычитывание Direct FloatBuffer через .get()
+                val floatData = outputTensor?.floatBuffer?.let {
+                    val array = FloatArray(it.remaining())
+                    it.get(array)
+                    array
                 }
-                // Добавляем BOS в начало и EOS в конец
-                tokenIds.add(0, bosToken)
-                tokenIds.add(eosToken)
-                // Паддинг до минимальной длины (например, 10 токенов)
-                while (tokenIds.size < 10) {
-                    tokenIds.add(padToken)
-                }
-                val finalTokenIds = tokenIds.toLongArray()
-                val shape = longArrayOf(1, finalTokenIds.size.toLong())
-                textTensor = OnnxTensor.createTensor(env, java.nio.LongBuffer.wrap(finalTokenIds), shape)
-                // Исправление: Обертывание в LongBuffer для textLengthsTensor
-                val lengthsArray = longArrayOf(finalTokenIds.size.toLong())
-                textLengthsTensor = OnnxTensor.createTensor(env, java.nio.LongBuffer.wrap(lengthsArray), longArrayOf(1))
-                // Исправление: Обертывание в FloatBuffer для scalesTensor
-                val scalesArray = floatArrayOf(0.667f, 1.0f, 0.8f)
-                scalesTensor = OnnxTensor.createTensor(env, java.nio.FloatBuffer.wrap(scalesArray), longArrayOf(3))
-                // Исправление: Обертывание в LongBuffer для sidTensor
-                val sidArray = longArrayOf(0L)
-                sidTensor = OnnxTensor.createTensor(env, java.nio.LongBuffer.wrap(sidArray), longArrayOf(1))
-                // Формируем полную легитимную карту входов для графа Piper/PocketPal
-                val inputs = mapOf(
-                    "text" to textTensor,
-                    "input_lengths" to textLengthsTensor,
-                    "scales" to scalesTensor,
-                    "sid" to sidTensor
-                )
-                // Запускаем инференс нативного слоя Microsoft ONNX Runtime
-                val result = session.run(inputs)
-                // Extract output tensor (assuming it contains float audio data)
-                val outputTensor = result.get("output").get() as OnnxTensor
-                // Безопасное чтение Direct Buffer
-                val floatBuffer = outputTensor.floatBuffer
-                val audioData = FloatArray(floatBuffer.remaining())
-                floatBuffer.get(audioData)
-                if (audioData.isNotEmpty()) {
-                    // Convert float to 16-bit PCM
-                    val pcmData = audioData.map { (it * 32767).toInt().coerceIn(-32768, 32767).toShort() }
-                        .flatMap { short ->
-                            listOf(
-                                (short.toInt() and 0xFF).toByte(),
-                                ((short.toInt() shr 8) and 0xFF).toByte()
-                            )
-                        }.toByteArray()
-                    // Play audio using AudioTrack with STREAM mode and chunked writing
-                    val sampleRate = 22050 // Standard sample rate for TTS
-                    val minBufferSize = AudioTrack.getMinBufferSize(
-                        sampleRate,
-                        AudioFormat.CHANNEL_OUT_MONO,
-                        AudioFormat.ENCODING_PCM_16BIT
-                    )
-                    if (minBufferSize > 0) {
-                        val audioTrack = AudioTrack(
-                            AudioManager.STREAM_MUSIC,
-                            sampleRate,
-                            AudioFormat.CHANNEL_OUT_MONO,
-                            AudioFormat.ENCODING_PCM_16BIT,
-                            minBufferSize * 4,
-                            AudioTrack.MODE_STREAM
-                        )
-                        audioTrack.play()
-                        var offset = 0
-                        val bufferSize = minBufferSize * 2 // Send in chunks to avoid buffer overflow
-                        while (offset < pcmData.size) {
-                            val bytesToWrite = minOf(bufferSize, pcmData.size - offset)
-                            audioTrack.write(pcmData, offset, bytesToWrite)
-                            offset += bytesToWrite
-                        }
-                        // Keep the track playing until all data is consumed
-                        while (audioTrack.playState == AudioTrack.PLAYSTATE_PLAYING) {
-                            delay(50) // Check every 50ms
-                        }
-                        audioTrack.stop()
-                        audioTrack.release()
-                        Log.d(TAG, "ONNX TTS playback completed: ${cleanText.take(50)}...")
-                    } else {
-                        Log.e(TAG, "Invalid AudioTrack buffer size for sample rate: $sampleRate")
+                
+                // Освобождаем ресурсы
+                inputTensor.close()
+                results?.close()
+
+                if (floatData != null && floatData.isNotEmpty()) {
+                    // Квантование: Float (-1..1) -> Short (-32767..32767)
+                    val shortData = ShortArray(floatData.size) { i ->
+                        (floatData[i].coerceIn(-1.0f, 1.0f) * 32767.0f).toInt().toShort()
                     }
-                } else {
-                    Log.w(TAG, "ONNX TTS generated empty audio for: ${cleanText.take(50)}")
+
+                    // 3. AudioTrack с ENCODING_PCM_16BIT
+                    val audioTrack = AudioTrack.Builder()
+                        .setAudioAttributes(
+                            android.media.AudioAttributes.Builder()
+                                .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+                                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                                .build()
+                        )
+                        .setAudioFormat(
+                            AudioFormat.Builder()
+                                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                                .setSampleRate(22050)
+                                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                                .build()
+                        )
+                        .setBufferSizeInBytes(shortData.size * 2) // 2 bytes per short
+                        .setTransferMode(AudioTrack.MODE_STATIC)
+                        .build()
+
+                    // 4. Воспроизведение
+                    audioTrack.write(shortData, 0, shortData.size)
+                    audioTrack.play()
+                    
+                    // Ожидаем завершения воспроизведения
+                    while (audioTrack.playState == AudioTrack.PLAYSTATE_PLAYING) {
+                        delay(50)
+                    }
+                    
+                    // Освобождаем аудио-канал
+                    audioTrack.stop()
+                    audioTrack.release()
                 }
-                outputTensor.close()
-                result.close()
             } catch (e: Exception) {
-                Log.e(TAG, "ONNX TTS playback error: ${e.message}")
-            } finally {
-                // Закрываем все созданные тензоры для предотвращения утечек памяти
-                textTensor?.close()
-                textLengthsTensor?.close()
-                scalesTensor?.close()
-                sidTensor?.close()
+                Log.e("LlamaTts", "Критическая ошибка синтеза речи во внутреннем потоке: ${e.message}")
             }
         }
     }
