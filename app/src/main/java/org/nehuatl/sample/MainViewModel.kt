@@ -1263,18 +1263,21 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         // Жестко переносим всю работу с UI-потока в фоновый поток Default
         scope.launch(Dispatchers.Default) {
             try {
-                // Создаем строго одномерный массив Long-токенов
-                val inputIds = LongArray(text.length) { i -> text[i].code.toLong() }
+                // 1. Создаем одномерный массив токенов символов
+                val tokenIds = LongArray(text.length) { i -> text[i].code.toLong() }
 
-                // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Прямая и однозначная сигнатура фабрики OnnxTensor
-                val inputTensor = OnnxTensor.createTensor(ortEnv, inputIds, arrayOf(1L, text.length.toLong()))
+                // 2. Оборачиваем его в двумерный массив Object[], который ожидает Java API ONNX Runtime
+                val container3D = arrayOf<Any>(tokenIds)
+
+                // 3. Создаем тензор с формой [1, длина_строки]
+                val inputTensor = OnnxTensor.createTensor(ortEnv, container3D)
                 val inputName = ortSession?.inputNames?.iterator()?.next() ?: "input"
                 
-                // 2. Инференс ONNX Runtime (безопасное получение данных)
+                // 4. Инференс ONNX Runtime (безопасное получение данных)
                 val results = ortSession?.run(mapOf(inputName to inputTensor))
                 val outputTensor = results?.get(0) as? OnnxTensor
                 
-                // ИСПРАВЛЕНИЕ: Вычитывание Direct FloatBuffer через .get()
+                // 5. Вычитывание Direct FloatBuffer через .get()
                 val floatData = outputTensor?.floatBuffer?.let {
                     val array = FloatArray(it.remaining())
                     it.get(array)
@@ -1286,12 +1289,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 results?.close()
 
                 if (floatData != null && floatData.isNotEmpty()) {
-                    // Квантование: Float (-1..1) -> Short (-32767..32767)
+                    // 6. Квантование: Float (-1..1) -> Short (-32767..32767)
                     val shortData = ShortArray(floatData.size) { i ->
                         (floatData[i].coerceIn(-1.0f, 1.0f) * 32767.0f).toInt().toShort()
                     }
 
-                    // 3. AudioTrack с ENCODING_PCM_16BIT
+                    // 7. AudioTrack с ENCODING_PCM_16BIT
                     val audioTrack = AudioTrack.Builder()
                         .setAudioAttributes(
                             android.media.AudioAttributes.Builder()
@@ -1310,7 +1313,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         .setTransferMode(AudioTrack.MODE_STATIC)
                         .build()
 
-                    // 4. Воспроизведение
+                    // 8. Воспроизведение
                     audioTrack.write(shortData, 0, shortData.size)
                     audioTrack.play()
                     
