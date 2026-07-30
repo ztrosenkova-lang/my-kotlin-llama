@@ -124,6 +124,7 @@ fun ChatScreen(
     val chatMessages by viewModel.chatHistory.collectAsStateWithLifecycle()
     val temperature by viewModel.temperature.collectAsStateWithLifecycle()
     val maxTokens by viewModel.maxTokens.collectAsStateWithLifecycle()
+    val contextSize by viewModel.contextSize.collectAsStateWithLifecycle()
     val cloudState by viewModel.cloudState.collectAsStateWithLifecycle()
     val isModelLoaded by viewModel.isModelLoaded.collectAsStateWithLifecycle()
     // Исправленная строка 129: реактивная подписка на состояние записи
@@ -345,6 +346,8 @@ fun ChatScreen(
                 onTemperatureChange = { tempTemperature = it },
                 maxTokens = maxTokens,
                 onMaxTokensChange = { viewModel.updateMaxTokens(it) },
+                contextSize = contextSize,
+                onContextSizeChange = { viewModel.updateContextSize(it) },
                 onModelChangeClick = { showModelDialog = true },
                 onSave = {
                     viewModel.updateTemperature(tempTemperature)
@@ -717,6 +720,8 @@ private fun SettingsPanel(
     onTemperatureChange: (Float) -> Unit,
     maxTokens: Int,
     onMaxTokensChange: (Int) -> Unit,
+    contextSize: Int,
+    onContextSizeChange: (Int) -> Unit,
     onModelChangeClick: () -> Unit,
     onSave: () -> Unit,
     onClose: () -> Unit
@@ -745,6 +750,16 @@ private fun SettingsPanel(
                 onValueChange = { onMaxTokensChange(it.toInt()) },
                 valueRange = 1f..4096f,
                 steps = 50,
+                modifier = Modifier.fillMaxWidth(),
+                colors = SliderDefaults.colors(thumbColor = AccentColor, activeTrackColor = AccentColor, inactiveTrackColor = BorderGray)
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(text = "Размер контекстного окна: $contextSize", color = DarkText)
+            Slider(
+                value = contextSize.toFloat(),
+                onValueChange = { onContextSizeChange(it.toInt()) },
+                valueRange = 512f..8192f,
+                steps = 15,
                 modifier = Modifier.fillMaxWidth(),
                 colors = SliderDefaults.colors(thumbColor = AccentColor, activeTrackColor = AccentColor, inactiveTrackColor = BorderGray)
             )
