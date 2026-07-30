@@ -9,6 +9,7 @@ import android.content.Intent
 import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -120,7 +121,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     // PocketPal ONNX TTS Engine
     private var ortEnv: OrtEnvironment? = null
     private var ortSession: OrtSession? = null
-    private var isTtsReady = false
+    private val _isTtsReady = MutableStateFlow(false)
+    val isTtsReady: StateFlow<Boolean> = _isTtsReady.asStateFlow()
     private val alarmManager by lazy {
         getApplication<Application>().getSystemService(Context.ALARM_SERVICE) as AlarmManager
     }
@@ -278,46 +280,21 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
     init {
         instance = this
-        // Copy TTS assets from assets to filesDir if not present
-        val ttsTargetDir = File(application.filesDir, TTS_MODEL_DIR)
-        if (!ttsTargetDir.exists() || !File(ttsTargetDir, TTS_MODEL_NAME).exists()) {
-            appendSystemMessage("⏳ Настраиваю собственный приятный нейроголос ИИ-Друга...")
+        // Read local configuration maps and files safely
+        viewModelScope.launch(Dispatchers.IO) {
             try {
-                // Delete existing directory if it exists but is incomplete
-                if (ttsTargetDir.exists()) {
-                    ttsTargetDir.deleteRecursively()
-                }
-                // Create target directory
-                ttsTargetDir.mkdirs()
-                // Copy all assets from tts-model to filesDir
-                copyAssetDirectory(TTS_ASSETS_PREFIX, ttsTargetDir, application)
-                Log.d(TAG, "TTS assets copied successfully to: ${ttsTargetDir.absolutePath}")
+                if (!memoryFile.exists()) memoryFile.createNewFile()
+                if (!brainFile.exists()) brainFile.createNewFile()
+                Log.d("LlamaViewModel", "Local storage files initialized successfully.")
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to copy TTS assets: ${e.message}")
+                Log.e("LlamaViewModel", "Failed to initialize local text memory files: ${e.message}")
             }
         }
-        // Initialize PocketPal ONNX TTS Engine
-        val modelFile = File(ttsTargetDir, TTS_MODEL_NAME)
-        if (modelFile.exists()) {
-            try {
-                ortEnv = OrtEnvironment.getEnvironment()
-                val sessionOptions = OrtSession.SessionOptions()
-                ortSession = ortEnv?.createSession(modelFile.absolutePath, sessionOptions)
-                isTtsReady = true
-                Log.d("LlamaTts", "PocketPal ONNX TTS Engine successfully initialized.")
-                // Гарантированный запуск приветствия после инициализации модели
-                scope.launch(Dispatchers.Main) {
-                    val welcomeText = "Привет! Я твой ИИ друг. Рад нашему знакомству! Чем я могу помочь тебе сегодня?"
-                    updateLastSystemMessage(welcomeText)
-                    speakText(welcomeText)
-                }
-            } catch (e: Exception) {
-                Log.e("LlamaTts", "ONNX Session init failed: ${e.message}")
-                isTtsReady = false
-            }
-        } else {
-            Log.w(TAG, "TTS model folder not found: ${ttsTargetDir.absolutePath}")
-        }
+        
+        // Automatically trigger voice initialization right after creation
+        // The welcome greeting is now explicitly deferred inside initTts to guarantee runtime order
+        initTts(application.applicationContext)
+        
         scope.launch {
             _cloudFlow.collect { event ->
                 when (event) {
@@ -475,6 +452,52 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
         // Vosk теперь инициализируется лениво, при первом нажатии на микрофон
+    }
+    private fun initTts(context: Context) {
+        val modelFile = File(context.filesDir, "ru_RU-robot-medium.onnx")
+        
+        scope.launch(Dispatchers.IO) {
+            try {
+                // 1. Physical extraction from assets if missing on the device
+                if (!modelFile.exists()) {
+                    Log.d("LlamaTts", "First run: extracting TTS binary model from APK assets...")
+                    context.assets.open("ru_RU-robot-medium.onnx").use { inputStream ->
+                        modelFile.outputStream().use { outputStream ->
+                            inputStream.copyTo(outputStream)
+                        }
+                    }
+                    Log.d("LlamaTts", "TTS Binary successfully extracted to private storage.")
+                }
+
+                // 2. Initializing ONNX Runtime native session
+                ortEnv = OrtEnvironment.getEnvironment()
+                val sessionOptions = OrtSession.SessionOptions()
+                ortSession = ortEnv?.createSession(modelFile.absolutePath, sessionOptions)
+                
+                // 3. Update ready state flags safely on the main thread for UI responsiveness
+                withContext(Dispatchers.Main) {
+                    _isTtsReady.value = true
+                    
+                    // 4. STEP ONE: Inject structural loading success confirmation message directly into the chat UI
+                    val successNotification = "🟢 Голосовой движок PocketPal успешно загружен в оперативную память устройства."
+                    appendSystemMessage(successNotification)
+                    Log.d("LlamaTts", "PocketPal ONNX TTS Engine successfully initialized in memory.")
+                    
+                    // 5. STEP TWO: Trigger the welcome text generation and narration ONLY after the engine is up and notified
+                    val welcomeText = "Привет! Я твоя локальная языковая модель. Голосовой движок полностью готов к работе, чем я могу помочь?"
+                    appendSystemMessage(welcomeText)
+                    // Synchronously pass text to the non-blocking background AudioTrack pipeline
+                    speakText(welcomeText)
+                }
+                
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    _isTtsReady.value = false
+                    appendSystemMessage("🔴 Ошибка выделения памяти под голосовой движок: ${e.message}")
+                }
+                Log.e("LlamaTts", "Critical failure during native TTS pipeline initialization: ${e.message}")
+            }
+        }
     }
     private val llamaHelper by lazy {
         LlamaHelper(
@@ -1255,7 +1278,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
     fun speakText(text: String) {
         // Безопасная проверка готовности движка
-        if (!isTtsReady || ortSession == null || ortEnv == null || text.isBlank()) {
+        if (!_isTtsReady.value || ortSession == null || ortEnv == null || text.isBlank()) {
             Log.w("LlamaTts", "Синтез речи отменен: движок не готов или текст пуст")
             return
         }
@@ -1342,7 +1365,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         ortSession = null
         ortEnv?.close()
         ortEnv = null
-        isTtsReady = false
+        _isTtsReady.value = false
         _isModelLoaded.value = false
         llamaHelper.abort()
         llamaHelper.release()
