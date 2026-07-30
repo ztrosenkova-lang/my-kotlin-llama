@@ -1263,11 +1263,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         // Жестко переносим всю работу с UI-потока в фоновый поток Default
         scope.launch(Dispatchers.Default) {
             try {
-                // 1. Быстрая конвертация символов в ID токенов для ONNX-модели robot-medium
+                // Создаем строго одномерный массив Long-токенов
                 val inputIds = LongArray(text.length) { i -> text[i].code.toLong() }
-                
-                // Создаем входной тензор [1, длина_текста]
-                val inputTensor = OnnxTensor.createTensor(ortEnv, arrayOf(inputIds), arrayOf(1L, text.length.toLong()))
+
+                // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Прямая и однозначная сигнатура фабрики OnnxTensor
+                val inputTensor = OnnxTensor.createTensor(ortEnv, inputIds, arrayOf(1L, text.length.toLong()))
                 val inputName = ortSession?.inputNames?.iterator()?.next() ?: "input"
                 
                 // 2. Инференс ONNX Runtime (безопасное получение данных)
