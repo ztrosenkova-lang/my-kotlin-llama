@@ -78,8 +78,8 @@ dependencies {
     // Vosk
     implementation("com.alphacephei:vosk-android:0.3.47")
 
-    // RHVoice TTS
-    implementation(libs.rhvoice.tts)
+    // ONNX Runtime
+    implementation(libs.onnx.runtime)
 
     // Llama.cpp - Local module reference
     implementation(project(":llamaCpp"))
