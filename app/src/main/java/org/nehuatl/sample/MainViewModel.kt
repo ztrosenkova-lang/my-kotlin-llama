@@ -305,6 +305,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 ortSession = ortEnv?.createSession(modelFile.absolutePath, sessionOptions)
                 isTtsReady = true
                 Log.d("LlamaTts", "PocketPal ONNX TTS Engine successfully initialized.")
+                // Гарантированный запуск приветствия после инициализации модели
+                scope.launch(Dispatchers.Main) {
+                    val welcomeText = "Привет! Я твой ИИ друг. Рад нашему знакомству! Чем я могу помочь тебе сегодня?"
+                    updateLastSystemMessage(welcomeText)
+                    speakText(welcomeText)
+                }
             } catch (e: Exception) {
                 Log.e("LlamaTts", "ONNX Session init failed: ${e.message}")
                 isTtsReady = false
@@ -1258,20 +1264,47 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
         scope.launch(Dispatchers.Default) {
             try {
-                // Map characters to token IDs (simplified - in production use proper tokenizer)
-                val tokenIds = cleanText.map { char ->
-                    // Simple character mapping for demonstration - replace with actual tokenizer
-                    char.code.toLong()
-                }.toLongArray()
+                // Словарь соответствия кириллических символов ID токенов для VITS/PocketPal
+                val tokenMap = mapOf(
+                    'а' to 1, 'б' to 2, 'в' to 3, 'г' to 4, 'д' to 5,
+                    'е' to 6, 'ё' to 7, 'ж' to 8, 'з' to 9, 'и' to 10,
+                    'й' to 11, 'к' to 12, 'л' to 13, 'м' to 14, 'н' to 15,
+                    'о' to 16, 'п' to 17, 'р' to 18, 'с' to 19, 'т' to 20,
+                    'у' to 21, 'ф' to 22, 'х' to 23, 'ц' to 24, 'ч' to 25,
+                    'ш' to 26, 'щ' to 27, 'ъ' to 28, 'ы' to 29, 'ь' to 30,
+                    'э' to 31, 'ю' to 32, 'я' to 33, ' ' to 34, '.' to 35,
+                    ',' to 36, '!' to 37, '?' to 38, '-' to 39
+                )
+                // Формирование последовательности токенов с обязательными BOS (2) и EOS (3)
+                val bosToken = 2L
+                val eosToken = 3L
+                val padToken = 0L
+                val tokenIds = cleanText.lowercase()
+                    .mapNotNull { char -> tokenMap[char] }
+                    .filter { it in 0..200 }
+                    .map { it.toLong() }
+                    .toMutableList()
+                if (tokenIds.isEmpty()) {
+                    Log.w(TAG, "No valid tokens generated for text: ${cleanText.take(20)}...")
+                    return@launch
+                }
+                // Добавляем BOS в начало и EOS в конец
+                tokenIds.add(0, bosToken)
+                tokenIds.add(eosToken)
+                // Паддинг до минимальной длины (например, 10 токенов)
+                while (tokenIds.size < 10) {
+                    tokenIds.add(padToken)
+                }
+                val finalTokenIds = tokenIds.toLongArray()
                 // Create input tensor
-                val inputTensor = OnnxTensor.createTensor(env, arrayOf(tokenIds))
+                val inputTensor = OnnxTensor.createTensor(env, arrayOf(finalTokenIds))
                 // Run inference
                 val result = session.run(mapOf("input" to inputTensor))
                 // Extract output tensor (assuming it contains float audio data)
                 val outputTensor = result.get("output").get() as OnnxTensor
                 val audioData = outputTensor.floatBuffer.array()
                 if (audioData.isNotEmpty()) {
-                    // Convert float to 16-bit PCM using listOf to fix type inference
+                    // Convert float to 16-bit PCM
                     val pcmData = audioData.map { (it * 32767).toInt().coerceIn(-32768, 32767).toShort() }
                         .flatMap { short ->
                             listOf(
@@ -1279,7 +1312,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                 ((short.toInt() shr 8) and 0xFF).toByte()
                             )
                         }.toByteArray()
-                    // Play audio using AudioTrack
+                    // Play audio using AudioTrack with loop to prevent premature stop
                     val sampleRate = 22050 // Standard sample rate for TTS
                     val minBufferSize = AudioTrack.getMinBufferSize(
                         sampleRate,
@@ -1296,7 +1329,17 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             AudioTrack.MODE_STREAM
                         )
                         audioTrack.play()
-                        audioTrack.write(pcmData, 0, pcmData.size)
+                        var offset = 0
+                        val bufferSize = minBufferSize * 2 // Send in chunks to avoid buffer overflow
+                        while (offset < pcmData.size) {
+                            val bytesToWrite = minOf(bufferSize, pcmData.size - offset)
+                            audioTrack.write(pcmData, offset, bytesToWrite)
+                            offset += bytesToWrite
+                        }
+                        // Keep the track playing until all data is consumed
+                        while (audioTrack.playState == AudioTrack.PLAYSTATE_PLAYING) {
+                            delay(50) // Check every 50ms
+                        }
                         audioTrack.stop()
                         audioTrack.release()
                         Log.d(TAG, "ONNX TTS playback completed: ${cleanText.take(50)}...")
