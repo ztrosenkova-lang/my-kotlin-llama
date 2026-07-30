@@ -160,15 +160,15 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val onVoiceResult: (String) -> Unit = { recognizedText ->
         if (recognizedText.isNotEmpty()) {
             _recognizedText.value = recognizedText
-            appendSystemMessage("🎤 Распознано: $recognizedText")
+            // Сбрасываем таймер при новом слове
             autoSendJob?.cancel()
             autoSendJob = scope.launch {
-                delay(AUTO_SEND_DELAY)
-                val textToSend = _recognizedText.value
-                if (textToSend.isNotEmpty()) {
-                    appendSystemMessage("⏱ Автоотправка через ${AUTO_SEND_DELAY/1000} сек")
-                    sendUserMessage(textToSend)
-                    _recognizedText.value = ""
+                delay(5000L) // 5 сек тишины
+                if (_isRecording.value) {
+                    withContext(Dispatchers.Main) {
+                        sendUserMessage(_recognizedText.value.trim())
+                        stopRecording() // КРИТИЧЕСКИ: Выключаем запись
+                    }
                 }
             }
         }
@@ -290,11 +290,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 Log.e("LlamaViewModel", "Failed to initialize local text memory files: ${e.message}")
             }
         }
-        
         // Automatically trigger voice initialization right after creation
         // The welcome greeting is now explicitly deferred inside initTts to guarantee runtime order
         initTts(application.applicationContext)
-        
         scope.launch {
             _cloudFlow.collect { event ->
                 when (event) {
@@ -455,7 +453,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
     private fun initTts(context: Context) {
         val modelFile = File(context.filesDir, "ru_RU-robot-medium.onnx")
-        
         scope.launch(Dispatchers.IO) {
             try {
                 // 1. Physical extraction from assets if missing on the device
@@ -468,28 +465,23 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     }
                     Log.d("LlamaTts", "TTS Binary successfully extracted to private storage.")
                 }
-
                 // 2. Initializing ONNX Runtime native session
                 ortEnv = OrtEnvironment.getEnvironment()
                 val sessionOptions = OrtSession.SessionOptions()
                 ortSession = ortEnv?.createSession(modelFile.absolutePath, sessionOptions)
-                
                 // 3. Update ready state flags safely on the main thread for UI responsiveness
                 withContext(Dispatchers.Main) {
                     _isTtsReady.value = true
-                    
                     // 4. STEP ONE: Inject structural loading success confirmation message directly into the chat UI
                     val successNotification = "🟢 Голосовой движок PocketPal успешно загружен в оперативную память устройства."
                     appendSystemMessage(successNotification)
                     Log.d("LlamaTts", "PocketPal ONNX TTS Engine successfully initialized in memory.")
-                    
                     // 5. STEP TWO: Trigger the welcome text generation and narration ONLY after the engine is up and notified
                     val welcomeText = "Привет! Я твоя локальная языковая модель. Голосовой движок полностью готов к работе, чем я могу помочь?"
                     appendSystemMessage(welcomeText)
                     // Synchronously pass text to the non-blocking background AudioTrack pipeline
                     speakText(welcomeText)
                 }
-                
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     _isTtsReady.value = false
@@ -549,7 +541,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         withContext(Dispatchers.Main) {
                             appendSystemMessage("📥 Начинаю загрузку модели...")
                         }
-                        // Скачивание ZIP-архива с прогрессом
+                        // Скачивание ZIP-архива с реальным прогрессом
                         FileOutputStream(tempFile).use { output ->
                             val buffer = ByteArray(8192)
                             var bytesRead: Int
@@ -560,7 +552,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                 totalBytesRead += bytesRead
                                 if (fileLength > 0) {
                                     val progressPercent = (totalBytesRead * 100 / fileLength).toInt()
-                                    if (progressPercent % 5 == 0 && progressPercent != lastLoggedPercent) {
+                                    if (progressPercent != lastLoggedPercent) {
                                         lastLoggedPercent = progressPercent
                                         withContext(Dispatchers.Main) {
                                             appendSystemMessage("📥 Загрузка голосового движка: $progressPercent%")
@@ -568,7 +560,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                     }
                                 } else {
                                     val currentMB = totalBytesRead / (1024 * 1024)
-                                    if (currentMB % 25 == 0L && currentMB > 0) {
+                                    if (currentMB > 0 && currentMB % 25 == 0L) {
                                         withContext(Dispatchers.Main) {
                                             appendSystemMessage("📥 Загружено: $currentMB МБ")
                                         }
@@ -658,46 +650,64 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 appendSystemMessage("⏳ Начинаю локальную распаковку архива с диска... Пожалуйста, подождите.")
             }
             try {
-                // Open secure input stream from content resolver
+                // 1. Копирование URI в физический файл кэша
+                val tempZipFile = File(context.cacheDir, "temp_model.zip")
                 context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                    // Create target directory if it doesn't exist
-                    targetDir.mkdirs()
-                    // Extract archive with 250-file progress tracking and in-place updates
-                    ZipInputStream(inputStream).use { zis ->
-                        var entry = zis.nextEntry
-                        var entryCounter = 0
-                        while (entry != null) {
-                            entryCounter++
-                            if (entryCounter % 250 == 0) {
+                    FileOutputStream(tempZipFile).use { outputStream ->
+                        val buffer = ByteArray(8192)
+                        var bytesRead: Int
+                        var totalBytesRead = 0L
+                        while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                            outputStream.write(buffer, 0, bytesRead)
+                            totalBytesRead += bytesRead
+                            // Обновление прогресса каждые 5 МБ
+                            if (totalBytesRead % (5 * 1024 * 1024) < 8192) {
+                                val progressMB = totalBytesRead / (1024 * 1024)
                                 withContext(Dispatchers.Main) {
-                                    updateLastSystemMessage("⏳ Распаковка архива (разворачивание 3.7 ГБ на диске): извлечено $entryCounter файлов...")
+                                    updateLastSystemMessage("⏳ Кэширование архива на диск: $progressMB МБ...")
                                 }
                             }
-                            val entryFile = File(targetDir, entry.name)
-                            if (entry.isDirectory) {
-                                entryFile.mkdirs()
-                            } else {
-                                entryFile.parentFile?.mkdirs()
-                                FileOutputStream(entryFile).use { fos ->
-                                    val buffer = ByteArray(8192)
-                                    var len: Int
-                                    while (zis.read(buffer).also { len = it } != -1) {
-                                        fos.write(buffer, 0, len)
-                                    }
-                                }
-                            }
-                            zis.closeEntry()
-                            entry = zis.nextEntry
                         }
-                    }
-                    withContext(Dispatchers.Main) {
-                        updateLastSystemMessage("📦 Распаковка архива голосового движка Vosk успешно завершена!")
                     }
                 } ?: run {
                     withContext(Dispatchers.Main) {
                         appendSystemMessage("⚠️ Не удалось открыть выбранный файл. Убедитесь, что это корректный ZIP-архив.")
                     }
                     return@launch
+                }
+                // 2. Распаковка из временного файла
+                targetDir.mkdirs()
+                ZipInputStream(tempZipFile.inputStream()).use { zis ->
+                    var entry = zis.nextEntry
+                    var entryCounter = 0
+                    while (entry != null) {
+                        entryCounter++
+                        if (entryCounter % 250 == 0) {
+                            withContext(Dispatchers.Main) {
+                                updateLastSystemMessage("⏳ Распаковка архива (разворачивание 3.7 ГБ на диске): извлечено $entryCounter файлов...")
+                            }
+                        }
+                        val entryFile = File(targetDir, entry.name)
+                        if (entry.isDirectory) {
+                            entryFile.mkdirs()
+                        } else {
+                            entryFile.parentFile?.mkdirs()
+                            FileOutputStream(entryFile).use { fos ->
+                                val buffer = ByteArray(8192)
+                                var len: Int
+                                while (zis.read(buffer).also { len = it } != -1) {
+                                    fos.write(buffer, 0, len)
+                                }
+                            }
+                        }
+                        zis.closeEntry()
+                        entry = zis.nextEntry
+                    }
+                }
+                // 3. Удаление временного файла
+                tempZipFile.delete()
+                withContext(Dispatchers.Main) {
+                    updateLastSystemMessage("📦 Распаковка архива голосового движка Vosk успешно завершена!")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Ошибка локальной распаковки Vosk: ${e.message}")
@@ -916,22 +926,15 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     fun startRecording() {
         if (_isRecording.value) return
         _recognizedText.value = ""
-        appendSystemMessage("🎤 Запуск записи...")
         voskRecognizer?.startRecording()
         _isRecording.value = true
     }
     fun stopRecording() {
         if (!_isRecording.value) return
-        appendSystemMessage("⏹ Остановка записи")
+        autoSendJob?.cancel()
         voskRecognizer?.stopRecording()
         _isRecording.value = false
-        autoSendJob?.cancel()
-        val textToSend = _recognizedText.value
-        if (textToSend.isNotEmpty()) {
-            appendSystemMessage("📤 Отправка текста")
-            sendUserMessage(textToSend)
-            _recognizedText.value = ""
-        }
+        _recognizedText.value = "" // Очистка для нового сеанса
     }
     // === Методы для облачного ИИ ===
     fun isCloudConfigured(): Boolean = cloudAIProvider.isConfigured()
@@ -1282,41 +1285,33 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             Log.w("LlamaTts", "Синтез речи отменен: движок не готов или текст пуст")
             return
         }
-
         // Жестко переносим всю работу с UI-потока в фоновый поток Default
         scope.launch(Dispatchers.Default) {
             try {
                 // 1. Создаем одномерный массив токенов символов
                 val tokenIds = LongArray(text.length) { i -> text[i].code.toLong() }
-
                 // 2. Оборачиваем его в двумерный массив Object[], который ожидает Java API ONNX Runtime
                 val container3D = arrayOf<Any>(tokenIds)
-
                 // 3. Создаем тензор с формой [1, длина_строки]
                 val inputTensor = OnnxTensor.createTensor(ortEnv, container3D)
                 val inputName = ortSession?.inputNames?.iterator()?.next() ?: "input"
-                
                 // 4. Инференс ONNX Runtime (безопасное получение данных)
                 val results = ortSession?.run(mapOf(inputName to inputTensor))
                 val outputTensor = results?.get(0) as? OnnxTensor
-                
                 // 5. Вычитывание Direct FloatBuffer через .get()
                 val floatData = outputTensor?.floatBuffer?.let {
                     val array = FloatArray(it.remaining())
                     it.get(array)
                     array
                 }
-                
                 // Освобождаем ресурсы
                 inputTensor.close()
                 results?.close()
-
                 if (floatData != null && floatData.isNotEmpty()) {
                     // 6. Квантование: Float (-1..1) -> Short (-32767..32767)
                     val shortData = ShortArray(floatData.size) { i ->
                         (floatData[i].coerceIn(-1.0f, 1.0f) * 32767.0f).toInt().toShort()
                     }
-
                     // 7. AudioTrack с ENCODING_PCM_16BIT
                     val audioTrack = AudioTrack.Builder()
                         .setAudioAttributes(
@@ -1335,16 +1330,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         .setBufferSizeInBytes(shortData.size * 2) // 2 bytes per short
                         .setTransferMode(AudioTrack.MODE_STATIC)
                         .build()
-
                     // 8. Воспроизведение
                     audioTrack.write(shortData, 0, shortData.size)
                     audioTrack.play()
-                    
                     // Ожидаем завершения воспроизведения
                     while (audioTrack.playState == AudioTrack.PLAYSTATE_PLAYING) {
                         delay(50)
                     }
-                    
                     // Освобождаем аудио-канал
                     audioTrack.stop()
                     audioTrack.release()
