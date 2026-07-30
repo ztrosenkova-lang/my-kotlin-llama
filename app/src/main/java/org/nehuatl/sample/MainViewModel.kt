@@ -37,7 +37,7 @@ import java.util.zip.ZipInputStream
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
-import com.sunnychung.lib.pipertts.PiperTts
+import com.github.rhasspy.piper.PiperTts
 
 data class ChatMessage(val role: String, val text: String)
 
