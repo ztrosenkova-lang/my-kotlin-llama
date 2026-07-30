@@ -93,3 +93,9 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 }
+
+repositories {
+    google()
+    mavenCentral()
+    maven { url = java.net.URI("https://jitpack.io") }
+}
