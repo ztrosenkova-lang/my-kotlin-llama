@@ -1303,9 +1303,15 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 val finalTokenIds = tokenIds.toLongArray()
                 val shape = longArrayOf(1, finalTokenIds.size.toLong())
                 textTensor = OnnxTensor.createTensor(env, java.nio.LongBuffer.wrap(finalTokenIds), shape)
-                textLengthsTensor = OnnxTensor.createTensor(env, longArrayOf(finalTokenIds.size.toLong()), longArrayOf(1))
-                scalesTensor = OnnxTensor.createTensor(env, floatArrayOf(0.667f, 1.0f, 0.8f), longArrayOf(3))
-                sidTensor = OnnxTensor.createTensor(env, longArrayOf(0L), longArrayOf(1))
+                // Исправление: Обертывание в LongBuffer для textLengthsTensor
+                val lengthsArray = longArrayOf(finalTokenIds.size.toLong())
+                textLengthsTensor = OnnxTensor.createTensor(env, java.nio.LongBuffer.wrap(lengthsArray), longArrayOf(1))
+                // Исправление: Обертывание в FloatBuffer для scalesTensor
+                val scalesArray = floatArrayOf(0.667f, 1.0f, 0.8f)
+                scalesTensor = OnnxTensor.createTensor(env, java.nio.FloatBuffer.wrap(scalesArray), longArrayOf(3))
+                // Исправление: Обертывание в LongBuffer для sidTensor
+                val sidArray = longArrayOf(0L)
+                sidTensor = OnnxTensor.createTensor(env, java.nio.LongBuffer.wrap(sidArray), longArrayOf(1))
                 // Формируем полную легитимную карту входов для графа Piper/PocketPal
                 val inputs = mapOf(
                     "text" to textTensor,
