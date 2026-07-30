@@ -72,8 +72,15 @@ dependencies {
     implementation(libs.material)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
 
+    // Extended Material Icons
+    implementation("androidx.compose.material:material-icons-extended")
+
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+
+    // OkHttp
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.logging.interceptor)
 
     // Vosk
     implementation("com.alphacephei:vosk-android:0.3.47")
