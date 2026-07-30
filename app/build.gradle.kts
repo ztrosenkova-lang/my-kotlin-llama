@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "org.nehuatl.sample"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "org.nehuatl.sample"
