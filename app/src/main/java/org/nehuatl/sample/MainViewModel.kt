@@ -37,6 +37,7 @@ import java.util.zip.ZipInputStream
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
+import com.sunnychung.lib.pipertts.PiperTts
 
 data class ChatMessage(val role: String, val text: String)
 
@@ -59,11 +60,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         private const val VOSK_MODEL_URL = "http://alphacephei.com/vosk/models/vosk-model-ru-0.42.zip"
         private const val VOSK_MODEL_DIR = "vosk-model-large"
         private const val VOSK_MODEL_READY_FLAG = "is_vosk_large_ready"
-        // Sherpa-ONNX TTS Configuration Constants
+        // Piper TTS Configuration Constants
         private const val TTS_MODEL_DIR = "tts-model"
-        private const val TTS_MODEL_NAME = "model.onnx"
-        private const val TTS_TOKENS_NAME = "tokens.txt"
-        private const val TTS_DATA_DIR = "espeak-ng-data"
+        private const val TTS_MODEL_NAME = "ru_RU-robot-medium.onnx"
+        private const val TTS_CONFIG_NAME = "ru_RU-robot-medium.onnx.json"
         private const val TTS_ASSETS_PREFIX = "tts-model"
     }
 
@@ -134,8 +134,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         File(getApplication<Application>().filesDir, "brain.txt")
     }
 
-    // Sherpa-ONNX Neural TTS Engine
-    private var offlineTts: com.k2fsa.sherpa.onnx.OfflineTts? = null
+    // Piper TTS Engine
+    private var piperTts: PiperTts? = null
 
     private val alarmManager by lazy {
         getApplication<Application>().getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -255,7 +255,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
      */
     private fun extractRussianRoot(word: String): String {
         val lowerWord = word.lowercase()
-        
+
         // List of common Russian suffixes to remove (longest first)
         val suffixes = listOf(
             "ами", "ые", "ой", "ых", "ого", "его", "ому", "ему", "им", "ым",
@@ -263,7 +263,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             "ам", "ям", "ом", "ем", "ах", "ях", "ов", "ев", "ин", "ын",
             "а", "я", "о", "е", "и", "ы", "у", "ю"
         )
-        
+
         // Try to remove suffixes from the end
         var stem = lowerWord
         for (suffix in suffixes) {
@@ -272,7 +272,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 break
             }
         }
-        
+
         // If the word is very short or no suffix was removed, return the original
         return if (stem.length < 2) lowerWord else stem
     }
@@ -357,25 +357,23 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
 
-        // Initialize Sherpa-ONNX Neural TTS Engine
+        // Initialize Piper TTS Engine
         if (ttsTargetDir.exists()) {
             try {
-                val config = com.k2fsa.sherpa.onnx.OfflineTtsModelConfig(
-                    vits = com.k2fsa.sherpa.onnx.OfflineVitsModelConfig(
-                        model = File(ttsTargetDir, TTS_MODEL_NAME).absolutePath,
-                        lexicon = "",
-                        tokens = File(ttsTargetDir, TTS_TOKENS_NAME).absolutePath,
-                        dataDir = File(ttsTargetDir, TTS_DATA_DIR).absolutePath
-                    ),
-                    numThreads = 2,
-                    debug = false
-                )
-                offlineTts = com.k2fsa.sherpa.onnx.OfflineTts(
-                    config = com.k2fsa.sherpa.onnx.OfflineTtsConfig(model = config)
-                )
-                Log.d(TAG, "Sherpa-ONNX Neural TTS Engine initialized successfully.")
+                val modelFile = File(ttsTargetDir, TTS_MODEL_NAME)
+                val configFile = File(ttsTargetDir, TTS_CONFIG_NAME)
+
+                if (modelFile.exists() && configFile.exists()) {
+                    piperTts = PiperTts(
+                        modelPath = modelFile.absolutePath,
+                        configPath = configFile.absolutePath
+                    )
+                    Log.d(TAG, "Piper TTS Engine initialized successfully.")
+                } else {
+                    Log.w(TAG, "Piper TTS model or config file missing")
+                }
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to initialize custom Neural TTS engine: ${e.message}")
+                Log.e(TAG, "Failed to initialize Piper TTS engine: ${e.message}")
             }
         } else {
             Log.w(TAG, "TTS model folder not found: ${ttsTargetDir.absolutePath}")
@@ -1145,7 +1143,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         if (llamaHelper.getContextId() == null) {
             _state.value = GenerationState.Error("Модель не загружена. Загрузите модель через 'движок'.")
-            return        }
+            return }
 
         val isSearchCommand = prompt.contains(FIND_COMMAND, ignoreCase = true) ||
                 prompt.contains(SEARCH_COMMAND, ignoreCase = true) ||
@@ -1327,7 +1325,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     fun abortLocal() {
         if (_state.value.isActive()) {
             Log.i(TAG, "Aborting generation")
-            offlineTts?.let {
+            piperTts?.let {
                 // Stop any ongoing TTS playback
             }
             llamaHelper.abort()
@@ -1438,20 +1436,20 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         if (cleanText.isBlank()) return
 
-        val ttsEngine = offlineTts
+        val ttsEngine = piperTts
         if (ttsEngine == null) {
-            Log.w(TAG, "TTS engine not available, skipping speech")
+            Log.w(TAG, "Piper TTS engine not available, skipping speech")
             return
         }
 
         scope.launch(Dispatchers.Default) {
             try {
-                // Generate audio using Sherpa-ONNX
-                val audio = ttsEngine.generate(cleanText)
+                // Generate audio using Piper TTS
+                val audio = ttsEngine.synthesize(cleanText)
 
                 if (audio.isNotEmpty()) {
-                    // Get the native sample rate dynamically from the engine
-                    val sampleRate = ttsEngine.sampleRate()
+                    // Piper TTS uses 22050 Hz sample rate
+                    val sampleRate = 22050
 
                     val minBufferSize = AudioTrack.getMinBufferSize(
                         sampleRate,
@@ -1476,15 +1474,15 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         audioTrack.stop()
                         audioTrack.release()
 
-                        Log.d(TAG, "TTS playback completed: ${cleanText.take(50)}...")
+                        Log.d(TAG, "Piper TTS playback completed: ${cleanText.take(50)}...")
                     } else {
                         Log.e(TAG, "Invalid AudioTrack buffer size for sample rate: $sampleRate")
                     }
                 } else {
-                    Log.w(TAG, "TTS generated empty audio for: ${cleanText.take(50)}")
+                    Log.w(TAG, "Piper TTS generated empty audio for: ${cleanText.take(50)}")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "TTS playback error: ${e.message}")
+                Log.e(TAG, "Piper TTS playback error: ${e.message}")
             }
         }
     }
@@ -1497,7 +1495,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     override fun onCleared() {
         super.onCleared()
         instance = null
-        offlineTts = null
+        piperTts?.close()
+        piperTts = null
         _isModelLoaded.value = false
         llamaHelper.abort()
         llamaHelper.release()
