@@ -12,6 +12,7 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven { url = java.net.URI("https://jitpack.io") }
+        // Репозиторий для sherpa-onnx (Maven Central уже содержит нужный артефакт)
     }
 }
 
