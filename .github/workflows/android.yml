@@ -31,22 +31,18 @@ jobs:
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
 
-      - name: Pre-Download and Embed Neural TTS Model Assets
+      - name: Create TTS Assets Directory
+        run: mkdir -p app/src/main/assets/tts-model
+
+      - name: Download Piper TTS Model Configuration
         run: |
-          mkdir -p app/src/main/assets/tts-model
-          echo "Downloading raw speech model assets via official HuggingFace Client Toolkit..."
-          
-          # Secure direct pull of single model and token layers straight to target directory layout
-          curl -L -o app/src/main/assets/tts-model/model.onnx "https://huggingface.co/csukuangfj/sherpa-onnx-tts-vits-ru-hf-dasha-medium/resolve/main/model.onnx"
-          curl -L -o app/src/main/assets/tts-model/tokens.txt "https://huggingface.co/csukuangfj/sherpa-onnx-tts-vits-ru-hf-dasha-medium/resolve/main/tokens.txt"
-          
-          # Pull configuration dependencies mapping blocks
-          mkdir -p app/src/main/assets/tts-model/espeak-ng-data
-          curl -L -o app/src/main/assets/tts-model/espeak-ng-data/ru_dict "https://huggingface.co/csukuangfj/sherpa-onnx-tts-vits-ru-hf-dasha-medium/resolve/main/espeak-ng-data/ru_dict" || true
-          
-          echo "Verifying local assets target location mapping content:"
-          ls -la app/src/main/assets/tts-model
-          echo "Sherpa-ONNX Neural Speech Package ready inside assets"
+          curl -L "https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/robot-medium/ru_RU-robot-medium.onnx.json" \
+          -o "app/src/main/assets/tts-model/ru_RU-robot-medium.onnx.json"
+
+      - name: Download Piper TTS Model Weights
+        run: |
+          curl -L "https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/robot-medium/ru_RU-robot-medium.onnx" \
+          -o "app/src/main/assets/tts-model/ru_RU-robot-medium.onnx"
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug
