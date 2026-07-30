@@ -363,7 +363,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         // Initialize PocketPal ONNX TTS Engine
         val modelFile = File(ttsTargetDir, TTS_MODEL_NAME)
-        
+
         if (modelFile.exists()) {
             try {
                 ortEnv = OrtEnvironment.getEnvironment()
@@ -553,7 +553,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         )
     }
 
-    private fun updateLastSystemMessage(newText: String) {
+    fun updateLastSystemMessage(newText: String) {
         val currentList = _chatHistory.value.toMutableList()
         if (currentList.isNotEmpty() && currentList.last().role == "system") {
             currentList[currentList.lastIndex] = ChatMessage("system", newText)
@@ -1143,7 +1143,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         if (llamaHelper.getContextId() == null) {
             _state.value = GenerationState.Error("Модель не загружена. Загрузите модель через 'движок'.")
-            return }
+            return        }
 
         val isSearchCommand = prompt.contains(FIND_COMMAND, ignoreCase = true) ||
                 prompt.contains(SEARCH_COMMAND, ignoreCase = true) ||
@@ -1456,16 +1456,16 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
                 // Run inference
                 val result = session.run(mapOf("input" to inputTensor))
-                
+
                 // Extract output tensor (assuming it contains float audio data)
                 val outputTensor = result.get("output").get() as OnnxTensor
                 val audioData = outputTensor.floatBuffer.array()
 
                 if (audioData.isNotEmpty()) {
-                    // Convert float to 16-bit PCM
+                    // Convert float to 16-bit PCM using listOf to fix type inference
                     val pcmData = audioData.map { (it * 32767).toInt().coerceIn(-32768, 32767).toShort() }
                         .flatMap { short ->
-                            byteArrayOf(
+                            listOf(
                                 (short.toInt() and 0xFF).toByte(),
                                 ((short.toInt() shr 8) and 0xFF).toByte()
                             )
