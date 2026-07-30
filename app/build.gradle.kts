@@ -78,8 +78,8 @@ dependencies {
     // Vosk
     implementation("com.alphacephei:vosk-android:0.3.47")
 
-    // Piper TTS - Native Android port
-    implementation(libs.piper.tts)
+    // RHVoice TTS
+    implementation(libs.rhvoice.tts)
 
     // Llama.cpp - Local module reference
     implementation(project(":llamaCpp"))
