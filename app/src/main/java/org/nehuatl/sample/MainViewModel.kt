@@ -455,31 +455,33 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         val modelFile = File(context.filesDir, "ru_RU-robot-medium.onnx")
         scope.launch(Dispatchers.IO) {
             try {
-                // 1. Physical extraction from assets if missing on the device
+                // 1. Побайтовое копирование файла модели из assets, если он отсутствует на устройстве
                 if (!modelFile.exists()) {
-                    Log.d("LlamaTts", "First run: extracting TTS binary model from APK assets...")
+                    Log.d("LlamaTts", "Копирование модели TTS из assets...")
                     context.assets.open("ru_RU-robot-medium.onnx").use { inputStream ->
                         modelFile.outputStream().use { outputStream ->
                             inputStream.copyTo(outputStream)
                         }
                     }
-                    Log.d("LlamaTts", "TTS Binary successfully extracted to private storage.")
+                    Log.d("LlamaTts", "Файл модели успешно скопирован.")
                 }
-                // 2. Initializing ONNX Runtime native session
+                // 2. Спецификация SessionOptions строго по требованиям pocket-tts-onnx
                 ortEnv = OrtEnvironment.getEnvironment()
-                val sessionOptions = OrtSession.SessionOptions()
+                val sessionOptions = OrtSession.SessionOptions().apply {
+                    // Выключаем внутренний сбор телеметрии ORT, блокирующий инициализацию
+                    setDisableTelemetry(true)
+                    // Разрешаем движку аллоцировать память под инициализаторы напрямую из RAM устройства
+                    addConfigEntry("session.use_device_allocator_for_initializers", "1")
+                }
+                // 3. Создание нативной сессии
                 ortSession = ortEnv?.createSession(modelFile.absolutePath, sessionOptions)
-                // 3. Update ready state flags safely on the main thread for UI responsiveness
+                // 4. Публикация успешного статуса и запуск приветственного диалога
                 withContext(Dispatchers.Main) {
                     _isTtsReady.value = true
-                    // 4. STEP ONE: Inject structural loading success confirmation message directly into the chat UI
                     val successNotification = "🟢 Голосовой движок PocketPal успешно загружен в оперативную память устройства."
                     appendSystemMessage(successNotification)
-                    Log.d("LlamaTts", "PocketPal ONNX TTS Engine successfully initialized in memory.")
-                    // 5. STEP TWO: Trigger the welcome text generation and narration ONLY after the engine is up and notified
                     val welcomeText = "Привет! Я твоя локальная языковая модель. Голосовой движок полностью готов к работе, чем я могу помочь?"
                     appendSystemMessage(welcomeText)
-                    // Synchronously pass text to the non-blocking background AudioTrack pipeline
                     speakText(welcomeText)
                 }
             } catch (e: Exception) {
@@ -487,7 +489,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     _isTtsReady.value = false
                     appendSystemMessage("🔴 Ошибка выделения памяти под голосовой движок: ${e.message}")
                 }
-                Log.e("LlamaTts", "Critical failure during native TTS pipeline initialization: ${e.message}")
+                Log.e("LlamaTts", "Критическая ошибка инициализации сессии ONNX: ${e.message}")
             }
         }
     }
@@ -748,8 +750,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             delay(200)
             // Start RAM loading animation
             ramProgressJob = scope.launch(Dispatchers.Main) {
-                var dots = 1
-                while (true) {
+                var dots = 1                while (true) {
                     updateLastSystemMessage("⚙️ Инициализация ядра Vosk... Загрузка весов модели в ОЗУ" + ".".repeat(dots))
                     delay(600)
                     dots = (dots % 3) + 1
