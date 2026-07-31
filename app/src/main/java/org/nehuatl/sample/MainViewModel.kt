@@ -512,16 +512,50 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     fun isVoskInitialized(): Boolean = _isVoskLoaded.value
     fun initVoskLazily(context: Context) {
         if (_isVoskLoaded.value) {
+            Log.d(TAG, "Vosk already loaded, skipping initialization")
             return
         }
+
         val prefs = context.getSharedPreferences("cloud_ai", Context.MODE_PRIVATE)
         val isReady = prefs.getBoolean(VOSK_MODEL_READY_FLAG, false)
         val targetDir = File(context.filesDir, VOSK_MODEL_DIR)
-        if (!isReady) {
+
+        // Проверка физического наличия модели на диске
+        val amDir = File(targetDir, "am")
+        val finalMdlFile = File(amDir, "final.mdl")
+        val modelExists = amDir.exists() && amDir.isDirectory && finalMdlFile.exists() && finalMdlFile.isFile
+
+        // Если флаг готовности есть, но файлов нет - сбрасываем флаг
+        if (isReady && !modelExists) {
+            Log.w(TAG, "Model flag is ready but files are missing, resetting flag")
+            prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, false).apply()
+            _isVoskLoaded.value = false
+            scope.launch {
+                withContext(Dispatchers.Main) {
+                    appendSystemMessage("⚠️ Файлы модели Vosk повреждены или удалены. Начинаю перезагрузку...")
+                }
+            }
+        }
+
+        // Проверяем флаг готовности после возможного сброса
+        val actualIsReady = prefs.getBoolean(VOSK_MODEL_READY_FLAG, false)
+
+        if (!actualIsReady || !modelExists) {
+            // Если есть файлы, но флаг сброшен - пробуем инициализировать
+            if (modelExists) {
+                scope.launch {
+                    appendSystemMessage("⏳ Обнаружены файлы модели, пробую загрузить...")
+                    initializeVoskModel(context)
+                }
+                return
+            }
+
+            // Файлов нет - начинаем загрузку
             appendSystemMessage("⏳ Высокоточная голосовая модель не найдена. Начинаю безопасную загрузку (~1.2 ГБ)... Пожалуйста, не закрывайте приложение.")
             scope.launch {
                 withContext(Dispatchers.IO) {
                     var tempFile: File? = null
+                    var downloadSuccess = false
                     try {
                         val url = URL(VOSK_MODEL_URL)
                         val connection = url.openConnection() as HttpURLConnection
@@ -570,12 +604,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                 }
                             }
                         }
+                        downloadSuccess = true
                         // Single clear message before unzip starts
                         withContext(Dispatchers.Main) {
                             appendSystemMessage("⏳ Начинаю распаковку голосового движка Vosk... Это займет около 30-40 секунд, пожалуйста, подождите.")
                         }
                         // Распаковка архива - with 250-file progress tracking and in-place updates
                         targetDir.mkdirs()
+                        var unzipSuccess = false
                         ZipInputStream(tempFile.inputStream()).use { zis ->
                             var entry = zis.nextEntry
                             var entryCounter = 0
@@ -602,47 +638,59 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                 zis.closeEntry()
                                 entry = zis.nextEntry
                             }
+                            unzipSuccess = true
                         }
-                        withContext(Dispatchers.Main) {
-                            updateLastSystemMessage("📦 Распаковка архива голосового движка Vosk успешно завершена!")
+                        if (unzipSuccess) {
+                            // 3. Физический чек-ап файлов модели после успешной распаковки
+                            val amDirCheck = File(targetDir, "am")
+                            val finalMdlFileCheck = File(amDirCheck, "final.mdl")
+                            if (amDirCheck.exists() && amDirCheck.isDirectory && finalMdlFileCheck.exists() && finalMdlFileCheck.isFile) {
+                                withContext(Dispatchers.Main) {
+                                    updateLastSystemMessage("📦 Распаковка архива голосового движка Vosk успешно завершена!")
+                                }
+                                // 4. Запись успеха в настройки только после полной проверки
+                                prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, true).apply()
+                                // 5. Запуск инициализации модели
+                                initializeVoskModel(context)
+                            } else {
+                                throw Exception("Критические файлы модели Vosk отсутствуют: am/final.mdl не найден")
+                            }
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Ошибка загрузки/распаковки модели Vosk: ${e.message}")
                         // Network failure - trigger offline mode with file picker
                         withContext(Dispatchers.Main) {
-                            appendSystemMessage("⚠ Сеть заблокирована или отсутствует подключение к интернету. Перехожу в автономный режим.")
+                            appendSystemMessage("⚠ Ошибка загрузки модели: ${e.message}")
                             appendSystemMessage("📂 Пожалуйста, выберите скачанный архив 'vosk-model-ru-0.42.zip' из памяти вашего телефона или флешки.")
                             _voskFilePickerEvent.tryEmit(Unit)
                         }
+                        // Сброс флага готовности при ошибке
+                        prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, false).apply()
+                        _isVoskLoaded.value = false
                     } finally {
-                        // 1. File Purge
-                        tempFile?.let {
-                            if (it.exists()) {
-                                it.delete()
-                                Log.d(TAG, "Временный ZIP-файл успешно удален")
-                            }
+                        // 1. Очистка временного файла
+                        tempFile?.let { if (it.exists()) it.delete() }
+                        
+                        // 2. Сброс флагов (БЕЗ затирающего appendSystemMessage)
+                        if (!downloadSuccess) {
+                            prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, false).apply()
+                            _isVoskLoaded.value = false
+                            Log.w(TAG, "Vosk download pipeline terminated execution safely.")
                         }
-                        // 2. State Commit
-                        prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, true).apply()
-                        // 3. Completion Notice on Main thread
-                        withContext(Dispatchers.Main) {
-                            appendSystemMessage("✅ Голосовой движок успешно настроен, архив очищен!")
-                        }
-                        // 4. RAM Memory Allocation (synchronous flow) with OOM protection
-                        initializeVoskModel(getApplication<Application>().applicationContext)
                     }
                 }
             }
         } else {
             // Модель уже готова - инициализируем синхронно
             scope.launch {
-                initializeVoskModel(getApplication<Application>().applicationContext)
+                initializeVoskModel(context)
             }
         }
     }
     // === Offline Unzipping Routine ===
     fun processLocalVoskZip(uri: Uri, context: Context) {
         if (_isVoskLoaded.value) {
+            Log.d(TAG, "Vosk already loaded, skipping local processing")
             return
         }
         val prefs = context.getSharedPreferences("cloud_ai", Context.MODE_PRIVATE)
@@ -654,6 +702,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             try {
                 // 1. Копирование URI в физический файл кэша
                 val tempZipFile = File(context.cacheDir, "temp_model.zip")
+                var copySuccess = false
                 context.contentResolver.openInputStream(uri)?.use { inputStream ->
                     FileOutputStream(tempZipFile).use { outputStream ->
                         val buffer = ByteArray(8192)
@@ -670,6 +719,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                 }
                             }
                         }
+                        copySuccess = true
                     }
                 } ?: run {
                     withContext(Dispatchers.Main) {
@@ -677,8 +727,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     }
                     return@launch
                 }
+                if (!copySuccess) {
+                    throw Exception("Не удалось скопировать архив в кэш")
+                }
                 // 2. Распаковка из временного файла
                 targetDir.mkdirs()
+                var unzipSuccess = false
                 ZipInputStream(tempZipFile.inputStream()).use { zis ->
                     var entry = zis.nextEntry
                     var entryCounter = 0
@@ -705,25 +759,40 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         zis.closeEntry()
                         entry = zis.nextEntry
                     }
+                    unzipSuccess = true
                 }
-                // 3. Удаление временного файла
+                if (unzipSuccess) {
+                    // 3. Физический чек-ап файлов модели после успешной распаковки
+                    val amDir = File(targetDir, "am")
+                    val finalMdlFile = File(amDir, "final.mdl")
+                    if (amDir.exists() && amDir.isDirectory && finalMdlFile.exists() && finalMdlFile.isFile) {
+                        withContext(Dispatchers.Main) {
+                            updateLastSystemMessage("📦 Распаковка архива голосового движка Vosk успешно завершена!")
+                        }
+                        // 4. Запись успеха в настройки только после полной проверки
+                        prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, true).apply()
+                        // 5. Запуск инициализации модели
+                        initializeVoskModel(context)
+                    } else {
+                        throw Exception("Критические файлы модели Vosk отсутствуют: am/final.mdl не найден")
+                    }
+                }
+                // 6. Удаление временного файла
                 tempZipFile.delete()
-                withContext(Dispatchers.Main) {
-                    updateLastSystemMessage("📦 Распаковка архива голосового движка Vosk успешно завершена!")
-                }
             } catch (e: Exception) {
                 Log.e(TAG, "Ошибка локальной распаковки Vosk: ${e.message}")
                 withContext(Dispatchers.Main) {
                     appendSystemMessage("⚠️ Ошибка при распаковке архива: ${e.message}")
                 }
+                // Сброс флага готовности при ошибке
+                prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, false).apply()
+                _isVoskLoaded.value = false
             } finally {
-                // Commit state flag
-                prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, true).apply()
-                withContext(Dispatchers.Main) {
-                    appendSystemMessage("✅ Голосовой движок успешно настроен автономно!")
+                if (!_isVoskLoaded.value) {
+                    withContext(Dispatchers.Main) {
+                        appendSystemMessage("⚠ Локальная распаковка не удалась. Попробуйте еще раз.")
+                    }
                 }
-                // Initialize Vosk model with OOM protection
-                initializeVoskModel(context.applicationContext)
             }
         }
     }
@@ -731,10 +800,27 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         var ramProgressJob: Job? = null
         try {
             val targetDir = File(context.filesDir, VOSK_MODEL_DIR)
+            // 1. ФИЗИЧЕСКАЯ ПРОВЕРКА ФАЙЛОВ МОДЕЛИ ПЕРЕД ИНИЦИАЛИЗАЦИЕЙ
+            val amDir = File(targetDir, "am")
+            val finalMdlFile = File(amDir, "final.mdl")
+            if (!amDir.exists() || !amDir.isDirectory || !finalMdlFile.exists() || !finalMdlFile.isFile) {
+                Log.e(TAG, "Critical model files missing: am/final.mdl not found")
+                val prefs = context.getSharedPreferences("cloud_ai", Context.MODE_PRIVATE)
+                prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, false).apply()
+                _isVoskLoaded.value = false
+                withContext(Dispatchers.Main) {
+                    appendSystemMessage("⚠️ Критические файлы модели Vosk отсутствуют. Попробуйте перезагрузить модель.")
+                }
+                return
+            }
             // Intelligent path detection: find the directory containing the "am" folder
             val modelPath = findModelPath(targetDir)
             // Validate that the model directory actually exists
             if (modelPath == null || !File(modelPath).exists()) {
+                Log.e(TAG, "Model path not found or invalid")
+                val prefs = context.getSharedPreferences("cloud_ai", Context.MODE_PRIVATE)
+                prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, false).apply()
+                _isVoskLoaded.value = false
                 withContext(Dispatchers.Main) {
                     appendSystemMessage("⚠️ Модель не найдена. Попробуйте перезапустить приложение.")
                 }
@@ -750,7 +836,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             delay(200)
             // Start RAM loading animation
             ramProgressJob = scope.launch(Dispatchers.Main) {
-                var dots = 1                while (true) {
+                var dots = 1
+                while (true) {
                     updateLastSystemMessage("⚙️ Инициализация ядра Vosk... Загрузка весов модели в ОЗУ" + ".".repeat(dots))
                     delay(600)
                     dots = (dots % 3) + 1
@@ -788,6 +875,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         appendSystemMessage("⚠️ Ошибка инициализации Vosk: ${t.message}")
                     }
                 }
+                // Сброс флага готовности при ошибке инициализации
+                val prefs = context.getSharedPreferences("cloud_ai", Context.MODE_PRIVATE)
+                prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, false).apply()
+                _isVoskLoaded.value = false
                 // Re-throw to allow caller to handle, but we already logged and notified user
                 throw t
             }
@@ -799,6 +890,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             withContext(Dispatchers.Main) {
                 appendSystemMessage("⚠️ Ошибка инициализации Vosk: ${e.message}")
             }
+            // Сброс флага готовности при ошибке
+            val prefs = context.getSharedPreferences("cloud_ai", Context.MODE_PRIVATE)
+            prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, false).apply()
+            _isVoskLoaded.value = false
         } finally {
             // Ensure RAM loading animation is cancelled in all cases
             ramProgressJob?.cancel()
