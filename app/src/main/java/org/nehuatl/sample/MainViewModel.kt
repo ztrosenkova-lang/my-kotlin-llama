@@ -468,9 +468,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 // 2. Спецификация SessionOptions строго по требованиям pocket-tts-onnx
                 ortEnv = OrtEnvironment.getEnvironment()
                 val sessionOptions = OrtSession.SessionOptions().apply {
-                    // Выключаем внутренний сбор телеметрии ORT, блокирующий инициализацию
-                    setDisableTelemetry(true)
-                    // Разрешаем движку аллоцировать память под инициализаторы напрямую из RAM устройства
+                    // ПРАВИЛЬНОЕ ИСПРАВЛЕНИЕ: Отключение телеметрии через конфиг-строку (работает в Android)
+                    addConfigEntry("session.disable_telemetry", "1")
+                    // Использование прямого аллокатора устройства для весов pocket-tts
                     addConfigEntry("session.use_device_allocator_for_initializers", "1")
                 }
                 // 3. Создание нативной сессии
