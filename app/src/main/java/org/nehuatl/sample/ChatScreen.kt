@@ -485,124 +485,117 @@ private fun TopBarWithSwitch(
     val isCloudReady = cloudConfig?.authKey?.isNotEmpty() == true
     val localIndicatorColor = if (isLocalReady) GreenColor else PaleYellowColor
     val cloudIndicatorColor = if (isCloudReady) GreenColor else PaleYellowColor
-    Card(
+    
+    // ПОЛЕ 1: Общий контейнер с рамкой
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(4.dp),
-        shape = MaterialTheme.shapes.medium,
-        border = BorderStroke(1.dp, BorderGray),
-        colors = CardDefaults.cardColors(containerColor = SurfaceGray)
+            .height(80.dp) // Фиксированная высота
+            .padding(4.dp)
+            .border(1.dp, BorderGray, RoundedCornerShape(8.dp))
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+        // ПОЛЕ 2: Логотип (прижат к левому краю)
+        Image(
+            painter = painterResource(id = R.mipmap.ic_launcher),
+            contentDescription = "Лого",
+            modifier = Modifier
+                .size(56.dp)
+                .padding(end = 8.dp)
+                .clip(RoundedCornerShape(12.dp)),
+            contentScale = ContentScale.Crop
+        )
+
+        // ПОЛЕ 3: Название приложения (центрировано по вертикали и горизонтали)
+        Box(
+            modifier = Modifier
+                .weight(1f) // Занимает всё доступное пространство по центру
+                .fillMaxHeight(),
+            contentAlignment = Alignment.Center // Строгое центрирование текста
         ) {
-            // Левая часть: Логотип (80.dp)
-            Image(
-                painter = painterResource(id = R.mipmap.ic_launcher),
-                contentDescription = "Лого",
-                contentScale = ContentScale.FillBounds,
-                modifier = Modifier
-                    .size(80.dp)
-                    .clip(RoundedCornerShape(16.dp))
+            Text(
+                text = "-- ИИ-Друг --",
+                style = MaterialTheme.typography.titleMedium,
+                color = FriendlyRobotColor,
+                fontWeight = FontWeight.ExtraBold,
+                fontFamily = FontFamily.Monospace,
+                textAlign = TextAlign.Center
             )
-            Spacer(modifier = Modifier.width(12.dp))
-            // Правая часть: Колонка без фона
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+        }
+
+        // ПОЛЕ 4: Блок управления с фиксированной шириной 132.dp
+        Column(
+            modifier = Modifier
+                .width(132.dp) // Фиксированная ширина для прямоугольника
+                .fillMaxHeight(),
+            verticalArrangement = Arrangement.SpaceEvenly, // Равномерный отступ по высоте
+            horizontalAlignment = Alignment.CenterHorizontally // Центрирование строк
+        ) {
+            // Верхняя строка: Индикаторы-фонарики
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Line 1 (Top Row - LED Indicators):
-                // Parent container with centering
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Child row holding the indicator blocks
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        // Индикатор локального ИИ
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(10.dp)
-                                    .background(localIndicatorColor, shape = CircleShape)
-                                    .border(0.5.dp, BorderGray, CircleShape)
-                            )
-                            Text(text = "локальный ИИ", fontSize = 6.sp, color = DarkText)
-                        }
-                        // Индикатор облачного ИИ
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(10.dp)
-                                    .background(cloudIndicatorColor, shape = CircleShape)
-                                    .border(0.5.dp, BorderGray, CircleShape)
-                            )
-                            Text(text = "Облачный ИИ", fontSize = 6.sp, color = DarkText)
-                        }
-                    }
-                }
-                // Line 2 (Bottom Row - Unified Center Combo):
-                // Parent container that spans full width and centers its content
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Crucial Packaging Inner Container - wraps tightly around children
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // 1. The Title Element
-                        Text(
-                            text = "ИИ-Друг",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = FriendlyRobotColor,
-                            fontSize = 18.sp,
-                            fontFamily = FontFamily.Monospace,
-                            textAlign = TextAlign.Start
-                        )
-                        // 2. The 3-Character Gap Element
-                        Spacer(modifier = Modifier.width(14.dp))
-                        // 3. The Switch Controls Element
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            ModeButton(
-                                label = "Local",
-                                isSelected = currentMode == AIMode.LOCAL,
-                                onClick = { onLocalForceDialog() },
-                                modifier = Modifier.size(36.dp, 22.dp)
-                            )
-                            ModeButton(
-                                label = "Neutral",
-                                isSelected = currentMode == AIMode.NEUTRAL,
-                                onClick = { onModeChange(AIMode.NEUTRAL) },
-                                modifier = Modifier.size(36.dp, 22.dp)
-                            )
-                            ModeButton(
-                                label = "Cloud",
-                                isSelected = currentMode == AIMode.CLOUD,
-                                onClick = { onCloudForceDialog() },
-                                modifier = Modifier.size(36.dp, 22.dp)
-                            )
-                        }
-                    }
-                }
+                StatusIndicator(
+                    color = localIndicatorColor,
+                    text = "локальный ИИ"
+                )
+                StatusIndicator(
+                    color = cloudIndicatorColor,
+                    text = "Облачный ИИ"
+                )
+            }
+
+            // Нижняя строка: Кнопки управления (строго 42.dp каждая)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ModeButton(
+                    label = "Local",
+                    isSelected = currentMode == AIMode.LOCAL,
+                    onClick = { onLocalForceDialog() },
+                    modifier = Modifier.width(42.dp).height(22.dp) // Ширина точно подогнана под фонарики
+                )
+                ModeButton(
+                    label = "Neutral",
+                    isSelected = currentMode == AIMode.NEUTRAL,
+                    onClick = { onModeChange(AIMode.NEUTRAL) },
+                    modifier = Modifier.width(42.dp).height(22.dp)
+                )
+                ModeButton(
+                    label = "Cloud",
+                    isSelected = currentMode == AIMode.CLOUD,
+                    onClick = { onCloudForceDialog() },
+                    modifier = Modifier.width(42.dp).height(22.dp)
+                )
             }
         }
+    }
+}
+@Composable
+private fun StatusIndicator(
+    color: Color,
+    text: String
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(10.dp)
+                .background(color, shape = CircleShape)
+                .border(0.5.dp, BorderGray, CircleShape)
+        )
+        Text(
+            text = text,
+            fontSize = 6.sp,
+            color = DarkText
+        )
     }
 }
 @Composable
