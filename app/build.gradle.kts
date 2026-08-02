@@ -1,3 +1,5 @@
+import java.net.URL
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -117,7 +119,7 @@ tasks.register("downloadTtsModel") {
         println("⏳ Скачивание модели TTS...")
         ttsModelDir.mkdirs()
         try {
-            val url = URI(ttsModelUrl).toURL()
+            val url = URL(ttsModelUrl)
             url.openStream().use { inputStream ->
                 ttsModelFile.outputStream().use { outputStream ->
                     inputStream.copyTo(outputStream)
