@@ -515,16 +515,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             Log.d(TAG, "Vosk already loaded, skipping initialization")
             return
         }
-
         val prefs = context.getSharedPreferences("cloud_ai", Context.MODE_PRIVATE)
         val isReady = prefs.getBoolean(VOSK_MODEL_READY_FLAG, false)
         val targetDir = File(context.filesDir, VOSK_MODEL_DIR)
-
         // Проверка физического наличия модели на диске
         val amDir = File(targetDir, "am")
         val finalMdlFile = File(amDir, "final.mdl")
         val modelExists = amDir.exists() && amDir.isDirectory && finalMdlFile.exists() && finalMdlFile.isFile
-
         // Если флаг готовности есть, но файлов нет - сбрасываем флаг
         if (isReady && !modelExists) {
             Log.w(TAG, "Model flag is ready but files are missing, resetting flag")
@@ -536,10 +533,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 }
             }
         }
-
         // Проверяем флаг готовности после возможного сброса
         val actualIsReady = prefs.getBoolean(VOSK_MODEL_READY_FLAG, false)
-
         if (!actualIsReady || !modelExists) {
             // Если есть файлы, но флаг сброшен - пробуем инициализировать
             if (modelExists) {
@@ -549,7 +544,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 }
                 return
             }
-
             // Файлов нет - начинаем загрузку
             appendSystemMessage("⏳ Высокоточная голосовая модель не найдена. Начинаю безопасную загрузку (~1.2 ГБ)... Пожалуйста, не закрывайте приложение.")
             scope.launch {
@@ -670,7 +664,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     } finally {
                         // 1. Очистка временного файла
                         tempFile?.let { if (it.exists()) it.delete() }
-                        
                         // 2. Сброс флагов (БЕЗ затирающего appendSystemMessage)
                         if (!downloadSuccess) {
                             prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, false).apply()
@@ -1395,7 +1388,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 val results = ortSession?.run(mapOf(inputName to inputTensor))
                 val outputTensor = results?.get(0) as? OnnxTensor
                 // 5. Вычитывание Direct FloatBuffer через .get()
-                val floatData = outputTensor?.floatBuffer?.let {
+                val floatBuffer = outputTensor?.floatBuffer
+                val floatData = floatBuffer?.let {
                     val array = FloatArray(it.remaining())
                     it.get(array)
                     array
@@ -1409,36 +1403,37 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         (floatData[i].coerceIn(-1.0f, 1.0f) * 32767.0f).toInt().toShort()
                     }
                     // 7. AudioTrack с ENCODING_PCM_16BIT
-                    val audioTrack = AudioTrack.Builder()
-                        .setAudioAttributes(
-                            android.media.AudioAttributes.Builder()
-                                .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
-                                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
-                                .build()
+                    val sampleRate = 22050
+                    val minBufferSize = AudioTrack.getMinBufferSize(
+                        sampleRate,
+                        AudioFormat.CHANNEL_OUT_MONO,
+                        AudioFormat.ENCODING_PCM_16BIT
+                    )
+                    if (minBufferSize > 0) {
+                        // Используем MODE_STATIC для стабильного воспроизведения
+                        val audioTrack = AudioTrack(
+                            AudioManager.STREAM_MUSIC,
+                            sampleRate,
+                            AudioFormat.CHANNEL_OUT_MONO,
+                            AudioFormat.ENCODING_PCM_16BIT,
+                            shortData.size * 2,
+                            AudioTrack.MODE_STATIC
                         )
-                        .setAudioFormat(
-                            AudioFormat.Builder()
-                                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                                .setSampleRate(22050)
-                                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                                .build()
-                        )
-                        .setBufferSizeInBytes(shortData.size * 2) // 2 bytes per short
-                        .setTransferMode(AudioTrack.MODE_STATIC)
-                        .build()
-                    // 8. Воспроизведение
-                    audioTrack.write(shortData, 0, shortData.size)
-                    audioTrack.play()
-                    // Ожидаем завершения воспроизведения
-                    while (audioTrack.playState == AudioTrack.PLAYSTATE_PLAYING) {
-                        delay(50)
+                        audioTrack.write(shortData, 0, shortData.size)
+                        audioTrack.play()
+                        // Ожидаем завершения воспроизведения
+                        while (audioTrack.playState == AudioTrack.PLAYSTATE_PLAYING) {
+                            delay(50)
+                        }
+                        audioTrack.stop()
+                        audioTrack.release()
+                        Log.d(TAG, "ONNX TTS playback completed")
+                    } else {
+                        Log.e(TAG, "Invalid AudioTrack buffer size")
                     }
-                    // Освобождаем аудио-канал
-                    audioTrack.stop()
-                    audioTrack.release()
                 }
             } catch (e: Exception) {
-                Log.e("LlamaTts", "Критическая ошибка синтеза речи во внутреннем потоке: ${e.message}")
+                Log.e("LlamaTts", "Критическая ошибка синтеза речи: ${e.message}")
             }
         }
     }
