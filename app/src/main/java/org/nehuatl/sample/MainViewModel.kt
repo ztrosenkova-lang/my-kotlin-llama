@@ -455,15 +455,22 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         val modelFile = File(context.filesDir, "ru_RU-robot-medium.onnx")
         scope.launch(Dispatchers.IO) {
             try {
-                // 1. Побайтовое копирование файла модели из assets, если он отсутствует на устройстве
+                // 1. Проверяем, есть ли модель в filesDir
                 if (!modelFile.exists()) {
-                    Log.d("LlamaTts", "Копирование модели TTS из assets...")
+                    Log.d("LlamaTts", "Модель не найдена в filesDir, копирую из assets...")
+                    // Копируем из assets в filesDir с большим буфером
                     context.assets.open("ru_RU-robot-medium.onnx").use { inputStream ->
                         modelFile.outputStream().use { outputStream ->
-                            inputStream.copyTo(outputStream)
+                            val buffer = ByteArray(64 * 1024) // 64 KB буфер
+                            var bytesRead: Int
+                            while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                                outputStream.write(buffer, 0, bytesRead)
+                            }
                         }
                     }
-                    Log.d("LlamaTts", "Файл модели успешно скопирован.")
+                    Log.d("LlamaTts", "Модель скопирована: ${modelFile.absolutePath}")
+                } else {
+                    Log.d("LlamaTts", "Модель уже существует в filesDir: ${modelFile.absolutePath}")
                 }
                 // 2. Спецификация SessionOptions строго по требованиям pocket-tts-onnx
                 ortEnv = OrtEnvironment.getEnvironment()
@@ -723,8 +730,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 if (!copySuccess) {
                     throw Exception("Не удалось скопировать архив в кэш")
                 }
-                // 2. Распаковка из временного файла
-                targetDir.mkdirs()
+                // 2. Распаковка из временного файла                targetDir.mkdirs()
                 var unzipSuccess = false
                 ZipInputStream(tempZipFile.inputStream()).use { zis ->
                     var entry = zis.nextEntry
