@@ -100,3 +100,55 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 }
+
+// ============================================================
+// ЗАДАЧА ДЛЯ СКАЧИВАНИЯ МОДЕЛИ TTS ПРИ СБОРКЕ
+// ============================================================
+
+val ttsModelDir = file("src/main/assets/tts-model")
+val ttsModelFile = file("src/main/assets/tts-model/ru_RU-robot-medium.onnx")
+val ttsModelUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/robot-medium/ru_RU-robot-medium.onnx"
+
+tasks.register("downloadTtsModel") {
+    group = "download"
+    description = "Скачивает модель TTS из Hugging Face, если она отсутствует в assets"
+    onlyIf { !ttsModelFile.exists() }
+    doLast {
+        println("⏳ Скачивание модели TTS...")
+        ttsModelDir.mkdirs()
+        try {
+            val url = java.net.URI(ttsModelUrl).toURL()
+            url.openStream().use { inputStream ->
+                ttsModelFile.outputStream().use { outputStream ->
+                    inputStream.copyTo(outputStream)
+                }
+            }
+            println("✅ Модель TTS успешно скачана: ${ttsModelFile.absolutePath}")
+        } catch (e: Exception) {
+            println("❌ Ошибка скачивания модели TTS: ${e.message}")
+            throw e
+        }
+    }
+}
+
+// Автоматический запуск скачивания перед сборкой
+tasks.named("preBuild") {
+    dependsOn("downloadTtsModel")
+}
+
+// Проверка размера модели после скачивания (для отладки)
+tasks.register("checkTtsModel") {
+    group = "verification"
+    description = "Проверяет, что модель TTS существует и имеет корректный размер"
+    doLast {
+        if (ttsModelFile.exists()) {
+            val sizeMB = ttsModelFile.length() / (1024 * 1024)
+            println("✅ Модель TTS найдена. Размер: $sizeMB МБ")
+            if (sizeMB < 10) {
+                println("⚠️ Внимание: модель слишком маленькая ($sizeMB МБ). Возможно, файл повреждён.")
+            }
+        } else {
+            println("❌ Модель TTS не найдена")
+        }
+    }
+}
