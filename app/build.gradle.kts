@@ -117,7 +117,7 @@ tasks.register("downloadTtsModel") {
         println("⏳ Скачивание модели TTS...")
         ttsModelDir.mkdirs()
         try {
-            val url = java.net.URL(ttsModelUrl)
+            val url = URI(ttsModelUrl).toURL()
             url.openStream().use { inputStream ->
                 ttsModelFile.outputStream().use { outputStream ->
                     inputStream.copyTo(outputStream)
