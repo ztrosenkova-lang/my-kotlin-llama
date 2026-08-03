@@ -1,6 +1,7 @@
 package org.nehuatl.sample
 
 import android.Manifest
+import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -25,12 +26,24 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import org.nehuatl.sample.ui.theme.KotlinLlamaCppTheme
+import java.security.MessageDigest
 
 class MainActivity : ComponentActivity() {
 
     private var modelPath by mutableStateOf<String?>(null)
     private var mmprojPath by mutableStateOf<String?>(null)
     private var imagePath by mutableStateOf<String?>(null)
+
+    // Константы для работы с паролем
+    companion object {
+        private const val PREFS_NAME = "app_security"
+        private const val KEY_PASSWORD_HASH = "password_hash"
+        private const val TAG = "MainActivity"
+    }
+
+    private val prefs by lazy {
+        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
 
     private val modelPickerLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -87,23 +100,133 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+    // ========== ФУНКЦИИ РАБОТЫ С ПАРОЛЕМ ==========
 
-        enableEdgeToEdge()
+    /**
+     * Хеширует пароль с помощью SHA-256
+     */
+    private fun hashPassword(password: String): String {
+        val bytes = password.toByteArray()
+        val md = MessageDigest.getInstance("SHA-256")
+        val digest = md.digest(bytes)
+        return digest.joinToString("") { "%02x".format(it) }
+    }
 
-        // Проверка и запрос всех необходимых разрешений
-        checkAndRequestAllPermissions()
+    /**
+     * Проверяет, установлен ли пароль
+     */
+    private fun isPasswordSet(): Boolean {
+        return prefs.contains(KEY_PASSWORD_HASH)
+    }
 
-        // Логирование состояния точного будильника без принудительного открытия настроек
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val alarmManager = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
-            if (!alarmManager.canScheduleExactAlarms()) {
-                Log.w("MainActivity", "Разрешение на точный будильник не предоставлено. Пользователь сможет установить его при создании первого будильника.")
-                // Запрос разрешения будет выполнен при установке будильника через AlarmReceiver
-            }
+    /**
+     * Проверяет введённый пароль
+     */
+    private fun checkPassword(input: String): Boolean {
+        val storedHash = prefs.getString(KEY_PASSWORD_HASH, null) ?: return false
+        return hashPassword(input) == storedHash
+    }
+
+    /**
+     * Сохраняет хеш пароля
+     */
+    private fun setPassword(password: String) {
+        prefs.edit().putString(KEY_PASSWORD_HASH, hashPassword(password)).apply()
+    }
+
+    /**
+     * Показывает диалог установки пароля (при первом запуске)
+     */
+    private fun showSetPasswordDialog() {
+        val builder = AlertDialog.Builder(this)
+        val inflater = layoutInflater
+        val view = inflater.inflate(R.layout.dialog_set_password, null) // Используем XML-разметку
+
+        // Если у вас нет XML-разметки, можно создать поля программно
+        // Для простоты использую стандартный AlertDialog с EditText
+
+        val passwordInput = android.widget.EditText(this).apply {
+            hint = "Введите пароль"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        val confirmInput = android.widget.EditText(this).apply {
+            hint = "Подтвердите пароль"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
         }
 
+        val linearLayout = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(50, 20, 50, 20)
+            addView(passwordInput)
+            addView(confirmInput)
+        }
+
+        builder.setTitle("🔒 Установка пароля")
+            .setMessage("Приложение будет защищено паролем. Введите пароль дважды для подтверждения.")
+            .setView(linearLayout)
+            .setPositiveButton("Установить") { _, _ ->
+                val password = passwordInput.text.toString()
+                val confirm = confirmInput.text.toString()
+                if (password.isNotEmpty() && password == confirm) {
+                    setPassword(password)
+                    Log.d(TAG, "Пароль установлен успешно")
+                    // После установки пароля показываем экран входа
+                    showPasswordDialog()
+                } else {
+                    Log.w(TAG, "Пароль не совпадает или пустой")
+                    showSetPasswordDialog() // Повторяем попытку
+                }
+            }
+            .setNegativeButton("Выйти") { _, _ ->
+                finishAffinity() // Закрываем приложение
+            }
+            .setCancelable(false)
+            .show()
+    }
+
+    /**
+     * Показывает диалог ввода пароля
+     */
+    private fun showPasswordDialog() {
+        val passwordInput = android.widget.EditText(this).apply {
+            hint = "Введите пароль"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("🔒 Введите пароль")
+            .setMessage("Для доступа к приложению требуется пароль.")
+            .setView(passwordInput)
+            .setPositiveButton("Войти") { _, _ ->
+                val input = passwordInput.text.toString()
+                if (checkPassword(input)) {
+                    Log.d(TAG, "Пароль верный, вход разрешён")
+                    // Показываем основной интерфейс
+                    showMainContent()
+                } else {
+                    Log.w(TAG, "Неверный пароль")
+                    // Показываем сообщение об ошибке и закрываем приложение
+                    AlertDialog.Builder(this)
+                        .setTitle("Ошибка")
+                        .setMessage("Неверный пароль. Приложение будет закрыто.")
+                        .setPositiveButton("OK") { _, _ ->
+                            finishAffinity()
+                        }
+                        .setCancelable(false)
+                        .show()
+                }
+            }
+            .setNegativeButton("Выйти") { _, _ ->
+                finishAffinity()
+            }
+            .setCancelable(false)
+            .show()
+    }
+
+    /**
+     * Показывает основной интерфейс (ChatScreen)
+     */
+    private fun showMainContent() {
         setContent {
             KotlinLlamaCppTheme {
                 val viewModel: MainViewModel by viewModels {
@@ -129,6 +252,50 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    // ========== ЖИЗНЕННЫЙ ЦИКЛ ==========
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+
+        // Проверка и запрос всех необходимых разрешений
+        checkAndRequestAllPermissions()
+
+        // Логирование состояния точного будильника без принудительного открытия настроек
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val alarmManager = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+            if (!alarmManager.canScheduleExactAlarms()) {
+                Log.w("MainActivity", "Разрешение на точный будильник не предоставлено. Пользователь сможет установить его при создании первого будильника.")
+            }
+        }
+
+        // Проверяем пароль при запуске
+        checkPasswordAndProceed()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // При возврате из фона также проверяем пароль
+        if (isPasswordSet()) {
+            showPasswordDialog()
+        }
+    }
+
+    /**
+     * Проверяет, установлен ли пароль, и показывает соответствующий диалог
+     */
+    private fun checkPasswordAndProceed() {
+        if (!isPasswordSet()) {
+            // Первый запуск — предлагаем установить пароль
+            showSetPasswordDialog()
+        } else {
+            // Пароль уже установлен — запрашиваем ввод
+            showPasswordDialog()
+        }
+    }
+
+    // ========== РАЗРЕШЕНИЯ ==========
 
     /**
      * Запрашивает все необходимые разрешения в зависимости от версии Android:
