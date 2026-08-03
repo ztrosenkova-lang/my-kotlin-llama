@@ -53,8 +53,9 @@ android {
         jniLibs {
             useLegacyPackaging = true
         }
+        // Убираем noCompress для onnx, так как больше не используем ONNX модели
         androidResources {
-            noCompress.addAll(listOf("bin", "gguf", "onnx", "txt"))
+            noCompress.addAll(listOf("bin", "gguf", "txt"))
         }
     }
 }
@@ -84,13 +85,11 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging.interceptor)
 
-    // Vosk
-    implementation("com.alphacephei:vosk-android:0.3.47")
+    // ===== УДАЛЕНО: Vosk и ONNX Runtime =====
+    // Вместо них используем встроенный Android TTS и Speech Recognizer
+    // Они уже есть в системе и не требуют дополнительных зависимостей
 
-    // ONNX Runtime
-    implementation(libs.onnx.runtime)
-
-    // Llama.cpp - Local module reference
+    // Llama.cpp - Local module reference (оставляем для локального ИИ)
     implementation(project(":llamaCpp"))
 
     // Testing
@@ -104,53 +103,15 @@ dependencies {
 }
 
 // ============================================================
-// ЗАДАЧА ДЛЯ СКАЧИВАНИЯ МОДЕЛИ TTS ПРИ СБОРКЕ
+// УДАЛЕНО: ЗАДАЧА ДЛЯ СКАЧИВАНИЯ МОДЕЛИ TTS
 // ============================================================
-
-val ttsModelDir = file("src/main/assets/tts-model")
-val ttsModelFile = file("src/main/assets/tts-model/ru_RU-robot-medium.onnx")
-val ttsModelUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/robot-medium/ru_RU-robot-medium.onnx"
-
-tasks.register("downloadTtsModel") {
-    group = "download"
-    description = "Скачивает модель TTS из Hugging Face, если она отсутствует в assets"
-    onlyIf { !ttsModelFile.exists() }
-    doLast {
-        println("⏳ Скачивание модели TTS...")
-        ttsModelDir.mkdirs()
-        try {
-            val url = URL(ttsModelUrl)
-            url.openStream().use { inputStream ->
-                ttsModelFile.outputStream().use { outputStream ->
-                    inputStream.copyTo(outputStream)
-                }
-            }
-            println("✅ Модель TTS успешно скачана: ${ttsModelFile.absolutePath}")
-        } catch (e: Exception) {
-            println("❌ Ошибка скачивания модели TTS: ${e.message}")
-            throw e
-        }
-    }
-}
-
-// Автоматический запуск скачивания перед сборкой
-tasks.named("preBuild") {
-    dependsOn("downloadTtsModel")
-}
-
-// Проверка размера модели после скачивания (для отладки)
-tasks.register("checkTtsModel") {
-    group = "verification"
-    description = "Проверяет, что модель TTS существует и имеет корректный размер"
-    doLast {
-        if (ttsModelFile.exists()) {
-            val sizeMB = ttsModelFile.length() / (1024 * 1024)
-            println("✅ Модель TTS найдена. Размер: $sizeMB МБ")
-            if (sizeMB < 10) {
-                println("⚠️ Внимание: модель слишком маленькая ($sizeMB МБ). Возможно, файл повреждён.")
-            }
-        } else {
-            println("❌ Модель TTS не найдена")
-        }
-    }
-}
+// Модель TTS больше не требуется, так как используем
+// встроенный Android TextToSpeech (Google TTS)
+//
+// Соответственно, удалены:
+// - val ttsModelDir
+// - val ttsModelFile
+// - val ttsModelUrl
+// - tasks.register("downloadTtsModel")
+// - tasks.named("preBuild") { dependsOn("downloadTtsModel") }
+// - tasks.register("checkTtsModel")
