@@ -813,7 +813,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     FileOutputStream(tempZipFile).use { outputStream ->
                         val buffer = ByteArray(8192)
                         var bytesRead: Int
-                        var totalBytesRead = 0L                        while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                        var totalBytesRead = 0L
+                        while (inputStream.read(buffer).also { bytesRead = it } != -1) {
                             outputStream.write(buffer, 0, bytesRead)
                             totalBytesRead += bytesRead
                             // Обновление прогресса каждые 5 МБ
