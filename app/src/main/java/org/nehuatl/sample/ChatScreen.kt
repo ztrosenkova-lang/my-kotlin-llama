@@ -2,6 +2,7 @@ package org.nehuatl.sample
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -131,10 +132,9 @@ fun ChatScreen(
     val contextSize by viewModel.contextSize.collectAsStateWithLifecycle()
     val cloudState by viewModel.cloudState.collectAsStateWithLifecycle()
     val isModelLoaded by viewModel.isModelLoaded.collectAsStateWithLifecycle()
-    // Исправленная строка 129: реактивная подписка на состояние записи
-    val isRecording by viewModel.isRecording.collectAsStateWithLifecycle()
-    // ИСПРАВЛЕННЫЙ ЖИВОЙ ПОТОК: Интерфейс реактивно слушает бэкенд Vosk
-    val isVoskReady by viewModel.isVoskLoaded.collectAsStateWithLifecycle(initialValue = false)
+    
+    // НОВОЕ: Реактивная подписка на состояние TTS
+    val isTtsReady by viewModel.isTtsReady.collectAsStateWithLifecycle()
 
     var promptInput by remember { mutableStateOf("") }
     var showModelDialog by remember { mutableStateOf(false) }
@@ -159,63 +159,56 @@ fun ChatScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val coroutineScope = rememberCoroutineScope()
 
-    // Register the Activity Result Launcher for Document Picking
+    // НОВЫЙ Launcher для распознавания речи (Google Speech Recognizer)
+    val speechRecognizerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val data: Intent? = result.data
+            val results = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            if (!results.isNullOrEmpty()) {
+                val recognizedText = results[0]
+                if (recognizedText.isNotBlank()) {
+                    viewModel.sendUserMessage(recognizedText)
+                }
+            }
+        } else {
+            viewModel.appendSystemMessage("⚠️ Распознавание речи отменено или не удалось")
+        }
+    }
+
+    // НОВЫЙ Launcher для выбора ZIP-файла (если нужен для других целей, оставляем)
     val localVoskZipLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: android.net.Uri? ->
         uri?.let { selectedUri ->
-            viewModel.processLocalVoskZip(selectedUri, context)
+            // Если всё ещё нужна поддержка Vosk, оставьте, иначе удалите
+            // viewModel.processLocalVoskZip(selectedUri, context)
+            viewModel.appendSystemMessage("⚠️ Поддержка Vosk удалена. Используйте встроенный Google Speech Recognizer.")
         }
     }
 
-    // Collect and observe the offline event shared flow
-    LaunchedEffect(viewModel.voskFilePickerEvent) {
-        viewModel.voskFilePickerEvent.collect {
-            localVoskZipLauncher.launch("application/zip")
-        }
-    }
-
-    // НОВЫЙ БЛОК: Запуск TTS после получения всех разрешений
+    // НОВЫЙ БЛОК: Инициализация TTS (вместо ONNX)
     LaunchedEffect(Unit) {
-        // Проверяем наличие всех необходимых разрешений
+        // Проверяем разрешение на запись аудио (для распознавания речи)
         val hasRecordPermission = ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.RECORD_AUDIO
         ) == PackageManager.PERMISSION_GRANTED
 
-        val hasNotificationPermission = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.POST_NOTIFICATIONS
-            ) == PackageManager.PERMISSION_GRANTED
+        if (hasRecordPermission) {
+            // TTS инициализируется автоматически в MainViewModel
+            // Просто включаем озвучку
+            viewModel.enableTts()
         } else {
-            true
-        }
-
-        // Если разрешения получены, запускаем initTts
-        if (hasRecordPermission && hasNotificationPermission) {
-            viewModel.initTts(context) // Теперь доступно, так как метод public
-        } else {
-            viewModel.appendSystemMessage("⚠️ Для работы голосового движка требуются разрешения. Пожалуйста, предоставьте их в настройках.")
+            viewModel.appendSystemMessage("⚠️ Для работы распознавания речи требуется разрешение на запись аудио.")
         }
     }
 
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP || event == Lifecycle.Event.ON_DESTROY) {
-                if (isRecording) {
-                    viewModel.stopRecording()
-                }
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
-    }
+    // УДАЛЕНО: DisposableEffect для Vosk
 
     // Блок приветствия при запуске (отсчет 5 секунд) с typewriter эффектом
-    val fullWelcomeString = "Привет! Я твой персональный ИИ-Друг, это лучшая запоминалка паролей и умный собеседник! 🤖✨ Я создан, чтобы доказать: искусственный интеллект — это твой надежный и полностью автономный союзник, защищенный от любых внешних блокировок!\n\nВот что я умею:\n🎤 СЛЫШАТЬ И ГОВОРИТЬ: Кнопка «Голос» загружает мои уши Vosk и собственный нейроголос. Нажми микрофон в подвале, чтобы общаться голосом.\n🧠 РАЗДЕЛЬНАЯ ПАМЯТЬ: Скажи мне «запомни [факт]», и я запишу это в твою личную базу знаний. В фоне я сам анализирую наш чат и делаю важные выводы в свой мозг.\n🔍 УМНЫЙ ПОИСК: Очисти чат корзинкой, если хочешь начать с чистого листа. Я всё забуду, но если тебе понадобится что-нибудь вспомнить — просто скажи «посмотри в чате», «вспомни» или «найди». Я пойму тебя в любом падеже и склонении!\n⏰ КОМАНДЫ: Я легко поставлю будильник или напомню о делах, например: «напомни в 18.00 идти в гараж».\n\nДавай общаться! Включи локальный движок Llama или облачный ИИ в шапке приложения, и погнали!"
+    val fullWelcomeString = "Привет! Я твой персональный ИИ-Друг, это лучшая запоминалка паролей и умный собеседник! 🤖✨ Я создан, чтобы доказать: искусственный интеллект — это твой надежный и полностью автономный союзник, защищенный от любых внешних блокировок!\n\nВот что я умею:\n🎤 СЛЫШАТЬ И ГОВОРИТЬ: Использую встроенный голосовой движок Android и Google Speech Recognizer. Нажми микрофон в подвале, чтобы общаться голосом.\n🧠 РАЗДЕЛЬНАЯ ПАМЯТЬ: Скажи мне «запомни [факт]», и я запишу это в твою личную базу знаний. В фоне я сам анализирую наш чат и делаю важные выводы в свой мозг.\n🔍 УМНЫЙ ПОИСК: Очисти чат корзинкой, если хочешь начать с чистого листа. Я всё забуду, но если тебе понадобится что-нибудь вспомнить — просто скажи «посмотри в чате», «вспомни» или «найди». Я пойму тебя в любом падеже и склонении!\n⏰ КОМАНДЫ: Я легко поставлю будильник или напомню о делах, например: «напомни в 18.00 идти в гараж».\n\nДавай общаться! Включи локальный движок Llama или облачный ИИ в шапке приложения, и погнали!"
 
     LaunchedEffect(Unit) {
         // Асинхронная задержка в 5 секунд (5000 миллисекунд)
@@ -246,24 +239,19 @@ fun ChatScreen(
     }
 
     // УНИВЕРСАЛЬНЫЙ АВТОСКРОЛЛ ДЛЯ ВСЕХ ТИПОВ СООБЩЕНИЙ
-    // Динамически извлекаем текст САМОГО ПОСЛЕДНЕГО сообщения в чате для отслеживания (приветствие, память или ИИ)
     val lastMessageText = chatMessages.lastOrNull()?.text ?: ""
-    // LaunchedEffect теперь гарантированно просыпается при добавлении нового сообщения,
-    // при генерации локального/облачного текста, а также при изменении букв приветствия или памяти!
     LaunchedEffect(chatMessages.size, generatedText.length, cloudGeneratedText.length, lastMessageText) {
         if (chatMessages.isNotEmpty() || generatedText.isNotEmpty() || cloudGeneratedText.isNotEmpty()) {
-            // Мягкая, плавная анимация докрутки scrollState к самому низу экрана
             scrollState.animateScrollTo(
                 value = scrollState.maxValue,
                 animationSpec = tween(
-                    durationMillis = 300, // Снижаем задержку до 300мс для мгновенного плавного следования за печатью
+                    durationMillis = 300,
                     easing = LinearOutSlowInEasing
                 )
             )
         }
     }
 
-    // Удален автозапрос фокуса для клавиатуры
     LaunchedEffect(showSettings) {
         if (showSettings) {
             tempTemperature = temperature
@@ -288,7 +276,6 @@ fun ChatScreen(
         )
     }
 
-    // Вычисляем флаг готовности облачного ИИ для передачи в диалог
     val isCloudReady = viewModel.getCloudConfig()?.authKey?.isNotEmpty() == true || cloudState is CloudAIState.Ready
 
     if (showCloudDialog) {
@@ -380,7 +367,7 @@ fun ChatScreen(
             onSettingsClick = { showSettings = !showSettings },
             onPromptSettingsClick = { showPromptSettings = !showPromptSettings },
             onHelpClick = { showHelpDialog = true },
-            isVoskReady = isVoskReady,
+            isTtsReady = isTtsReady,
             viewModel = viewModel,
             context = context,
             coroutineScope = coroutineScope
@@ -518,11 +505,11 @@ fun ChatScreen(
             enabled = true,
             isGenerating = state.isActive() || cloudState.isActive(),
             focusRequester = focusRequester,
-            isRecording = isRecording,
-            isVoskReady = isVoskReady,
+            isTtsReady = isTtsReady,
             viewModel = viewModel,
             context = context,
-            modifier = Modifier.padding(8.dp) // UPDATED: padding changed from 16.dp to 8.dp
+            speechRecognizerLauncher = speechRecognizerLauncher,
+            modifier = Modifier.padding(8.dp)
         )
     }
 }
@@ -542,17 +529,15 @@ private fun TopBarWithSwitch(
     val localIndicatorColor = if (isLocalReady) GreenColor else PaleYellowColor
     val cloudIndicatorColor = if (isCloudReady) GreenColor else PaleYellowColor
 
-    // ПОЛЕ 1: Общий контейнер с рамкой
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(80.dp) // Фиксированная высота
+            .height(80.dp)
             .padding(4.dp)
             .border(1.dp, BorderGray, RoundedCornerShape(8.dp))
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // ПОЛЕ 2: Логотип (прижат к левому краю)
         Image(
             painter = painterResource(id = R.mipmap.ic_launcher),
             contentDescription = "Лого",
@@ -563,12 +548,11 @@ private fun TopBarWithSwitch(
             contentScale = ContentScale.Crop
         )
 
-        // ПОЛЕ 3: Название приложения (центрировано по вертикали и горизонтали)
         Box(
             modifier = Modifier
-                .weight(1f) // Занимает всё доступное пространство по центру
+                .weight(1f)
                 .fillMaxHeight(),
-            contentAlignment = Alignment.Center // Строгое центрирование текста
+            contentAlignment = Alignment.Center
         ) {
             Text(
                 text = "-- ИИ-Друг --",
@@ -580,15 +564,13 @@ private fun TopBarWithSwitch(
             )
         }
 
-        // ПОЛЕ 4: Блок управления с фиксированной шириной 132.dp
         Column(
             modifier = Modifier
-                .width(132.dp) // Фиксированная ширина для прямоугольника
+                .width(132.dp)
                 .fillMaxHeight(),
-            verticalArrangement = Arrangement.SpaceEvenly, // Равномерный отступ по высоте
-            horizontalAlignment = Alignment.CenterHorizontally // Центрирование строк
+            verticalArrangement = Arrangement.SpaceEvenly,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Верхняя строка: Индикаторы-фонарики
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -604,7 +586,6 @@ private fun TopBarWithSwitch(
                 )
             }
 
-            // Нижняя строка: Кнопки управления (строго 42.dp каждая)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -614,7 +595,7 @@ private fun TopBarWithSwitch(
                     label = "Local",
                     isSelected = currentMode == AIMode.LOCAL,
                     onClick = { onLocalForceDialog() },
-                    modifier = Modifier.width(42.dp).height(22.dp) // Ширина точно подогнана под фонарики
+                    modifier = Modifier.width(42.dp).height(22.dp)
                 )
                 ModeButton(
                     label = "Neutral",
@@ -692,7 +673,7 @@ private fun ControlPanel(
     onSettingsClick: () -> Unit,
     onPromptSettingsClick: () -> Unit,
     onHelpClick: () -> Unit,
-    isVoskReady: Boolean,
+    isTtsReady: Boolean,
     viewModel: MainViewModel,
     context: android.content.Context,
     coroutineScope: kotlinx.coroutines.CoroutineScope
@@ -728,29 +709,15 @@ private fun ControlPanel(
                 label = "справка",
                 onClick = onHelpClick
             )
-            // Используем реактивный isVoskReady для иконки и логики
+            // НОВАЯ КНОПКА "ГОЛОС" — включает/выключает TTS
             IconButtonWithLabel(
-                icon = if (isVoskReady) Icons.Default.VolumeUp else Icons.Default.VolumeMute,
-                label = "голос",
+                icon = if (isTtsReady) Icons.Default.VolumeUp else Icons.Default.VolumeMute,
+                label = if (isTtsReady) "озвучка вкл" else "озвучка выкл",
                 onClick = {
-                    // Стандартная проверка разрешения на запись аудио
-                    if (ContextCompat.checkSelfPermission(
-                            context,
-                            Manifest.permission.RECORD_AUDIO
-                        ) != PackageManager.PERMISSION_GRANTED
-                    ) {
-                        viewModel.appendSystemMessage("⚠️ Нет разрешения на запись аудио")
-                        return@IconButtonWithLabel
-                    }
-                    if (isVoskReady) {
-                        // Выгрузка движка из памяти
-                        viewModel.releaseVosk()
-                        viewModel.appendSystemMessage("📢 Голосовой движок Vosk успешно выгружен из ОЗУ.")
+                    if (isTtsReady) {
+                        viewModel.disableTts()
                     } else {
-                        // Запуск инициализации внутри корутины
-                        coroutineScope.launch {
-                            viewModel.initVoskLazily(context)
-                        }
+                        viewModel.enableTts()
                     }
                 }
             )
@@ -1256,7 +1223,6 @@ private fun ModelPickerDialog(
             Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("Настройка ИИ", style = MaterialTheme.typography.headlineSmall, color = DarkText)
 
-                // Блок выбора языковой модели
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Языковая модель", color = DarkText)
                     val displayModelPath = currentModelPath?.substringAfterLast("/")?.replace("primary%3AModels%", "") ?: "Не выбрана"
@@ -1274,7 +1240,6 @@ private fun ModelPickerDialog(
                     }
                 }
 
-                // Блок выбора мультимодального проектора (опционально)
                 Column(modifier = Modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("(опционально)", style = MaterialTheme.typography.bodySmall, color = DarkText.copy(alpha = 0.6f))
                     Text("Мультимодальный проектор (mmproj)", color = DarkText)
@@ -1293,7 +1258,6 @@ private fun ModelPickerDialog(
                     }
                 }
 
-                // Кнопка запуска
                 Button(
                     onClick = onLoad,
                     enabled = currentModelPath != null,
@@ -1303,7 +1267,6 @@ private fun ModelPickerDialog(
                     Text("Запустить нейросеть", color = DarkText)
                 }
 
-                // Кнопка отмены
                 TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
                     Text("Отмена", color = DarkText)
                 }
@@ -1323,18 +1286,17 @@ private fun PromptInput(
     enabled: Boolean,
     isGenerating: Boolean,
     focusRequester: FocusRequester,
-    isRecording: Boolean,
-    isVoskReady: Boolean,
+    isTtsReady: Boolean,
     viewModel: MainViewModel,
     context: android.content.Context,
+    speechRecognizerLauncher: androidx.activity.result.ActivityResultLauncher<Intent>,
     modifier: Modifier = Modifier
 ) {
-    // Подписка на поток информации о памяти
     val memoryInfoText by viewModel.memoryInfoText.collectAsStateWithLifecycle(initialValue = "Загрузка памяти...")
 
     Card(
         modifier = modifier
-            .fillMaxWidth(), // UPDATED: removed padding(horizontal = 12.dp, vertical = 6.dp)
+            .fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         border = BorderStroke(1.dp, BorderGray),
         colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF9DB))
@@ -1349,15 +1311,14 @@ private fun PromptInput(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Левая группа: Plus и Delete в вертикальной колонке
+                // Левая группа: Plus и Delete
                 Column(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Plus Button
                     Box(
                         modifier = Modifier
-                            .size(41.dp) // UPDATED: size changed from 48.dp to 41.dp
+                            .size(41.dp)
                             .background(Color(0xFFF1F3F5), shape = CircleShape)
                             .border(1.dp, BorderGray, CircleShape),
                         contentAlignment = Alignment.Center
@@ -1365,7 +1326,7 @@ private fun PromptInput(
                         IconButton(
                             onClick = onPickImage,
                             enabled = enabled && !isGenerating,
-                            modifier = Modifier.size(41.dp) // UPDATED: size changed from 48.dp to 41.dp
+                            modifier = Modifier.size(41.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Add,
@@ -1375,10 +1336,9 @@ private fun PromptInput(
                         }
                     }
 
-                    // Delete Button
                     Box(
                         modifier = Modifier
-                            .size(41.dp) // UPDATED: size changed from 48.dp to 41.dp
+                            .size(41.dp)
                             .background(Color(0xFFF1F3F5), shape = CircleShape)
                             .border(1.dp, BorderGray, CircleShape),
                         contentAlignment = Alignment.Center
@@ -1386,7 +1346,7 @@ private fun PromptInput(
                         IconButton(
                             onClick = onClearChat,
                             enabled = true,
-                            modifier = Modifier.size(41.dp) // UPDATED: size changed from 48.dp to 41.dp
+                            modifier = Modifier.size(41.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Delete,
@@ -1397,7 +1357,7 @@ private fun PromptInput(
                     }
                 }
 
-                // Центр: Поле ввода (Pure White)
+                // Центр: Поле ввода
                 OutlinedTextField(
                     value = prompt,
                     onValueChange = onPromptChange,
@@ -1419,25 +1379,21 @@ private fun PromptInput(
                     )
                 )
 
-                // Правая группа: Микрофон и Отправить/Стоп в вертикальной колонке
+                // Правая группа: Микрофон и Отправить/Стоп
                 Column(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Microphone Button
+                    // НОВАЯ КНОПКА МИКРОФОНА — запускает Google Speech Recognizer
                     Box(
                         modifier = Modifier
-                            .size(41.dp) // UPDATED: size changed from 48.dp to 41.dp
+                            .size(41.dp)
                             .background(Color(0xFFF1F3F5), shape = CircleShape)
                             .border(1.dp, BorderGray, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         IconButton(
                             onClick = {
-                                if (!isVoskReady) {
-                                    viewModel.appendSystemMessage("⚠️ Голосовой движок не загружен. Нажмите кнопку «голос» в верхней панели управления, чтобы активировать высокоточное распознавание.")
-                                    return@IconButton
-                                }
                                 if (ContextCompat.checkSelfPermission(
                                         context,
                                         Manifest.permission.RECORD_AUDIO
@@ -1446,19 +1402,21 @@ private fun PromptInput(
                                     viewModel.appendSystemMessage("⚠️ Нет разрешения на запись аудио")
                                     return@IconButton
                                 }
-                                if (isRecording) {
-                                    viewModel.stopRecording()
-                                } else {
-                                    viewModel.startRecording()
+                                // Запускаем распознавание речи
+                                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ru-RU")
+                                    putExtra(RecognizerIntent.EXTRA_PROMPT, "Говорите...")
                                 }
+                                speechRecognizerLauncher.launch(intent)
                             },
                             enabled = true,
-                            modifier = Modifier.size(41.dp) // UPDATED: size changed from 48.dp to 41.dp
+                            modifier = Modifier.size(41.dp)
                         ) {
                             Icon(
-                                imageVector = if (isRecording) Icons.Default.Mic else Icons.Default.MicOff,
-                                contentDescription = if (isRecording) "Остановить запись" else "Начать запись",
-                                tint = if (isVoskReady && isRecording) AccentColor else if (isVoskReady) DarkText.copy(alpha = 0.4f) else DarkText.copy(alpha = 0.4f)
+                                imageVector = Icons.Default.Mic,
+                                contentDescription = "Распознать речь",
+                                tint = if (isTtsReady) AccentColor else DarkText.copy(alpha = 0.4f)
                             )
                         }
                     }
@@ -1466,7 +1424,7 @@ private fun PromptInput(
                     // Send/Stop Button
                     Box(
                         modifier = Modifier
-                            .size(41.dp) // UPDATED: size changed from 48.dp to 41.dp
+                            .size(41.dp)
                             .background(Color(0xFFF1F3F5), shape = CircleShape)
                             .border(1.dp, BorderGray, CircleShape),
                         contentAlignment = Alignment.Center
@@ -1474,7 +1432,7 @@ private fun PromptInput(
                         if (isGenerating) {
                             IconButton(
                                 onClick = onAbort,
-                                modifier = Modifier.size(41.dp) // UPDATED: size changed from 48.dp to 41.dp
+                                modifier = Modifier.size(41.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
@@ -1486,7 +1444,7 @@ private fun PromptInput(
                             IconButton(
                                 onClick = onGenerate,
                                 enabled = enabled && prompt.isNotBlank(),
-                                modifier = Modifier.size(41.dp) // UPDATED: size changed from 48.dp to 41.dp
+                                modifier = Modifier.size(41.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.ArrowUpward,
@@ -1499,10 +1457,8 @@ private fun PromptInput(
                 }
             }
 
-            // Отступ перед счетчиком памяти
             Spacer(modifier = Modifier.height(2.dp))
 
-            // Счетчик состояния памяти
             Text(
                 text = memoryInfoText,
                 color = DarkText.copy(alpha = 0.6f),
@@ -1510,8 +1466,8 @@ private fun PromptInput(
                 fontFamily = ChatFontFamily,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 4.dp, end = 4.dp, bottom = 2.dp), // FIXED: proper padding syntax
-                textAlign = TextAlign.Center // UPDATED: textAlign changed from TextAlign.Start to TextAlign.Center
+                    .padding(start = 4.dp, end = 4.dp, bottom = 2.dp),
+                textAlign = TextAlign.Center
             )
         }
     }
