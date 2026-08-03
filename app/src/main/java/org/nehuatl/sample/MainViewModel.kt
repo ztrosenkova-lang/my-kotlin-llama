@@ -529,15 +529,16 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    // ИСПРАВЛЕНИЕ 1: Меняем видимость с private на public
+    // ИСПРАВЛЕНИЕ: Меняем видимость с private на public и сохраняем MappedByteBuffer во временный файл
     fun initTts(context: Context) {
         scope.launch(Dispatchers.IO) {
+            var tempFile: File? = null
             try {
                 withContext(Dispatchers.Main) {
                     showLoadingIndicator()
                 }
 
-                // ПРЯМАЯ ЗАГРУЗКА из assets через mmap, минуя копирование в filesDir
+                // 1. Загружаем модель из assets в MappedByteBuffer
                 val afd = context.assets.openFd("tts-model/ru_RU-robot-medium.onnx")
                 val fileChannel = FileInputStream(afd.fileDescriptor).channel
                 val modelBuffer = fileChannel.map(
@@ -548,14 +549,21 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 fileChannel.close()
                 afd.close()
 
+                // 2. Сохраняем MappedByteBuffer во временный файл
+                tempFile = File(context.cacheDir, "tts_model_temp.onnx")
+                tempFile?.parentFile?.mkdirs()
+                tempFile?.createNewFile()
+                FileOutputStream(tempFile).use { outputStream ->
+                    outputStream.channel.write(modelBuffer)
+                }
+
+                // 3. Инициализируем ONNX Runtime с путём к временному файлу
                 ortEnv = OrtEnvironment.getEnvironment()
                 val sessionOptions = OrtSession.SessionOptions().apply {
                     addConfigEntry("session.disable_telemetry", "1")
                     addConfigEntry("session.use_device_allocator_for_initializers", "1")
                 }
-
-                // ИСПРАВЛЕНИЕ 2: Используем перегрузку createSession с ByteBuffer
-                ortSession = ortEnv?.createSession(modelBuffer, sessionOptions)
+                ortSession = ortEnv?.createSession(tempFile?.absolutePath, sessionOptions)
 
                 withContext(Dispatchers.Main) {
                     hideLoadingIndicator()
@@ -573,6 +581,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     appendSystemMessage("🔴 Ошибка выделения памяти под голосовой движок: ${e.message}")
                 }
                 Log.e("LlamaTts", "Критическая ошибка инициализации сессии ONNX: ${e.message}")
+            } finally {
+                // Удаляем временный файл после загрузки
+                tempFile?.delete()
             }
         }
     }
@@ -802,8 +813,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     FileOutputStream(tempZipFile).use { outputStream ->
                         val buffer = ByteArray(8192)
                         var bytesRead: Int
-                        var totalBytesRead = 0L
-                        while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                        var totalBytesRead = 0L                        while (inputStream.read(buffer).also { bytesRead = it } != -1) {
                             outputStream.write(buffer, 0, bytesRead)
                             totalBytesRead += bytesRead
                             // Обновление прогресса каждые 5 МБ
