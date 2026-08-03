@@ -20,8 +20,11 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
-    <!-- Разрешение на запись аудио (для микрофона) -->
+    <!-- Разрешение на запись аудио (для микрофона и распознавания речи) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- НОВОЕ: Разрешение на уведомления для Android 14+ (нужно для TTS в фоне) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:allowBackup="true"
