@@ -530,6 +530,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     // ИСПРАВЛЕНИЕ: Меняем видимость с private на public и сохраняем MappedByteBuffer во временный файл
+    // ИСПРАВЛЕНИЕ 2: НЕ УДАЛЯЕМ временный файл, чтобы сессия ONNX Runtime могла использовать его
     fun initTts(context: Context) {
         scope.launch(Dispatchers.IO) {
             var tempFile: File? = null
@@ -581,10 +582,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     appendSystemMessage("🔴 Ошибка выделения памяти под голосовой движок: ${e.message}")
                 }
                 Log.e("LlamaTts", "Критическая ошибка инициализации сессии ONNX: ${e.message}")
-            } finally {
-                // Удаляем временный файл после загрузки
-                tempFile?.delete()
             }
+            // ИСПРАВЛЕНИЕ: НЕ УДАЛЯЕМ временный файл, чтобы сессия могла использовать его
+            // finally блок удалён
         }
     }
 
