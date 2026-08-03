@@ -26,6 +26,12 @@
     <!-- НОВОЕ: Разрешение на уведомления для Android 14+ (нужно для TTS в фоне) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- НОВОЕ: Разрешение на запуск фоновых сервисов -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+    <!-- НОВОЕ: Разрешение на игнорирование оптимизации батареи -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
