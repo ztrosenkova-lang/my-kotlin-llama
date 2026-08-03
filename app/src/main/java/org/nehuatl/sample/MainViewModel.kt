@@ -458,6 +458,152 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
+    // === НОВАЯ ФУНКЦИЯ: Определение категории записи ===
+    private fun determineCategory(text: String): String {
+        val lowerText = text.lowercase()
+        // Словари ключевых слов для каждой категории
+        val categories = mapOf(
+            "[ПАРОЛЬ]" to listOf("пароль", "логин", "доступ", "код", "пин", "секрет", "ключ"),
+            "[КОНТАКТ]" to listOf("телефон", "номер", "контакт", "позвонить", "мобильный", "вотсап", "телеграм"),
+            "[ПРАЙС]" to listOf("руб", "цена", "стоимость", "прайс", "оплата", "расчёт", "скидка", "тариф"),
+            "[ИНСТРУКЦИЯ]" to listOf("как", "инструкция", "алгоритм", "пошагово", "руководство", "порядок", "действия"),
+            "[АДРЕС]" to listOf("адрес", "улица", "город", "метро", "район", "дом"),
+            "[ДАТА]" to listOf("дата", "время", "встреча", "напоминание", "дедлайн")
+        )
+
+        // Подсчёт совпадений для каждой категории
+        val scores = categories.mapValues { (_, keywords) ->
+            keywords.count { keyword -> lowerText.contains(keyword) }
+        }
+
+        // Находим категорию с максимальным числом совпадений
+        val bestCategory = scores.maxByOrNull { it.value }
+        return if (bestCategory != null && bestCategory.value > 0) {
+            bestCategory.key
+        } else {
+            "[ОБЩЕЕ]"
+        }
+    }
+
+    // === МОДИФИЦИРОВАННЫЙ МЕТОД: Сохранение с меткой ===
+    fun saveToLongTermMemory(text: String) {
+        try {
+            if (!memoryFile.exists()) {
+                memoryFile.createNewFile()
+            }
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+            val timestamp = dateFormat.format(Date())
+
+            // Определяем категорию и добавляем метку
+            val category = determineCategory(text)
+            val taggedText = "$category $text"
+
+            memoryFile.appendText("[$timestamp] $taggedText\n")
+            Log.d(TAG, "Записано в долговременную память: $taggedText")
+            appendSystemMessage("🧠 Запомнено: $text")
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка записи памяти: ${e.message}")
+        }
+    }
+
+    // === МОДИФИЦИРОВАННЫЙ МЕТОД: Умный поиск по блокам ===
+    private fun searchMemory(query: String, category: String? = null): String {
+        val fullMemory = readFromLongTermMemory()
+        if (fullMemory.isEmpty()) return ""
+
+        val lines = fullMemory.split("\n").filter { it.isNotEmpty() }
+
+        // Если категория указана — ищем только в ней
+        if (category != null) {
+            val filteredLines = lines.filter { it.startsWith(category) }
+            if (filteredLines.isNotEmpty()) {
+                // Ищем ключевые слова внутри блока
+                val keywords = extractKeywords(query)
+                return if (keywords.isNotEmpty()) {
+                    filteredLines.filter { line ->
+                        val lowerLine = line.lowercase()
+                        keywords.any { keyword -> lowerLine.contains(keyword) }
+                    }.joinToString("\n")
+                } else {
+                    filteredLines.joinToString("\n")
+                }
+            }
+        }
+
+        // Если блок не найден или категория не указана — ищем по всей базе
+        val keywords = extractKeywords(query)
+        return if (keywords.isNotEmpty()) {
+            lines.filter { line ->
+                val lowerLine = line.lowercase()
+                keywords.any { keyword -> lowerLine.contains(keyword) }
+            }.joinToString("\n")
+        } else {
+            ""
+        }
+    }
+
+    // === ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ: Извлечение ключевых слов из запроса ===
+    private fun extractKeywords(query: String): List<String> {
+        return query.lowercase()
+            .replace(RECALL_COMMAND, "")
+            .replace(FIND_COMMAND, "")
+            .replace(SEARCH_COMMAND, "")
+            .replace(CHAT_LOOKUP_COMMAND, "")
+            .trim()
+            .split(" ")
+            .map { it.trim() }
+            .filter { it.length > 2 }
+            .map { extractRussianRoot(it) }
+            .distinct()
+    }
+
+    // === МОДИФИЦИРОВАННЫЙ buildSystemPrompt ===
+    private fun buildSystemPrompt(isSearchCommand: Boolean, prompt: String): String {
+        val basePrompt = _systemPrompt.value
+        if (!isSearchCommand) {
+            return basePrompt
+        }
+
+        val brainData = readBrain()
+        val chatHistory = _chatHistory.value
+
+        // Определяем категорию запроса
+        val queryCategory = determineCategory(prompt)
+
+        // Ищем в соответствующем блоке
+        var filteredMemory = searchMemory(prompt, queryCategory)
+
+        // Если ничего не найдено — ищем по всей базе
+        if (filteredMemory.isEmpty()) {
+            filteredMemory = searchMemory(prompt, null)
+        }
+
+        // Если всё ещё пусто — сообщаем об этом
+        val memorySection = if (filteredMemory.isNotEmpty()) {
+            "ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ (НАЙДЕННЫЕ ФАКТЫ):\n$filteredMemory\n\n"
+        } else {
+            "ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ: подходящих фактов не найдено.\n\n"
+        }
+
+        return buildString {
+            append(basePrompt)
+            append("\n\n")
+            append(memorySection)
+            if (brainData.isNotEmpty()) {
+                append("КРАТКИЕ ВЫВОДЫ ИЗ ПРОШЛЫХ РАЗГОВОРОВ (МОЗГ):\n$brainData\n\n")
+            }
+            if (chatHistory.isNotEmpty()) {
+                append("ИСТОРИЯ ЧАТА (ВЕСЬ ДИАЛОГ):\n")
+                chatHistory.forEach { message ->
+                    val prefix = if (message.role == "user") "Пользователь" else "Ассистент"
+                    append("$prefix: ${message.text}\n")
+                }
+                append("\n")
+            }
+            append("Пользователь просит тебя НАЙТИ ИЛИ ВСПОМНИТЬ информацию из его личной базы знаний, а также ВЫПОЛНИТЬ МАТЕМАТИЧЕСКИЙ ИЛИ ЛОГИЧЕСКИЙ РАСЧЕТ на основе найденных фактов. Внимательно изучи предоставленные строки ЛОКАЛЬНОЙ БАЗЫ ЗНАНИЙ. Если там указана цена, тариф или условие (например, цена плитки за квадратный метр), используй эти точные цифры для выполнения математического действия, запрошенного пользователем (например, умножь площадь на стоимость). Дай развернутый, понятный и дружелюбный ответ с демонстрацией хода вычислений. Если нужных данных в памяти нет — честно скажи об этом.")
+        }
+    }
+
     // === Отправка сообщений ===
     fun sendUserMessage(text: String) {
         if (text.isBlank()) return
@@ -486,34 +632,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             lowerText.contains(RECALL_COMMAND) || lowerText.contains(FIND_COMMAND) || lowerText.contains(SEARCH_COMMAND) || lowerText.contains(CHAT_LOOKUP_COMMAND) -> {
                 // Для NEUTRAL режима выполняем локальный поиск и выводим результат
                 if (_currentMode.value == AIMode.NEUTRAL) {
-                    val searchResult = buildSystemPrompt(true, text)
-                    val memoryData = readFromLongTermMemory()
+                    val memoryData = searchMemory(text, determineCategory(text))
                     if (memoryData.isNotEmpty()) {
-                        val cleanSearchQuery = text.lowercase()
-                            .replace(RECALL_COMMAND, "")
-                            .replace(FIND_COMMAND, "")
-                            .replace(SEARCH_COMMAND, "")
-                            .replace(CHAT_LOOKUP_COMMAND, "")
-                            .trim()
-                        // Используем интеллектуальный стемминг для ключевых слов
-                        val keywords = cleanSearchQuery.split(" ")
-                            .map { it.trim() }
-                            .filter { it.length > 2 }
-                            .map { extractRussianRoot(it) }
-                            .distinct()
-                        val filteredLines = memoryData.split("\n")
-                            .filter { line ->
-                                val lowerLine = line.lowercase()
-                                keywords.any { keyword -> lowerLine.contains(keyword) }
-                            }
-                            .joinToString("\n")
-                        if (filteredLines.isNotEmpty()) {
-                            appendSystemMessage("🔍 Найдено в памяти:\n$filteredLines")
-                        } else {
-                            appendSystemMessage("🔍 Ничего не найдено по запросу '$cleanSearchQuery'")
-                        }
+                        appendSystemMessage("🔍 Найдено в памяти:\n$memoryData")
                     } else {
-                        appendSystemMessage("🔍 База знаний пуста. Сохраните что-нибудь через 'запомни'")
+                        appendSystemMessage("🔍 Ничего не найдено по запросу '$text'")
                     }
                     return
                 }
@@ -678,70 +801,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    private fun buildSystemPrompt(isSearchCommand: Boolean, prompt: String): String {
-        val basePrompt = _systemPrompt.value
-        if (!isSearchCommand) {
-            return basePrompt
-        }
-
-        val brainData = readBrain()
-        val chatHistory = _chatHistory.value
-
-        // Извлечение ключевых слов из запроса для поиска в памяти с использованием стемминга
-        val cleanSearchQuery = prompt.lowercase()
-            .replace("вспомни", "")
-            .replace("найди", "")
-            .replace("поищи", "")
-            .replace("посмотри в чате", "")
-            .trim()
-
-        // Используем интеллектуальный стемминг для извлечения корней слов
-        val keywords = cleanSearchQuery.split(" ")
-            .map { it.trim() }
-            .filter { it.length > 2 }
-            .flatMap { word ->
-                // Извлекаем корень слова с помощью стеммера
-                val root = extractRussianRoot(word)
-                mutableListOf(root).also {
-                    // Добавляем оригинальное слово для более точного поиска
-                    it.add(word)
-                }
-            }
-            .distinct()
-
-        val fullMemory = readFromLongTermMemory()
-        val filteredMemory = if (fullMemory.isNotEmpty() && keywords.isNotEmpty()) {
-            fullMemory.split("\n")
-                .filter { line ->
-                    val lowerLine = line.lowercase()
-                    keywords.any { keyword -> lowerLine.contains(keyword) }
-                }
-                .joinToString("\n")
-        } else {
-            ""
-        }
-
-        return buildString {
-            append(basePrompt)
-            append("\n\n")
-            if (filteredMemory.isNotEmpty()) {
-                append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ (НАЙДЕННЫЕ ФАКТЫ):\n$filteredMemory\n\n")
-            }
-            if (brainData.isNotEmpty()) {
-                append("КРАТКИЕ ВЫВОДЫ ИЗ ПРОШЛЫХ РАЗГОВОРОВ (МОЗГ):\n$brainData\n\n")
-            }
-            if (chatHistory.isNotEmpty()) {
-                append("ИСТОРИЯ ЧАТА (ВЕСЬ ДИАЛОГ):\n")
-                chatHistory.forEach { message ->
-                    val prefix = if (message.role == "user") "Пользователь" else "Ассистент"
-                    append("$prefix: ${message.text}\n")
-                }
-                append("\n")
-            }
-            append("Пользователь просит тебя НАЙТИ ИЛИ ВСПОМНИТЬ информацию из его личной базы знаний, а также ВЫПОЛНИТЬ МАТЕМАТИЧЕСКИЙ ИЛИ ЛОГИЧЕСКИЙ РАСЧЕТ на основе найденных фактов. Внимательно изучи предоставленные строки ЛОКАЛЬНОЙ БАЗЫ ЗНАНИЙ. Если там указана цена, тариф или условие (например, цена плитки за квадратный метр), используй эти точные цифры для выполнения математического действия, запрошенного пользователем (например, умножь площадь на стоимость). Дай развернутый, понятный и дружелюбный ответ с демонстрацией хода вычислений. Если нужных данных в памяти нет — честно скажи об этом.")
-        }
-    }
-
     private fun handleAlarmCommand(prompt: String) {
         val timePattern = Regex("(?:в|в\\s+|напомни\\s+в\\s+)(\\d{1,2}[:.]\\d{2})")
         val match = timePattern.find(prompt)
@@ -835,21 +894,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     // === Работа с памятью ===
-    fun saveToLongTermMemory(text: String) {
-        try {
-            if (!memoryFile.exists()) {
-                memoryFile.createNewFile()
-            }
-            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
-            val timestamp = dateFormat.format(Date())
-            memoryFile.appendText("[$timestamp] $text\n")
-            Log.d(TAG, "Записано в долговременную память: $text")
-            appendSystemMessage("🧠 Запомнено: $text")
-        } catch (e: Exception) {
-            Log.e(TAG, "Ошибка записи памяти: ${e.message}")
-        }
-    }
-
     fun readFromLongTermMemory(): String {
         return try {
             if (memoryFile.exists()) {
