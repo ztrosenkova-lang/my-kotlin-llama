@@ -340,9 +340,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
 
-        // Automatically trigger voice initialization right after creation
-        // The welcome greeting is now explicitly deferred inside initTts to guarantee runtime order
-        initTts(application.applicationContext)
+        // Удален вызов initTts - теперь он должен вызываться из ChatScreen.kt после получения разрешений
 
         scope.launch {
             _cloudFlow.collect { event ->
@@ -531,7 +529,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    private fun initTts(context: Context) {
+    // ИСПРАВЛЕНИЕ 1: Меняем видимость с private на public
+    fun initTts(context: Context) {
         scope.launch(Dispatchers.IO) {
             try {
                 withContext(Dispatchers.Main) {
@@ -554,6 +553,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     addConfigEntry("session.disable_telemetry", "1")
                     addConfigEntry("session.use_device_allocator_for_initializers", "1")
                 }
+
+                // ИСПРАВЛЕНИЕ 2: Используем перегрузку createSession с ByteBuffer
                 ortSession = ortEnv?.createSession(modelBuffer, sessionOptions)
 
                 withContext(Dispatchers.Main) {
