@@ -7,6 +7,9 @@ import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.speech.RecognizerIntent
+import android.speech.tts.TextToSpeech
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -35,15 +38,9 @@ import java.util.*
 import java.util.concurrent.TimeUnit
 import java.lang.ref.WeakReference
 import java.util.zip.ZipInputStream
-import android.media.AudioFormat
-import android.media.AudioManager
-import android.media.AudioTrack
-import ai.onnxruntime.OnnxTensor
-import ai.onnxruntime.OrtEnvironment
-import ai.onnxruntime.OrtSession
-import java.nio.channels.FileChannel
-import java.io.FileInputStream
 import kotlinx.coroutines.runBlocking
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 
 data class ChatMessage(val role: String, val text: String)
 
@@ -63,15 +60,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         private const val CHAT_LOOKUP_COMMAND = "посмотри в чате"
         private const val AUTO_SEND_DELAY = 5000L
         private const val AUTO_BRAIN_COMPRESSION_THRESHOLD = 14
-        // FIXED: Correct URL with full path to the Vosk model archive
-        private const val VOSK_MODEL_URL = "http://alphacephei.com/vosk/models/vosk-model-ru-0.42.zip"
-        private const val VOSK_MODEL_DIR = "vosk-model-large"
-        private const val VOSK_MODEL_READY_FLAG = "is_vosk_large_ready"
-        // PocketPal ONNX TTS Configuration Constants
-        private const val TTS_MODEL_DIR = "tts-model"
-        private const val TTS_MODEL_NAME = "ru_RU-robot-medium.onnx"
-        private const val TTS_CONFIG_NAME = "ru_RU-robot-medium.onnx.json"
-        private const val TTS_ASSETS_PREFIX = "tts-model"
     }
 
     private val viewModelJob = SupervisorJob()
@@ -141,11 +129,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         File(getApplication<Application>().filesDir, "brain.txt")
     }
 
-    // PocketPal ONNX TTS Engine
-    private var ortEnv: OrtEnvironment? = null
-    private var ortSession: OrtSession? = null
+    // === НОВЫЙ TTS и Speech Recognizer ===
+    private var textToSpeech: TextToSpeech? = null
+    private var isTtsEnabled = false
     private val _isTtsReady = MutableStateFlow(false)
     val isTtsReady: StateFlow<Boolean> = _isTtsReady.asStateFlow()
+
+    // === НОВЫЙ Speech Recognizer (будет инициализироваться через Activity) ===
+    private var speechRecognizerLauncher: ((String) -> Unit)? = null
 
     private val alarmManager by lazy {
         getApplication<Application>().getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -157,108 +148,255 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     fun setCurrentMode(mode: AIMode) {
         _currentMode.value = mode
-        if (mode == AIMode.NEUTRAL) {
-            stopRecording()
-        }
     }
-
-    // === Vosk ===
-    private val _isRecording = MutableStateFlow(false)
-    val isRecording = _isRecording.asStateFlow()
-
-    private val _recognizedText = MutableStateFlow("")
-    val recognizedText = _recognizedText.asStateFlow()
-
-    private var autoSendJob: Job? = null
-    private var voskRecognizer: VoskRecognizer? = null
-
-    // Реактивный поток состояния Vosk
-    private val _isVoskLoaded = MutableStateFlow(false)
-    val isVoskLoaded = _isVoskLoaded.asStateFlow()
 
     // === RAM Memory Info State Flow ===
     private val _memoryInfoText = MutableStateFlow("Всего доступно: 0.0 ГБ / Занято: 0.0 ГБ")
     val memoryInfoText: StateFlow<String> = _memoryInfoText.asStateFlow()
 
-    // === Vosk File Picker Event Flow ===
-    private val _voskFilePickerEvent = MutableSharedFlow<Unit>(
-        replay = 0,
-        extraBufferCapacity = 1,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST
-    )
-    val voskFilePickerEvent = _voskFilePickerEvent.asSharedFlow()
+    // === Флаг загрузки TTS ===
+    private var ttsInitJob: Job? = null
 
-    // Track last spoken message index for TTS
-    private var lastSpokenMessageIndex = -1
+    private val llamaHelper by lazy {
+        LlamaHelper(
+            contentResolver = contentResolver,
+            scope = scope,
+            sharedFlow = _llmFlow,
+        )
+    }
 
-    // Job for loading animation
-    private var loadingAnimationJob: Job? = null
+    init {
+        instance = this
 
-    private val onVoiceResult: (String) -> Unit = { recognizedText ->
-        if (recognizedText.isNotEmpty()) {
-            _recognizedText.value = recognizedText
-            // Сбрасываем таймер при новом слове
-            autoSendJob?.cancel()
-            autoSendJob = scope.launch {
-                delay(5000L) // 5 сек тишины
-                if (_isRecording.value) {
-                    withContext(Dispatchers.Main) {
-                        sendUserMessage(_recognizedText.value.trim())
-                        stopRecording() // КРИТИЧЕСКИ: Выключаем запись
+        // Read local configuration maps and files safely
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                if (!memoryFile.exists()) memoryFile.createNewFile()
+                if (!brainFile.exists()) brainFile.createNewFile()
+                Log.d("LlamaViewModel", "Local storage files initialized successfully.")
+            } catch (e: Exception) {
+                Log.e("LlamaViewModel", "Failed to initialize local text memory files: ${e.message}")
+            }
+        }
+
+        // НОВАЯ ИНИЦИАЛИЗАЦИЯ TTS
+        initTts()
+
+        scope.launch {
+            _cloudFlow.collect { event ->
+                when (event) {
+                    is CloudAIEvent.Started -> {
+                        _cloudGeneratedText.value = ""
+                        _cloudState.value = CloudAIState.Generating(
+                            prompt = event.prompt,
+                            startTime = System.currentTimeMillis(),
+                            tokensGenerated = 0
+                        )
+                    }
+                    is CloudAIEvent.Ongoing -> {
+                        _cloudGeneratedText.value = event.text
+                        val currentState = _cloudState.value
+                        if (currentState is CloudAIState.Generating) {
+                            _cloudState.value = currentState.copy(tokensGenerated = event.tokenCount)
+                        }
+                    }
+                    is CloudAIEvent.Done -> {
+                        _cloudState.value = CloudAIState.Completed(event.tokenCount, event.duration)
+                        val fullText = event.fullText
+                        if (fullText.isNotEmpty()) {
+                            // Speak the complete text once before typewriter
+                            speakText(fullText)
+                            // Add empty assistant message and type it out
+                            _chatHistory.value = _chatHistory.value + ChatMessage("assistant", "")
+                            scope.launch(Dispatchers.Main) {
+                                var typedText = ""
+                                for (char in fullText) {
+                                    typedText += char
+                                    val currentList = _chatHistory.value.toMutableList()
+                                    if (currentList.isNotEmpty() && currentList.last().role == "assistant") {
+                                        currentList[currentList.lastIndex] = ChatMessage("assistant", typedText)
+                                        _chatHistory.value = currentList
+                                    }
+                                    delay(30) // Typing speed
+                                }
+                            }
+                        }
+                        _cloudGeneratedText.value = fullText
+                    }
+                    is CloudAIEvent.Error -> {
+                        _cloudState.value = CloudAIState.Error(event.message)
+                        Log.e(TAG, "Ошибка облачного ИИ: ${event.message}")
+                    }
+                    is CloudAIEvent.TokenReceived -> {
+                        val config = cloudAIProvider.getConfig()
+                        if (config != null) {
+                            _cloudState.value = CloudAIState.Ready(config.modelId)
+                        }
                     }
                 }
             }
         }
-    }
 
-    private val onVoiceLog: (String) -> Unit = { logText ->
-        Log.d("VoskLog", logText)
-    }
-
-    private fun copyAssetFile(assetPath: String, destinationFile: File, context: Context): Boolean {
-        return try {
-            val inputStream: InputStream = context.assets.open(assetPath)
-            FileOutputStream(destinationFile).use { outputStream ->
-                val buffer = ByteArray(8192)
-                var length: Int
-                while (inputStream.read(buffer).also { length = it } > 0) {
-                    outputStream.write(buffer, 0, length)
+        scope.launch {
+            _llmFlow.collect { event ->
+                when (event) {
+                    is LlamaHelper.LLMEvent.Started -> {
+                        _state.value = GenerationState.Generating(prompt = event.prompt, tokensGenerated = 0)
+                    }
+                    is LlamaHelper.LLMEvent.Ongoing -> {
+                        _generatedText.value += event.word
+                        val currentState = _state.value
+                        if (currentState is GenerationState.Generating) {
+                            _state.value = currentState.copy(tokensGenerated = event.tokenCount)
+                        }
+                    }
+                    is LlamaHelper.LLMEvent.Done -> {
+                        _state.value = GenerationState.Completed(event.tokenCount, event.duration)
+                        val fullText = event.fullText
+                        if (fullText.isNotEmpty()) {
+                            // Speak the complete text once before typewriter
+                            speakText(fullText)
+                            // Add empty assistant message and type it out
+                            _chatHistory.value = _chatHistory.value + ChatMessage("assistant", "")
+                            scope.launch(Dispatchers.Main) {
+                                var typedText = ""
+                                for (char in fullText) {
+                                    typedText += char
+                                    val currentList = _chatHistory.value.toMutableList()
+                                    if (currentList.isNotEmpty() && currentList.last().role == "assistant") {
+                                        currentList[currentList.lastIndex] = ChatMessage("assistant", typedText)
+                                        _chatHistory.value = currentList
+                                    }
+                                    delay(30) // Typing speed
+                                }
+                            }
+                        }
+                        _generatedText.value = fullText
+                    }
+                    is LlamaHelper.LLMEvent.Error -> {
+                        _state.value = GenerationState.Error(event.message)
+                        Log.e(TAG, "Ошибка локального ИИ: ${event.message}")
+                        _isModelLoaded.value = false
+                    }
+                    is LlamaHelper.LLMEvent.Loaded -> {
+                        _state.value = GenerationState.ModelLoaded(event.path)
+                        _isModelLoaded.value = true
+                    }
                 }
             }
-            inputStream.close()
-            true
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to copy asset: $assetPath - ${e.message}")
-            false
         }
+
+        // Запуск фоновой корутины для мониторинга RAM
+        scope.launch(Dispatchers.Default) {
+            val context = getApplication<Application>().applicationContext
+            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+            val memoryInfo = android.app.ActivityManager.MemoryInfo()
+            while (true) {
+                if (activityManager != null) {
+                    activityManager.getMemoryInfo(memoryInfo)
+                    // Конвертируем байты в гигабайты (1 ГБ = 1024 * 1024 * 1024 байт)
+                    val totalGb = memoryInfo.totalMem.toDouble() / (1024.0 * 1024.0 * 1024.0)
+                    val availGb = memoryInfo.availMem.toDouble() / (1024.0 * 1024.0 * 1024.0)
+                    val usedGb = totalGb - availGb
+                    // Форматируем строку до одного знака после запятой
+                    val formattedString = String.format(
+                        java.util.Locale.US,
+                        "Всего доступно %.1f ГБ / Занято %.1f ГБ",
+                        totalGb,
+                        usedGb
+                    )
+                    // Перенаправляем обновление стейта в поток данных
+                    _memoryInfoText.value = formattedString
+                }
+                // Задержка ровно в 1 секунду (1000мс) перед следующим замером
+                delay(1000)
+            }
+        }
+
+        // НЕТ централизованного голосового синтезатора — теперь озвучка управляется через speakText()
+        // и вызывается явно из Done-событий
     }
 
-    private fun copyAssetDirectory(assetDir: String, targetDir: File, context: Context) {
-        try {
-            val files = context.assets.list(assetDir) ?: return
-            targetDir.mkdirs()
-            for (file in files) {
-                val assetPath = if (assetDir.isEmpty()) file else "$assetDir/$file"
-                val targetFile = File(targetDir, file)
-                // Check if it's a directory by trying to list it
-                try {
-                    val subFiles = context.assets.list(assetPath)
-                    if (subFiles != null && subFiles.isNotEmpty()) {
-                        // It's a directory - recursively copy
-                        copyAssetDirectory(assetPath, targetFile, context)
+    // === НОВЫЙ МЕТОД: Инициализация TTS ===
+    private fun initTts() {
+        ttsInitJob?.cancel()
+        ttsInitJob = viewModelScope.launch {
+            try {
+                val context = getApplication<Application>()
+                textToSpeech = TextToSpeech(context) { status ->
+                    if (status == TextToSpeech.SUCCESS) {
+                        val result = textToSpeech?.setLanguage(Locale("ru", "RU"))
+                        if (result == TextToSpeech.LANG_AVAILABLE || result == TextToSpeech.LANG_COUNTRY_AVAILABLE) {
+                            _isTtsReady.value = true
+                            isTtsEnabled = true
+                            appendSystemMessage("🟢 Голосовой движок Android TTS успешно инициализирован.")
+                            // Приветственное сообщение
+                            val welcomeText = "Привет! Я твоя локальная языковая модель. Голосовой движок полностью готов к работе, чем я могу помочь?"
+                            appendSystemMessage(welcomeText)
+                            speakText(welcomeText)
+                            Log.d(TAG, "TTS initialized successfully with Russian language")
+                        } else {
+                            _isTtsReady.value = false
+                            appendSystemMessage("⚠️ Русский язык не поддерживается TTS. Проверьте настройки.")
+                            Log.w(TAG, "TTS init: Russian language not available")
+                        }
                     } else {
-                        // It's a file
-                        copyAssetFile(assetPath, targetFile, context)
+                        _isTtsReady.value = false
+                        appendSystemMessage("🔴 Ошибка инициализации TTS: $status")
+                        Log.e(TAG, "TTS init failed with status: $status")
                     }
-                } catch (e: Exception) {
-                    // If listing fails, treat as file
-                    copyAssetFile(assetPath, targetFile, context)
                 }
+                // Устанавливаем речь на русском языке (повторно, если первый вызов не сработал)
+                textToSpeech?.setLanguage(Locale("ru", "RU"))
+            } catch (e: Exception) {
+                _isTtsReady.value = false
+                appendSystemMessage("🔴 Ошибка инициализации TTS: ${e.message}")
+                Log.e(TAG, "TTS init error: ${e.message}", e)
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to copy asset directory: $assetDir - ${e.message}")
         }
     }
+
+    // === НОВЫЙ МЕТОД: Включение/отключение TTS ===
+    fun enableTts() {
+        if (!_isTtsReady.value) {
+            appendSystemMessage("⚠️ TTS ещё не инициализирован. Попробуйте позже.")
+            return
+        }
+        isTtsEnabled = true
+        appendSystemMessage("🔊 Озвучка включена")
+    }
+
+    fun disableTts() {
+        isTtsEnabled = false
+        if (textToSpeech?.isSpeaking == true) {
+            textToSpeech?.stop()
+        }
+        appendSystemMessage("🔇 Озвучка отключена")
+    }
+
+    // === НОВЫЙ МЕТОД: Озвучка текста ===
+    fun speakText(text: String) {
+        if (!_isTtsReady.value || !isTtsEnabled || text.isBlank()) {
+            return
+        }
+        textToSpeech?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+    }
+
+    // === НОВЫЙ МЕТОД: Запуск распознавания речи (через ActivityResultLauncher) ===
+    fun startListening(onResult: (String) -> Unit) {
+        if (speechRecognizerLauncher == null) {
+            appendSystemMessage("⚠️ Распознавание речи не настроено. Передайте Launcher из Activity.")
+            return
+        }
+        speechRecognizerLauncher?.invoke(onResult)
+    }
+
+    // === НОВЫЙ МЕТОД: Установка Launcher для распознавания речи ===
+    fun setSpeechRecognizerLauncher(launcher: (String) -> Unit) {
+        speechRecognizerLauncher = launcher
+    }
+
+    // === ОСТАВЛЯЕМ БЕЗ ИЗМЕНЕНИЙ (кроме удаления Vosk) ===
 
     /**
      * Extracts the stem from a Russian word by removing common suffixes.
@@ -326,276 +464,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    init {
-        instance = this
-
-        // Read local configuration maps and files safely
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                if (!memoryFile.exists()) memoryFile.createNewFile()
-                if (!brainFile.exists()) brainFile.createNewFile()
-                Log.d("LlamaViewModel", "Local storage files initialized successfully.")
-            } catch (e: Exception) {
-                Log.e("LlamaViewModel", "Failed to initialize local text memory files: ${e.message}")
-            }
-        }
-
-        // Удален вызов initTts - теперь он должен вызываться из ChatScreen.kt после получения разрешений
-
-        scope.launch {
-            _cloudFlow.collect { event ->
-                when (event) {
-                    is CloudAIEvent.Started -> {
-                        _cloudGeneratedText.value = ""
-                        _cloudState.value = CloudAIState.Generating(
-                            prompt = event.prompt,
-                            startTime = System.currentTimeMillis(),
-                            tokensGenerated = 0
-                        )
-                    }
-                    is CloudAIEvent.Ongoing -> {
-                        _cloudGeneratedText.value = event.text
-                        val currentState = _cloudState.value
-                        if (currentState is CloudAIState.Generating) {
-                            _cloudState.value = currentState.copy(tokensGenerated = event.tokenCount)
-                        }
-                    }
-                    is CloudAIEvent.Done -> {
-                        _cloudState.value = CloudAIState.Completed(event.tokenCount, event.duration)
-                        val fullText = event.fullText
-                        if (fullText.isNotEmpty()) {
-                            stopRecording()
-                            // Speak the complete text once before typewriter
-                            speakText(fullText)
-                            // Add empty assistant message and type it out
-                            _chatHistory.value = _chatHistory.value + ChatMessage("assistant", "")
-                            scope.launch(Dispatchers.Main) {
-                                var typedText = ""
-                                for (char in fullText) {
-                                    typedText += char
-                                    val currentList = _chatHistory.value.toMutableList()
-                                    if (currentList.isNotEmpty() && currentList.last().role == "assistant") {
-                                        currentList[currentList.lastIndex] = ChatMessage("assistant", typedText)
-                                        _chatHistory.value = currentList
-                                    }
-                                    delay(30) // Typing speed
-                                }
-                            }
-                        }
-                        _cloudGeneratedText.value = fullText
-                    }
-                    is CloudAIEvent.Error -> {
-                        _cloudState.value = CloudAIState.Error(event.message)
-                        Log.e(TAG, "Ошибка облачного ИИ: ${event.message}")
-                    }
-                    is CloudAIEvent.TokenReceived -> {
-                        val config = cloudAIProvider.getConfig()
-                        if (config != null) {
-                            _cloudState.value = CloudAIState.Ready(config.modelId)
-                        }
-                    }
-                }
-            }
-        }
-
-        scope.launch {
-            _llmFlow.collect { event ->
-                when (event) {
-                    is LlamaHelper.LLMEvent.Started -> {
-                        _state.value = GenerationState.Generating(prompt = event.prompt, tokensGenerated = 0)
-                    }
-                    is LlamaHelper.LLMEvent.Ongoing -> {
-                        _generatedText.value += event.word
-                        val currentState = _state.value
-                        if (currentState is GenerationState.Generating) {
-                            _state.value = currentState.copy(tokensGenerated = event.tokenCount)
-                        }
-                    }
-                    is LlamaHelper.LLMEvent.Done -> {
-                        _state.value = GenerationState.Completed(event.tokenCount, event.duration)
-                        val fullText = event.fullText
-                        if (fullText.isNotEmpty()) {
-                            stopRecording()
-                            // Speak the complete text once before typewriter
-                            speakText(fullText)
-                            // Add empty assistant message and type it out
-                            _chatHistory.value = _chatHistory.value + ChatMessage("assistant", "")
-                            scope.launch(Dispatchers.Main) {
-                                var typedText = ""
-                                for (char in fullText) {
-                                    typedText += char
-                                    val currentList = _chatHistory.value.toMutableList()
-                                    if (currentList.isNotEmpty() && currentList.last().role == "assistant") {
-                                        currentList[currentList.lastIndex] = ChatMessage("assistant", typedText)
-                                        _chatHistory.value = currentList
-                                    }
-                                    delay(30) // Typing speed
-                                }
-                            }
-                        }
-                        _generatedText.value = fullText
-                    }
-                    is LlamaHelper.LLMEvent.Error -> {
-                        _state.value = GenerationState.Error(event.message)
-                        Log.e(TAG, "Ошибка локального ИИ: ${event.message}")
-                        _isModelLoaded.value = false
-                    }
-                    is LlamaHelper.LLMEvent.Loaded -> {
-                        _state.value = GenerationState.ModelLoaded(event.path)
-                        _isModelLoaded.value = true
-                    }
-                }
-            }
-        }
-
-        // Запуск фоновой корутины для мониторинга RAM
-        scope.launch(Dispatchers.Default) {
-            val context = getApplication<Application>().applicationContext
-            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
-            val memoryInfo = android.app.ActivityManager.MemoryInfo()
-            while (true) {
-                if (activityManager != null) {
-                    activityManager.getMemoryInfo(memoryInfo)
-                    // Конвертируем байты в гигабайты (1 ГБ = 1024 * 1024 * 1024 байт)
-                    val totalGb = memoryInfo.totalMem.toDouble() / (1024.0 * 1024.0 * 1024.0)
-                    val availGb = memoryInfo.availMem.toDouble() / (1024.0 * 1024.0 * 1024.0)
-                    val usedGb = totalGb - availGb
-                    // Форматируем строку до одного знака после запятой
-                    val formattedString = String.format(
-                        java.util.Locale.US,
-                        "Всего доступно %.1f ГБ / Занято %.1f ГБ",
-                        totalGb,
-                        usedGb
-                    )
-                    // Перенаправляем обновление стейта в поток данных
-                    _memoryInfoText.value = formattedString
-                }
-                // Задержка ровно в 1 секунду (1000мс) перед следующим замером
-                delay(1000)
-            }
-        }
-
-        // Централизованный голосовой синтезатор для новых сообщений
-        scope.launch {
-            chatHistory.collect { historyList ->
-                if (historyList.isNotEmpty()) {
-                    val lastIndex = historyList.lastIndex
-                    if (lastIndex > lastSpokenMessageIndex) {
-                        val newlyArrivedItem = historyList.last()
-                        lastSpokenMessageIndex = lastIndex
-                        // Пропускаем assistant (уже обработано в Done) и системные индикаторы прогресса
-                        val isTypewriterActive = newlyArrivedItem.role == "system" &&
-                                (newlyArrivedItem.text.startsWith("⏳ Распаковка") ||
-                                        newlyArrivedItem.text.startsWith("⚙️ Инициализация") ||
-                                        newlyArrivedItem.text.startsWith("📥 Загрузка") ||
-                                        newlyArrivedItem.text.startsWith("📦") ||
-                                        newlyArrivedItem.text.startsWith("🧹") ||
-                                        newlyArrivedItem.text.startsWith("⏳ Настраиваю"))
-                        val isAssistant = newlyArrivedItem.role == "assistant"
-                        if (newlyArrivedItem.text.isNotEmpty() && !isTypewriterActive && !isAssistant) {
-                            speakText(newlyArrivedItem.text)
-                        }
-                    }
-                } else {
-                    lastSpokenMessageIndex = -1 // Полный сброс индекса при очистке чата
-                }
-            }
-        }
-
-        // Vosk теперь инициализируется лениво, при первом нажатии на микрофон
-    }
-
-    // --- NEW: Loading Animation Methods ---
-    private fun showLoadingIndicator() {
-        loadingAnimationJob?.cancel()
-        loadingAnimationJob = scope.launch(Dispatchers.Main) {
-            var dots = 1
-            while (true) {
-                updateLastSystemMessage("⏳ Загрузка голосового движка" + ".".repeat(dots))
-                delay(600)
-                dots = (dots % 3) + 1
-            }
-        }
-    }
-
-    private fun hideLoadingIndicator() {
-        loadingAnimationJob?.cancel()
-        loadingAnimationJob = null
-        // Remove the loading message if it's the last one
-        val currentList = _chatHistory.value
-        if (currentList.isNotEmpty() && currentList.last().role == "system" &&
-            currentList.last().text.startsWith("⏳ Загрузка голосового движка")) {
-            _chatHistory.value = currentList.dropLast(1)
-        }
-    }
-
-    // ИСПРАВЛЕНИЕ: Меняем видимость с private на public и сохраняем MappedByteBuffer во временный файл
-    // ИСПРАВЛЕНИЕ 2: НЕ УДАЛЯЕМ временный файл, чтобы сессия ONNX Runtime могла использовать его
-    fun initTts(context: Context) {
-        scope.launch(Dispatchers.IO) {
-            var tempFile: File? = null
-            try {
-                withContext(Dispatchers.Main) {
-                    showLoadingIndicator()
-                }
-
-                // 1. Загружаем модель из assets в MappedByteBuffer
-                val afd = context.assets.openFd("tts-model/ru_RU-robot-medium.onnx")
-                val fileChannel = FileInputStream(afd.fileDescriptor).channel
-                val modelBuffer = fileChannel.map(
-                    FileChannel.MapMode.READ_ONLY,
-                    afd.startOffset,
-                    afd.declaredLength
-                )
-                fileChannel.close()
-                afd.close()
-
-                // 2. Сохраняем MappedByteBuffer во временный файл
-                tempFile = File(context.cacheDir, "tts_model_temp.onnx")
-                tempFile?.parentFile?.mkdirs()
-                tempFile?.createNewFile()
-                FileOutputStream(tempFile).use { outputStream ->
-                    outputStream.channel.write(modelBuffer)
-                }
-
-                // 3. Инициализируем ONNX Runtime с путём к временному файлу
-                ortEnv = OrtEnvironment.getEnvironment()
-                val sessionOptions = OrtSession.SessionOptions().apply {
-                    addConfigEntry("session.disable_telemetry", "1")
-                    addConfigEntry("session.use_device_allocator_for_initializers", "1")
-                }
-                ortSession = ortEnv?.createSession(tempFile?.absolutePath, sessionOptions)
-
-                withContext(Dispatchers.Main) {
-                    hideLoadingIndicator()
-                    _isTtsReady.value = true
-                    val successNotification = "🟢 Голосовой движок PocketPal успешно загружен в оперативную память устройства."
-                    appendSystemMessage(successNotification)
-                    val welcomeText = "Привет! Я твоя локальная языковая модель. Голосовой движок полностью готов к работе, чем я могу помочь?"
-                    appendSystemMessage(welcomeText)
-                    speakText(welcomeText)
-                }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    hideLoadingIndicator()
-                    _isTtsReady.value = false
-                    appendSystemMessage("🔴 Ошибка выделения памяти под голосовой движок: ${e.message}")
-                }
-                Log.e("LlamaTts", "Критическая ошибка инициализации сессии ONNX: ${e.message}")
-            }
-            // ИСПРАВЛЕНИЕ: НЕ УДАЛЯЕМ временный файл, чтобы сессия могла использовать его
-            // finally блок удалён
-        }
-    }
-
-    private val llamaHelper by lazy {
-        LlamaHelper(
-            contentResolver = contentResolver,
-            scope = scope,
-            sharedFlow = _llmFlow,
-        )
-    }
-
     fun updateLastSystemMessage(newText: String) {
         val currentList = _chatHistory.value.toMutableList()
         if (currentList.isNotEmpty() && currentList.last().role == "system") {
@@ -603,466 +471,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             _chatHistory.value = currentList
         } else {
             _chatHistory.value = currentList + ChatMessage("system", newText)
-        }
-    }
-
-    fun isVoskInitialized(): Boolean = _isVoskLoaded.value
-
-    fun initVoskLazily(context: Context) {
-        if (_isVoskLoaded.value) {
-            Log.d(TAG, "Vosk already loaded, skipping initialization")
-            return
-        }
-
-        val prefs = context.getSharedPreferences("cloud_ai", Context.MODE_PRIVATE)
-        val isReady = prefs.getBoolean(VOSK_MODEL_READY_FLAG, false)
-        val targetDir = File(context.filesDir, VOSK_MODEL_DIR)
-
-        // Проверка физического наличия модели на диске
-        val amDir = File(targetDir, "am")
-        val finalMdlFile = File(amDir, "final.mdl")
-        val modelExists = amDir.exists() && amDir.isDirectory && finalMdlFile.exists() && finalMdlFile.isFile
-
-        // Если флаг готовности есть, но файлов нет - сбрасываем флаг
-        if (isReady && !modelExists) {
-            Log.w(TAG, "Model flag is ready but files are missing, resetting flag")
-            prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, false).apply()
-            _isVoskLoaded.value = false
-            scope.launch {
-                withContext(Dispatchers.Main) {
-                    appendSystemMessage("⚠️ Файлы модели Vosk повреждены или удалены. Начинаю перезагрузку...")
-                }
-            }
-        }
-
-        // Проверяем флаг готовности после возможного сброса
-        val actualIsReady = prefs.getBoolean(VOSK_MODEL_READY_FLAG, false)
-        if (!actualIsReady || !modelExists) {
-            // Если есть файлы, но флаг сброшен - пробуем инициализировать
-            if (modelExists) {
-                scope.launch {
-                    appendSystemMessage("⏳ Обнаружены файлы модели, пробую загрузить...")
-                    initializeVoskModel(context)
-                }
-                return
-            }
-
-            // Файлов нет - начинаем загрузку
-            appendSystemMessage("⏳ Высокоточная голосовая модель не найдена. Начинаю безопасную загрузку (~1.2 ГБ)... Пожалуйста, не закрывайте приложение.")
-            scope.launch {
-                withContext(Dispatchers.IO) {
-                    var tempFile: File? = null
-                    var downloadSuccess = false
-                    try {
-                        val url = URL(VOSK_MODEL_URL)
-                        val connection = url.openConnection() as HttpURLConnection
-                        connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                        connection.connectTimeout = 15000
-                        connection.readTimeout = 15000
-                        connection.connect()
-
-                        val fileLength = connection.contentLength
-                        val inputStream = connection.inputStream
-                        tempFile = File(context.cacheDir, "vosk-model-temp.zip")
-                        tempFile?.parentFile?.let {
-                            if (!it.exists()) it.mkdirs()
-                        }
-                        try {
-                            tempFile?.createNewFile()
-                        } catch (ioe: java.io.IOException) {
-                            Log.e(TAG, "Не удалось создать временный файл: " + ioe.message)
-                        }
-
-                        withContext(Dispatchers.Main) {
-                            appendSystemMessage("📥 Начинаю загрузку модели...")
-                        }
-
-                        // Скачивание ZIP-архива с реальным прогрессом
-                        FileOutputStream(tempFile).use { output ->
-                            val buffer = ByteArray(8192)
-                            var bytesRead: Int
-                            var totalBytesRead = 0L
-                            var lastLoggedPercent = -1
-                            while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                                output.write(buffer, 0, bytesRead)
-                                totalBytesRead += bytesRead
-                                if (fileLength > 0) {
-                                    val progressPercent = (totalBytesRead * 100 / fileLength).toInt()
-                                    if (progressPercent != lastLoggedPercent) {
-                                        lastLoggedPercent = progressPercent
-                                        withContext(Dispatchers.Main) {
-                                            appendSystemMessage("📥 Загрузка голосового движка: $progressPercent%")
-                                        }
-                                    }
-                                } else {
-                                    val currentMB = totalBytesRead / (1024 * 1024)
-                                    if (currentMB > 0 && currentMB % 25 == 0L) {
-                                        withContext(Dispatchers.Main) {
-                                            appendSystemMessage("📥 Загружено: $currentMB МБ")
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        downloadSuccess = true
-
-                        // Single clear message before unzip starts
-                        withContext(Dispatchers.Main) {
-                            appendSystemMessage("⏳ Начинаю распаковку голосового движка Vosk... Это займет около 30-40 секунд, пожалуйста, подождите.")
-                        }
-
-                        // Распаковка архива - with 250-file progress tracking and in-place updates
-                        targetDir.mkdirs()
-                        var unzipSuccess = false
-                        ZipInputStream(tempFile.inputStream()).use { zis ->
-                            var entry = zis.nextEntry
-                            var entryCounter = 0
-                            while (entry != null) {
-                                entryCounter++
-                                if (entryCounter % 250 == 0) {
-                                    withContext(Dispatchers.Main) {
-                                        updateLastSystemMessage("⏳ Распаковка архива (разворачивание 3.7 ГБ на диске): извлечено $entryCounter файлов...")
-                                    }
-                                }
-                                val entryFile = File(targetDir, entry.name)
-                                if (entry.isDirectory) {
-                                    entryFile.mkdirs()
-                                } else {
-                                    entryFile.parentFile?.mkdirs()
-                                    FileOutputStream(entryFile).use { fos ->
-                                        val buffer = ByteArray(8192)
-                                        var len: Int
-                                        while (zis.read(buffer).also { len = it } != -1) {
-                                            fos.write(buffer, 0, len)
-                                        }
-                                    }
-                                }
-                                zis.closeEntry()
-                                entry = zis.nextEntry
-                            }
-                            unzipSuccess = true
-                        }
-
-                        if (unzipSuccess) {
-                            // 3. Физический чек-ап файлов модели после успешной распаковки
-                            val amDirCheck = File(targetDir, "am")
-                            val finalMdlFileCheck = File(amDirCheck, "final.mdl")
-                            if (amDirCheck.exists() && amDirCheck.isDirectory && finalMdlFileCheck.exists() && finalMdlFileCheck.isFile) {
-                                withContext(Dispatchers.Main) {
-                                    updateLastSystemMessage("📦 Распаковка архива голосового движка Vosk успешно завершена!")
-                                }
-                                // 4. Запись успеха в настройки только после полной проверки
-                                prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, true).apply()
-                                // 5. Запуск инициализации модели
-                                initializeVoskModel(context)
-                            } else {
-                                throw Exception("Критические файлы модели Vosk отсутствуют: am/final.mdl не найден")
-                            }
-                        }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Ошибка загрузки/распаковки модели Vosk: ${e.message}")
-                        // Network failure - trigger offline mode with file picker
-                        withContext(Dispatchers.Main) {
-                            appendSystemMessage("⚠ Ошибка загрузки модели: ${e.message}")
-                            appendSystemMessage("📂 Пожалуйста, выберите скачанный архив 'vosk-model-ru-0.42.zip' из памяти вашего телефона или флешки.")
-                            _voskFilePickerEvent.tryEmit(Unit)
-                        }
-                        // Сброс флага готовности при ошибке
-                        prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, false).apply()
-                        _isVoskLoaded.value = false
-                    } finally {
-                        // 1. Очистка временного файла
-                        tempFile?.let { if (it.exists()) it.delete() }
-                        // 2. Сброс флагов (БЕЗ затирающего appendSystemMessage)
-                        if (!downloadSuccess) {
-                            prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, false).apply()
-                            _isVoskLoaded.value = false
-                            Log.w(TAG, "Vosk download pipeline terminated execution safely.")
-                        }
-                    }
-                }
-            }
-        } else {
-            // Модель уже готова - инициализируем синхронно
-            scope.launch {
-                initializeVoskModel(context)
-            }
-        }
-    }
-
-    // === Offline Unzipping Routine ===
-    fun processLocalVoskZip(uri: Uri, context: Context) {
-        if (_isVoskLoaded.value) {
-            Log.d(TAG, "Vosk already loaded, skipping local processing")
-            return
-        }
-
-        val prefs = context.getSharedPreferences("cloud_ai", Context.MODE_PRIVATE)
-        val targetDir = File(context.filesDir, VOSK_MODEL_DIR)
-
-        scope.launch(Dispatchers.IO) {
-            withContext(Dispatchers.Main) {
-                appendSystemMessage("⏳ Начинаю локальную распаковку архива с диска... Пожалуйста, подождите.")
-            }
-
-            try {
-                // 1. Копирование URI в физический файл кэша
-                val tempZipFile = File(context.cacheDir, "temp_model.zip")
-                var copySuccess = false
-                context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                    FileOutputStream(tempZipFile).use { outputStream ->
-                        val buffer = ByteArray(8192)
-                        var bytesRead: Int
-                        var totalBytesRead = 0L
-                        while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                            outputStream.write(buffer, 0, bytesRead)
-                            totalBytesRead += bytesRead
-                            // Обновление прогресса каждые 5 МБ
-                            if (totalBytesRead % (5 * 1024 * 1024) < 8192) {
-                                val progressMB = totalBytesRead / (1024 * 1024)
-                                withContext(Dispatchers.Main) {
-                                    updateLastSystemMessage("⏳ Кэширование архива на диск: $progressMB МБ...")
-                                }
-                            }
-                        }
-                        copySuccess = true
-                    }
-                } ?: run {
-                    withContext(Dispatchers.Main) {
-                        appendSystemMessage("⚠️ Не удалось открыть выбранный файл. Убедитесь, что это корректный ZIP-архив.")
-                    }
-                    return@launch
-                }
-
-                if (!copySuccess) {
-                    throw Exception("Не удалось скопировать архив в кэш")
-                }
-
-                // 2. Распаковка из временного файла
-                targetDir.mkdirs()
-                var unzipSuccess = false
-                ZipInputStream(tempZipFile.inputStream()).use { zis ->
-                    var entry = zis.nextEntry
-                    var entryCounter = 0
-                    while (entry != null) {
-                        entryCounter++
-                        if (entryCounter % 250 == 0) {
-                            withContext(Dispatchers.Main) {
-                                updateLastSystemMessage("⏳ Распаковка архива (разворачивание 3.7 ГБ на диске): извлечено $entryCounter файлов...")
-                            }
-                        }
-                        val entryFile = File(targetDir, entry.name)
-                        if (entry.isDirectory) {
-                            entryFile.mkdirs()
-                        } else {
-                            entryFile.parentFile?.mkdirs()
-                            FileOutputStream(entryFile).use { fos ->
-                                val buffer = ByteArray(8192)
-                                var len: Int
-                                while (zis.read(buffer).also { len = it } != -1) {
-                                    fos.write(buffer, 0, len)
-                                }
-                            }
-                        }
-                        zis.closeEntry()
-                        entry = zis.nextEntry
-                    }
-                    unzipSuccess = true
-                }
-
-                if (unzipSuccess) {
-                    // 3. Физический чек-ап файлов модели после успешной распаковки
-                    val amDir = File(targetDir, "am")
-                    val finalMdlFile = File(amDir, "final.mdl")
-                    if (amDir.exists() && amDir.isDirectory && finalMdlFile.exists() && finalMdlFile.isFile) {
-                        withContext(Dispatchers.Main) {
-                            updateLastSystemMessage("📦 Распаковка архива голосового движка Vosk успешно завершена!")
-                        }
-                        // 4. Запись успеха в настройки только после полной проверки
-                        prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, true).apply()
-                        // 5. Запуск инициализации модели
-                        initializeVoskModel(context)
-                    } else {
-                        throw Exception("Критические файлы модели Vosk отсутствуют: am/final.mdl не найден")
-                    }
-                }
-
-                // 6. Удаление временного файла
-                tempZipFile.delete()
-            } catch (e: Exception) {
-                Log.e(TAG, "Ошибка локальной распаковки Vosk: ${e.message}")
-                withContext(Dispatchers.Main) {
-                    appendSystemMessage("⚠️ Ошибка при распаковке архива: ${e.message}")
-                }
-                // Сброс флага готовности при ошибке
-                prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, false).apply()
-                _isVoskLoaded.value = false
-            } finally {
-                if (!_isVoskLoaded.value) {
-                    withContext(Dispatchers.Main) {
-                        appendSystemMessage("⚠ Локальная распаковка не удалась. Попробуйте еще раз.")
-                    }
-                }
-            }
-        }
-    }
-
-    private suspend fun initializeVoskModel(context: Context) {
-        var ramProgressJob: Job? = null
-        try {
-            val targetDir = File(context.filesDir, VOSK_MODEL_DIR)
-
-            // 1. ФИЗИЧЕСКАЯ ПРОВЕРКА ФАЙЛОВ МОДЕЛИ ПЕРЕД ИНИЦИАЛИЗАЦИЕЙ
-            val amDir = File(targetDir, "am")
-            val finalMdlFile = File(amDir, "final.mdl")
-            if (!amDir.exists() || !amDir.isDirectory || !finalMdlFile.exists() || !finalMdlFile.isFile) {
-                Log.e(TAG, "Critical model files missing: am/final.mdl not found")
-                val prefs = context.getSharedPreferences("cloud_ai", Context.MODE_PRIVATE)
-                prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, false).apply()
-                _isVoskLoaded.value = false
-                withContext(Dispatchers.Main) {
-                    appendSystemMessage("⚠️ Критические файлы модели Vosk отсутствуют. Попробуйте перезагрузить модель.")
-                }
-                return
-            }
-
-            // Intelligent path detection: find the directory containing the "am" folder
-            val modelPath = findModelPath(targetDir)
-
-            // Validate that the model directory actually exists
-            if (modelPath == null || !File(modelPath).exists()) {
-                Log.e(TAG, "Model path not found or invalid")
-                val prefs = context.getSharedPreferences("cloud_ai", Context.MODE_PRIVATE)
-                prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, false).apply()
-                _isVoskLoaded.value = false
-                withContext(Dispatchers.Main) {
-                    appendSystemMessage("⚠️ Модель не найдена. Попробуйте перезапустить приложение.")
-                }
-                return
-            }
-
-            // OOM Protection: Clear memory before initializing VoskRecognizer
-            withContext(Dispatchers.Main) {
-                updateLastSystemMessage("🧹 Очистка памяти перед загрузкой Vosk...")
-            }
-            Log.d(TAG, "OOM Protection: Running GC before VoskRecognizer init")
-            System.gc()
-            Runtime.getRuntime().gc()
-            delay(200)
-
-            // Start RAM loading animation
-            ramProgressJob = scope.launch(Dispatchers.Main) {
-                var dots = 1
-                while (true) {
-                    updateLastSystemMessage("⚙️ Инициализация ядра Vosk... Загрузка весов модели в ОЗУ" + ".".repeat(dots))
-                    delay(600)
-                    dots = (dots % 3) + 1
-                }
-            }
-
-            // Wrap VoskRecognizer initialization in try-catch for OutOfMemoryError
-            try {
-                voskRecognizer = VoskRecognizer(
-                    contextRef = WeakReference(context.applicationContext),
-                    onResult = onVoiceResult,
-                    onLog = onVoiceLog,
-                    scope = scope,
-                    externalModelPath = modelPath
-                )
-
-                // Cancel RAM loading animation on success
-                ramProgressJob?.cancel()
-                ramProgressJob = null
-
-                withContext(Dispatchers.Main) {
-                    _isVoskLoaded.value = true
-                    appendSystemMessage("✅ Голосовой движок Vosk полностью загружен и готов в ОЗУ!")
-                }
-            } catch (t: Throwable) {
-                // Cancel RAM loading animation on error
-                ramProgressJob?.cancel()
-                ramProgressJob = null
-
-                if (t is OutOfMemoryError || t.message?.contains("OutOfMemoryError") == true) {
-                    Log.e(TAG, "OutOfMemoryError при инициализации Vosk", t)
-                    withContext(Dispatchers.Main) {
-                        appendSystemMessage("⚠️ Недостаточно оперативной памяти для загрузки голосовой модели. Попробуйте освободить память или перезапустить приложение.")
-                        appendSystemMessage("💡 Для работы Vosk требуется ~500 МБ свободной RAM.")
-                    }
-                } else {
-                    Log.e(TAG, "Ошибка инициализации Vosk: ${t.message}", t)
-                    withContext(Dispatchers.Main) {
-                        appendSystemMessage("⚠️ Ошибка инициализации Vosk: ${t.message}")
-                    }
-                }
-
-                // Сброс флага готовности при ошибке инициализации
-                val prefs = context.getSharedPreferences("cloud_ai", Context.MODE_PRIVATE)
-                prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, false).apply()
-                _isVoskLoaded.value = false
-
-                // Re-throw to allow caller to handle, but we already logged and notified user
-                throw t
-            }
-        } catch (e: Exception) {
-            // Cancel RAM loading animation if still running
-            ramProgressJob?.cancel()
-            ramProgressJob = null
-            Log.e(TAG, "Ошибка инициализации Vosk: ${e.message}")
-            withContext(Dispatchers.Main) {
-                appendSystemMessage("⚠️ Ошибка инициализации Vosk: ${e.message}")
-            }
-            // Сброс флага готовности при ошибке
-            val prefs = context.getSharedPreferences("cloud_ai", Context.MODE_PRIVATE)
-            prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, false).apply()
-            _isVoskLoaded.value = false
-        } finally {
-            // Ensure RAM loading animation is cancelled in all cases
-            ramProgressJob?.cancel()
-            ramProgressJob = null
-        }
-    }
-
-    private fun findModelPath(targetDir: File): String? {
-        // First priority: Check for nested structure: vosk-model-ru-0.42/am
-        val nestedDir = File(targetDir, "vosk-model-ru-0.42")
-        if (nestedDir.exists() && nestedDir.isDirectory && File(nestedDir, "am").exists()) {
-            return nestedDir.absolutePath
-        }
-
-        // Check if targetDir itself contains the "am" folder (flattened extraction)
-        if (File(targetDir, "am").exists()) {
-            return targetDir.absolutePath
-        }
-
-        // Check for any subdirectory that contains "am"
-        val subDirs = targetDir.listFiles { file -> file.isDirectory }
-        if (subDirs != null) {
-            for (subDir in subDirs) {
-                if (File(subDir, "am").exists()) {
-                    return subDir.absolutePath
-                }
-            }
-        }
-
-        // Fallback: return targetDir if it exists
-        return if (targetDir.exists()) targetDir.absolutePath else null
-    }
-
-    // === НОВЫЙ МЕТОД: Полная выгрузка Vosk из памяти ===
-    fun releaseVosk() {
-        try {
-            if (_isRecording.value) {
-                stopRecording()
-            }
-            voskRecognizer?.release()
-            voskRecognizer = null
-            _isVoskLoaded.value = false
-            appendSystemMessage("🔄 Голосовой движок Vosk полностью выгружен из памяти")
-            Log.d(TAG, "Vosk модель успешно освобождена из ОЗУ")
-        } catch (e: Exception) {
-            Log.e(TAG, "Ошибка при выгрузке Vosk: ${e.message}")
-            appendSystemMessage("⚠ Ошибка при выгрузке голосового движка")
         }
     }
 
@@ -1149,22 +557,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 appendSystemMessage("⚠️ Выберите режим работы: локальный или облачный ИИ")
             }
         }
-    }
-
-    // === Методы для Vosk ===
-    fun startRecording() {
-        if (_isRecording.value) return
-        _recognizedText.value = ""
-        voskRecognizer?.startRecording()
-        _isRecording.value = true
-    }
-
-    fun stopRecording() {
-        if (!_isRecording.value) return
-        autoSendJob?.cancel()
-        voskRecognizer?.stopRecording()
-        _isRecording.value = false
-        _recognizedText.value = "" // Очистка для нового сеанса
     }
 
     // === Методы для облачного ИИ ===
@@ -1454,9 +846,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     fun abortLocal() {
         if (_state.value.isActive()) {
             Log.i(TAG, "Aborting generation")
-            ortSession?.let {
-                // Stop any ongoing TTS playback
-            }
             llamaHelper.abort()
         }
     }
@@ -1534,10 +923,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _chatHistory.value = emptyList()
         _generatedText.value = ""
         _cloudGeneratedText.value = ""
-        _recognizedText.value = ""
-        lastSpokenMessageIndex = -1
-        autoSendJob?.cancel()
-        Log.d(TAG, "Context purified completely. Conversational session wiped.")
     }
 
     fun updateSystemPrompt(newPrompt: String) {
@@ -1556,89 +941,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         maxTokens.value = tokens.coerceIn(1, 4096)
     }
 
-    fun speakText(text: String) {
-        // Безопасная проверка готовности движка
-        if (!_isTtsReady.value || ortSession == null || ortEnv == null || text.isBlank()) {
-            Log.w("LlamaTts", "Синтез речи отменен: движок не готов или текст пуст")
-            return
-        }
-
-        // Жестко переносим всю работу с UI-потока в фоновый поток Default
-        scope.launch(Dispatchers.Default) {
-            try {
-                // 1. Создаем одномерный массив токенов символов
-                val tokenIds = LongArray(text.length) { i -> text[i].code.toLong() }
-
-                // 2. Оборачиваем его в двумерный массив Object[], который ожидает Java API ONNX Runtime
-                val container3D = arrayOf<Any>(tokenIds)
-
-                // 3. Создаем тензор с формой [1, длина_строки]
-                val inputTensor = OnnxTensor.createTensor(ortEnv, container3D)
-                val inputName = ortSession?.inputNames?.iterator()?.next() ?: "input"
-
-                // 4. Инференс ONNX Runtime (безопасное получение данных)
-                val results = ortSession?.run(mapOf(inputName to inputTensor))
-                val outputTensor = results?.get(0) as? OnnxTensor
-
-                // 5. Вычитывание Direct FloatBuffer через .get()
-                val floatBuffer = outputTensor?.floatBuffer
-                val floatData = floatBuffer?.let {
-                    val array = FloatArray(it.remaining())
-                    it.get(array)
-                    array
-                }
-
-                // Освобождаем ресурсы
-                inputTensor.close()
-                results?.close()
-
-                if (floatData != null && floatData.isNotEmpty()) {
-                    // 6. Квантование: Float (-1..1) -> Short (-32767..32767)
-                    val shortData = ShortArray(floatData.size) { i ->
-                        (floatData[i].coerceIn(-1.0f, 1.0f) * 32767.0f).toInt().toShort()
-                    }
-
-                    // 7. AudioTrack с ENCODING_PCM_16BIT
-                    val sampleRate = 22050
-                    val minBufferSize = AudioTrack.getMinBufferSize(
-                        sampleRate,
-                        AudioFormat.CHANNEL_OUT_MONO,
-                        AudioFormat.ENCODING_PCM_16BIT
-                    )
-
-                    if (minBufferSize > 0) {
-                        // Используем MODE_STATIC для стабильного воспроизведения
-                        val audioTrack = AudioTrack(
-                            AudioManager.STREAM_MUSIC,
-                            sampleRate,
-                            AudioFormat.CHANNEL_OUT_MONO,
-                            AudioFormat.ENCODING_PCM_16BIT,
-                            shortData.size * 2,
-                            AudioTrack.MODE_STATIC
-                        )
-
-                        audioTrack.write(shortData, 0, shortData.size)
-                        audioTrack.play()
-
-                        // Ожидаем завершения воспроизведения
-                        while (audioTrack.playState == AudioTrack.PLAYSTATE_PLAYING) {
-                            delay(50)
-                        }
-
-                        audioTrack.stop()
-                        audioTrack.release()
-
-                        Log.d(TAG, "ONNX TTS playback completed")
-                    } else {
-                        Log.e(TAG, "Invalid AudioTrack buffer size")
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("LlamaTts", "Критическая ошибка синтеза речи: ${e.message}")
-            }
-        }
-    }
-
     fun releaseModel() {
         _isModelLoaded.value = false
         llamaHelper.release()
@@ -1647,16 +949,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     override fun onCleared() {
         super.onCleared()
         instance = null
-        ortSession?.close()
-        ortSession = null
-        ortEnv?.close()
-        ortEnv = null
+        textToSpeech?.shutdown()
+        textToSpeech = null
         _isTtsReady.value = false
         _isModelLoaded.value = false
         llamaHelper.abort()
         llamaHelper.release()
-        voskRecognizer?.release()
-        autoSendJob?.cancel()
         viewModelJob.cancel()
     }
 }
