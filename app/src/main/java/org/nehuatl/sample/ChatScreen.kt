@@ -101,54 +101,7 @@ private val DarkText = Color(0xFF212529)
 private val ChatFontFamily = FontFamily.Monospace
 private val GreenColor = Color(0xFF4CD964)
 private val PaleYellowColor = Color(0xFFFFF9DB)
-private val FriendlyRobotColor = Color(0xFF00B4D8)
-
-private object HelpText {
-    val fullHelp = """
-        🤖 ИИ-ДРУГ — ПОЛНОЕ РУКОВОДСТВО
-        =================================
-        
-        🎯 ОСНОВНЫЕ РЕЖИМЫ РАБОТЫ
-        --------------------------
-        • Локальный ИИ — использует загруженную модель Llama на устройстве.
-          Полная автономность и приватность.
-        • Облачный ИИ — подключается к облачным сервисам (GigaChat, OpenRouter).
-          Требуется интернет и API-ключ.
-        • Нейтральный режим — ИИ выгружен из памяти. Работают только команды
-          поиска, будильника и голосовой ввод.
-        
-        🧠 УПРАВЛЕНИЕ ПАМЯТЬЮ
-        ----------------------
-        • «запомни [текст]» — сохраняет информацию в базу знаний
-        • «найди [запрос]» или «вспомни [запрос]» — ищет в базе знаний
-        • «посмотри в чате [запрос]» — ищет в истории диалога
-        • Кнопка «мозг» — открывает редактор базы знаний для ручного редактирования
-        
-        🎤 ГОЛОСОВОЙ ВВОД И ВЫВОД
-        -------------------------
-        • Кнопка «голос» в панели управления — загружает/выгружает Vosk
-        • Микрофон в поле ввода — запускает голосовое распознавание
-        • Голосовой движок TTS — озвучивает ответы ИИ
-        
-        ⏰ КОМАНДЫ БУДИЛЬНИКА
-        ---------------------
-        • «будильник в 18.00» или «напомни в 18.00 идти в гараж»
-        • Требуется разрешение на точные будильники для Android 12+
-        
-        🔧 НАСТРОЙКИ
-        -----------
-        • «движок» — выбор модели Llama, размер контекста, температура
-        • «характер» — системный промпт (инструкция для ИИ)
-        • Креативность (температура) — от 0.1 (строгий) до 1.0 (творческий)
-        
-        💡 СОВЕТЫ
-        ---------
-        • Для поиска по памяти используйте ключевые слова в любом падеже
-        • ИИ сам анализирует диалог и запоминает важные факты в фоне
-        • При проблемах с памятью перезапустите приложение
-        • Голосовой движок Vosk требует ~500 МБ свободной RAM
-    """.trimIndent()
-}
+private val FriendlyRobotColor = Color(0xFF00B4D8) // Уникальный бирюзовый цвет дружелюбного ИИ
 
 enum class AIMode {
     LOCAL,
@@ -178,12 +131,10 @@ fun ChatScreen(
     val contextSize by viewModel.contextSize.collectAsStateWithLifecycle()
     val cloudState by viewModel.cloudState.collectAsStateWithLifecycle()
     val isModelLoaded by viewModel.isModelLoaded.collectAsStateWithLifecycle()
+    // Исправленная строка 129: реактивная подписка на состояние записи
     val isRecording by viewModel.isRecording.collectAsStateWithLifecycle()
+    // ИСПРАВЛЕННЫЙ ЖИВОЙ ПОТОК: Интерфейс реактивно слушает бэкенд Vosk
     val isVoskReady by viewModel.isVoskLoaded.collectAsStateWithLifecycle(initialValue = false)
-
-    // ДОБАВЛЕНО: Состояния для управления инициализацией TTS
-    var isTtsInitialized by remember { mutableStateOf(false) }
-    var isTtsLoading by remember { mutableStateOf(false) }
 
     var promptInput by remember { mutableStateOf("") }
     var showModelDialog by remember { mutableStateOf(false) }
@@ -208,23 +159,6 @@ fun ChatScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val coroutineScope = rememberCoroutineScope()
 
-    // ДОБАВЛЕНО: Launcher для запроса разрешений
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val allGranted = permissions.values.all { it }
-        if (allGranted) {
-            if (!isTtsInitialized && !isTtsLoading) {
-                isTtsLoading = true
-                viewModel.initTts(context)
-                isTtsInitialized = true
-                isTtsLoading = false
-            }
-        } else {
-            viewModel.appendSystemMessage("⚠️ Для работы голосового движка необходимы разрешения")
-        }
-    }
-
     // Register the Activity Result Launcher for Document Picking
     val localVoskZipLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -238,6 +172,33 @@ fun ChatScreen(
     LaunchedEffect(viewModel.voskFilePickerEvent) {
         viewModel.voskFilePickerEvent.collect {
             localVoskZipLauncher.launch("application/zip")
+        }
+    }
+
+    // НОВЫЙ БЛОК: Запуск TTS после получения всех разрешений
+    LaunchedEffect(Unit) {
+        // Проверяем наличие всех необходимых разрешений
+        val hasRecordPermission = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+
+        val hasNotificationPermission = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+
+        // Если разрешения получены, запускаем initTts
+        if (hasRecordPermission && hasNotificationPermission) {
+            viewModel.initTts(context)
+        } else {
+            // Если разрешений нет, ждем их предоставления
+            // Приложение должно запросить их через отдельный механизм
+            viewModel.appendSystemMessage("⚠️ Для работы голосового движка требуются разрешения. Пожалуйста, предоставьте их в настройках.")
         }
     }
 
@@ -255,44 +216,20 @@ fun ChatScreen(
         }
     }
 
-    // ИЗМЕНЕНО: Блок проверки разрешений и запуска TTS
-    LaunchedEffect(Unit) {
-        val hasPermissions = ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.RECORD_AUDIO
-        ) == PackageManager.PERMISSION_GRANTED
-
-        if (hasPermissions) {
-            if (!isTtsInitialized && !isTtsLoading) {
-                isTtsLoading = true
-                viewModel.initTts(context)
-                isTtsInitialized = true
-                isTtsLoading = false
-            }
-        } else {
-            permissionLauncher.launch(
-                arrayOf(
-                    Manifest.permission.RECORD_AUDIO,
-                    Manifest.permission.POST_NOTIFICATIONS
-                )
-            )
-        }
-    }
-
-    // Блок приветствия при запуске с typewriter эффектом
+    // Блок приветствия при запуске (отсчет 5 секунд) с typewriter эффектом
     val fullWelcomeString = "Привет! Я твой персональный ИИ-Друг, это лучшая запоминалка паролей и умный собеседник! 🤖✨ Я создан, чтобы доказать: искусственный интеллект — это твой надежный и полностью автономный союзник, защищенный от любых внешних блокировок!\n\nВот что я умею:\n🎤 СЛЫШАТЬ И ГОВОРИТЬ: Кнопка «Голос» загружает мои уши Vosk и собственный нейроголос. Нажми микрофон в подвале, чтобы общаться голосом.\n🧠 РАЗДЕЛЬНАЯ ПАМЯТЬ: Скажи мне «запомни [факт]», и я запишу это в твою личную базу знаний. В фоне я сам анализирую наш чат и делаю важные выводы в свой мозг.\n🔍 УМНЫЙ ПОИСК: Очисти чат корзинкой, если хочешь начать с чистого листа. Я всё забуду, но если тебе понадобится что-нибудь вспомнить — просто скажи «посмотри в чате», «вспомни» или «найди». Я пойму тебя в любом падеже и склонении!\n⏰ КОМАНДЫ: Я легко поставлю будильник или напомню о делах, например: «напомни в 18.00 идти в гараж».\n\nДавай общаться! Включи локальный движок Llama или облачный ИИ в шапке приложения, и погнали!"
 
-    // ИЗМЕНЕНО: Запуск приветствия только после загрузки TTS
-    LaunchedEffect(isTtsInitialized) {
-        if (isTtsInitialized) {
-            delay(500)
-            viewModel.speakText(fullWelcomeString)
-            var runningText = ""
-            for (i in fullWelcomeString.indices) {
-                runningText += fullWelcomeString[i]
-                viewModel.updateLastSystemMessage(runningText)
-                delay(35)
-            }
+    LaunchedEffect(Unit) {
+        // Асинхронная задержка в 5 секунд (5000 миллисекунд)
+        kotlinx.coroutines.delay(5000)
+        // Мгновенный запуск озвучки полного текста
+        viewModel.speakText(fullWelcomeString)
+        // Динамическая печать инструкции посимвольно через updateLastSystemMessage
+        var runningText = ""
+        for (i in fullWelcomeString.indices) {
+            runningText += fullWelcomeString[i]
+            viewModel.updateLastSystemMessage(runningText)
+            delay(35) // Плавный механический ритм печати с интервалом 35 мс
         }
     }
 
@@ -311,20 +248,24 @@ fun ChatScreen(
     }
 
     // УНИВЕРСАЛЬНЫЙ АВТОСКРОЛЛ ДЛЯ ВСЕХ ТИПОВ СООБЩЕНИЙ
+    // Динамически извлекаем текст САМОГО ПОСЛЕДНЕГО сообщения в чате для отслеживания (приветствие, память или ИИ)
     val lastMessageText = chatMessages.lastOrNull()?.text ?: ""
-
+    // LaunchedEffect теперь гарантированно просыпается при добавлении нового сообщения,
+    // при генерации локального/облачного текста, а также при изменении букв приветствия или памяти!
     LaunchedEffect(chatMessages.size, generatedText.length, cloudGeneratedText.length, lastMessageText) {
         if (chatMessages.isNotEmpty() || generatedText.isNotEmpty() || cloudGeneratedText.isNotEmpty()) {
+            // Мягкая, плавная анимация докрутки scrollState к самому низу экрана
             scrollState.animateScrollTo(
                 value = scrollState.maxValue,
                 animationSpec = tween(
-                    durationMillis = 300,
+                    durationMillis = 300, // Снижаем задержку до 300мс для мгновенного плавного следования за печатью
                     easing = LinearOutSlowInEasing
                 )
             )
         }
     }
 
+    // Удален автозапрос фокуса для клавиатуры
     LaunchedEffect(showSettings) {
         if (showSettings) {
             tempTemperature = temperature
@@ -349,6 +290,7 @@ fun ChatScreen(
         )
     }
 
+    // Вычисляем флаг готовности облачного ИИ для передачи в диалог
     val isCloudReady = viewModel.getCloudConfig()?.authKey?.isNotEmpty() == true || cloudState is CloudAIState.Ready
 
     if (showCloudDialog) {
@@ -548,30 +490,6 @@ fun ChatScreen(
                                 modifier = Modifier.padding(vertical = 2.dp)
                             )
                         }
-
-                        // ДОБАВЛЕНО: Индикатор загрузки TTS
-                        if (isTtsLoading) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    color = AccentColor,
-                                    strokeWidth = 2.dp
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Загрузка голосового движка...",
-                                    color = DarkText.copy(alpha = 0.7f),
-                                    fontSize = 12.sp,
-                                    fontFamily = ChatFontFamily
-                                )
-                            }
-                        }
                     }
                 }
             }
@@ -606,7 +524,7 @@ fun ChatScreen(
             isVoskReady = isVoskReady,
             viewModel = viewModel,
             context = context,
-            modifier = Modifier.padding(8.dp)
+            modifier = Modifier.padding(8.dp) // UPDATED: padding changed from 16.dp to 8.dp
         )
     }
 }
@@ -622,18 +540,21 @@ private fun TopBarWithSwitch(
 ) {
     val isLocalReady = isModelLoaded
     val isCloudReady = cloudConfig?.authKey?.isNotEmpty() == true
+
     val localIndicatorColor = if (isLocalReady) GreenColor else PaleYellowColor
     val cloudIndicatorColor = if (isCloudReady) GreenColor else PaleYellowColor
 
+    // ПОЛЕ 1: Общий контейнер с рамкой
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(80.dp)
+            .height(80.dp) // Фиксированная высота
             .padding(4.dp)
             .border(1.dp, BorderGray, RoundedCornerShape(8.dp))
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // ПОЛЕ 2: Логотип (прижат к левому краю)
         Image(
             painter = painterResource(id = R.mipmap.ic_launcher),
             contentDescription = "Лого",
@@ -644,11 +565,12 @@ private fun TopBarWithSwitch(
             contentScale = ContentScale.Crop
         )
 
+        // ПОЛЕ 3: Название приложения (центрировано по вертикали и горизонтали)
         Box(
             modifier = Modifier
-                .weight(1f)
+                .weight(1f) // Занимает всё доступное пространство по центру
                 .fillMaxHeight(),
-            contentAlignment = Alignment.Center
+            contentAlignment = Alignment.Center // Строгое центрирование текста
         ) {
             Text(
                 text = "-- ИИ-Друг --",
@@ -660,13 +582,15 @@ private fun TopBarWithSwitch(
             )
         }
 
+        // ПОЛЕ 4: Блок управления с фиксированной шириной 132.dp
         Column(
             modifier = Modifier
-                .width(132.dp)
+                .width(132.dp) // Фиксированная ширина для прямоугольника
                 .fillMaxHeight(),
-            verticalArrangement = Arrangement.SpaceEvenly,
-            horizontalAlignment = Alignment.CenterHorizontally
+            verticalArrangement = Arrangement.SpaceEvenly, // Равномерный отступ по высоте
+            horizontalAlignment = Alignment.CenterHorizontally // Центрирование строк
         ) {
+            // Верхняя строка: Индикаторы-фонарики
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -682,6 +606,7 @@ private fun TopBarWithSwitch(
                 )
             }
 
+            // Нижняя строка: Кнопки управления (строго 42.dp каждая)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -691,7 +616,7 @@ private fun TopBarWithSwitch(
                     label = "Local",
                     isSelected = currentMode == AIMode.LOCAL,
                     onClick = { onLocalForceDialog() },
-                    modifier = Modifier.width(42.dp).height(22.dp)
+                    modifier = Modifier.width(42.dp).height(22.dp) // Ширина точно подогнана под фонарики
                 )
                 ModeButton(
                     label = "Neutral",
@@ -805,10 +730,12 @@ private fun ControlPanel(
                 label = "справка",
                 onClick = onHelpClick
             )
+            // Используем реактивный isVoskReady для иконки и логики
             IconButtonWithLabel(
                 icon = if (isVoskReady) Icons.Default.VolumeUp else Icons.Default.VolumeMute,
                 label = "голос",
                 onClick = {
+                    // Стандартная проверка разрешения на запись аудио
                     if (ContextCompat.checkSelfPermission(
                             context,
                             Manifest.permission.RECORD_AUDIO
@@ -818,9 +745,11 @@ private fun ControlPanel(
                         return@IconButtonWithLabel
                     }
                     if (isVoskReady) {
+                        // Выгрузка движка из памяти
                         viewModel.releaseVosk()
                         viewModel.appendSystemMessage("📢 Голосовой движок Vosk успешно выгружен из ОЗУ.")
                     } else {
+                        // Запуск инициализации внутри корутины
                         coroutineScope.launch {
                             viewModel.initVoskLazily(context)
                         }
@@ -861,6 +790,7 @@ private fun SettingsPanel(
         Column(modifier = Modifier.padding(16.dp)) {
             Text("🌡️ Настройки движка ИИ", color = DarkText, style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
+
             Text(text = "Креативность (Температура): ${String.format("%.1f", temperature)}", color = DarkText)
             Slider(
                 value = temperature,
@@ -870,7 +800,9 @@ private fun SettingsPanel(
                 modifier = Modifier.fillMaxWidth(),
                 colors = SliderDefaults.colors(thumbColor = AccentColor, activeTrackColor = AccentColor, inactiveTrackColor = BorderGray)
             )
+
             Spacer(modifier = Modifier.height(12.dp))
+
             Text(text = "Максимум токенов: $maxTokens", color = DarkText)
             Slider(
                 value = maxTokens.toFloat(),
@@ -880,7 +812,9 @@ private fun SettingsPanel(
                 modifier = Modifier.fillMaxWidth(),
                 colors = SliderDefaults.colors(thumbColor = AccentColor, activeTrackColor = AccentColor, inactiveTrackColor = BorderGray)
             )
+
             Spacer(modifier = Modifier.height(12.dp))
+
             Text(text = "Размер контекстного окна: $contextSize", color = DarkText)
             Slider(
                 value = contextSize.toFloat(),
@@ -890,7 +824,9 @@ private fun SettingsPanel(
                 modifier = Modifier.fillMaxWidth(),
                 colors = SliderDefaults.colors(thumbColor = AccentColor, activeTrackColor = AccentColor, inactiveTrackColor = BorderGray)
             )
+
             Spacer(modifier = Modifier.height(12.dp))
+
             Button(
                 onClick = onModelChangeClick,
                 colors = ButtonDefaults.buttonColors(containerColor = BorderGray),
@@ -898,7 +834,9 @@ private fun SettingsPanel(
             ) {
                 Text("Сменить или перезагрузить модель", color = DarkText)
             }
+
             Spacer(modifier = Modifier.height(8.dp))
+
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = {
@@ -907,6 +845,7 @@ private fun SettingsPanel(
                     colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
                     modifier = Modifier.weight(1f)
                 ) { Text("Сохранить", color = DarkText) }
+
                 Button(
                     onClick = onClose,
                     colors = ButtonDefaults.buttonColors(containerColor = BorderGray),
@@ -927,6 +866,7 @@ private fun PromptSettingsPanel(promptText: String, onPromptChange: (String) -> 
         Column(modifier = Modifier.padding(16.dp)) {
             Text("🧠 Роль ИИ (Системный промпт)", color = DarkText, style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
+
             OutlinedTextField(
                 value = promptText,
                 onValueChange = onPromptChange,
@@ -944,7 +884,9 @@ private fun PromptSettingsPanel(promptText: String, onPromptChange: (String) -> 
                     cursorColor = AccentColor
                 )
             )
+
             Spacer(modifier = Modifier.height(12.dp))
+
             Button(
                 onClick = onSave,
                 colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
@@ -985,6 +927,7 @@ private fun CloudAIDialog(
                     style = MaterialTheme.typography.bodyMedium,
                     color = DarkText
                 )
+
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("🔵 GigaChat", color = DarkText)
                     Switch(
@@ -999,6 +942,7 @@ private fun CloudAIDialog(
                     )
                     Text("🌐 Другой провайдер", color = DarkText)
                 }
+
                 OutlinedTextField(
                     value = apiUrl,
                     onValueChange = onApiUrlChange,
@@ -1020,6 +964,7 @@ private fun CloudAIDialog(
                         cursorColor = AccentColor
                     )
                 )
+
                 OutlinedTextField(
                     value = authKey,
                     onValueChange = onAuthKeyChange,
@@ -1047,6 +992,7 @@ private fun CloudAIDialog(
                         cursorColor = AccentColor
                     )
                 )
+
                 Button(
                     onClick = onGenerateToken,
                     enabled = !isGeneratingToken && authKey.isNotBlank(),
@@ -1067,6 +1013,7 @@ private fun CloudAIDialog(
                         )
                     }
                 }
+
                 if (!isGigaChat) {
                     Text(
                         text = "ℹ️ Для обычных провайдеров ключ используется как токен",
@@ -1311,10 +1258,12 @@ private fun ModelPickerDialog(
             Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("Настройка ИИ", style = MaterialTheme.typography.headlineSmall, color = DarkText)
 
+                // Блок выбора языковой модели
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Языковая модель", color = DarkText)
                     val displayModelPath = currentModelPath?.substringAfterLast("/")?.replace("primary%3AModels%", "") ?: "Не выбрана"
                     Text(text = "Текущая модель: $displayModelPath", style = MaterialTheme.typography.bodySmall, color = DarkText.copy(alpha = 0.7f))
+
                     Button(
                         onClick = onPickModel,
                         modifier = Modifier.fillMaxWidth(),
@@ -1327,11 +1276,13 @@ private fun ModelPickerDialog(
                     }
                 }
 
+                // Блок выбора мультимодального проектора (опционально)
                 Column(modifier = Modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("(опционально)", style = MaterialTheme.typography.bodySmall, color = DarkText.copy(alpha = 0.6f))
                     Text("Мультимодальный проектор (mmproj)", color = DarkText)
                     val displayMmprojPath = mmprojPath?.substringAfterLast("/")?.replace("primary%3AModels%", "") ?: "Не выбран"
                     Text(text = "Текущий проектор: $displayMmprojPath", style = MaterialTheme.typography.bodySmall, color = DarkText.copy(alpha = 0.7f))
+
                     Button(
                         onClick = onPickMmproj,
                         modifier = Modifier.fillMaxWidth(),
@@ -1344,6 +1295,7 @@ private fun ModelPickerDialog(
                     }
                 }
 
+                // Кнопка запуска
                 Button(
                     onClick = onLoad,
                     enabled = currentModelPath != null,
@@ -1353,6 +1305,7 @@ private fun ModelPickerDialog(
                     Text("Запустить нейросеть", color = DarkText)
                 }
 
+                // Кнопка отмены
                 TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
                     Text("Отмена", color = DarkText)
                 }
@@ -1378,11 +1331,12 @@ private fun PromptInput(
     context: android.content.Context,
     modifier: Modifier = Modifier
 ) {
+    // Подписка на поток информации о памяти
     val memoryInfoText by viewModel.memoryInfoText.collectAsStateWithLifecycle(initialValue = "Загрузка памяти...")
 
     Card(
         modifier = modifier
-            .fillMaxWidth(),
+            .fillMaxWidth(), // UPDATED: removed padding(horizontal = 12.dp, vertical = 6.dp)
         shape = RoundedCornerShape(24.dp),
         border = BorderStroke(1.dp, BorderGray),
         colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF9DB))
@@ -1397,13 +1351,15 @@ private fun PromptInput(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Левая группа: Plus и Delete в вертикальной колонке
                 Column(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    // Plus Button
                     Box(
                         modifier = Modifier
-                            .size(41.dp)
+                            .size(41.dp) // UPDATED: size changed from 48.dp to 41.dp
                             .background(Color(0xFFF1F3F5), shape = CircleShape)
                             .border(1.dp, BorderGray, CircleShape),
                         contentAlignment = Alignment.Center
@@ -1411,7 +1367,7 @@ private fun PromptInput(
                         IconButton(
                             onClick = onPickImage,
                             enabled = enabled && !isGenerating,
-                            modifier = Modifier.size(41.dp)
+                            modifier = Modifier.size(41.dp) // UPDATED: size changed from 48.dp to 41.dp
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Add,
@@ -1421,9 +1377,10 @@ private fun PromptInput(
                         }
                     }
 
+                    // Delete Button
                     Box(
                         modifier = Modifier
-                            .size(41.dp)
+                            .size(41.dp) // UPDATED: size changed from 48.dp to 41.dp
                             .background(Color(0xFFF1F3F5), shape = CircleShape)
                             .border(1.dp, BorderGray, CircleShape),
                         contentAlignment = Alignment.Center
@@ -1431,7 +1388,7 @@ private fun PromptInput(
                         IconButton(
                             onClick = onClearChat,
                             enabled = true,
-                            modifier = Modifier.size(41.dp)
+                            modifier = Modifier.size(41.dp) // UPDATED: size changed from 48.dp to 41.dp
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Delete,
@@ -1442,6 +1399,7 @@ private fun PromptInput(
                     }
                 }
 
+                // Центр: Поле ввода (Pure White)
                 OutlinedTextField(
                     value = prompt,
                     onValueChange = onPromptChange,
@@ -1463,13 +1421,15 @@ private fun PromptInput(
                     )
                 )
 
+                // Правая группа: Микрофон и Отправить/Стоп в вертикальной колонке
                 Column(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    // Microphone Button
                     Box(
                         modifier = Modifier
-                            .size(41.dp)
+                            .size(41.dp) // UPDATED: size changed from 48.dp to 41.dp
                             .background(Color(0xFFF1F3F5), shape = CircleShape)
                             .border(1.dp, BorderGray, CircleShape),
                         contentAlignment = Alignment.Center
@@ -1495,7 +1455,7 @@ private fun PromptInput(
                                 }
                             },
                             enabled = true,
-                            modifier = Modifier.size(41.dp)
+                            modifier = Modifier.size(41.dp) // UPDATED: size changed from 48.dp to 41.dp
                         ) {
                             Icon(
                                 imageVector = if (isRecording) Icons.Default.Mic else Icons.Default.MicOff,
@@ -1505,9 +1465,10 @@ private fun PromptInput(
                         }
                     }
 
+                    // Send/Stop Button
                     Box(
                         modifier = Modifier
-                            .size(41.dp)
+                            .size(41.dp) // UPDATED: size changed from 48.dp to 41.dp
                             .background(Color(0xFFF1F3F5), shape = CircleShape)
                             .border(1.dp, BorderGray, CircleShape),
                         contentAlignment = Alignment.Center
@@ -1515,7 +1476,7 @@ private fun PromptInput(
                         if (isGenerating) {
                             IconButton(
                                 onClick = onAbort,
-                                modifier = Modifier.size(41.dp)
+                                modifier = Modifier.size(41.dp) // UPDATED: size changed from 48.dp to 41.dp
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
@@ -1527,7 +1488,7 @@ private fun PromptInput(
                             IconButton(
                                 onClick = onGenerate,
                                 enabled = enabled && prompt.isNotBlank(),
-                                modifier = Modifier.size(41.dp)
+                                modifier = Modifier.size(41.dp) // UPDATED: size changed from 48.dp to 41.dp
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.ArrowUpward,
@@ -1540,8 +1501,10 @@ private fun PromptInput(
                 }
             }
 
+            // Отступ перед счетчиком памяти
             Spacer(modifier = Modifier.height(2.dp))
 
+            // Счетчик состояния памяти
             Text(
                 text = memoryInfoText,
                 color = DarkText.copy(alpha = 0.6f),
@@ -1549,8 +1512,8 @@ private fun PromptInput(
                 fontFamily = ChatFontFamily,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 4.dp, end = 4.dp, bottom = 2.dp),
-                textAlign = TextAlign.Center
+                    .padding(start = 4.dp, end = 4.dp, bottom = 2.dp), // FIXED: proper padding syntax
+                textAlign = TextAlign.Center // UPDATED: textAlign changed from TextAlign.Start to TextAlign.Center
             )
         }
     }
