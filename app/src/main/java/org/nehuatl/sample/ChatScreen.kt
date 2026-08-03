@@ -16,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -1002,10 +1003,7 @@ private fun CloudAIDialog(
                     colors = ButtonDefaults.buttonColors(
                         containerColor = AccentColor
                     ),
-                    contentPadding = ButtonDefaults.ContentPadding.copy(
-                        horizontal = 8.dp,
-                        vertical = 4.dp
-                    ),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                     modifier = Modifier.height(28.dp)
                 ) {
                     Text(
@@ -1022,10 +1020,7 @@ private fun CloudAIDialog(
                     colors = ButtonDefaults.buttonColors(
                         containerColor = AccentColor
                     ),
-                    contentPadding = ButtonDefaults.ContentPadding.copy(
-                        horizontal = 8.dp,
-                        vertical = 4.dp
-                    ),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                     modifier = Modifier.height(28.dp)
                 ) {
                     Text(
@@ -1042,10 +1037,7 @@ private fun CloudAIDialog(
                     colors = ButtonDefaults.buttonColors(
                         containerColor = AccentColor
                     ),
-                    contentPadding = ButtonDefaults.ContentPadding.copy(
-                        horizontal = 8.dp,
-                        vertical = 4.dp
-                    ),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                     modifier = Modifier.height(28.dp)
                 ) {
                     Text(
