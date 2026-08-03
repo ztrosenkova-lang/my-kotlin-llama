@@ -289,15 +289,10 @@ fun ChatScreen(
                 viewModel.setCurrentMode(AIMode.CLOUD)
             },
             onClear = {
-                viewModel.clearCloudConfig()
-                cloudApiUrl = "https://gigachat.devices.sberbank.ru/api/v1/chat/completions"
+                // ИСПРАВЛЕНИЕ: Очищаем поля, НЕ закрывая диалог
+                cloudApiUrl = if (cloudIsGigaChat) "https://gigachat.devices.sberbank.ru/api/v1/chat/completions" else "https://openrouter.ai/api/v1/chat/completions"
                 cloudAuthKey = ""
-                cloudIsGigaChat = true
-                showCloudDialog = false
-                if (currentMode == AIMode.CLOUD) {
-                    currentMode = AIMode.NEUTRAL
-                    viewModel.setCurrentMode(AIMode.NEUTRAL)
-                }
+                viewModel.appendSystemMessage("🧹 Поля очищены")
             },
             onDismiss = { showCloudDialog = false },
             onGenerateToken = {
@@ -978,14 +973,88 @@ private fun CloudAIDialog(
             }
         },
         confirmButton = {
-            Button(onClick = onSave, colors = ButtonDefaults.buttonColors(containerColor = AccentColor)) {
-                Text("Сохранить", color = DarkText)
-            }
-        },
-        dismissButton = {
-            Row {
-                TextButton(onClick = onClear) { Text("Очистить", color = DarkText.copy(alpha = 0.6f)) }
-                TextButton(onClick = onDismiss) { Text("Закрыть", color = DarkText) }
+            // НОВАЯ КОМПАКТНАЯ ПАНЕЛЬ в одну строку
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 1. Фонарик статуса
+                Box(
+                    modifier = Modifier
+                        .size(12.dp)
+                        .background(
+                            color = if (isCloudReady) GreenColor else Color.Red,
+                            shape = CircleShape
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = if (isCloudReady) GreenColor else Color.Red,
+                            shape = CircleShape
+                        )
+                )
+
+                // 2. Кнопка "Сохранить"
+                Button(
+                    onClick = onSave,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AccentColor
+                    ),
+                    contentPadding = ButtonDefaults.ContentPadding.copy(
+                        horizontal = 8.dp,
+                        vertical = 4.dp
+                    ),
+                    modifier = Modifier.height(28.dp)
+                ) {
+                    Text(
+                        text = "Сохранить",
+                        color = DarkText,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                // 3. Кнопка "Очистить"
+                Button(
+                    onClick = onClear,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AccentColor
+                    ),
+                    contentPadding = ButtonDefaults.ContentPadding.copy(
+                        horizontal = 8.dp,
+                        vertical = 4.dp
+                    ),
+                    modifier = Modifier.height(28.dp)
+                ) {
+                    Text(
+                        text = "Очистить",
+                        color = DarkText,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                // 4. Кнопка "Закрыть"
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AccentColor
+                    ),
+                    contentPadding = ButtonDefaults.ContentPadding.copy(
+                        horizontal = 8.dp,
+                        vertical = 4.dp
+                    ),
+                    modifier = Modifier.height(28.dp)
+                ) {
+                    Text(
+                        text = "Закрыть",
+                        color = DarkText,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
         }
     )
