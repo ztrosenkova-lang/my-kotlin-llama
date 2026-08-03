@@ -1,6 +1,7 @@
 package org.nehuatl.sample
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -132,7 +133,6 @@ fun ChatScreen(
     val contextSize by viewModel.contextSize.collectAsStateWithLifecycle()
     val cloudState by viewModel.cloudState.collectAsStateWithLifecycle()
     val isModelLoaded by viewModel.isModelLoaded.collectAsStateWithLifecycle()
-    
     // НОВОЕ: Реактивная подписка на состояние TTS
     val isTtsReady by viewModel.isTtsReady.collectAsStateWithLifecycle()
 
@@ -174,17 +174,6 @@ fun ChatScreen(
             }
         } else {
             viewModel.appendSystemMessage("⚠️ Распознавание речи отменено или не удалось")
-        }
-    }
-
-    // НОВЫЙ Launcher для выбора ZIP-файла (если нужен для других целей, оставляем)
-    val localVoskZipLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: android.net.Uri? ->
-        uri?.let { selectedUri ->
-            // Если всё ещё нужна поддержка Vosk, оставьте, иначе удалите
-            // viewModel.processLocalVoskZip(selectedUri, context)
-            viewModel.appendSystemMessage("⚠️ Поддержка Vosk удалена. Используйте встроенный Google Speech Recognizer.")
         }
     }
 
