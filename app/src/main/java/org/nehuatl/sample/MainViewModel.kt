@@ -7,7 +7,6 @@ import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.speech.RecognizerIntent
 import android.speech.tts.TextToSpeech
 import android.util.Log
@@ -39,8 +38,6 @@ import java.util.concurrent.TimeUnit
 import java.lang.ref.WeakReference
 import java.util.zip.ZipInputStream
 import kotlinx.coroutines.runBlocking
-import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
 
 data class ChatMessage(val role: String, val text: String)
 
@@ -129,14 +126,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         File(getApplication<Application>().filesDir, "brain.txt")
     }
 
-    // === НОВЫЙ TTS и Speech Recognizer ===
+    // === НОВЫЙ TTS ===
     private var textToSpeech: TextToSpeech? = null
     private var isTtsEnabled = false
     private val _isTtsReady = MutableStateFlow(false)
     val isTtsReady: StateFlow<Boolean> = _isTtsReady.asStateFlow()
-
-    // === НОВЫЙ Speech Recognizer (будет инициализироваться через Activity) ===
-    private var speechRecognizerLauncher: ((String) -> Unit)? = null
 
     private val alarmManager by lazy {
         getApplication<Application>().getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -382,21 +376,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         textToSpeech?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
     }
 
-    // === НОВЫЙ МЕТОД: Запуск распознавания речи (через ActivityResultLauncher) ===
-    fun startListening(onResult: (String) -> Unit) {
-        if (speechRecognizerLauncher == null) {
-            appendSystemMessage("⚠️ Распознавание речи не настроено. Передайте Launcher из Activity.")
-            return
-        }
-        speechRecognizerLauncher?.invoke(onResult)
-    }
+    // === УДАЛЕНЫ методы startListening() и setSpeechRecognizerLauncher() ===
+    // Они не используются, так как распознавание речи запускается напрямую из ChatScreen.kt
+    // через ActivityResultLauncher и вызывает viewModel.sendUserMessage(recognizedText).
 
-    // === НОВЫЙ МЕТОД: Установка Launcher для распознавания речи ===
-    fun setSpeechRecognizerLauncher(launcher: (String) -> Unit) {
-        speechRecognizerLauncher = launcher
-    }
-
-    // === ОСТАВЛЯЕМ БЕЗ ИЗМЕНЕНИЙ (кроме удаления Vosk) ===
+    // === ОСТАВЛЯЕМ БЕЗ ИЗМЕНЕНИЙ ===
 
     /**
      * Extracts the stem from a Russian word by removing common suffixes.
