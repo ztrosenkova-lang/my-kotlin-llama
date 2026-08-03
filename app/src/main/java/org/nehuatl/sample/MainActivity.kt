@@ -136,15 +136,9 @@ class MainActivity : ComponentActivity() {
 
     /**
      * Показывает диалог установки пароля (при первом запуске)
+     * Исправлено: убран вызов R.layout.dialog_set_password, используется программное создание полей
      */
     private fun showSetPasswordDialog() {
-        val builder = AlertDialog.Builder(this)
-        val inflater = layoutInflater
-        val view = inflater.inflate(R.layout.dialog_set_password, null) // Используем XML-разметку
-
-        // Если у вас нет XML-разметки, можно создать поля программно
-        // Для простоты использую стандартный AlertDialog с EditText
-
         val passwordInput = android.widget.EditText(this).apply {
             hint = "Введите пароль"
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
@@ -161,7 +155,8 @@ class MainActivity : ComponentActivity() {
             addView(confirmInput)
         }
 
-        builder.setTitle("🔒 Установка пароля")
+        AlertDialog.Builder(this)
+            .setTitle("🔒 Установка пароля")
             .setMessage("Приложение будет защищено паролем. Введите пароль дважды для подтверждения.")
             .setView(linearLayout)
             .setPositiveButton("Установить") { _, _ ->
