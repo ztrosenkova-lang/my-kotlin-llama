@@ -1,39 +1,54 @@
 package org.nehuatl.sample
 
-import android.app.AlarmManager
 import android.app.Application
+import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
-import android.media.AudioFormat
-import android.media.AudioManager
-import android.media.AudioTrack
 import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import ai.onnxruntime.OnnxTensor
-import ai.onnxruntime.OrtEnvironment
-import ai.onnxruntime.OrtSession
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import org.nehuatl.llamacpp.LlamaHelper
 import java.io.File
-import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import java.nio.channels.FileChannel
 import java.text.SimpleDateFormat
 import java.util.*
+import java.util.concurrent.TimeUnit
 import java.lang.ref.WeakReference
 import java.util.zip.ZipInputStream
+import android.media.AudioFormat
+import android.media.AudioManager
+import android.media.AudioTrack
+import ai.onnxruntime.OnnxTensor
+import ai.onnxruntime.OrtEnvironment
+import ai.onnxruntime.OrtSession
+import java.nio.channels.FileChannel
+import java.io.FileInputStream
+import kotlinx.coroutines.runBlocking
 
 data class ChatMessage(val role: String, val text: String)
 
 class MainViewModel(application: Application, val contentResolver: ContentResolver) : AndroidViewModel(application) {
+
     companion object {
         @Volatile var instance: MainViewModel? = null
         private const val TAG = "MainViewModel"
@@ -48,12 +63,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         private const val CHAT_LOOKUP_COMMAND = "посмотри в чате"
         private const val AUTO_SEND_DELAY = 5000L
         private const val AUTO_BRAIN_COMPRESSION_THRESHOLD = 14
-
-        // Vosk constants
+        // FIXED: Correct URL with full path to the Vosk model archive
         private const val VOSK_MODEL_URL = "http://alphacephei.com/vosk/models/vosk-model-ru-0.42.zip"
         private const val VOSK_MODEL_DIR = "vosk-model-large"
         private const val VOSK_MODEL_READY_FLAG = "is_vosk_large_ready"
-
         // PocketPal ONNX TTS Configuration Constants
         private const val TTS_MODEL_DIR = "tts-model"
         private const val TTS_MODEL_NAME = "ru_RU-robot-medium.onnx"
@@ -177,6 +190,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     // Track last spoken message index for TTS
     private var lastSpokenMessageIndex = -1
+
+    // Job for loading animation
+    private var loadingAnimationJob: Job? = null
 
     private val onVoiceResult: (String) -> Unit = { recognizedText ->
         if (recognizedText.isNotEmpty()) {
@@ -324,7 +340,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
 
-        // УДАЛЕНО: initTts(application.applicationContext) - вызов перенесен в ChatScreen.kt
+        // Automatically trigger voice initialization right after creation
+        // The welcome greeting is now explicitly deferred inside initTts to guarantee runtime order
+        initTts(application.applicationContext)
 
         scope.launch {
             _cloudFlow.collect { event ->
@@ -444,7 +462,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     val totalGb = memoryInfo.totalMem.toDouble() / (1024.0 * 1024.0 * 1024.0)
                     val availGb = memoryInfo.availMem.toDouble() / (1024.0 * 1024.0 * 1024.0)
                     val usedGb = totalGb - availGb
-
                     // Форматируем строку до одного знака после запятой
                     val formattedString = String.format(
                         java.util.Locale.US,
@@ -452,7 +469,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         totalGb,
                         usedGb
                     )
-
                     // Перенаправляем обновление стейта в поток данных
                     _memoryInfoText.value = formattedString
                 }
@@ -477,9 +493,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                         newlyArrivedItem.text.startsWith("📦") ||
                                         newlyArrivedItem.text.startsWith("🧹") ||
                                         newlyArrivedItem.text.startsWith("⏳ Настраиваю"))
-
                         val isAssistant = newlyArrivedItem.role == "assistant"
-
                         if (newlyArrivedItem.text.isNotEmpty() && !isTypewriterActive && !isAssistant) {
                             speakText(newlyArrivedItem.text)
                         }
@@ -493,15 +507,39 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         // Vosk теперь инициализируется лениво, при первом нажатии на микрофон
     }
 
-    // --- НОВЫЙ МЕТОД initTts с MappedByteBuffer и анимацией загрузки ---
-    fun initTts(context: Context) {
-        // Показываем анимацию загрузки
-        showLoadingIndicator()
+    // --- NEW: Loading Animation Methods ---
+    private fun showLoadingIndicator() {
+        loadingAnimationJob?.cancel()
+        loadingAnimationJob = scope.launch(Dispatchers.Main) {
+            var dots = 1
+            while (true) {
+                updateLastSystemMessage("⏳ Загрузка голосового движка" + ".".repeat(dots))
+                delay(600)
+                dots = (dots % 3) + 1
+            }
+        }
+    }
 
+    private fun hideLoadingIndicator() {
+        loadingAnimationJob?.cancel()
+        loadingAnimationJob = null
+        // Remove the loading message if it's the last one
+        val currentList = _chatHistory.value
+        if (currentList.isNotEmpty() && currentList.last().role == "system" &&
+            currentList.last().text.startsWith("⏳ Загрузка голосового движка")) {
+            _chatHistory.value = currentList.dropLast(1)
+        }
+    }
+
+    private fun initTts(context: Context) {
         scope.launch(Dispatchers.IO) {
             try {
-                // ПРЯМАЯ ЗАГРУЗКА из assets через MappedByteBuffer, минуя копирование в filesDir
-                val afd = context.assets.openFd("$TTS_MODEL_DIR/$TTS_MODEL_NAME")
+                withContext(Dispatchers.Main) {
+                    showLoadingIndicator()
+                }
+
+                // ПРЯМАЯ ЗАГРУЗКА из assets через mmap, минуя копирование в filesDir
+                val afd = context.assets.openFd("tts-model/ru_RU-robot-medium.onnx")
                 val fileChannel = FileInputStream(afd.fileDescriptor).channel
                 val modelBuffer = fileChannel.map(
                     FileChannel.MapMode.READ_ONLY,
@@ -519,9 +557,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 ortSession = ortEnv?.createSession(modelBuffer, sessionOptions)
 
                 withContext(Dispatchers.Main) {
-                    _isTtsReady.value = true
-                    // Скрываем анимацию загрузки
                     hideLoadingIndicator()
+                    _isTtsReady.value = true
                     val successNotification = "🟢 Голосовой движок PocketPal успешно загружен в оперативную память устройства."
                     appendSystemMessage(successNotification)
                     val welcomeText = "Привет! Я твоя локальная языковая модель. Голосовой движок полностью готов к работе, чем я могу помочь?"
@@ -530,38 +567,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    _isTtsReady.value = false
-                    // Скрываем анимацию загрузки при ошибке
                     hideLoadingIndicator()
+                    _isTtsReady.value = false
                     appendSystemMessage("🔴 Ошибка выделения памяти под голосовой движок: ${e.message}")
                 }
                 Log.e("LlamaTts", "Критическая ошибка инициализации сессии ONNX: ${e.message}")
-            }
-        }
-    }
-
-    // --- НОВЫЕ МЕТОДЫ для анимации загрузки ---
-    fun showLoadingIndicator() {
-        // Запускаем анимацию с бегущими точками
-        viewModelScope.launch(Dispatchers.Main) {
-            var dots = 1
-            while (true) {
-                updateLastSystemMessage("⏳ Загрузка голосового движка" + ".".repeat(dots))
-                delay(500)
-                dots = (dots % 3) + 1
-            }
-        }
-    }
-
-    fun hideLoadingIndicator() {
-        // Убираем анимацию, заменяя сообщение на финальное
-        viewModelScope.launch(Dispatchers.Main) {
-            // Просто обновляем последнее системное сообщение, если оно еще отображается
-            val currentList = _chatHistory.value
-            if (currentList.isNotEmpty() && currentList.last().role == "system" && currentList.last().text.startsWith("⏳ Загрузка голосового движка")) {
-                // Заменяем на пустую строку или финальное сообщение, но лучше оставить как есть,
-                // т.к. финальное сообщение будет добавлено после успешной загрузки.
-                // Просто не делаем ничего, чтобы не было конфликтов.
             }
         }
     }
@@ -615,7 +625,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         // Проверяем флаг готовности после возможного сброса
         val actualIsReady = prefs.getBoolean(VOSK_MODEL_READY_FLAG, false)
-
         if (!actualIsReady || !modelExists) {
             // Если есть файлы, но флаг сброшен - пробуем инициализировать
             if (modelExists) {
@@ -642,7 +651,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
                         val fileLength = connection.contentLength
                         val inputStream = connection.inputStream
-
                         tempFile = File(context.cacheDir, "vosk-model-temp.zip")
                         tempFile?.parentFile?.let {
                             if (!it.exists()) it.mkdirs()
@@ -663,11 +671,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             var bytesRead: Int
                             var totalBytesRead = 0L
                             var lastLoggedPercent = -1
-
                             while (inputStream.read(buffer).also { bytesRead = it } != -1) {
                                 output.write(buffer, 0, bytesRead)
                                 totalBytesRead += bytesRead
-
                                 if (fileLength > 0) {
                                     val progressPercent = (totalBytesRead * 100 / fileLength).toInt()
                                     if (progressPercent != lastLoggedPercent) {
@@ -686,7 +692,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                 }
                             }
                         }
-
                         downloadSuccess = true
 
                         // Single clear message before unzip starts
@@ -700,7 +705,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         ZipInputStream(tempFile.inputStream()).use { zis ->
                             var entry = zis.nextEntry
                             var entryCounter = 0
-
                             while (entry != null) {
                                 entryCounter++
                                 if (entryCounter % 250 == 0) {
@@ -708,7 +712,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                         updateLastSystemMessage("⏳ Распаковка архива (разворачивание 3.7 ГБ на диске): извлечено $entryCounter файлов...")
                                     }
                                 }
-
                                 val entryFile = File(targetDir, entry.name)
                                 if (entry.isDirectory) {
                                     entryFile.mkdirs()
@@ -794,17 +797,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 // 1. Копирование URI в физический файл кэша
                 val tempZipFile = File(context.cacheDir, "temp_model.zip")
                 var copySuccess = false
-
                 context.contentResolver.openInputStream(uri)?.use { inputStream ->
                     FileOutputStream(tempZipFile).use { outputStream ->
                         val buffer = ByteArray(8192)
                         var bytesRead: Int
                         var totalBytesRead = 0L
-
                         while (inputStream.read(buffer).also { bytesRead = it } != -1) {
                             outputStream.write(buffer, 0, bytesRead)
                             totalBytesRead += bytesRead
-
                             // Обновление прогресса каждые 5 МБ
                             if (totalBytesRead % (5 * 1024 * 1024) < 8192) {
                                 val progressMB = totalBytesRead / (1024 * 1024)
@@ -829,11 +829,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 // 2. Распаковка из временного файла
                 targetDir.mkdirs()
                 var unzipSuccess = false
-
                 ZipInputStream(tempZipFile.inputStream()).use { zis ->
                     var entry = zis.nextEntry
                     var entryCounter = 0
-
                     while (entry != null) {
                         entryCounter++
                         if (entryCounter % 250 == 0) {
@@ -841,7 +839,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                 updateLastSystemMessage("⏳ Распаковка архива (разворачивание 3.7 ГБ на диске): извлечено $entryCounter файлов...")
                             }
                         }
-
                         val entryFile = File(targetDir, entry.name)
                         if (entry.isDirectory) {
                             entryFile.mkdirs()
@@ -900,7 +897,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     private suspend fun initializeVoskModel(context: Context) {
         var ramProgressJob: Job? = null
-
         try {
             val targetDir = File(context.filesDir, VOSK_MODEL_DIR)
 
@@ -1000,12 +996,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             // Cancel RAM loading animation if still running
             ramProgressJob?.cancel()
             ramProgressJob = null
-
             Log.e(TAG, "Ошибка инициализации Vosk: ${e.message}")
             withContext(Dispatchers.Main) {
                 appendSystemMessage("⚠️ Ошибка инициализации Vosk: ${e.message}")
             }
-
             // Сброс флага готовности при ошибке
             val prefs = context.getSharedPreferences("cloud_ai", Context.MODE_PRIVATE)
             prefs.edit().putBoolean(VOSK_MODEL_READY_FLAG, false).apply()
@@ -1071,7 +1065,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         // Обработка локальных команд в любом режиме
         val lowerText = text.lowercase()
-
         when {
             lowerText.contains(REMEMBER_COMMAND) -> {
                 val cleanText = text.substringAfter(REMEMBER_COMMAND).trim()
@@ -1098,21 +1091,18 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             .replace(SEARCH_COMMAND, "")
                             .replace(CHAT_LOOKUP_COMMAND, "")
                             .trim()
-
                         // Используем интеллектуальный стемминг для ключевых слов
                         val keywords = cleanSearchQuery.split(" ")
                             .map { it.trim() }
                             .filter { it.length > 2 }
                             .map { extractRussianRoot(it) }
                             .distinct()
-
                         val filteredLines = memoryData.split("\n")
                             .filter { line ->
                                 val lowerLine = line.lowercase()
                                 keywords.any { keyword -> lowerLine.contains(keyword) }
                             }
                             .joinToString("\n")
-
                         if (filteredLines.isNotEmpty()) {
                             appendSystemMessage("🔍 Найдено в памяти:\n$filteredLines")
                         } else {
@@ -1204,7 +1194,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
             return
         }
-
         if (prompt.lowercase().contains(ALARM_COMMAND) || prompt.lowercase().contains(REMIND_COMMAND)) {
             handleAlarmCommand(prompt)
             return
@@ -1239,10 +1228,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     // === Методы для локального ИИ ===
     fun loadModel(path: String, mmprojPath: String? = null) {
         if (path.isEmpty()) return
-
         _state.value = GenerationState.LoadingModel
         _isModelLoaded.value = false
-
         scope.launch {
             try {
                 llamaHelper.load(
@@ -1274,7 +1261,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
             return
         }
-
         if (prompt.lowercase().contains(ALARM_COMMAND) || prompt.lowercase().contains(REMIND_COMMAND)) {
             handleAlarmCommand(prompt)
             return
@@ -1291,7 +1277,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 prompt.contains(CHAT_LOOKUP_COMMAND, ignoreCase = true)
 
         val fullSystemPrompt = buildSystemPrompt(isSearchCommand, prompt)
-
         _generatedText.value = ""
         _state.value = GenerationState.Generating(prompt = prompt, tokensGenerated = 0)
 
@@ -1351,15 +1336,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         return buildString {
             append(basePrompt)
             append("\n\n")
-
             if (filteredMemory.isNotEmpty()) {
                 append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ (НАЙДЕННЫЕ ФАКТЫ):\n$filteredMemory\n\n")
             }
-
             if (brainData.isNotEmpty()) {
                 append("КРАТКИЕ ВЫВОДЫ ИЗ ПРОШЛЫХ РАЗГОВОРОВ (МОЗГ):\n$brainData\n\n")
             }
-
             if (chatHistory.isNotEmpty()) {
                 append("ИСТОРИЯ ЧАТА (ВЕСЬ ДИАЛОГ):\n")
                 chatHistory.forEach { message ->
@@ -1368,7 +1350,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 }
                 append("\n")
             }
-
             append("Пользователь просит тебя НАЙТИ ИЛИ ВСПОМНИТЬ информацию из его личной базы знаний, а также ВЫПОЛНИТЬ МАТЕМАТИЧЕСКИЙ ИЛИ ЛОГИЧЕСКИЙ РАСЧЕТ на основе найденных фактов. Внимательно изучи предоставленные строки ЛОКАЛЬНОЙ БАЗЫ ЗНАНИЙ. Если там указана цена, тариф или условие (например, цена плитки за квадратный метр), используй эти точные цифры для выполнения математического действия, запрошенного пользователем (например, умножь площадь на стоимость). Дай развернутый, понятный и дружелюбный ответ с демонстрацией хода вычислений. Если нужных данных в памяти нет — честно скажи об этом.")
         }
     }
@@ -1634,6 +1615,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
                         audioTrack.stop()
                         audioTrack.release()
+
                         Log.d(TAG, "ONNX TTS playback completed")
                     } else {
                         Log.e(TAG, "Invalid AudioTrack buffer size")
