@@ -194,10 +194,8 @@ fun ChatScreen(
 
         // Если разрешения получены, запускаем initTts
         if (hasRecordPermission && hasNotificationPermission) {
-            viewModel.initTts(context)
+            viewModel.initTts(context) // Теперь доступно, так как метод public
         } else {
-            // Если разрешений нет, ждем их предоставления
-            // Приложение должно запросить их через отдельный механизм
             viewModel.appendSystemMessage("⚠️ Для работы голосового движка требуются разрешения. Пожалуйста, предоставьте их в настройках.")
         }
     }
