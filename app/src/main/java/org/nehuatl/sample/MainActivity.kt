@@ -180,7 +180,8 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Показывает диалог ввода пароля
+     * Показывает диалог ввода пароля с дизайном, аналогичным HelpDialog
+     * (закруглённые края, фон SurfaceGray)
      */
     private fun showPasswordDialog() {
         val passwordInput = android.widget.EditText(this).apply {
@@ -188,7 +189,8 @@ class MainActivity : ComponentActivity() {
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
         }
 
-        AlertDialog.Builder(this)
+        // Создаём диалог с кастомным фоном
+        val dialog = AlertDialog.Builder(this)
             .setTitle("🔒 Введите пароль")
             .setMessage("Для доступа к приложению требуется пароль.")
             .setView(passwordInput)
@@ -196,11 +198,9 @@ class MainActivity : ComponentActivity() {
                 val input = passwordInput.text.toString()
                 if (checkPassword(input)) {
                     Log.d(TAG, "Пароль верный, вход разрешён")
-                    // Показываем основной интерфейс
                     showMainContent()
                 } else {
                     Log.w(TAG, "Неверный пароль")
-                    // Показываем сообщение об ошибке и закрываем приложение
                     AlertDialog.Builder(this)
                         .setTitle("Ошибка")
                         .setMessage("Неверный пароль. Приложение будет закрыто.")
@@ -215,7 +215,28 @@ class MainActivity : ComponentActivity() {
                 finishAffinity()
             }
             .setCancelable(false)
-            .show()
+            .create()
+
+        // Применяем стиль из HelpDialog (закруглённые углы, фон)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.show()
+        // Устанавливаем фон и закругления через корневую View
+        dialog.window?.decorView?.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        val rootView = dialog.window?.decorView?.findViewById<android.widget.FrameLayout>(android.R.id.content)
+        rootView?.setBackgroundResource(R.drawable.dialog_background) // если есть drawable
+        // Если нет ресурса, используем программный фон
+        if (rootView != null) {
+            val background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(android.graphics.Color.parseColor("#FFF1F3F5")) // SurfaceGray
+                cornerRadius = 16.dpToPx().toFloat()
+            }
+            rootView.background = background
+        }
+    }
+
+    // Вспомогательная функция для перевода dp в px
+    private fun Int.dpToPx(): Int {
+        return (this * resources.displayMetrics.density).toInt()
     }
 
     /**
@@ -271,10 +292,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // При возврате из фона также проверяем пароль
-        if (isPasswordSet()) {
-            showPasswordDialog()
-        }
+        // УБРАНО: пароль больше не запрашивается при возврате из фона
     }
 
     /**
