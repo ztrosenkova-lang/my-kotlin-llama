@@ -286,8 +286,10 @@ fun ChatScreen(
                     isGigaChat = cloudIsGigaChat
                 )
                 viewModel.saveCloudConfig(config)
-                // УБРАНО: автоматическое переключение в облачный режим
-                viewModel.appendSystemMessage("💾 Настройки облачного ИИ сохранены")
+                // ВОССТАНАВЛИВАЕМ: активация облачного режима при сохранении
+                viewModel.setCurrentMode(AIMode.CLOUD)
+                showCloudDialog = false
+                viewModel.appendSystemMessage("☁️ Облачный ИИ активирован")
             },
             onClear = {
                 // ИСПРАВЛЕНИЕ: Очищаем поля и сбрасываем подключение
@@ -306,10 +308,9 @@ fun ChatScreen(
                 viewModel.generateCloudToken { success ->
                     isGeneratingToken = false
                     if (success) {
-                        // Активация облачного режима при успешном получении токена
-                        viewModel.setCurrentMode(AIMode.CLOUD)
-                        viewModel.appendSystemMessage("☁️ Облачный ИИ активирован")
-                        // Сохраняем настройки автоматически
+                        // ТОЛЬКО получаем токен, без активации
+                        viewModel.appendSystemMessage("✅ Токен получен. Нажмите 'Сохранить' для активации облачного ИИ.")
+                        // Сохраняем настройки, но НЕ активируем
                         val config = CloudAIConfig(
                             apiUrl = cloudApiUrl,
                             modelId = if (cloudIsGigaChat) "GigaChat" else "Custom",
@@ -319,7 +320,6 @@ fun ChatScreen(
                         viewModel.saveCloudConfig(config)
                         // Принудительно устанавливаем состояние Ready для фонарика
                         viewModel.setCloudReady(config.modelId)
-                        showCloudDialog = false
                     } else {
                         viewModel.appendSystemMessage("❌ Ошибка подключения к облачному ИИ")
                     }
