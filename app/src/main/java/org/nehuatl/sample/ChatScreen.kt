@@ -285,21 +285,41 @@ fun ChatScreen(
                     isGigaChat = cloudIsGigaChat
                 )
                 viewModel.saveCloudConfig(config)
-                showCloudDialog = false
-                currentMode = AIMode.CLOUD
-                viewModel.setCurrentMode(AIMode.CLOUD)
+                // УБРАНО: автоматическое переключение в облачный режим
+                // showCloudDialog = false
+                // currentMode = AIMode.CLOUD
+                // viewModel.setCurrentMode(AIMode.CLOUD)
+                viewModel.appendSystemMessage("💾 Настройки облачного ИИ сохранены")
             },
             onClear = {
-                // ИСПРАВЛЕНИЕ: Очищаем поля, НЕ закрывая диалог
+                // ИСПРАВЛЕНИЕ: Очищаем поля и сбрасываем подключение
                 cloudApiUrl = if (cloudIsGigaChat) "https://gigachat.devices.sberbank.ru/api/v1/chat/completions" else "https://openrouter.ai/api/v1/chat/completions"
                 cloudAuthKey = ""
-                viewModel.appendSystemMessage("🧹 Поля очищены")
+                viewModel.clearCloudConfig()
+                viewModel.appendSystemMessage("🧹 Настройки облачного ИИ сброшены")
             },
             onDismiss = { showCloudDialog = false },
             onGenerateToken = {
                 isGeneratingToken = true
                 viewModel.generateCloudToken { success ->
                     isGeneratingToken = false
+                    if (success) {
+                        // Активация облачного режима при успешном получении токена
+                        currentMode = AIMode.CLOUD
+                        viewModel.setCurrentMode(AIMode.CLOUD)
+                        viewModel.appendSystemMessage("☁️ Облачный ИИ активирован")
+                        // Сохраняем настройки автоматически
+                        val config = CloudAIConfig(
+                            apiUrl = cloudApiUrl,
+                            modelId = if (cloudIsGigaChat) "GigaChat" else "Custom",
+                            authKey = cloudAuthKey,
+                            isGigaChat = cloudIsGigaChat
+                        )
+                        viewModel.saveCloudConfig(config)
+                        showCloudDialog = false
+                    } else {
+                        viewModel.appendSystemMessage("❌ Ошибка подключения к облачному ИИ")
+                    }
                 }
             },
             isGeneratingToken = isGeneratingToken
