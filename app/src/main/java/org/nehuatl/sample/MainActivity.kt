@@ -180,8 +180,7 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Показывает диалог ввода пароля с дизайном, аналогичным HelpDialog
-     * (закруглённые края, фон SurfaceGray)
+     * Показывает диалог ввода пароля с закруглёнными краями и фоном SurfaceGray
      */
     private fun showPasswordDialog() {
         val passwordInput = android.widget.EditText(this).apply {
@@ -217,14 +216,15 @@ class MainActivity : ComponentActivity() {
             .setCancelable(false)
             .create()
 
-        // Применяем стиль из HelpDialog (закруглённые углы, фон)
+        // Применяем стиль: прозрачный фон окна и закруглённый фон для содержимого
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.show()
+
         // Устанавливаем фон и закругления через корневую View
         dialog.window?.decorView?.setBackgroundColor(android.graphics.Color.TRANSPARENT)
         val rootView = dialog.window?.decorView?.findViewById<android.widget.FrameLayout>(android.R.id.content)
-        rootView?.setBackgroundResource(R.drawable.dialog_background) // если есть drawable
-        // Если нет ресурса, используем программный фон
+
+        // Используем программный фон (без ресурса)
         if (rootView != null) {
             val background = android.graphics.drawable.GradientDrawable().apply {
                 setColor(android.graphics.Color.parseColor("#FFF1F3F5")) // SurfaceGray
