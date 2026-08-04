@@ -180,17 +180,35 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Показывает диалог ввода пароля с закруглёнными краями и фоном SurfaceGray
+     * Показывает диалог ввода пароля с улучшенным дизайном:
+     * - Уменьшенная ширина (отступы 20 dp)
+     * - Центрированные надписи
+     * - Поле ввода с исчезающим hint
+     * - Кнопки в стиле приложения
+     * - Рожица робота в заголовке
      */
     private fun showPasswordDialog() {
+        // Создаём поле ввода с исчезающим hint
         val passwordInput = android.widget.EditText(this).apply {
             hint = "Введите пароль"
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            // Добавляем слушатель для очистки hint при вводе
+            setOnFocusChangeListener { _, hasFocus ->
+                if (hasFocus) {
+                    // При фокусе hint исчезает
+                    setHint("")
+                } else {
+                    // При потере фокуса, если поле пустое, возвращаем hint
+                    if (text.isNullOrEmpty()) {
+                        setHint("Введите пароль")
+                    }
+                }
+            }
         }
 
         // Создаём диалог с кастомным фоном
         val dialog = AlertDialog.Builder(this)
-            .setTitle("🔒 Введите пароль")
+            .setTitle("🤖 Введите пароль")
             .setMessage("Для доступа к приложению требуется пароль.")
             .setView(passwordInput)
             .setPositiveButton("Войти") { _, _ ->
@@ -224,13 +242,61 @@ class MainActivity : ComponentActivity() {
         dialog.window?.decorView?.setBackgroundColor(android.graphics.Color.TRANSPARENT)
         val rootView = dialog.window?.decorView?.findViewById<android.widget.FrameLayout>(android.R.id.content)
 
-        // Используем программный фон (без ресурса)
+        // Используем программный фон с отступами
         if (rootView != null) {
             val background = android.graphics.drawable.GradientDrawable().apply {
                 setColor(android.graphics.Color.parseColor("#FFF1F3F5")) // SurfaceGray
                 cornerRadius = 16.dpToPx().toFloat()
             }
             rootView.background = background
+
+            // Добавляем отступы 20 dp от краёв экрана
+            val params = rootView.layoutParams as? android.widget.FrameLayout.LayoutParams
+            params?.let {
+                val marginPx = 20.dpToPx()
+                it.setMargins(marginPx, marginPx, marginPx, marginPx)
+                rootView.layoutParams = it
+            }
+        }
+
+        // Центрируем заголовок и сообщение
+        dialog.window?.decorView?.post {
+            try {
+                // Пытаемся найти и центрировать заголовок
+                val titleView = dialog.window?.decorView?.findViewById<android.widget.TextView>(android.R.id.title)
+                titleView?.gravity = android.view.Gravity.CENTER
+                // Центрируем сообщение
+                val messageView = dialog.window?.decorView?.findViewById<android.widget.TextView>(android.R.id.message)
+                messageView?.gravity = android.view.Gravity.CENTER
+            } catch (e: Exception) {
+                Log.w(TAG, "Не удалось центрировать текст", e)
+            }
+        }
+
+        // Стилизуем кнопки после отображения
+        dialog.window?.decorView?.post {
+            try {
+                // Ищем кнопки и применяем стиль
+                val buttonPositive = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                val buttonNegative = dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
+
+                listOf(buttonPositive, buttonNegative).forEach { button ->
+                    button?.let {
+                        // Стиль кнопок как в HelpDialog (AccentColor с закруглениями)
+                        it.setBackgroundColor(android.graphics.Color.parseColor("#FF74C0FC")) // AccentColor
+                        it.setTextColor(android.graphics.Color.parseColor("#FF212529")) // DarkText
+                        it.setPadding(32.dpToPx(), 12.dpToPx(), 32.dpToPx(), 12.dpToPx())
+                        // Закругления через GradientDrawable
+                        val drawable = android.graphics.drawable.GradientDrawable().apply {
+                            setColor(android.graphics.Color.parseColor("#FF74C0FC"))
+                            cornerRadius = 12.dpToPx().toFloat()
+                        }
+                        it.background = drawable
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Не удалось стилизовать кнопки", e)
+            }
         }
     }
 
