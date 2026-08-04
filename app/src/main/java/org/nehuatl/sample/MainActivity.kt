@@ -136,16 +136,35 @@ class MainActivity : ComponentActivity() {
 
     /**
      * Показывает диалог установки пароля (при первом запуске)
-     * Исправлено: убран вызов R.layout.dialog_set_password, используется программное создание полей
+     * Переработан в едином стиле с showPasswordDialog()
      */
     private fun showSetPasswordDialog() {
+        // Создаём поля ввода с исчезающим hint
         val passwordInput = android.widget.EditText(this).apply {
             hint = "Введите пароль"
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setOnFocusChangeListener { _, hasFocus ->
+                if (hasFocus) {
+                    setHint("")
+                } else {
+                    if (text.isNullOrEmpty()) {
+                        setHint("Введите пароль")
+                    }
+                }
+            }
         }
         val confirmInput = android.widget.EditText(this).apply {
             hint = "Подтвердите пароль"
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setOnFocusChangeListener { _, hasFocus ->
+                if (hasFocus) {
+                    setHint("")
+                } else {
+                    if (text.isNullOrEmpty()) {
+                        setHint("Подтвердите пароль")
+                    }
+                }
+            }
         }
 
         val linearLayout = android.widget.LinearLayout(this).apply {
@@ -155,8 +174,8 @@ class MainActivity : ComponentActivity() {
             addView(confirmInput)
         }
 
-        AlertDialog.Builder(this)
-            .setTitle("🔒 Установка пароля")
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("🤖 Установка пароля")
             .setMessage("Приложение будет защищено паролем. Введите пароль дважды для подтверждения.")
             .setView(linearLayout)
             .setPositiveButton("Установить") { _, _ ->
@@ -165,18 +184,76 @@ class MainActivity : ComponentActivity() {
                 if (password.isNotEmpty() && password == confirm) {
                     setPassword(password)
                     Log.d(TAG, "Пароль установлен успешно")
-                    // После установки пароля показываем экран входа
                     showPasswordDialog()
                 } else {
                     Log.w(TAG, "Пароль не совпадает или пустой")
-                    showSetPasswordDialog() // Повторяем попытку
+                    showSetPasswordDialog()
                 }
             }
             .setNegativeButton("Выйти") { _, _ ->
-                finishAffinity() // Закрываем приложение
+                finishAffinity()
             }
             .setCancelable(false)
-            .show()
+            .create()
+
+        // Применяем единый стиль с showPasswordDialog()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.show()
+
+        // Устанавливаем фон и закругления
+        dialog.window?.decorView?.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        val rootView = dialog.window?.decorView?.findViewById<android.widget.FrameLayout>(android.R.id.content)
+
+        if (rootView != null) {
+            val background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(android.graphics.Color.parseColor("#FFF1F3F5")) // SurfaceGray
+                cornerRadius = 16.dpToPx().toFloat()
+            }
+            rootView.background = background
+
+            // Отступы 20 dp от краёв экрана
+            val params = rootView.layoutParams as? android.widget.FrameLayout.LayoutParams
+            params?.let {
+                val marginPx = 20.dpToPx()
+                it.setMargins(marginPx, marginPx, marginPx, marginPx)
+                rootView.layoutParams = it
+            }
+        }
+
+        // Центрируем заголовок и сообщение
+        dialog.window?.decorView?.post {
+            try {
+                val titleView = dialog.window?.decorView?.findViewById<android.widget.TextView>(android.R.id.title)
+                titleView?.gravity = android.view.Gravity.CENTER
+                val messageView = dialog.window?.decorView?.findViewById<android.widget.TextView>(android.R.id.message)
+                messageView?.gravity = android.view.Gravity.CENTER
+            } catch (e: Exception) {
+                Log.w(TAG, "Не удалось центрировать текст", e)
+            }
+        }
+
+        // Стилизуем кнопки
+        dialog.window?.decorView?.post {
+            try {
+                val buttonPositive = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                val buttonNegative = dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
+
+                listOf(buttonPositive, buttonNegative).forEach { button ->
+                    button?.let {
+                        it.setBackgroundColor(android.graphics.Color.parseColor("#FF74C0FC"))
+                        it.setTextColor(android.graphics.Color.parseColor("#FF212529"))
+                        it.setPadding(32.dpToPx(), 12.dpToPx(), 32.dpToPx(), 12.dpToPx())
+                        val drawable = android.graphics.drawable.GradientDrawable().apply {
+                            setColor(android.graphics.Color.parseColor("#FF74C0FC"))
+                            cornerRadius = 12.dpToPx().toFloat()
+                        }
+                        it.background = drawable
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Не удалось стилизовать кнопки", e)
+            }
+        }
     }
 
     /**
