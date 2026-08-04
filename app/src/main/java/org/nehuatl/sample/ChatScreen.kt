@@ -134,8 +134,10 @@ fun ChatScreen(
     val contextSize by viewModel.contextSize.collectAsStateWithLifecycle()
     val cloudState by viewModel.cloudState.collectAsStateWithLifecycle()
     val isModelLoaded by viewModel.isModelLoaded.collectAsStateWithLifecycle()
-    // НОВОЕ: Реактивная подписка на состояние TTS
+    // Реактивная подписка на состояние TTS
     val isTtsReady by viewModel.isTtsReady.collectAsStateWithLifecycle()
+    // ИСПРАВЛЕНИЕ: Используем StateFlow из ViewModel для текущего режима
+    val currentMode by viewModel.currentMode.collectAsStateWithLifecycle()
 
     var promptInput by remember { mutableStateOf("") }
     var showModelDialog by remember { mutableStateOf(false) }
@@ -151,7 +153,6 @@ fun ChatScreen(
     var cloudAuthKey by remember { mutableStateOf("") }
     var cloudIsGigaChat by remember { mutableStateOf(true) }
     var isGeneratingToken by remember { mutableStateOf(false) }
-    var currentMode by remember { mutableStateOf(AIMode.NEUTRAL) }
 
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -258,7 +259,7 @@ fun ChatScreen(
                 showModelDialog = false
                 if (currentModelPath != null) {
                     viewModel.loadModel(currentModelPath, mmprojPath)
-                    currentMode = AIMode.LOCAL
+                    // ИСПРАВЛЕНИЕ: Убираем прямую установку, используем setCurrentMode
                     viewModel.setCurrentMode(AIMode.LOCAL)
                 }
             },
@@ -286,9 +287,6 @@ fun ChatScreen(
                 )
                 viewModel.saveCloudConfig(config)
                 // УБРАНО: автоматическое переключение в облачный режим
-                // showCloudDialog = false
-                // currentMode = AIMode.CLOUD
-                // viewModel.setCurrentMode(AIMode.CLOUD)
                 viewModel.appendSystemMessage("💾 Настройки облачного ИИ сохранены")
             },
             onClear = {
@@ -297,6 +295,10 @@ fun ChatScreen(
                 cloudAuthKey = ""
                 viewModel.clearCloudConfig()
                 viewModel.appendSystemMessage("🧹 Настройки облачного ИИ сброшены")
+                // Сбрасываем режим на Neutral, если был Cloud
+                if (currentMode == AIMode.CLOUD) {
+                    viewModel.setCurrentMode(AIMode.NEUTRAL)
+                }
             },
             onDismiss = { showCloudDialog = false },
             onGenerateToken = {
@@ -305,7 +307,6 @@ fun ChatScreen(
                     isGeneratingToken = false
                     if (success) {
                         // Активация облачного режима при успешном получении токена
-                        currentMode = AIMode.CLOUD
                         viewModel.setCurrentMode(AIMode.CLOUD)
                         viewModel.appendSystemMessage("☁️ Облачный ИИ активирован")
                         // Сохраняем настройки автоматически
@@ -316,6 +317,8 @@ fun ChatScreen(
                             isGigaChat = cloudIsGigaChat
                         )
                         viewModel.saveCloudConfig(config)
+                        // Принудительно устанавливаем состояние Ready для фонарика
+                        viewModel.setCloudReady(config.modelId)
                         showCloudDialog = false
                     } else {
                         viewModel.appendSystemMessage("❌ Ошибка подключения к облачному ИИ")
@@ -350,7 +353,6 @@ fun ChatScreen(
         TopBarWithSwitch(
             currentMode = currentMode,
             onModeChange = { newMode ->
-                currentMode = newMode
                 viewModel.setCurrentMode(newMode)
                 if (newMode == AIMode.NEUTRAL) {
                     viewModel.releaseModel()
