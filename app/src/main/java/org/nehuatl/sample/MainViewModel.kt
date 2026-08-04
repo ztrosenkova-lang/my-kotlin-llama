@@ -324,10 +324,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             _isTtsReady.value = true
                             isTtsEnabled = true
                             appendSystemMessage("🟢 Голосовой движок Android TTS успешно инициализирован.")
-                            // Приветственное сообщение
+                            // Приветственное сообщение (только в чат, без озвучки)
                             val welcomeText = "Привет! Я твоя локальная языковая модель. Голосовой движок полностью готов к работе, чем я могу помочь?"
                             appendSystemMessage(welcomeText)
-                            speakText(welcomeText)
+                            // УБРАНО: speakText(welcomeText) — озвучка теперь только из ChatScreen
                             Log.d(TAG, "TTS initialized successfully with Russian language")
                         } else {
                             _isTtsReady.value = false
