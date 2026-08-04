@@ -197,14 +197,13 @@ fun ChatScreen(
 
     // УДАЛЕНО: DisposableEffect для Vosk
 
-    // Блок приветствия при запуске (отсчет 5 секунд) с typewriter эффектом
+    // Блок приветствия при запуске (отсчет 20 секунд) с typewriter эффектом
     val fullWelcomeString = "Привет! Я твой персональный ИИ-Друг, это лучшая запоминалка паролей и умный собеседник! 🤖✨ Я создан, чтобы доказать: искусственный интеллект — это твой надежный и полностью автономный союзник, защищенный от любых внешних блокировок!\n\nВот что я умею:\n🎤 СЛЫШАТЬ И ГОВОРИТЬ: Использую встроенный голосовой движок Android и Google Speech Recognizer. Нажми микрофон в подвале, чтобы общаться голосом.\n🧠 РАЗДЕЛЬНАЯ ПАМЯТЬ: Скажи мне «запомни [факт]», и я запишу это в твою личную базу знаний. В фоне я сам анализирую наш чат и делаю важные выводы в свой мозг.\n🔍 УМНЫЙ ПОИСК: Очисти чат корзинкой, если хочешь начать с чистого листа. Я всё забуду, но если тебе понадобится что-нибудь вспомнить — просто скажи «посмотри в чате», «вспомни» или «найди». Я пойму тебя в любом падеже и склонении!\n⏰ КОМАНДЫ: Я легко поставлю будильник или напомню о делах, например: «напомни в 18.00 идти в гараж».\n\nДавай общаться! Включи локальный движок Llama или облачный ИИ в шапке приложения, и погнали!"
 
     LaunchedEffect(Unit) {
-        // Асинхронная задержка в 5 секунд (5000 миллисекунд)
-        kotlinx.coroutines.delay(5000)
-        // Мгновенный запуск озвучки полного текста
-        viewModel.speakText(fullWelcomeString)
+        // Асинхронная задержка в 20 секунд (20000 миллисекунд)
+        kotlinx.coroutines.delay(20000)
+        // УБРАНО: озвучка приветствия здесь (она уже есть в MainViewModel.initTts)
         // Динамическая печать инструкции посимвольно через updateLastSystemMessage
         var runningText = ""
         for (i in fullWelcomeString.indices) {
@@ -368,9 +367,19 @@ fun ChatScreen(
             onMemoryClick = {
                 memoryEditText = viewModel.readFromLongTermMemory()
                 showMemoryEditor = true
+                // Голосовое пояснение для кнопки "мозг"
+                viewModel.speakText("Редактор базы знаний")
             },
-            onSettingsClick = { showSettings = !showSettings },
-            onPromptSettingsClick = { showPromptSettings = !showPromptSettings },
+            onSettingsClick = {
+                showSettings = !showSettings
+                // Голосовое пояснение для кнопки "движок"
+                viewModel.speakText("Настройки движка ИИ")
+            },
+            onPromptSettingsClick = {
+                showPromptSettings = !showPromptSettings
+                // Голосовое пояснение для кнопки "характер"
+                viewModel.speakText("Настройка роли ИИ")
+            },
             onHelpClick = { showHelpDialog = true },
             isTtsReady = isTtsReady,
             viewModel = viewModel,
