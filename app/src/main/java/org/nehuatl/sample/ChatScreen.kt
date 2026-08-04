@@ -203,7 +203,8 @@ fun ChatScreen(
     LaunchedEffect(Unit) {
         // Асинхронная задержка в 20 секунд (20000 миллисекунд)
         kotlinx.coroutines.delay(20000)
-        // УБРАНО: озвучка приветствия здесь (она уже есть в MainViewModel.initTts)
+        // Озвучка приветствия
+        viewModel.speakText(fullWelcomeString)
         // Динамическая печать инструкции посимвольно через updateLastSystemMessage
         var runningText = ""
         for (i in fullWelcomeString.indices) {
