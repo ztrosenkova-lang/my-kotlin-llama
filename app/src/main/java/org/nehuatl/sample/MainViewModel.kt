@@ -350,27 +350,76 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    // === НОВЫЙ МЕТОД: Включение/отключение TTS ===
+    // === ИСПРАВЛЕННЫЙ МЕТОД: Включение TTS (загружает движок заново) ===
     fun enableTts() {
-        if (!_isTtsReady.value) {
-            appendSystemMessage("⚠️ TTS ещё не инициализирован. Попробуйте позже.")
+        // Если TTS уже инициализирован и включён — просто выходим
+        if (_isTtsReady.value && isTtsEnabled) {
+            appendSystemMessage("🔊 Озвучка уже включена")
             return
         }
-        isTtsEnabled = true
-        appendSystemMessage("🔊 Озвучка включена")
+
+        // Если TTS уже инициализирован, но выключен — просто включаем
+        if (_isTtsReady.value && !isTtsEnabled) {
+            isTtsEnabled = true
+            appendSystemMessage("🔊 Озвучка включена")
+            return
+        }
+
+        // Если TTS не инициализирован — загружаем заново
+        ttsInitJob?.cancel()
+        ttsInitJob = viewModelScope.launch {
+            try {
+                val context = getApplication<Application>()
+                // Если старый объект существует — выгружаем
+                textToSpeech?.shutdown()
+                textToSpeech = null
+                _isTtsReady.value = false
+
+                textToSpeech = TextToSpeech(context) { status ->
+                    if (status == TextToSpeech.SUCCESS) {
+                        val result = textToSpeech?.setLanguage(Locale("ru", "RU"))
+                        if (result == TextToSpeech.LANG_AVAILABLE || result == TextToSpeech.LANG_COUNTRY_AVAILABLE) {
+                            _isTtsReady.value = true
+                            isTtsEnabled = true
+                            appendSystemMessage("🟢 Голосовой движок Android TTS успешно загружен.")
+                            Log.d(TAG, "TTS enabled successfully")
+                        } else {
+                            _isTtsReady.value = false
+                            appendSystemMessage("⚠️ Русский язык не поддерживается TTS. Проверьте настройки.")
+                            Log.w(TAG, "TTS enable: Russian language not available")
+                        }
+                    } else {
+                        _isTtsReady.value = false
+                        appendSystemMessage("🔴 Ошибка загрузки TTS: $status")
+                        Log.e(TAG, "TTS enable failed with status: $status")
+                    }
+                }
+                textToSpeech?.setLanguage(Locale("ru", "RU"))
+            } catch (e: Exception) {
+                _isTtsReady.value = false
+                appendSystemMessage("🔴 Ошибка загрузки TTS: ${e.message}")
+                Log.e(TAG, "TTS enable error: ${e.message}", e)
+            }
+        }
     }
 
+    // === ИСПРАВЛЕННЫЙ МЕТОД: Отключение TTS (полная выгрузка из памяти) ===
     fun disableTts() {
         isTtsEnabled = false
         if (textToSpeech?.isSpeaking == true) {
             textToSpeech?.stop()
         }
-        appendSystemMessage("🔇 Озвучка отключена")
+        // Полная выгрузка TTS из памяти
+        textToSpeech?.shutdown()
+        textToSpeech = null
+        _isTtsReady.value = false
+        appendSystemMessage("🔇 Озвучка отключена, TTS выгружен из памяти")
+        Log.d(TAG, "TTS disabled and unloaded")
     }
 
     // === НОВЫЙ МЕТОД: Озвучка текста ===
     fun speakText(text: String) {
-        if (!_isTtsReady.value || !isTtsEnabled || text.isBlank()) {
+        if (!_isTtsReady.value || !isTtsEnabled || text.isBlank() || textToSpeech == null) {
             return
         }
         textToSpeech?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
