@@ -425,6 +425,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         textToSpeech?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
     }
 
+    // === НОВЫЙ МЕТОД: Принудительная установка состояния "Облако готово" ===
+    fun setCloudReady(modelId: String) {
+        _cloudState.value = CloudAIState.Ready(modelId)
+        Log.d(TAG, "Cloud state set to Ready for model: $modelId")
+    }
+
     // === УДАЛЕНЫ методы startListening() и setSpeechRecognizerLauncher() ===
     // Они не используются, так как распознавание речи запускается напрямую из ChatScreen.kt
     // через ActivityResultLauncher и вызывает viewModel.sendUserMessage(recognizedText).
