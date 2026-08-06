@@ -148,7 +148,7 @@ class MainActivity : ComponentActivity() {
     private fun showSetPasswordDialog() {
         val dialogView = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
-            setPadding(50, 30, 50, 30)
+            setPadding(40, 20, 40, 20)
         }
 
         // 1. Заголовок с роботом (центрируем)
@@ -158,18 +158,18 @@ class MainActivity : ComponentActivity() {
             setTextColor(android.graphics.Color.parseColor("#FF212529"))
             gravity = android.view.Gravity.CENTER
             textAlignment = android.view.View.TEXT_ALIGNMENT_CENTER
-            setPadding(0, 0, 0, 20)
+            setPadding(0, 0, 0, 16)
         }
         dialogView.addView(titleView)
 
         // 2. Сообщение (центрируем)
         val messageView = android.widget.TextView(this).apply {
             text = "Приложение будет защищено паролем. Введите пароль дважды для подтверждения."
-            textSize = 14f
+            textSize = 13f
             setTextColor(android.graphics.Color.parseColor("#FF212529"))
             gravity = android.view.Gravity.CENTER
             textAlignment = android.view.View.TEXT_ALIGNMENT_CENTER
-            setPadding(0, 0, 0, 20)
+            setPadding(0, 0, 0, 16)
         }
         dialogView.addView(messageView)
 
@@ -183,26 +183,26 @@ class MainActivity : ComponentActivity() {
         val buttonContainer = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.CENTER_HORIZONTAL
-            setPadding(0, 20, 0, 0)
+            setPadding(0, 16, 0, 0)
         }
 
-        // Кнопка "Установить"
+        // Кнопка "Установить" (уменьшена)
         val positiveButton = android.widget.Button(this).apply {
             text = "Установить"
             setBackgroundColor(android.graphics.Color.parseColor("#FF74C0FC"))
             setTextColor(android.graphics.Color.parseColor("#FF212529"))
-            setPadding(27.dpToPx(), 10.dpToPx(), 27.dpToPx(), 10.dpToPx())
-            textSize = 13.6f
+            setPadding(16.dpToPx(), 8.dpToPx(), 16.dpToPx(), 8.dpToPx())
+            textSize = 12f
             val drawable = android.graphics.drawable.GradientDrawable().apply {
                 setColor(android.graphics.Color.parseColor("#FF74C0FC"))
-                cornerRadius = 12.dpToPx().toFloat()
+                cornerRadius = 10.dpToPx().toFloat()
             }
             background = drawable
             layoutParams = android.widget.LinearLayout.LayoutParams(
                 android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
                 android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                setMargins(15.dpToPx(), 0, 15.dpToPx(), 0)
+                setMargins(10.dpToPx(), 0, 10.dpToPx(), 0)
             }
             setOnClickListener {
                 val password = passwordInput.text.toString()
@@ -210,6 +210,8 @@ class MainActivity : ComponentActivity() {
                 if (password.isNotEmpty() && password == confirm) {
                     setPassword(password)
                     Log.d(TAG, "Пароль установлен успешно")
+                    // Закрываем диалог установки
+                    (it.parent?.parent as? AlertDialog)?.dismiss()
                     showPasswordDialog()
                 } else {
                     Log.w(TAG, "Пароль не совпадает или пустой")
@@ -219,23 +221,23 @@ class MainActivity : ComponentActivity() {
         }
         buttonContainer.addView(positiveButton)
 
-        // Кнопка "Выйти"
+        // Кнопка "Выйти" (уменьшена)
         val negativeButton = android.widget.Button(this).apply {
             text = "Выйти"
             setBackgroundColor(android.graphics.Color.parseColor("#FF74C0FC"))
             setTextColor(android.graphics.Color.parseColor("#FF212529"))
-            setPadding(27.dpToPx(), 10.dpToPx(), 27.dpToPx(), 10.dpToPx())
-            textSize = 13.6f
+            setPadding(16.dpToPx(), 8.dpToPx(), 16.dpToPx(), 8.dpToPx())
+            textSize = 12f
             val drawable = android.graphics.drawable.GradientDrawable().apply {
                 setColor(android.graphics.Color.parseColor("#FF74C0FC"))
-                cornerRadius = 12.dpToPx().toFloat()
+                cornerRadius = 10.dpToPx().toFloat()
             }
             background = drawable
             layoutParams = android.widget.LinearLayout.LayoutParams(
                 android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
                 android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                setMargins(15.dpToPx(), 0, 15.dpToPx(), 0)
+                setMargins(10.dpToPx(), 0, 10.dpToPx(), 0)
             }
             setOnClickListener {
                 finishAffinity()
@@ -278,7 +280,7 @@ class MainActivity : ComponentActivity() {
     private fun showPasswordDialog() {
         val dialogView = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
-            setPadding(50, 30, 50, 30)
+            setPadding(40, 20, 40, 20)
         }
 
         // 1. Заголовок с роботом (центрируем)
@@ -288,18 +290,18 @@ class MainActivity : ComponentActivity() {
             setTextColor(android.graphics.Color.parseColor("#FF212529"))
             gravity = android.view.Gravity.CENTER
             textAlignment = android.view.View.TEXT_ALIGNMENT_CENTER
-            setPadding(0, 0, 0, 20)
+            setPadding(0, 0, 0, 16)
         }
         dialogView.addView(titleView)
 
         // 2. Сообщение (центрируем)
         val messageView = android.widget.TextView(this).apply {
             text = "Для доступа к приложению требуется пароль."
-            textSize = 14f
+            textSize = 13f
             setTextColor(android.graphics.Color.parseColor("#FF212529"))
             gravity = android.view.Gravity.CENTER
             textAlignment = android.view.View.TEXT_ALIGNMENT_CENTER
-            setPadding(0, 0, 0, 20)
+            setPadding(0, 0, 0, 16)
         }
         dialogView.addView(messageView)
 
@@ -311,31 +313,33 @@ class MainActivity : ComponentActivity() {
         val buttonContainer = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.CENTER_HORIZONTAL
-            setPadding(0, 20, 0, 0)
+            setPadding(0, 16, 0, 0)
         }
 
-        // Кнопка "Войти"
+        // Кнопка "Войти" (уменьшена)
         val positiveButton = android.widget.Button(this).apply {
             text = "Войти"
             setBackgroundColor(android.graphics.Color.parseColor("#FF74C0FC"))
             setTextColor(android.graphics.Color.parseColor("#FF212529"))
-            setPadding(27.dpToPx(), 10.dpToPx(), 27.dpToPx(), 10.dpToPx())
-            textSize = 13.6f
+            setPadding(16.dpToPx(), 8.dpToPx(), 16.dpToPx(), 8.dpToPx())
+            textSize = 12f
             val drawable = android.graphics.drawable.GradientDrawable().apply {
                 setColor(android.graphics.Color.parseColor("#FF74C0FC"))
-                cornerRadius = 12.dpToPx().toFloat()
+                cornerRadius = 10.dpToPx().toFloat()
             }
             background = drawable
             layoutParams = android.widget.LinearLayout.LayoutParams(
                 android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
                 android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                setMargins(15.dpToPx(), 0, 15.dpToPx(), 0)
+                setMargins(10.dpToPx(), 0, 10.dpToPx(), 0)
             }
             setOnClickListener {
                 val input = passwordInput.text.toString()
                 if (checkPassword(input)) {
                     Log.d(TAG, "Пароль верный, вход разрешён")
+                    // Закрываем диалог ввода
+                    (it.parent?.parent as? AlertDialog)?.dismiss()
                     showMainContent()
                 } else {
                     Log.w(TAG, "Неверный пароль")
@@ -352,23 +356,23 @@ class MainActivity : ComponentActivity() {
         }
         buttonContainer.addView(positiveButton)
 
-        // Кнопка "Выйти"
+        // Кнопка "Выйти" (уменьшена)
         val negativeButton = android.widget.Button(this).apply {
             text = "Выйти"
             setBackgroundColor(android.graphics.Color.parseColor("#FF74C0FC"))
             setTextColor(android.graphics.Color.parseColor("#FF212529"))
-            setPadding(27.dpToPx(), 10.dpToPx(), 27.dpToPx(), 10.dpToPx())
-            textSize = 13.6f
+            setPadding(16.dpToPx(), 8.dpToPx(), 16.dpToPx(), 8.dpToPx())
+            textSize = 12f
             val drawable = android.graphics.drawable.GradientDrawable().apply {
                 setColor(android.graphics.Color.parseColor("#FF74C0FC"))
-                cornerRadius = 12.dpToPx().toFloat()
+                cornerRadius = 10.dpToPx().toFloat()
             }
             background = drawable
             layoutParams = android.widget.LinearLayout.LayoutParams(
                 android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
                 android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                setMargins(15.dpToPx(), 0, 15.dpToPx(), 0)
+                setMargins(10.dpToPx(), 0, 10.dpToPx(), 0)
             }
             setOnClickListener {
                 finishAffinity()
