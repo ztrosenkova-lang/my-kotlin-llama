@@ -135,39 +135,40 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
+     * Создаёт поле ввода с бледно-жёлтым фоном и закруглённой рамкой
+     */
+    private fun createStyledEditText(hintText: String): android.widget.EditText {
+        return android.widget.EditText(this).apply {
+            hint = hintText
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            gravity = android.view.Gravity.CENTER
+            setOnFocusChangeListener { _, hasFocus ->
+                if (hasFocus) {
+                    setHint("")
+                } else {
+                    if (text.isNullOrEmpty()) {
+                        setHint(hintText)
+                    }
+                }
+            }
+            // Устанавливаем бледно-жёлтый фон и закруглённую рамку
+            val drawable = android.graphics.drawable.GradientDrawable().apply {
+                setColor(android.graphics.Color.parseColor("#FFFFF9DB")) // Pale Yellow
+                cornerRadius = 12.dpToPx().toFloat()
+                setStroke(1.dpToPx(), android.graphics.Color.parseColor("#FFCED4DA")) // BorderGray
+            }
+            background = drawable
+            setPadding(16.dpToPx(), 12.dpToPx(), 16.dpToPx(), 12.dpToPx())
+        }
+    }
+
+    /**
      * Показывает диалог установки пароля (при первом запуске)
      * С центрированным заголовком, полями и горизонтальными кнопками
      */
     private fun showSetPasswordDialog() {
-        // Создаём поля ввода с исчезающим hint и центрированным текстом
-        val passwordInput = android.widget.EditText(this).apply {
-            hint = "Введите пароль"
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-            gravity = android.view.Gravity.CENTER
-            setOnFocusChangeListener { _, hasFocus ->
-                if (hasFocus) {
-                    setHint("")
-                } else {
-                    if (text.isNullOrEmpty()) {
-                        setHint("Введите пароль")
-                    }
-                }
-            }
-        }
-        val confirmInput = android.widget.EditText(this).apply {
-            hint = "Подтвердите пароль"
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-            gravity = android.view.Gravity.CENTER
-            setOnFocusChangeListener { _, hasFocus ->
-                if (hasFocus) {
-                    setHint("")
-                } else {
-                    if (text.isNullOrEmpty()) {
-                        setHint("Подтвердите пароль")
-                    }
-                }
-            }
-        }
+        val passwordInput = createStyledEditText("Введите пароль")
+        val confirmInput = createStyledEditText("Подтвердите пароль")
 
         val linearLayout = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
@@ -242,7 +243,6 @@ class MainActivity : ComponentActivity() {
                 val buttonPositive = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
                 val buttonNegative = dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
 
-                // Устанавливаем горизонтальное расположение с промежутком
                 val parent = buttonPositive?.parent as? android.widget.LinearLayout
                 parent?.orientation = android.widget.LinearLayout.HORIZONTAL
                 parent?.gravity = android.view.Gravity.CENTER_HORIZONTAL
@@ -251,12 +251,13 @@ class MainActivity : ComponentActivity() {
                     button?.let {
                         val params = it.layoutParams as? android.widget.LinearLayout.LayoutParams
                         params?.weight = 1f
-                        params?.setMargins(8.dpToPx(), 0, 8.dpToPx(), 0)
+                        params?.setMargins(15.dpToPx(), 0, 15.dpToPx(), 0)
                         it.layoutParams = params
 
                         it.setBackgroundColor(android.graphics.Color.parseColor("#FF74C0FC"))
                         it.setTextColor(android.graphics.Color.parseColor("#FF212529"))
-                        it.setPadding(32.dpToPx(), 12.dpToPx(), 32.dpToPx(), 12.dpToPx())
+                        it.setPadding(27.dpToPx(), 10.dpToPx(), 27.dpToPx(), 10.dpToPx())
+                        it.textSize = 13.6f // Уменьшаем текст на 15%
                         val drawable = android.graphics.drawable.GradientDrawable().apply {
                             setColor(android.graphics.Color.parseColor("#FF74C0FC"))
                             cornerRadius = 12.dpToPx().toFloat()
@@ -274,23 +275,8 @@ class MainActivity : ComponentActivity() {
      * Показывает диалог ввода пароля с центрированными элементами
      */
     private fun showPasswordDialog() {
-        // Создаём поле ввода с исчезающим hint и центрированным текстом
-        val passwordInput = android.widget.EditText(this).apply {
-            hint = "Введите пароль"
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-            gravity = android.view.Gravity.CENTER
-            setOnFocusChangeListener { _, hasFocus ->
-                if (hasFocus) {
-                    setHint("")
-                } else {
-                    if (text.isNullOrEmpty()) {
-                        setHint("Введите пароль")
-                    }
-                }
-            }
-        }
+        val passwordInput = createStyledEditText("Введите пароль")
 
-        // Создаём диалог
         val dialog = AlertDialog.Builder(this)
             .setTitle("🤖 Введите пароль")
             .setMessage("Для доступа к приложению требуется пароль.")
@@ -351,8 +337,6 @@ class MainActivity : ComponentActivity() {
                 val messageView = dialog.window?.decorView?.findViewById<android.widget.TextView>(android.R.id.message)
                 messageView?.gravity = android.view.Gravity.CENTER
                 messageView?.textAlignment = android.view.View.TEXT_ALIGNMENT_CENTER
-
-                // Поле ввода центрируется через gravity = CENTER
             } catch (e: Exception) {
                 Log.w(TAG, "Не удалось центрировать текст", e)
             }
@@ -372,12 +356,13 @@ class MainActivity : ComponentActivity() {
                     button?.let {
                         val params = it.layoutParams as? android.widget.LinearLayout.LayoutParams
                         params?.weight = 1f
-                        params?.setMargins(8.dpToPx(), 0, 8.dpToPx(), 0)
+                        params?.setMargins(15.dpToPx(), 0, 15.dpToPx(), 0)
                         it.layoutParams = params
 
                         it.setBackgroundColor(android.graphics.Color.parseColor("#FF74C0FC"))
                         it.setTextColor(android.graphics.Color.parseColor("#FF212529"))
-                        it.setPadding(32.dpToPx(), 12.dpToPx(), 32.dpToPx(), 12.dpToPx())
+                        it.setPadding(27.dpToPx(), 10.dpToPx(), 27.dpToPx(), 10.dpToPx())
+                        it.textSize = 13.6f // Уменьшаем текст на 15%
                         val drawable = android.graphics.drawable.GradientDrawable().apply {
                             setColor(android.graphics.Color.parseColor("#FF74C0FC"))
                             cornerRadius = 12.dpToPx().toFloat()
