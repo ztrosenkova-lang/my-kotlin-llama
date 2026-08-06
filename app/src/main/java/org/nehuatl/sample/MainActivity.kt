@@ -8,6 +8,8 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.provider.Settings
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -95,6 +97,21 @@ class MainActivity : ComponentActivity() {
         }
         if (!storageGranted) {
             Log.w("MainActivity", "Разрешение на чтение хранилища не получено")
+        }
+    }
+
+    // ========== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ВИБРАЦИИ ==========
+    private fun vibrateButton() {
+        try {
+            val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator?.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(50)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Vibration failed", e)
         }
     }
 
@@ -186,7 +203,13 @@ class MainActivity : ComponentActivity() {
             setPadding(0, 16, 0, 0)
         }
 
-        // Кнопка "Установить" (уменьшена)
+        // Создаём диалог ДО кнопок, чтобы иметь ссылку
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setCancelable(false)
+            .create()
+
+        // Кнопка "Установить" с тактильной обратной связью
         val positiveButton = android.widget.Button(this).apply {
             text = "Установить"
             setBackgroundColor(android.graphics.Color.parseColor("#FF74C0FC"))
@@ -204,24 +227,32 @@ class MainActivity : ComponentActivity() {
             ).apply {
                 setMargins(10.dpToPx(), 0, 10.dpToPx(), 0)
             }
+            // Добавляем тактильную обратную связь при нажатии
+            setOnTouchListener { _, _ ->
+                vibrateButton()
+                false
+            }
             setOnClickListener {
                 val password = passwordInput.text.toString()
                 val confirm = confirmInput.text.toString()
                 if (password.isNotEmpty() && password == confirm) {
                     setPassword(password)
                     Log.d(TAG, "Пароль установлен успешно")
-                    // Закрываем диалог установки
-                    (it.parent?.parent as? AlertDialog)?.dismiss()
+                    dialog.dismiss()
                     showPasswordDialog()
                 } else {
                     Log.w(TAG, "Пароль не совпадает или пустой")
-                    showSetPasswordDialog()
+                    android.widget.Toast.makeText(
+                        this@MainActivity,
+                        "Пароли не совпадают или пустые",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
                 }
             }
         }
         buttonContainer.addView(positiveButton)
 
-        // Кнопка "Выйти" (уменьшена)
+        // Кнопка "Выйти" с тактильной обратной связью
         val negativeButton = android.widget.Button(this).apply {
             text = "Выйти"
             setBackgroundColor(android.graphics.Color.parseColor("#FF74C0FC"))
@@ -239,7 +270,12 @@ class MainActivity : ComponentActivity() {
             ).apply {
                 setMargins(10.dpToPx(), 0, 10.dpToPx(), 0)
             }
+            setOnTouchListener { _, _ ->
+                vibrateButton()
+                false
+            }
             setOnClickListener {
+                dialog.dismiss()
                 finishAffinity()
             }
         }
@@ -247,12 +283,7 @@ class MainActivity : ComponentActivity() {
 
         dialogView.addView(buttonContainer)
 
-        // Создаём и показываем диалог
-        val dialog = AlertDialog.Builder(this)
-            .setView(dialogView)
-            .setCancelable(false)
-            .create()
-
+        // Настраиваем и показываем диалог
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.show()
 
@@ -316,7 +347,13 @@ class MainActivity : ComponentActivity() {
             setPadding(0, 16, 0, 0)
         }
 
-        // Кнопка "Войти" (уменьшена)
+        // Создаём диалог ДО кнопок, чтобы иметь ссылку
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setCancelable(false)
+            .create()
+
+        // Кнопка "Войти" с тактильной обратной связью
         val positiveButton = android.widget.Button(this).apply {
             text = "Войти"
             setBackgroundColor(android.graphics.Color.parseColor("#FF74C0FC"))
@@ -334,29 +371,29 @@ class MainActivity : ComponentActivity() {
             ).apply {
                 setMargins(10.dpToPx(), 0, 10.dpToPx(), 0)
             }
+            setOnTouchListener { _, _ ->
+                vibrateButton()
+                false
+            }
             setOnClickListener {
                 val input = passwordInput.text.toString()
                 if (checkPassword(input)) {
                     Log.d(TAG, "Пароль верный, вход разрешён")
-                    // Закрываем диалог ввода
-                    (it.parent?.parent as? AlertDialog)?.dismiss()
+                    dialog.dismiss()
                     showMainContent()
                 } else {
                     Log.w(TAG, "Неверный пароль")
-                    AlertDialog.Builder(this@MainActivity)
-                        .setTitle("Ошибка")
-                        .setMessage("Неверный пароль. Приложение будет закрыто.")
-                        .setPositiveButton("OK") { _, _ ->
-                            finishAffinity()
-                        }
-                        .setCancelable(false)
-                        .show()
+                    android.widget.Toast.makeText(
+                        this@MainActivity,
+                        "Неверный пароль",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
                 }
             }
         }
         buttonContainer.addView(positiveButton)
 
-        // Кнопка "Выйти" (уменьшена)
+        // Кнопка "Выйти" с тактильной обратной связью
         val negativeButton = android.widget.Button(this).apply {
             text = "Выйти"
             setBackgroundColor(android.graphics.Color.parseColor("#FF74C0FC"))
@@ -374,7 +411,12 @@ class MainActivity : ComponentActivity() {
             ).apply {
                 setMargins(10.dpToPx(), 0, 10.dpToPx(), 0)
             }
+            setOnTouchListener { _, _ ->
+                vibrateButton()
+                false
+            }
             setOnClickListener {
+                dialog.dismiss()
                 finishAffinity()
             }
         }
@@ -382,12 +424,7 @@ class MainActivity : ComponentActivity() {
 
         dialogView.addView(buttonContainer)
 
-        // Создаём и показываем диалог
-        val dialog = AlertDialog.Builder(this)
-            .setView(dialogView)
-            .setCancelable(false)
-            .create()
-
+        // Настраиваем и показываем диалог
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.show()
 
