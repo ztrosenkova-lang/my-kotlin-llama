@@ -44,31 +44,11 @@ jobs:
           curl -L "https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/robot-medium/ru_RU-robot-medium.onnx" \
           -o "app/src/main/assets/tts-model/ru_RU-robot-medium.onnx"
 
-      - name: Decode Keystore from Secret
-        run: |
-          printf "%s" "${{ secrets.KEYSTORE_BASE64 }}" > app/keystore.b64
-          base64 --decode app/keystore.b64 > app/release.keystore
-          rm app/keystore.b64
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug
 
-      - name: Verify Keystore File
-        run: |
-          if [ -f "app/release.keystore" ]; then
-            echo "✅ Keystore file exists"
-            ls -la app/release.keystore
-          else
-            echo "❌ Keystore file NOT found!"
-            exit 1
-          fi
-
-      - name: Build Release APK with Signing
-        run: ./gradlew assembleRelease
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-
-      - name: Upload Release APK Artifact
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-apk
-          path: app/build/outputs/apk/release/app-release.apk
+          name: app-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
