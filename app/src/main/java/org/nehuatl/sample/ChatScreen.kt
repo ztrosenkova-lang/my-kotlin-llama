@@ -74,6 +74,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -95,6 +96,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import androidx.compose.animation.core.*
+import androidx.compose.runtime.remember
 
 private val AppBackground = Color(0xFFFFFFFF)
 private val SurfaceGray = Color(0xFFF1F3F5)
@@ -363,7 +366,23 @@ fun ChatScreen(
             isModelLoaded = isModelLoaded,
             cloudConfig = viewModel.getCloudConfig(),
             onCloudForceDialog = { showCloudDialog = true },
-            onLocalForceDialog = { showModelDialog = true }
+            onLocalForceDialog = { showModelDialog = true },
+            // Передаём статус для анимации
+            statusText = when (currentMode) {
+                AIMode.LOCAL -> {
+                    when (state) {
+                        is GenerationState.Generating -> "🤖 Локальный ИИ думает..."
+                        else -> "🤖 Локальный ИИ: Готов к работе"
+                    }
+                }
+                AIMode.CLOUD -> {
+                    when (cloudState) {
+                        is CloudAIState.Generating -> "☁️ Облако думает..."
+                        else -> "☁️ Облако: Готово к работе"
+                    }
+                }
+                else -> "🤖 ИИ выгружен"
+            }
         )
 
         ControlPanel(
@@ -538,13 +557,27 @@ private fun TopBarWithSwitch(
     isModelLoaded: Boolean,
     cloudConfig: CloudAIConfig?,
     onCloudForceDialog: () -> Unit,
-    onLocalForceDialog: () -> Unit
+    onLocalForceDialog: () -> Unit,
+    statusText: String = ""
 ) {
     val isLocalReady = isModelLoaded
     val isCloudReady = cloudConfig?.authKey?.isNotEmpty() == true
 
     val localIndicatorColor = if (isLocalReady) GreenColor else PaleYellowColor
     val cloudIndicatorColor = if (isCloudReady) GreenColor else PaleYellowColor
+
+    // Анимация вращения крестиков
+    val infiniteTransition = rememberInfiniteTransition()
+    val rotationAngle by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = 1200,
+                easing = LinearEasing
+            )
+        )
+    )
 
     Row(
         modifier = Modifier
@@ -565,19 +598,44 @@ private fun TopBarWithSwitch(
             contentScale = ContentScale.Crop
         )
 
-        Box(
+        // НОВЫЙ ЦЕНТРАЛЬНЫЙ КОНТЕЙНЕР
+        Row(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight(),
-            contentAlignment = Alignment.Center
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            // Левый крестик
             Text(
-                text = "-- ИИ-Друг --",
+                text = "+",
+                fontSize = 20.sp,
+                color = AccentColor,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.rotate(
+                    if (statusText.contains("думает")) rotationAngle else 0f
+                )
+            )
+
+            // Центральный текст
+            Text(
+                text = "ИИ-Друг",
                 style = MaterialTheme.typography.titleMedium,
-                color = FriendlyRobotColor,
+                color = DarkText,
                 fontWeight = FontWeight.ExtraBold,
                 fontFamily = FontFamily.Monospace,
-                textAlign = TextAlign.Center
+                modifier = Modifier.padding(horizontal = 8.dp)
+            )
+
+            // Правый крестик
+            Text(
+                text = "+",
+                fontSize = 20.sp,
+                color = AccentColor,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.rotate(
+                    if (statusText.contains("думает")) rotationAngle else 0f
+                )
             )
         }
 
