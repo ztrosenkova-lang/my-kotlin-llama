@@ -272,8 +272,7 @@ fun ChatScreen(
                 viewModel.verifySecretPhrase(secretPhraseInput)
                 secretPhraseInput = "" // Очищаем поле после проверки
             },
-            viewModel = viewModel,
-            context = context
+            viewModel = viewModel
         )
         return // Выходим из функции, чтобы не рендерить основной интерфейс
     }
@@ -581,9 +580,10 @@ private fun LockScreen(
     secretPhrase: String,
     onSecretPhraseChange: (String) -> Unit,
     onVerify: () -> Unit,
-    viewModel: MainViewModel,
-    context: android.content.Context
+    viewModel: MainViewModel
 ) {
+    val context = LocalContext.current
+
     // Блокируем кнопку "Назад"
     BackHandler(enabled = true) {
         // Ничего не делаем — блокируем выход
