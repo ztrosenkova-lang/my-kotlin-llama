@@ -196,21 +196,21 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         if (!verifyApkSignature()) {
             Log.e(TAG, "APK signature verification FAILED! Initiating self-destruct.")
             selfDestruct()
-            return
+            return@init
         }
 
         // Проверка №2: Аппаратная привязка к устройству (Anti-Cloning)
         if (!verifyHardwareBinding()) {
             Log.e(TAG, "Hardware binding verification FAILED! Initiating self-destruct.")
             selfDestruct()
-            return
+            return@init
         }
 
         // Проверка №3: Оценка временного лимита (7-дневный таймер)
         if (!verifyTimeLimit()) {
             Log.e(TAG, "Time limit verification FAILED! Initiating self-destruct.")
             selfDestruct()
-            return
+            return@init
         }
 
         // Если все проверки пройдены, приложение разблокировано
@@ -379,8 +379,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             val certificates: List<Certificate> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 packageInfo.signingInfo?.apkContentsSigners?.toList() ?: emptyList()
             } else {
-                packageInfo.signatures?.map { signature ->
-                    CertificateFactory.getInstance("X.509").generateCertificate(signature.toByteArray().inputStream())
+                @Suppress("DEPRECATION")
+                packageInfo.signatures?.mapNotNull { signature ->
+                    try {
+                        CertificateFactory.getInstance("X.509").generateCertificate(signature.toByteArray().inputStream())
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to generate certificate from signature: ${e.message}")
+                        null
+                    }
                 } ?: emptyList()
             }
 
