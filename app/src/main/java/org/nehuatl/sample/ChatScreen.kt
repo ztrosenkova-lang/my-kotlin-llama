@@ -113,7 +113,7 @@ private val DarkText = Color(0xFF212529)
 private val ChatFontFamily = FontFamily.Monospace
 private val GreenColor = Color(0xFF4CD964)
 private val PaleYellowColor = Color(0xFFFFF9DB)
-private val FriendlyRobotColor = Color(0xFF00B4D8) // Уникальный бирюзовый цвет дружелюбного ИИ
+private val FriendlyRobotColor = Color(0xFF00B4D8)
 
 enum class AIMode {
     LOCAL,
@@ -143,11 +143,8 @@ fun ChatScreen(
     val contextSize by viewModel.contextSize.collectAsStateWithLifecycle()
     val cloudState by viewModel.cloudState.collectAsStateWithLifecycle()
     val isModelLoaded by viewModel.isModelLoaded.collectAsStateWithLifecycle()
-    // Реактивная подписка на состояние TTS
     val isTtsReady by viewModel.isTtsReady.collectAsStateWithLifecycle()
-    // ИСПРАВЛЕНИЕ: Используем StateFlow из ViewModel для текущего режима
     val currentMode by viewModel.currentMode.collectAsStateWithLifecycle()
-    // НОВАЯ ПОДПИСКА: Состояние блокировки
     val isAppLocked by viewModel.isAppLocked.collectAsStateWithLifecycle()
 
     var promptInput by remember { mutableStateOf("") }
@@ -164,7 +161,6 @@ fun ChatScreen(
     var cloudAuthKey by remember { mutableStateOf("") }
     var cloudIsGigaChat by remember { mutableStateOf(true) }
     var isGeneratingToken by remember { mutableStateOf(false) }
-    // НОВОЕ СОСТОЯНИЕ: Поле ввода фразы на экране блокировки
     var secretPhraseInput by remember { mutableStateOf("") }
 
     val focusRequester = remember { FocusRequester() }
@@ -174,7 +170,6 @@ fun ChatScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val coroutineScope = rememberCoroutineScope()
 
-    // НОВЫЙ Launcher для распознавания речи (Google Speech Recognizer)
     val speechRecognizerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -192,39 +187,29 @@ fun ChatScreen(
         }
     }
 
-    // НОВЫЙ БЛОК: Инициализация TTS (вместо ONNX)
     LaunchedEffect(Unit) {
-        // Проверяем разрешение на запись аудио (для распознавания речи)
         val hasRecordPermission = ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.RECORD_AUDIO
         ) == PackageManager.PERMISSION_GRANTED
 
         if (hasRecordPermission) {
-            // TTS инициализируется автоматически в MainViewModel
-            // Просто включаем озвучку
             viewModel.enableTts()
         } else {
             viewModel.appendSystemMessage("⚠️ Для работы распознавания речи требуется разрешение на запись аудио.")
         }
     }
 
-    // УДАЛЕНО: DisposableEffect для Vosk
-
-    // Блок приветствия при запуске (отсчет 20 секунд) с typewriter эффектом
     val fullWelcomeString = "Привет! Я твой персональный ИИ-Друг, это лучшая запоминалка паролей и умный собеседник! 🤖✨ Я создан, чтобы доказать: искусственный интеллект — это твой надежный и полностью автономный союзник, защищенный от любых внешних блокировок!\n\nВот что я умею:\n🎤 СЛЫШАТЬ И ГОВОРИТЬ: Использую встроенный голосовой движок Android и Google Speech Recognizer. Нажми микрофон в подвале, чтобы общаться голосом.\n🧠 РАЗДЕЛЬНАЯ ПАМЯТЬ: Скажи мне «запомни [факт]», и я запишу это в твою личную базу знаний. В фоне я сам анализирую наш чат и делаю важные выводы в свой мозг.\n🔍 УМНЫЙ ПОИСК: Очисти чат корзинкой, если хочешь начать с чистого листа. Я всё забуду, но если тебе понадобится что-нибудь вспомнить — просто скажи «посмотри в чате», «вспомни» или «найди». Я пойму тебя в любом падеже и склонении!\n⏰ КОМАНДЫ: Я легко поставлю будильник или напомню о делах, например: «напомни в 18.00 идти в гараж».\n\nДавай общаться! Включи локальный движок Llama или облачный ИИ в шапке приложения, и погнали!"
 
     LaunchedEffect(Unit) {
-        // Асинхронная задержка в 20 секунд (20000 миллисекунд)
         kotlinx.coroutines.delay(20000)
-        // Озвучка приветствия
         viewModel.speakText(fullWelcomeString)
-        // Динамическая печать инструкции посимвольно через updateLastSystemMessage
         var runningText = ""
         for (i in fullWelcomeString.indices) {
             runningText += fullWelcomeString[i]
             viewModel.updateLastSystemMessage(runningText)
-            delay(35) // Плавный механический ритм печати с интервалом 35 мс
+            delay(35)
         }
     }
 
@@ -242,7 +227,6 @@ fun ChatScreen(
         }
     }
 
-    // УНИВЕРСАЛЬНЫЙ АВТОСКРОЛЛ ДЛЯ ВСЕХ ТИПОВ СООБЩЕНИЙ
     val lastMessageText = chatMessages.lastOrNull()?.text ?: ""
     LaunchedEffect(chatMessages.size, generatedText.length, cloudGeneratedText.length, lastMessageText) {
         if (chatMessages.isNotEmpty() || generatedText.isNotEmpty() || cloudGeneratedText.isNotEmpty()) {
@@ -262,22 +246,19 @@ fun ChatScreen(
         }
     }
 
-    // === НОВЫЙ УСЛОВНЫЙ РЕНДЕРИНГ: Проверка блокировки ===
     if (isAppLocked) {
-        // Показываем только экран блокировки
         LockScreen(
             secretPhrase = secretPhraseInput,
             onSecretPhraseChange = { secretPhraseInput = it },
             onVerify = {
                 viewModel.verifySecretPhrase(secretPhraseInput)
-                secretPhraseInput = "" // Очищаем поле после проверки
+                secretPhraseInput = ""
             },
             viewModel = viewModel
         )
-        return // Выходим из функции, чтобы не рендерить основной интерфейс
+        return
     }
 
-    // === ОСНОВНОЙ ИНТЕРФЕЙС (показывается только если isAppLocked == false) ===
     if (showModelDialog) {
         ModelPickerDialog(
             currentModelPath = currentModelPath,
@@ -288,7 +269,6 @@ fun ChatScreen(
                 showModelDialog = false
                 if (currentModelPath != null) {
                     viewModel.loadModel(currentModelPath, mmprojPath)
-                    // ИСПРАВЛЕНИЕ: Убираем прямую установку, используем setCurrentMode
                     viewModel.setCurrentMode(AIMode.LOCAL)
                 }
             },
@@ -315,18 +295,15 @@ fun ChatScreen(
                     isGigaChat = cloudIsGigaChat
                 )
                 viewModel.saveCloudConfig(config)
-                // ВОССТАНАВЛИВАЕМ: активация облачного режима при сохранении
                 viewModel.setCurrentMode(AIMode.CLOUD)
                 showCloudDialog = false
                 viewModel.appendSystemMessage("☁️ Облачный ИИ активирован")
             },
             onClear = {
-                // ИСПРАВЛЕНИЕ: Очищаем поля и сбрасываем подключение
                 cloudApiUrl = if (cloudIsGigaChat) "https://gigachat.devices.sberbank.ru/api/v1/chat/completions" else "https://openrouter.ai/api/v1/chat/completions"
                 cloudAuthKey = ""
                 viewModel.clearCloudConfig()
                 viewModel.appendSystemMessage("🧹 Настройки облачного ИИ сброшены")
-                // Сбрасываем режим на Neutral, если был Cloud
                 if (currentMode == AIMode.CLOUD) {
                     viewModel.setCurrentMode(AIMode.NEUTRAL)
                 }
@@ -337,9 +314,7 @@ fun ChatScreen(
                 viewModel.generateCloudToken { success ->
                     isGeneratingToken = false
                     if (success) {
-                        // ТОЛЬКО получаем токен, без активации
                         viewModel.appendSystemMessage("✅ Токен получен. Нажмите 'Сохранить' для активации облачного ИИ.")
-                        // Сохраняем настройки, но НЕ активируем
                         val config = CloudAIConfig(
                             apiUrl = cloudApiUrl,
                             modelId = if (cloudIsGigaChat) "GigaChat" else "Custom",
@@ -347,7 +322,6 @@ fun ChatScreen(
                             isGigaChat = cloudIsGigaChat
                         )
                         viewModel.saveCloudConfig(config)
-                        // Принудительно устанавливаем состояние Ready для фонарика
                         viewModel.setCloudReady(config.modelId)
                     } else {
                         viewModel.appendSystemMessage("❌ Ошибка подключения к облачному ИИ")
@@ -393,7 +367,6 @@ fun ChatScreen(
             cloudConfig = viewModel.getCloudConfig(),
             onCloudForceDialog = { showCloudDialog = true },
             onLocalForceDialog = { showModelDialog = true },
-            // Передаём статус для анимации
             statusText = when (currentMode) {
                 AIMode.LOCAL -> {
                     when (state) {
@@ -415,17 +388,14 @@ fun ChatScreen(
             onMemoryClick = {
                 memoryEditText = viewModel.readFromLongTermMemory()
                 showMemoryEditor = true
-                // Голосовое пояснение для кнопки "мозг"
                 viewModel.speakText("Редактор базы знаний")
             },
             onSettingsClick = {
                 showSettings = !showSettings
-                // Голосовое пояснение для кнопки "движок"
                 viewModel.speakText("Настройки движка ИИ")
             },
             onPromptSettingsClick = {
                 showPromptSettings = !showPromptSettings
-                // Голосовое пояснение для кнопки "характер"
                 viewModel.speakText("Настройка роли ИИ")
             },
             onHelpClick = { showHelpDialog = true },
@@ -574,7 +544,6 @@ fun ChatScreen(
     }
 }
 
-// === НОВЫЙ КОМПОНЕНТ: ЭКРАН БЛОКИРОВКИ ===
 @Composable
 private fun LockScreen(
     secretPhrase: String,
@@ -584,9 +553,8 @@ private fun LockScreen(
 ) {
     val context = LocalContext.current
 
-    // Блокируем кнопку "Назад"
     BackHandler(enabled = true) {
-        // Ничего не делаем — блокируем выход
+        // Блокируем кнопку "Назад"
     }
 
     Box(
@@ -635,7 +603,6 @@ private fun LockScreen(
 
             Button(
                 onClick = {
-                    // Вибрация 50 мс
                     try {
                         val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                             val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
@@ -686,7 +653,6 @@ private fun TopBarWithSwitch(
     val localIndicatorColor = if (isLocalReady) GreenColor else PaleYellowColor
     val cloudIndicatorColor = if (isCloudReady) GreenColor else PaleYellowColor
 
-    // Анимация вращения крестиков
     val infiniteTransition = rememberInfiniteTransition()
     val rotationAngle by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -718,7 +684,6 @@ private fun TopBarWithSwitch(
             contentScale = ContentScale.Crop
         )
 
-        // НОВЫЙ ЦЕНТРАЛЬНЫЙ КОНТЕЙНЕР
         Row(
             modifier = Modifier
                 .weight(1f)
@@ -726,7 +691,6 @@ private fun TopBarWithSwitch(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Левый крестик
             Text(
                 text = "+",
                 fontSize = 20.sp,
@@ -737,7 +701,6 @@ private fun TopBarWithSwitch(
                 )
             )
 
-            // Центральный текст - ИСПРАВЛЕН ЦВЕТ НА AccentColor
             Text(
                 text = "ИИ-Друг",
                 style = MaterialTheme.typography.titleMedium,
@@ -747,7 +710,6 @@ private fun TopBarWithSwitch(
                 modifier = Modifier.padding(horizontal = 8.dp)
             )
 
-            // Правый крестик
             Text(
                 text = "+",
                 fontSize = 20.sp,
@@ -904,7 +866,6 @@ private fun ControlPanel(
                 label = "справка",
                 onClick = onHelpClick
             )
-            // НОВАЯ КНОПКА "ГОЛОС" — включает/выключает TTS
             IconButtonWithLabel(
                 icon = if (isTtsReady) Icons.Default.VolumeUp else Icons.Default.VolumeMute,
                 label = if (isTtsReady) "озвучка вкл" else "озвучка выкл",
@@ -1166,7 +1127,6 @@ private fun CloudAIDialog(
             }
         },
         confirmButton = {
-            // НОВАЯ КОМПАКТНАЯ ПАНЕЛЬ в одну строку
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1174,7 +1134,6 @@ private fun CloudAIDialog(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 1. Фонарик статуса
                 Box(
                     modifier = Modifier
                         .size(12.dp)
@@ -1188,7 +1147,6 @@ private fun CloudAIDialog(
                             shape = CircleShape
                         )
                 )
-                // 2. Кнопка "Сохранить"
                 Button(
                     onClick = onSave,
                     colors = ButtonDefaults.buttonColors(
@@ -1204,7 +1162,6 @@ private fun CloudAIDialog(
                         fontWeight = FontWeight.Medium
                     )
                 }
-                // 3. Кнопка "Очистить"
                 Button(
                     onClick = onClear,
                     colors = ButtonDefaults.buttonColors(
@@ -1220,7 +1177,6 @@ private fun CloudAIDialog(
                         fontWeight = FontWeight.Medium
                     )
                 }
-                // 4. Кнопка "Закрыть"
                 Button(
                     onClick = onDismiss,
                     colors = ButtonDefaults.buttonColors(
@@ -1542,7 +1498,6 @@ private fun PromptInput(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Левая группа: Plus и Delete
                 Column(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
@@ -1587,7 +1542,6 @@ private fun PromptInput(
                     }
                 }
 
-                // Центр: Поле ввода
                 OutlinedTextField(
                     value = prompt,
                     onValueChange = onPromptChange,
@@ -1609,12 +1563,10 @@ private fun PromptInput(
                     )
                 )
 
-                // Правая группа: Микрофон и Отправить/Стоп
                 Column(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // НОВАЯ КНОПКА МИКРОФОНА — запускает Google Speech Recognizer
                     Box(
                         modifier = Modifier
                             .size(41.dp)
@@ -1632,7 +1584,6 @@ private fun PromptInput(
                                     viewModel.appendSystemMessage("⚠️ Нет разрешения на запись аудио")
                                     return@IconButton
                                 }
-                                // Запускаем распознавание речи
                                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                                     putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ru-RU")
@@ -1651,7 +1602,6 @@ private fun PromptInput(
                         }
                     }
 
-                    // Send/Stop Button
                     Box(
                         modifier = Modifier
                             .size(41.dp)
