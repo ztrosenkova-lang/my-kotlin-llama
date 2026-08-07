@@ -46,7 +46,9 @@ jobs:
 
       - name: Decode Keystore from Secret
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/release.keystore
+          printf "%s" "${{ secrets.KEYSTORE_BASE64 }}" > app/keystore.b64
+          base64 --decode app/keystore.b64 > app/release.keystore
+          rm app/keystore.b64
 
       - name: Verify Keystore File
         run: |
