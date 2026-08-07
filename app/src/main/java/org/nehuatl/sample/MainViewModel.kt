@@ -196,7 +196,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         if (!verifyApkSignature()) {
             Log.e(TAG, "APK signature verification FAILED! Initiating self-destruct.")
             selfDestruct()
-            // Выход из init через return запрещен, поэтому используем условие
         } else {
             // Проверка №2: Аппаратная привязка к устройству (Anti-Cloning)
             if (!verifyHardwareBinding()) {
