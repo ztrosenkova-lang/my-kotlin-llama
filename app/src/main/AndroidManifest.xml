@@ -23,6 +23,9 @@
     <!-- Разрешение на запись аудио (для микрофона и распознавания речи) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- Разрешение на вибрацию (для тактильной обратной связи) -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
     <!-- НОВОЕ: Разрешение на уведомления для Android 14+ (нужно для TTS в фоне) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
