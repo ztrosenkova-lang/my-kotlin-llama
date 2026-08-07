@@ -3,7 +3,12 @@ package org.nehuatl.sample
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.speech.RecognizerIntent
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -85,6 +90,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -141,6 +147,8 @@ fun ChatScreen(
     val isTtsReady by viewModel.isTtsReady.collectAsStateWithLifecycle()
     // ИСПРАВЛЕНИЕ: Используем StateFlow из ViewModel для текущего режима
     val currentMode by viewModel.currentMode.collectAsStateWithLifecycle()
+    // НОВАЯ ПОДПИСКА: Состояние блокировки
+    val isAppLocked by viewModel.isAppLocked.collectAsStateWithLifecycle()
 
     var promptInput by remember { mutableStateOf("") }
     var showModelDialog by remember { mutableStateOf(false) }
@@ -156,6 +164,8 @@ fun ChatScreen(
     var cloudAuthKey by remember { mutableStateOf("") }
     var cloudIsGigaChat by remember { mutableStateOf(true) }
     var isGeneratingToken by remember { mutableStateOf(false) }
+    // НОВОЕ СОСТОЯНИЕ: Поле ввода фразы на экране блокировки
+    var secretPhraseInput by remember { mutableStateOf("") }
 
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -252,6 +262,23 @@ fun ChatScreen(
         }
     }
 
+    // === НОВЫЙ УСЛОВНЫЙ РЕНДЕРИНГ: Проверка блокировки ===
+    if (isAppLocked) {
+        // Показываем только экран блокировки
+        LockScreen(
+            secretPhrase = secretPhraseInput,
+            onSecretPhraseChange = { secretPhraseInput = it },
+            onVerify = {
+                viewModel.verifySecretPhrase(secretPhraseInput)
+                secretPhraseInput = "" // Очищаем поле после проверки
+            },
+            viewModel = viewModel,
+            context = context
+        )
+        return // Выходим из функции, чтобы не рендерить основной интерфейс
+    }
+
+    // === ОСНОВНОЙ ИНТЕРФЕЙС (показывается только если isAppLocked == false) ===
     if (showModelDialog) {
         ModelPickerDialog(
             currentModelPath = currentModelPath,
@@ -545,6 +572,101 @@ fun ChatScreen(
             speechRecognizerLauncher = speechRecognizerLauncher,
             modifier = Modifier.padding(8.dp)
         )
+    }
+}
+
+// === НОВЫЙ КОМПОНЕНТ: ЭКРАН БЛОКИРОВКИ ===
+@Composable
+private fun LockScreen(
+    secretPhrase: String,
+    onSecretPhraseChange: (String) -> Unit,
+    onVerify: () -> Unit,
+    viewModel: MainViewModel,
+    context: android.content.Context
+) {
+    // Блокируем кнопку "Назад"
+    BackHandler(enabled = true) {
+        // Ничего не делаем — блокируем выход
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(SurfaceGray),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "🤖 Введите секретную фразу",
+                style = MaterialTheme.typography.headlineSmall,
+                color = DarkText,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(bottom = 24.dp)
+            )
+
+            OutlinedTextField(
+                value = secretPhrase,
+                onValueChange = onSecretPhraseChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                placeholder = { Text("Введите фразу...", color = DarkText.copy(alpha = 0.5f)) },
+                visualTransformation = PasswordVisualTransformation(),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = DarkText,
+                    unfocusedTextColor = DarkText,
+                    focusedContainerColor = Color.White,
+                    unfocusedContainerColor = Color.White,
+                    focusedBorderColor = AccentColor,
+                    unfocusedBorderColor = BorderGray,
+                    cursorColor = AccentColor
+                )
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                onClick = {
+                    // Вибрация 50 мс
+                    try {
+                        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                            vibratorManager.defaultVibrator
+                        } else {
+                            context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            vibrator.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
+                        } else {
+                            vibrator.vibrate(50)
+                        }
+                    } catch (e: Exception) {
+                        // Игнорируем ошибки вибрации
+                    }
+                    onVerify()
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .height(56.dp)
+            ) {
+                Text(
+                    text = "Подтвердить",
+                    color = DarkText,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+            }
+        }
     }
 }
 
