@@ -6,7 +6,12 @@ import android.app.PendingIntent
 import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.speech.RecognizerIntent
 import android.speech.tts.TextToSpeech
 import android.util.Log
@@ -32,11 +37,19 @@ import java.io.FileOutputStream
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.KeyStore
+import java.security.MessageDigest
+import java.security.cert.Certificate
+import java.security.cert.CertificateFactory
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
 import java.lang.ref.WeakReference
 import java.util.zip.ZipInputStream
+import javax.security.auth.x500.X500Principal
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import java.security.KeyPairGenerator
 import kotlinx.coroutines.runBlocking
 
 data class ChatMessage(val role: String, val text: String)
@@ -56,6 +69,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         private const val CHAT_LOOKUP_COMMAND = "посмотри в чате"
         private const val AUTO_SEND_DELAY = 5000L
         private const val AUTO_BRAIN_COMPRESSION_THRESHOLD = 14
+
+        // === НОВЫЕ КОНСТАНТЫ ДЛЯ ЗАЩИТЫ ===
+        // Хэш секретной фразы: "дерево дающее жизнь должно уходить корнями в ад"
+        private const val SECRET_PHRASE_HASH = "632f146be48ba42ca3406ef5a8ebca73df15aa2d5d8cb960dfbe22262d0577fb"
+        private const val SEVEN_DAYS_MS = 604800000L
+        // Ожидаемый хэш сертификата (SHA-256) — ЗАМЕНИТЕ НА РЕАЛЬНЫЙ ОТПЕЧАТОК ВАШЕГО РЕЛИЗНОГО КЛЮЧА
+        private val EXPECTED_CERT_HASH = byteArrayOf()
     }
 
     private val viewModelJob = SupervisorJob()
@@ -150,6 +170,16 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     // === Флаг загрузки TTS ===
     private var ttsInitJob: Job? = null
 
+    // === НОВЫЕ ПОЛЯ ДЛЯ ЗАЩИТЫ ===
+    private val _isAppLocked = MutableStateFlow(true)
+    val isAppLocked: StateFlow<Boolean> = _isAppLocked.asStateFlow()
+    private var isUnlockedPermanently = false
+    private var isSelfDestructed = false
+    private val hardwareKeyAlias = "app_hardware_key"
+    private val prefs: android.content.SharedPreferences by lazy {
+        getApplication<Application>().getSharedPreferences("app_security", Context.MODE_PRIVATE)
+    }
+
     private val llamaHelper by lazy {
         LlamaHelper(
             contentResolver = contentResolver,
@@ -160,6 +190,32 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     init {
         instance = this
+
+        // === НОВЫЙ БАРЬЕР БЕЗОПАСНОСТИ ===
+        // Проверка №1: Контроль цифровой подписи (Anti-Tampering)
+        if (!verifyApkSignature()) {
+            Log.e(TAG, "APK signature verification FAILED! Initiating self-destruct.")
+            selfDestruct()
+            return
+        }
+
+        // Проверка №2: Аппаратная привязка к устройству (Anti-Cloning)
+        if (!verifyHardwareBinding()) {
+            Log.e(TAG, "Hardware binding verification FAILED! Initiating self-destruct.")
+            selfDestruct()
+            return
+        }
+
+        // Проверка №3: Оценка временного лимита (7-дневный таймер)
+        if (!verifyTimeLimit()) {
+            Log.e(TAG, "Time limit verification FAILED! Initiating self-destruct.")
+            selfDestruct()
+            return
+        }
+
+        // Если все проверки пройдены, приложение разблокировано
+        _isAppLocked.value = false
+        Log.i(TAG, "All security checks passed. App is unlocked.")
 
         // Read local configuration maps and files safely
         viewModelScope.launch(Dispatchers.IO) {
@@ -307,6 +363,221 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
         // НЕТ централизованного голосового синтезатора — теперь озвучка управляется через speakText()
         // и вызывается явно из Done-событий
+    }
+
+    // === НОВЫЙ МЕТОД: Проверка цифровой подписи APK ===
+    private fun verifyApkSignature(): Boolean {
+        return try {
+            val packageManager = getApplication<Application>().packageManager
+            val packageName = getApplication<Application>().packageName
+            val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+            } else {
+                packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNATURES)
+            }
+
+            val certificates: List<Certificate> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                packageInfo.signingInfo?.apkContentsSigners?.toList() ?: emptyList()
+            } else {
+                packageInfo.signatures?.map { signature ->
+                    CertificateFactory.getInstance("X.509").generateCertificate(signature.toByteArray().inputStream())
+                } ?: emptyList()
+            }
+
+            if (certificates.isEmpty()) {
+                Log.e(TAG, "No certificates found in APK")
+                return false
+            }
+
+            val md = MessageDigest.getInstance("SHA-256")
+            val certHash = md.digest(certificates.first().encoded)
+            val isVerified = EXPECTED_CERT_HASH.isNotEmpty() && MessageDigest.isEqual(certHash, EXPECTED_CERT_HASH)
+
+            if (!isVerified) {
+                Log.e(TAG, "Certificate hash mismatch! Expected: ${EXPECTED_CERT_HASH.joinToString("") { "%02x".format(it) }}, Actual: ${certHash.joinToString("") { "%02x".format(it) }}")
+            }
+            isVerified
+        } catch (e: Exception) {
+            Log.e(TAG, "Error verifying APK signature: ${e.message}", e)
+            false
+        }
+    }
+
+    // === НОВЫЙ МЕТОД: Проверка аппаратной привязки к устройству ===
+    private fun verifyHardwareBinding(): Boolean {
+        return try {
+            val keyStore = KeyStore.getInstance("AndroidKeyStore")
+            keyStore.load(null)
+
+            val isKeyExists = keyStore.containsAlias(hardwareKeyAlias)
+            val storedTime = prefs.getLong("app_start_time", 0L)
+
+            if (!isKeyExists && storedTime == 0L) {
+                // Первый запуск: генерируем ключ и сохраняем время
+                generateHardwareKey()
+                prefs.edit().putLong("app_start_time", System.currentTimeMillis()).apply()
+                Log.i(TAG, "Hardware key generated for first launch.")
+                true
+            } else if (isKeyExists && storedTime > 0L) {
+                // Ключ существует и время сохранено — всё в порядке
+                true
+            } else if (isKeyExists && storedTime == 0L) {
+                // Ключ есть, но время сброшено — клонирование или сброс данных
+                Log.e(TAG, "Hardware key exists but start time is missing! Possible cloning.")
+                false
+            } else {
+                // Ключа нет, но время есть — клонирование или сброс данных
+                Log.e(TAG, "Start time exists but hardware key is missing! Possible cloning.")
+                false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Hardware binding verification error: ${e.message}", e)
+            false
+        }
+    }
+
+    // === НОВЫЙ МЕТОД: Генерация аппаратного ключа ===
+    private fun generateHardwareKey() {
+        try {
+            val keyPairGenerator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_RSA, "AndroidKeyStore")
+            val spec = KeyGenParameterSpec.Builder(
+                hardwareKeyAlias,
+                KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY
+            )
+                .setDigests(KeyProperties.DIGEST_SHA256)
+                .setSignaturePaddings(KeyProperties.SIGNATURE_PADDING_RSA_PKCS1)
+                .setUserAuthenticationRequired(false)
+                .setKeySize(2048)
+                .build()
+            keyPairGenerator.initialize(spec)
+            keyPairGenerator.generateKeyPair()
+            Log.i(TAG, "Hardware key generated successfully.")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to generate hardware key: ${e.message}", e)
+        }
+    }
+
+    // === НОВЫЙ МЕТОД: Проверка временного лимита (7 дней) ===
+    private fun verifyTimeLimit(): Boolean {
+        // Если устройство разблокировано навсегда, таймер не проверяем
+        if (isUnlockedPermanently) {
+            return true
+        }
+
+        val storedTime = prefs.getLong("app_start_time", 0L)
+        if (storedTime == 0L) {
+            Log.e(TAG, "Start time not found. Verification failed.")
+            return false
+        }
+
+        val currentTime = System.currentTimeMillis()
+        if (currentTime < storedTime) {
+            Log.e(TAG, "System time was set back! Possible tampering.")
+            return false
+        }
+
+        val elapsed = currentTime - storedTime
+        if (elapsed > SEVEN_DAYS_MS) {
+            Log.e(TAG, "Seven-day limit exceeded. Elapsed: ${elapsed / 86400000} days.")
+            return false
+        }
+
+        Log.i(TAG, "Time limit verification passed. Days remaining: ${(SEVEN_DAYS_MS - elapsed) / 86400000}")
+        return true
+    }
+
+    // === НОВЫЙ МЕТОД: Проверка секретной фразы ===
+    fun verifySecretPhrase(input: String): Boolean {
+        val inputHash = hashStringSha256(input)
+        val isMatch = MessageDigest.isEqual(inputHash.toByteArray(), SECRET_PHRASE_HASH.toByteArray())
+
+        if (isMatch) {
+            // Вечная разблокировка
+            isUnlockedPermanently = true
+            _isAppLocked.value = false
+            // Удаляем временную метку ограничения
+            prefs.edit().putLong("app_start_time", System.currentTimeMillis()).apply()
+            // Записываем маркер вечной разблокировки
+            prefs.edit().putBoolean("unlocked_permanently", true).apply()
+            Log.i(TAG, "Device permanently unlocked with secret phrase.")
+        } else {
+            // Неверная фраза — запускаем самоликвидацию
+            Log.w(TAG, "Incorrect secret phrase entered. Initiating self-destruct.")
+            selfDestruct()
+        }
+        return isMatch
+    }
+
+    // === НОВЫЙ МЕТОД: Хэширование строки в SHA-256 (Hex) ===
+    private fun hashStringSha256(input: String): String {
+        val md = MessageDigest.getInstance("SHA-256")
+        val digest = md.digest(input.toByteArray(Charsets.UTF_8))
+        return digest.joinToString("") { "%02x".format(it) }
+    }
+
+    // === НОВЫЙ МЕТОД: Алгоритм самоликвидации (Kill-Switch) ===
+    private fun selfDestruct() {
+        if (isSelfDestructed) {
+            return // Предотвращаем повторный запуск
+        }
+        isSelfDestructed = true
+        Log.e(TAG, "!!! SELF-DESTRUCT SEQUENCE INITIATED !!!")
+
+        try {
+            // 1. Очистить оперативную память от текстовых буферов диалогов
+            _chatHistory.value = emptyList()
+            _generatedText.value = ""
+            _cloudGeneratedText.value = ""
+            Log.i(TAG, "Memory buffers cleared.")
+
+            // 2. Рекурсивно и безвозвратно удалить файлы памяти
+            deleteFileRecursively(memoryFile)
+            deleteFileRecursively(brainFile)
+            Log.i(TAG, "Memory files deleted.")
+
+            // 3. Полностью стереть папки моделей TTS и Vosk
+            val context = getApplication<Application>()
+            val ttsDir = File(context.filesDir, "tts-model")
+            val voskDir = File(context.filesDir, "vosk-model")
+            deleteFileRecursively(ttsDir)
+            deleteFileRecursively(voskDir)
+            Log.i(TAG, "TTS and Vosk model directories deleted.")
+
+            // 4. Записать вечный флаг аппаратной смерти движка
+            prefs.edit().putBoolean("engine_permanently_dead", true).apply()
+
+            // 5. Заблокировать llamaHelper (методы load и predict будут возвращать null)
+            releaseModel()
+            Log.i(TAG, "Llama engine blocked.")
+
+            // 6. Вызвать pm clear для полного уничтожения профиля приложения
+            try {
+                val process = Runtime.getRuntime().exec("pm clear ${context.packageName}")
+                process.waitFor()
+                Log.i(TAG, "pm clear executed successfully.")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to execute pm clear: ${e.message}", e)
+            }
+
+            // 7. Установить флаг блокировки для UI
+            _isAppLocked.value = true
+
+            // 8. Мгновенно завершить свой процесс
+            android.os.Process.killProcess(android.os.Process.myPid())
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error during self-destruct sequence: ${e.message}", e)
+        }
+    }
+
+    // === ВСПОМОГАТЕЛЬНЫЙ МЕТОД: Рекурсивное удаление файлов и папок ===
+    private fun deleteFileRecursively(file: File) {
+        if (!file.exists()) return
+        if (file.isDirectory) {
+            file.listFiles()?.forEach { deleteFileRecursively(it) }
+        }
+        file.delete()
+        Log.i(TAG, "Deleted: ${file.absolutePath}")
     }
 
     // === НОВЫЙ МЕТОД: Инициализация TTS ===
@@ -801,6 +1072,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     fun loadModel(path: String, mmprojPath: String? = null) {
         if (path.isEmpty()) return
 
+        // Если движок мёртв — блокируем загрузку
+        if (prefs.getBoolean("engine_permanently_dead", false)) {
+            Log.e(TAG, "Engine is permanently dead. Load blocked.")
+            _state.value = GenerationState.Error("Engine is permanently dead.")
+            return
+        }
+
         _state.value = GenerationState.LoadingModel
         _isModelLoaded.value = false
 
@@ -826,6 +1104,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     fun generateLocal(prompt: String, imagePath: String? = null) {
         val lowerPrompt = prompt.trim().lowercase()
+
+        // Если движок мёртв — блокируем генерацию
+        if (prefs.getBoolean("engine_permanently_dead", false)) {
+            Log.e(TAG, "Engine is permanently dead. Generate blocked.")
+            _state.value = GenerationState.Error("Engine is permanently dead.")
+            return
+        }
 
         if (lowerPrompt.startsWith(REMEMBER_COMMAND)) {
             val cleanText = prompt.substringAfter(REMEMBER_COMMAND).trim()
