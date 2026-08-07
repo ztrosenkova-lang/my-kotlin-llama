@@ -44,19 +44,11 @@ jobs:
           curl -L "https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/robot-medium/ru_RU-robot-medium.onnx" \
           -o "app/src/main/assets/tts-model/ru_RU-robot-medium.onnx"
 
-      - name: Decode Keystore from Secret
-        run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/release.keystore
-
-      - name: Build Release APK with Signing
+      - name: Build Release APK (unsigned)
         run: ./gradlew assembleRelease
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
-      - name: Upload Release APK Artifact
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-apk
-          path: app/build/outputs/apk/release/app-release.apk
+          name: app-release-unsigned-apk
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
