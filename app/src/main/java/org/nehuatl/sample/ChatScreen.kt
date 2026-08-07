@@ -491,7 +491,6 @@ fun ChatScreen(
                                 modifier = Modifier.padding(vertical = 2.dp)
                             )
                         }
-
                         if (generatedText.isNotEmpty() && state is GenerationState.Generating) {
                             Text(
                                 text = "ИИ: $generatedText",
@@ -501,7 +500,6 @@ fun ChatScreen(
                                 modifier = Modifier.padding(vertical = 2.dp)
                             )
                         }
-
                         if (cloudGeneratedText.isNotEmpty() && cloudState is CloudAIState.Generating) {
                             Text(
                                 text = "☁️ ИИ: $cloudGeneratedText",
@@ -617,11 +615,11 @@ private fun TopBarWithSwitch(
                 )
             )
 
-            // Центральный текст
+            // Центральный текст - ИСПРАВЛЕН ЦВЕТ НА AccentColor
             Text(
                 text = "ИИ-Друг",
                 style = MaterialTheme.typography.titleMedium,
-                color = DarkText,
+                color = AccentColor,
                 fontWeight = FontWeight.ExtraBold,
                 fontFamily = FontFamily.Monospace,
                 modifier = Modifier.padding(horizontal = 8.dp)
@@ -830,7 +828,6 @@ private fun SettingsPanel(
         Column(modifier = Modifier.padding(16.dp)) {
             Text("🌡️ Настройки движка ИИ", color = DarkText, style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
-
             Text(text = "Креативность (Температура): ${String.format("%.1f", temperature)}", color = DarkText)
             Slider(
                 value = temperature,
@@ -840,9 +837,7 @@ private fun SettingsPanel(
                 modifier = Modifier.fillMaxWidth(),
                 colors = SliderDefaults.colors(thumbColor = AccentColor, activeTrackColor = AccentColor, inactiveTrackColor = BorderGray)
             )
-
             Spacer(modifier = Modifier.height(12.dp))
-
             Text(text = "Максимум токенов: $maxTokens", color = DarkText)
             Slider(
                 value = maxTokens.toFloat(),
@@ -852,9 +847,7 @@ private fun SettingsPanel(
                 modifier = Modifier.fillMaxWidth(),
                 colors = SliderDefaults.colors(thumbColor = AccentColor, activeTrackColor = AccentColor, inactiveTrackColor = BorderGray)
             )
-
             Spacer(modifier = Modifier.height(12.dp))
-
             Text(text = "Размер контекстного окна: $contextSize", color = DarkText)
             Slider(
                 value = contextSize.toFloat(),
@@ -864,9 +857,7 @@ private fun SettingsPanel(
                 modifier = Modifier.fillMaxWidth(),
                 colors = SliderDefaults.colors(thumbColor = AccentColor, activeTrackColor = AccentColor, inactiveTrackColor = BorderGray)
             )
-
             Spacer(modifier = Modifier.height(12.dp))
-
             Button(
                 onClick = onModelChangeClick,
                 colors = ButtonDefaults.buttonColors(containerColor = BorderGray),
@@ -874,9 +865,7 @@ private fun SettingsPanel(
             ) {
                 Text("Сменить или перезагрузить модель", color = DarkText)
             }
-
             Spacer(modifier = Modifier.height(8.dp))
-
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = {
@@ -885,7 +874,6 @@ private fun SettingsPanel(
                     colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
                     modifier = Modifier.weight(1f)
                 ) { Text("Сохранить", color = DarkText) }
-
                 Button(
                     onClick = onClose,
                     colors = ButtonDefaults.buttonColors(containerColor = BorderGray),
@@ -906,7 +894,6 @@ private fun PromptSettingsPanel(promptText: String, onPromptChange: (String) -> 
         Column(modifier = Modifier.padding(16.dp)) {
             Text("🧠 Роль ИИ (Системный промпт)", color = DarkText, style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
-
             OutlinedTextField(
                 value = promptText,
                 onValueChange = onPromptChange,
@@ -924,9 +911,7 @@ private fun PromptSettingsPanel(promptText: String, onPromptChange: (String) -> 
                     cursorColor = AccentColor
                 )
             )
-
             Spacer(modifier = Modifier.height(12.dp))
-
             Button(
                 onClick = onSave,
                 colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
@@ -967,7 +952,6 @@ private fun CloudAIDialog(
                     style = MaterialTheme.typography.bodyMedium,
                     color = DarkText
                 )
-
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("🔵 GigaChat", color = DarkText)
                     Switch(
@@ -982,7 +966,6 @@ private fun CloudAIDialog(
                     )
                     Text("🌐 Другой провайдер", color = DarkText)
                 }
-
                 OutlinedTextField(
                     value = apiUrl,
                     onValueChange = onApiUrlChange,
@@ -1004,7 +987,6 @@ private fun CloudAIDialog(
                         cursorColor = AccentColor
                     )
                 )
-
                 OutlinedTextField(
                     value = authKey,
                     onValueChange = onAuthKeyChange,
@@ -1032,7 +1014,6 @@ private fun CloudAIDialog(
                         cursorColor = AccentColor
                     )
                 )
-
                 Button(
                     onClick = onGenerateToken,
                     enabled = !isGeneratingToken && authKey.isNotBlank(),
@@ -1053,7 +1034,6 @@ private fun CloudAIDialog(
                         )
                     }
                 }
-
                 if (!isGigaChat) {
                     Text(
                         text = "ℹ️ Для обычных провайдеров ключ используется как токен",
@@ -1086,7 +1066,6 @@ private fun CloudAIDialog(
                             shape = CircleShape
                         )
                 )
-
                 // 2. Кнопка "Сохранить"
                 Button(
                     onClick = onSave,
@@ -1103,7 +1082,6 @@ private fun CloudAIDialog(
                         fontWeight = FontWeight.Medium
                     )
                 }
-
                 // 3. Кнопка "Очистить"
                 Button(
                     onClick = onClear,
@@ -1120,7 +1098,6 @@ private fun CloudAIDialog(
                         fontWeight = FontWeight.Medium
                     )
                 }
-
                 // 4. Кнопка "Закрыть"
                 Button(
                     onClick = onDismiss,
@@ -1150,7 +1127,6 @@ private fun HelpDialog(
     LaunchedEffect(Unit) {
         viewModel.speakText("Открываю руководство пользователя. Здесь вы можете прочитать инструкции по управлению моими локальными движками, настройке раздельной памяти и командам умного поиска по корням слов.")
     }
-
     AlertDialog(
         onDismissRequest = {
             viewModel.abortLocal()
@@ -1191,7 +1167,6 @@ private fun HelpDialog(
 @Composable
 private fun MemoryEditorDialog(initialText: String, onSave: (String) -> Unit, onDismiss: () -> Unit) {
     var text by remember { mutableStateOf(initialText) }
-
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("🧠 База Знаний ИИ", style = MaterialTheme.typography.titleLarge, color = DarkText) },
@@ -1362,12 +1337,10 @@ private fun ModelPickerDialog(
         Card(colors = CardDefaults.cardColors(containerColor = SurfaceGray)) {
             Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("Настройка ИИ", style = MaterialTheme.typography.headlineSmall, color = DarkText)
-
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Языковая модель", color = DarkText)
                     val displayModelPath = currentModelPath?.substringAfterLast("/")?.replace("primary%3AModels%", "") ?: "Не выбрана"
                     Text(text = "Текущая модель: $displayModelPath", style = MaterialTheme.typography.bodySmall, color = DarkText.copy(alpha = 0.7f))
-
                     Button(
                         onClick = onPickModel,
                         modifier = Modifier.fillMaxWidth(),
@@ -1379,13 +1352,11 @@ private fun ModelPickerDialog(
                         )
                     }
                 }
-
                 Column(modifier = Modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("(опционально)", style = MaterialTheme.typography.bodySmall, color = DarkText.copy(alpha = 0.6f))
                     Text("Мультимодальный проектор (mmproj)", color = DarkText)
                     val displayMmprojPath = mmprojPath?.substringAfterLast("/")?.replace("primary%3AModels%", "") ?: "Не выбран"
                     Text(text = "Текущий проектор: $displayMmprojPath", style = MaterialTheme.typography.bodySmall, color = DarkText.copy(alpha = 0.7f))
-
                     Button(
                         onClick = onPickMmproj,
                         modifier = Modifier.fillMaxWidth(),
@@ -1397,7 +1368,6 @@ private fun ModelPickerDialog(
                         )
                     }
                 }
-
                 Button(
                     onClick = onLoad,
                     enabled = currentModelPath != null,
@@ -1406,7 +1376,6 @@ private fun ModelPickerDialog(
                 ) {
                     Text("Запустить нейросеть", color = DarkText)
                 }
-
                 TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
                     Text("Отмена", color = DarkText)
                 }
@@ -1475,7 +1444,6 @@ private fun PromptInput(
                             )
                         }
                     }
-
                     Box(
                         modifier = Modifier
                             .size(41.dp)
@@ -1596,9 +1564,7 @@ private fun PromptInput(
                     }
                 }
             }
-
             Spacer(modifier = Modifier.height(2.dp))
-
             Text(
                 text = memoryInfoText,
                 color = DarkText.copy(alpha = 0.6f),
