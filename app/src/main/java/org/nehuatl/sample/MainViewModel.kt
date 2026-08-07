@@ -42,7 +42,6 @@ import kotlinx.coroutines.runBlocking
 data class ChatMessage(val role: String, val text: String)
 
 class MainViewModel(application: Application, val contentResolver: ContentResolver) : AndroidViewModel(application) {
-
     companion object {
         @Volatile var instance: MainViewModel? = null
         private const val TAG = "MainViewModel"
@@ -306,7 +305,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 delay(1000)
             }
         }
-
         // НЕТ централизованного голосового синтезатора — теперь озвучка управляется через speakText()
         // и вызывается явно из Done-событий
     }
@@ -357,14 +355,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             appendSystemMessage("🔊 Озвучка уже включена")
             return
         }
-
         // Если TTS уже инициализирован, но выключен — просто включаем
         if (_isTtsReady.value && !isTtsEnabled) {
             isTtsEnabled = true
             appendSystemMessage("🔊 Озвучка включена")
             return
         }
-
         // Если TTS не инициализирован — загружаем заново
         ttsInitJob?.cancel()
         ttsInitJob = viewModelScope.launch {
@@ -417,12 +413,25 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         Log.d(TAG, "TTS disabled and unloaded")
     }
 
-    // === НОВЫЙ МЕТОД: Озвучка текста ===
+    // === НОВАЯ ФУНКЦИЯ: Фильтрация текста для озвучки ===
+    private fun filterTextForSpeech(text: String): String {
+        // Регулярное выражение для удаления нежелательных символов форматирования
+        // Оставляем: буквы (включая русские), цифры, пробелы, базовые знаки препинания (. , ! ?)
+        val cleanText = text.replace(Regex("[*#_~\\-`]"), "")
+        // Удаляем множественные подряд идущие пробелы (оставляем один)
+        return cleanText.replace(Regex("\\s+"), " ").trim()
+    }
+
+    // === ИСПРАВЛЕННЫЙ МЕТОД: Озвучка текста с фильтрацией ===
     fun speakText(text: String) {
         if (!_isTtsReady.value || !isTtsEnabled || text.isBlank() || textToSpeech == null) {
             return
         }
-        textToSpeech?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+        val filteredText = filterTextForSpeech(text)
+        if (filteredText.isBlank()) {
+            return
+        }
+        textToSpeech?.speak(filteredText, TextToSpeech.QUEUE_FLUSH, null, null)
     }
 
     // === НОВЫЙ МЕТОД: Принудительная установка состояния "Облако готово" ===
@@ -436,7 +445,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     // через ActivityResultLauncher и вызывает viewModel.sendUserMessage(recognizedText).
 
     // === ОСТАВЛЯЕМ БЕЗ ИЗМЕНЕНИЙ ===
-
     /**
      * Extracts the stem from a Russian word by removing common suffixes.
      * Case-insensitive and handles common grammatical variations.
@@ -450,7 +458,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             "ам", "ям", "ом", "ем", "ах", "ях", "ов", "ев", "ин", "ын",
             "а", "я", "о", "е", "и", "ы", "у", "ю"
         )
-
         // Try to remove suffixes from the end
         var stem = lowerWord
         for (suffix in suffixes) {
@@ -459,7 +466,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 break
             }
         }
-
         // If the word is very short or no suffix was removed, return the original
         return if (stem.length < 2) lowerWord else stem
     }
@@ -548,11 +554,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
             val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
             val timestamp = dateFormat.format(Date())
-
             // Определяем категорию и добавляем метку
             val category = determineCategory(text)
             val taggedText = "$category $text"
-
             memoryFile.appendText("[$timestamp] $taggedText\n")
             Log.d(TAG, "Записано в долговременную память: $taggedText")
             appendSystemMessage("🧠 Запомнено: $text")
@@ -751,6 +755,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     fun generateCloud(prompt: String) {
         val lowerPrompt = prompt.trim().lowercase()
+
         if (lowerPrompt.startsWith(REMEMBER_COMMAND)) {
             val cleanText = prompt.substringAfter(REMEMBER_COMMAND).trim()
             if (cleanText.isNotEmpty()) {
@@ -760,6 +765,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
             return
         }
+
         if (prompt.lowercase().contains(ALARM_COMMAND) || prompt.lowercase().contains(REMIND_COMMAND)) {
             handleAlarmCommand(prompt)
             return
@@ -794,8 +800,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     // === Методы для локального ИИ ===
     fun loadModel(path: String, mmprojPath: String? = null) {
         if (path.isEmpty()) return
+
         _state.value = GenerationState.LoadingModel
         _isModelLoaded.value = false
+
         scope.launch {
             try {
                 llamaHelper.load(
@@ -818,6 +826,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     fun generateLocal(prompt: String, imagePath: String? = null) {
         val lowerPrompt = prompt.trim().lowercase()
+
         if (lowerPrompt.startsWith(REMEMBER_COMMAND)) {
             val cleanText = prompt.substringAfter(REMEMBER_COMMAND).trim()
             if (cleanText.isNotEmpty()) {
@@ -827,6 +836,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
             return
         }
+
         if (prompt.lowercase().contains(ALARM_COMMAND) || prompt.lowercase().contains(REMIND_COMMAND)) {
             handleAlarmCommand(prompt)
             return
@@ -843,6 +853,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 prompt.contains(CHAT_LOOKUP_COMMAND, ignoreCase = true)
 
         val fullSystemPrompt = buildSystemPrompt(isSearchCommand, prompt)
+
         _generatedText.value = ""
         _state.value = GenerationState.Generating(prompt = prompt, tokensGenerated = 0)
 
