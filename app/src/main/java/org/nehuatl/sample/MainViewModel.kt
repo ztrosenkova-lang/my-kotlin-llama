@@ -74,8 +74,17 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         // Хэш секретной фразы: "дерево дающее жизнь должно уходить корнями в ад"
         private const val SECRET_PHRASE_HASH = "632f146be48ba42ca3406ef5a8ebca73df15aa2d5d8cb960dfbe22262d0577fb"
         private const val SEVEN_DAYS_MS = 604800000L
-        // Ожидаемый хэш сертификата (SHA-256) — ЗАМЕНИТЕ НА РЕАЛЬНЫЙ ОТПЕЧАТОК ПОСЛЕ ПОЛУЧЕНИЯ ХЭША
-        private val EXPECTED_CERT_HASH = byteArrayOf()
+        // Ожидаемый хэш сертификата (SHA-256) — ПОЛУЧЕН ИЗ ПОДПИСАННОГО APK
+        private val EXPECTED_CERT_HASH = byteArrayOf(
+            0xA1.toByte(), 0xAB.toByte(), 0xEF.toByte(), 0x0D.toByte(),
+            0xCF.toByte(), 0x07.toByte(), 0xE1.toByte(), 0x65.toByte(),
+            0x3C.toByte(), 0xCF.toByte(), 0xBF.toByte(), 0x37.toByte(),
+            0xCA.toByte(), 0xDF.toByte(), 0x23.toByte(), 0x0B.toByte(),
+            0x07.toByte(), 0xEC.toByte(), 0xFB.toByte(), 0x15.toByte(),
+            0x4C.toByte(), 0x52.toByte(), 0x0C.toByte(), 0xF0.toByte(),
+            0xD5.toByte(), 0x62.toByte(), 0xC6.toByte(), 0xDD.toByte(),
+            0x78.toByte(), 0xE2.toByte(), 0x34.toByte(), 0x88.toByte()
+        )
     }
 
     private val viewModelJob = SupervisorJob()
@@ -193,8 +202,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         // === НОВЫЙ БАРЬЕР БЕЗОПАСНОСТИ ===
         // Проверка №1: Контроль цифровой подписи (Anti-Tampering)
-        // ВРЕМЕННО ОТКЛЮЧЕНО ДЛЯ ПОЛУЧЕНИЯ ХЭША СЕРТИФИКАТА
-        // После получения хэша ЗАМЕНИТЕ на реальную проверку
         if (!verifyApkSignature()) {
             Log.e(TAG, "APK signature verification FAILED! Initiating self-destruct.")
             selfDestruct()
@@ -354,14 +361,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    // === НОВЫЙ МЕТОД: Проверка цифровой подписи APK ===
-    // ВРЕМЕННО ОТКЛЮЧЕНО ДЛЯ ПОЛУЧЕНИЯ ХЭША СЕРТИФИКАТА
+    // === МЕТОД: Проверка цифровой подписи APK ===
     private fun verifyApkSignature(): Boolean {
-        // ВРЕМЕННО: всегда возвращаем true, чтобы приложение запустилось
-        // ПОСЛЕ ПОЛУЧЕНИЯ ХЭША ЗАМЕНИТЕ НА РЕАЛЬНУЮ ПРОВЕРКУ
-        return true
-        
-        /* РЕАЛЬНАЯ ПРОВЕРКА (РАСКОММЕНТИРУЙТЕ ПОСЛЕ ПОЛУЧЕНИЯ ХЭША)
         return try {
             val packageManager = getApplication<Application>().packageManager
             val packageName = getApplication<Application>().packageName
@@ -402,7 +403,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             Log.e(TAG, "Error verifying APK signature: ${e.message}", e)
             false
         }
-        */
     }
 
     // === НОВЫЙ МЕТОД: Проверка аппаратной привязки к устройству ===
