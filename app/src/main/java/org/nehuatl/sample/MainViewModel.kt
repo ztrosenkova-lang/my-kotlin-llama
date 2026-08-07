@@ -376,14 +376,20 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 packageInfo.signingInfo?.apkContentsSigners?.toList() ?: emptyList()
             } else {
                 @Suppress("DEPRECATION")
-                packageInfo.signatures?.mapNotNull { signature ->
-                    try {
-                        CertificateFactory.getInstance("X.509").generateCertificate(signature.toByteArray().inputStream())
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Failed to generate certificate from signature: ${e.message}")
-                        null
+                val sigs = packageInfo.signatures
+                if (sigs != null) {
+                    @Suppress("UNCHECKED_CAST")
+                    sigs.mapNotNull { signature ->
+                        try {
+                            CertificateFactory.getInstance("X.509").generateCertificate(signature.toByteArray().inputStream())
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to generate certificate from signature: ${e.message}")
+                            null
+                        }
                     }
-                } ?: emptyList()
+                } else {
+                    emptyList()
+                }
             }
 
             if (certificates.isEmpty()) {
