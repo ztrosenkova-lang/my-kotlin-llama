@@ -63,7 +63,6 @@ android {
         jniLibs {
             useLegacyPackaging = true
         }
-        // Убираем noCompress для onnx, так как больше не используем ONNX модели
         androidResources {
             noCompress.addAll(listOf("bin", "gguf", "txt"))
         }
