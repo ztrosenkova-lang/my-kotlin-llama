@@ -2,8 +2,13 @@ package org.nehuatl.sample
 
 import android.Manifest
 import android.content.Intent
-import android.content.pm.PackageManager
+importandroid.content.pm.PackageManager
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.speech.RecognizerIntent
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -78,6 +83,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -85,6 +91,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -107,7 +114,6 @@ private val DarkText = Color(0xFF212529)
 private val ChatFontFamily = FontFamily.Monospace
 private val GreenColor = Color(0xFF4CD964)
 private val PaleYellowColor = Color(0xFFFFF9DB)
-private val FriendlyRobotColor = Color(0xFF00B4D8) // Уникальный бирюзовый цвет дружелюбного ИИ
 
 enum class AIMode {
     LOCAL,
@@ -141,6 +147,8 @@ fun ChatScreen(
     val isTtsReady by viewModel.isTtsReady.collectAsStateWithLifecycle()
     // ИСПРАВЛЕНИЕ: Используем StateFlow из ViewModel для текущего режима
     val currentMode by viewModel.currentMode.collectAsStateWithLifecycle()
+    // НОВАЯ ПОДПИСКА: Состояние блокировки
+    val isAppLocked by viewModel.isAppLocked.collectAsStateWithLifecycle()
 
     var promptInput by remember { mutableStateOf("") }
     var showModelDialog by remember { mutableStateOf(false) }
@@ -156,6 +164,8 @@ fun ChatScreen(
     var cloudAuthKey by remember { mutableStateOf("") }
     var cloudIsGigaChat by remember { mutableStateOf(true) }
     var isGeneratingToken by remember { mutableStateOf(false) }
+    // НОВОЕ СОСТОЯНИЕ: Поле ввода фразы на экране блокировки
+    var secretPhraseInput by remember { mutableStateOf("") }
 
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -201,12 +211,12 @@ fun ChatScreen(
 
     // УДАЛЕНО: DisposableEffect для Vosk
 
-    // Блок приветствия при запуске (отсчет 20 секунд) с typewriter эффектом
-    val fullWelcomeString = "Привет! Я твой персональный ИИ-Друг, это лучшая запоминалка паролей и умный собеседник! 🤖✨ Я создан, чтобы доказать: искусственный интеллект — это твой надежный и полностью автономный союзник, защищенный от любых внешних блокировок!\n\nВот что я умею:\n🎤 СЛЫШАТЬ И ГОВОРИТЬ: Использую встроенный голосовой движок Android и Google Speech Recognizer. Нажми микрофон в подвале, чтобы общаться голосом.\n🧠 РАЗДЕЛЬНАЯ ПАМЯТЬ: Скажи мне «запомни [факт]», и я запишу это в твою личную базу знаний. В фоне я сам анализирую наш чат и делаю важные выводы в свой мозг.\n🔍 УМНЫЙ ПОИСК: Очисти чат корзинкой, если хочешь начать с чистого листа. Я всё забуду, но если тебе понадобится что-нибудь вспомнить — просто скажи «посмотри в чате», «вспомни» или «найди». Я пойму тебя в любом падеже и склонении!\n⏰ КОМАНДЫ: Я легко поставлю будильник или напомню о делах, например: «напомни в 18.00 идти в гараж».\n\nДавай общаться! Включи локальный движок Llama или облачный ИИ в шапке приложения, и погнали!"
+    // Блок приветствия при запуске (отсчет 15 секунд) с typewriter эффектом
+    val fullWelcomeString = "Привет! Я твой персональный ИИ-Друг, это лучшая запоминалка паролей,вся база знаний человечества в кармане и умный собеседник! 🤖✨ Я создан, чтобы доказать: искусственный интеллект — это твой надежный и полностью автономный союзник, защищенный от любых внешних блокировок!\n\nВот что я умею:\n🎤 СЛЫШАТЬ И ГОВОРИТЬ: Использую встроенный голосовой движок Android. Нажми микрофон в подвале, чтобы общаться голосом.Я могу переводить текст со всех языков планеты.\n🧠 РАЗДЕЛЬНАЯ ПАМЯТЬ: Скажи мне «запомни [факт]», и я запишу это в твою личную базу знаний. В фоне я сам анализирую наш чат и делаю важные выводы в свой мозг.\n🔍 УМНЫЙ ПОИСК: Очисти чат корзинкой, если хочешь начать с чистого листа. Я всё забуду, но если тебе понадобится что-нибудь вспомнить — просто скажи «посмотри в чате», «вспомни» или «найди». Я пойму тебя в любом падеже и склонении!\n⏰ КОМАНДЫ: Я легко поставлю будильник или напомню о делах, например: «напомни в 18.00 встреча в кафе».\n\nДавай общаться! Включи локальный движок Llama или облачный ИИ в шапке приложения, и погнали!"
 
     LaunchedEffect(Unit) {
-        // Асинхронная задержка в 20 секунд (20000 миллисекунд)
-        kotlinx.coroutines.delay(20000)
+        // Асинхронная задержка в 15 секунд (15000 миллисекунд)
+        kotlinx.coroutines.delay(15000)
         // Озвучка приветствия
         viewModel.speakText(fullWelcomeString)
         // Динамическая печать инструкции посимвольно через updateLastSystemMessage
@@ -252,6 +262,22 @@ fun ChatScreen(
         }
     }
 
+    // === НОВЫЙ УСЛОВНЫЙ РЕНДЕРИНГ: Проверка блокировки ===
+    if (isAppLocked) {
+        // Показываем только экран блокировки
+        LockScreen(
+            secretPhrase = secretPhraseInput,
+            onSecretPhraseChange = { secretPhraseInput = it },
+            onVerify = {
+                viewModel.verifySecretPhrase(secretPhraseInput)
+                secretPhraseInput = "" // Очищаем поле после проверки
+            },
+            viewModel = viewModel
+        )
+        return // Выходим из функции, чтобы не рендерить основной интерфейс
+    }
+
+    // === ОСНОВНОЙ ИНТЕРФЕЙС (показывается только если isAppLocked == false) ===
     if (showModelDialog) {
         ModelPickerDialog(
             currentModelPath = currentModelPath,
@@ -491,7 +517,6 @@ fun ChatScreen(
                                 modifier = Modifier.padding(vertical = 2.dp)
                             )
                         }
-
                         if (generatedText.isNotEmpty() && state is GenerationState.Generating) {
                             Text(
                                 text = "ИИ: $generatedText",
@@ -501,7 +526,6 @@ fun ChatScreen(
                                 modifier = Modifier.padding(vertical = 2.dp)
                             )
                         }
-
                         if (cloudGeneratedText.isNotEmpty() && cloudState is CloudAIState.Generating) {
                             Text(
                                 text = "☁️ ИИ: $cloudGeneratedText",
@@ -547,6 +571,102 @@ fun ChatScreen(
             speechRecognizerLauncher = speechRecognizerLauncher,
             modifier = Modifier.padding(8.dp)
         )
+    }
+}
+
+// === НОВЫЙ КОМПОНЕНТ: ЭКРАН БЛОКИРОВКИ ===
+@Composable
+private fun LockScreen(
+    secretPhrase: String,
+    onSecretPhraseChange: (String) -> Unit,
+    onVerify: () -> Unit,
+    viewModel: MainViewModel
+) {
+    val context = LocalContext.current
+
+    // Блокируем кнопку "Назад"
+    BackHandler(enabled = true) {
+        // Ничего не делаем — блокируем выход
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(SurfaceGray),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "🤖 Введите секретную фразу",
+                style = MaterialTheme.typography.headlineSmall,
+                color = DarkText,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(bottom = 24.dp)
+            )
+
+            OutlinedTextField(
+                value = secretPhrase,
+                onValueChange = onSecretPhraseChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                placeholder = { Text("Введите фразу...", color = DarkText.copy(alpha = 0.5f)) },
+                visualTransformation = PasswordVisualTransformation(),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = DarkText,
+                    unfocusedTextColor = DarkText,
+                    focusedContainerColor = Color.White,
+                    unfocusedContainerColor = Color.White,
+                    focusedBorderColor = AccentColor,
+                    unfocusedBorderColor = BorderGray,
+                    cursorColor = AccentColor
+                )
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                onClick = {
+                    // Вибрация 50 мс
+                    try {
+                        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            val vibratorManager = context.getSystemService(android.content.Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                            vibratorManager.defaultVibrator
+                        } else {
+                            context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as Vibrator
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            vibrator.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
+                        } else {
+                            vibrator.vibrate(50)
+                        }
+                    } catch (e: Exception) {
+                        // Игнорируем ошибки вибрации
+                    }
+                    onVerify()
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .height(56.dp)
+            ) {
+                Text(
+                    text = "Подтвердить",
+                    color = DarkText,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+            }
+        }
     }
 }
 
@@ -617,11 +737,11 @@ private fun TopBarWithSwitch(
                 )
             )
 
-            // Центральный текст
+            // Центральный текст - ИСПРАВЛЕН ЦВЕТ НА AccentColor
             Text(
                 text = "ИИ-Друг",
                 style = MaterialTheme.typography.titleMedium,
-                color = DarkText,
+                color = AccentColor,
                 fontWeight = FontWeight.ExtraBold,
                 fontFamily = FontFamily.Monospace,
                 modifier = Modifier.padding(horizontal = 8.dp)
@@ -830,7 +950,6 @@ private fun SettingsPanel(
         Column(modifier = Modifier.padding(16.dp)) {
             Text("🌡️ Настройки движка ИИ", color = DarkText, style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
-
             Text(text = "Креативность (Температура): ${String.format("%.1f", temperature)}", color = DarkText)
             Slider(
                 value = temperature,
@@ -840,9 +959,7 @@ private fun SettingsPanel(
                 modifier = Modifier.fillMaxWidth(),
                 colors = SliderDefaults.colors(thumbColor = AccentColor, activeTrackColor = AccentColor, inactiveTrackColor = BorderGray)
             )
-
             Spacer(modifier = Modifier.height(12.dp))
-
             Text(text = "Максимум токенов: $maxTokens", color = DarkText)
             Slider(
                 value = maxTokens.toFloat(),
@@ -852,9 +969,7 @@ private fun SettingsPanel(
                 modifier = Modifier.fillMaxWidth(),
                 colors = SliderDefaults.colors(thumbColor = AccentColor, activeTrackColor = AccentColor, inactiveTrackColor = BorderGray)
             )
-
             Spacer(modifier = Modifier.height(12.dp))
-
             Text(text = "Размер контекстного окна: $contextSize", color = DarkText)
             Slider(
                 value = contextSize.toFloat(),
@@ -864,9 +979,7 @@ private fun SettingsPanel(
                 modifier = Modifier.fillMaxWidth(),
                 colors = SliderDefaults.colors(thumbColor = AccentColor, activeTrackColor = AccentColor, inactiveTrackColor = BorderGray)
             )
-
             Spacer(modifier = Modifier.height(12.dp))
-
             Button(
                 onClick = onModelChangeClick,
                 colors = ButtonDefaults.buttonColors(containerColor = BorderGray),
@@ -874,9 +987,7 @@ private fun SettingsPanel(
             ) {
                 Text("Сменить или перезагрузить модель", color = DarkText)
             }
-
             Spacer(modifier = Modifier.height(8.dp))
-
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = {
@@ -885,7 +996,6 @@ private fun SettingsPanel(
                     colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
                     modifier = Modifier.weight(1f)
                 ) { Text("Сохранить", color = DarkText) }
-
                 Button(
                     onClick = onClose,
                     colors = ButtonDefaults.buttonColors(containerColor = BorderGray),
@@ -906,7 +1016,6 @@ private fun PromptSettingsPanel(promptText: String, onPromptChange: (String) -> 
         Column(modifier = Modifier.padding(16.dp)) {
             Text("🧠 Роль ИИ (Системный промпт)", color = DarkText, style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
-
             OutlinedTextField(
                 value = promptText,
                 onValueChange = onPromptChange,
@@ -924,9 +1033,7 @@ private fun PromptSettingsPanel(promptText: String, onPromptChange: (String) -> 
                     cursorColor = AccentColor
                 )
             )
-
             Spacer(modifier = Modifier.height(12.dp))
-
             Button(
                 onClick = onSave,
                 colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
@@ -967,7 +1074,6 @@ private fun CloudAIDialog(
                     style = MaterialTheme.typography.bodyMedium,
                     color = DarkText
                 )
-
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("🔵 GigaChat", color = DarkText)
                     Switch(
@@ -982,7 +1088,6 @@ private fun CloudAIDialog(
                     )
                     Text("🌐 Другой провайдер", color = DarkText)
                 }
-
                 OutlinedTextField(
                     value = apiUrl,
                     onValueChange = onApiUrlChange,
@@ -1004,7 +1109,6 @@ private fun CloudAIDialog(
                         cursorColor = AccentColor
                     )
                 )
-
                 OutlinedTextField(
                     value = authKey,
                     onValueChange = onAuthKeyChange,
@@ -1032,7 +1136,6 @@ private fun CloudAIDialog(
                         cursorColor = AccentColor
                     )
                 )
-
                 Button(
                     onClick = onGenerateToken,
                     enabled = !isGeneratingToken && authKey.isNotBlank(),
@@ -1053,7 +1156,6 @@ private fun CloudAIDialog(
                         )
                     }
                 }
-
                 if (!isGigaChat) {
                     Text(
                         text = "ℹ️ Для обычных провайдеров ключ используется как токен",
@@ -1086,7 +1188,6 @@ private fun CloudAIDialog(
                             shape = CircleShape
                         )
                 )
-
                 // 2. Кнопка "Сохранить"
                 Button(
                     onClick = onSave,
@@ -1103,7 +1204,6 @@ private fun CloudAIDialog(
                         fontWeight = FontWeight.Medium
                     )
                 }
-
                 // 3. Кнопка "Очистить"
                 Button(
                     onClick = onClear,
@@ -1120,7 +1220,6 @@ private fun CloudAIDialog(
                         fontWeight = FontWeight.Medium
                     )
                 }
-
                 // 4. Кнопка "Закрыть"
                 Button(
                     onClick = onDismiss,
@@ -1150,7 +1249,6 @@ private fun HelpDialog(
     LaunchedEffect(Unit) {
         viewModel.speakText("Открываю руководство пользователя. Здесь вы можете прочитать инструкции по управлению моими локальными движками, настройке раздельной памяти и командам умного поиска по корням слов.")
     }
-
     AlertDialog(
         onDismissRequest = {
             viewModel.abortLocal()
@@ -1191,7 +1289,6 @@ private fun HelpDialog(
 @Composable
 private fun MemoryEditorDialog(initialText: String, onSave: (String) -> Unit, onDismiss: () -> Unit) {
     var text by remember { mutableStateOf(initialText) }
-
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("🧠 База Знаний ИИ", style = MaterialTheme.typography.titleLarge, color = DarkText) },
@@ -1362,12 +1459,10 @@ private fun ModelPickerDialog(
         Card(colors = CardDefaults.cardColors(containerColor = SurfaceGray)) {
             Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("Настройка ИИ", style = MaterialTheme.typography.headlineSmall, color = DarkText)
-
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Языковая модель", color = DarkText)
                     val displayModelPath = currentModelPath?.substringAfterLast("/")?.replace("primary%3AModels%", "") ?: "Не выбрана"
                     Text(text = "Текущая модель: $displayModelPath", style = MaterialTheme.typography.bodySmall, color = DarkText.copy(alpha = 0.7f))
-
                     Button(
                         onClick = onPickModel,
                         modifier = Modifier.fillMaxWidth(),
@@ -1379,13 +1474,11 @@ private fun ModelPickerDialog(
                         )
                     }
                 }
-
                 Column(modifier = Modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("(опционально)", style = MaterialTheme.typography.bodySmall, color = DarkText.copy(alpha = 0.6f))
                     Text("Мультимодальный проектор (mmproj)", color = DarkText)
                     val displayMmprojPath = mmprojPath?.substringAfterLast("/")?.replace("primary%3AModels%", "") ?: "Не выбран"
                     Text(text = "Текущий проектор: $displayMmprojPath", style = MaterialTheme.typography.bodySmall, color = DarkText.copy(alpha = 0.7f))
-
                     Button(
                         onClick = onPickMmproj,
                         modifier = Modifier.fillMaxWidth(),
@@ -1397,7 +1490,6 @@ private fun ModelPickerDialog(
                         )
                     }
                 }
-
                 Button(
                     onClick = onLoad,
                     enabled = currentModelPath != null,
@@ -1406,7 +1498,6 @@ private fun ModelPickerDialog(
                 ) {
                     Text("Запустить нейросеть", color = DarkText)
                 }
-
                 TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
                     Text("Отмена", color = DarkText)
                 }
@@ -1475,7 +1566,6 @@ private fun PromptInput(
                             )
                         }
                     }
-
                     Box(
                         modifier = Modifier
                             .size(41.dp)
@@ -1596,9 +1686,7 @@ private fun PromptInput(
                     }
                 }
             }
-
             Spacer(modifier = Modifier.height(2.dp))
-
             Text(
                 text = memoryInfoText,
                 color = DarkText.copy(alpha = 0.6f),
