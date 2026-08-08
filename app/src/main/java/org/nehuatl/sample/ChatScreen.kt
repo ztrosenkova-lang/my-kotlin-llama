@@ -2,13 +2,8 @@ package org.nehuatl.sample
 
 import android.Manifest
 import android.content.Intent
-importandroid.content.pm.PackageManager
-import android.os.Build
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
+import android.content.pm.PackageManager
 import android.speech.RecognizerIntent
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -83,7 +78,6 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -91,7 +85,6 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -114,6 +107,7 @@ private val DarkText = Color(0xFF212529)
 private val ChatFontFamily = FontFamily.Monospace
 private val GreenColor = Color(0xFF4CD964)
 private val PaleYellowColor = Color(0xFFFFF9DB)
+private val FriendlyRobotColor = Color(0xFF00B4D8) // Уникальный бирюзовый цвет дружелюбного ИИ
 
 enum class AIMode {
     LOCAL,
@@ -147,8 +141,6 @@ fun ChatScreen(
     val isTtsReady by viewModel.isTtsReady.collectAsStateWithLifecycle()
     // ИСПРАВЛЕНИЕ: Используем StateFlow из ViewModel для текущего режима
     val currentMode by viewModel.currentMode.collectAsStateWithLifecycle()
-    // НОВАЯ ПОДПИСКА: Состояние блокировки
-    val isAppLocked by viewModel.isAppLocked.collectAsStateWithLifecycle()
 
     var promptInput by remember { mutableStateOf("") }
     var showModelDialog by remember { mutableStateOf(false) }
@@ -164,8 +156,6 @@ fun ChatScreen(
     var cloudAuthKey by remember { mutableStateOf("") }
     var cloudIsGigaChat by remember { mutableStateOf(true) }
     var isGeneratingToken by remember { mutableStateOf(false) }
-    // НОВОЕ СОСТОЯНИЕ: Поле ввода фразы на экране блокировки
-    var secretPhraseInput by remember { mutableStateOf("") }
 
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -211,12 +201,12 @@ fun ChatScreen(
 
     // УДАЛЕНО: DisposableEffect для Vosk
 
-    // Блок приветствия при запуске (отсчет 15 секунд) с typewriter эффектом
-    val fullWelcomeString = "Привет! Я твой персональный ИИ-Друг, это лучшая запоминалка паролей,вся база знаний человечества в кармане и умный собеседник! 🤖✨ Я создан, чтобы доказать: искусственный интеллект — это твой надежный и полностью автономный союзник, защищенный от любых внешних блокировок!\n\nВот что я умею:\n🎤 СЛЫШАТЬ И ГОВОРИТЬ: Использую встроенный голосовой движок Android. Нажми микрофон в подвале, чтобы общаться голосом.Я могу переводить текст со всех языков планеты.\n🧠 РАЗДЕЛЬНАЯ ПАМЯТЬ: Скажи мне «запомни [факт]», и я запишу это в твою личную базу знаний. В фоне я сам анализирую наш чат и делаю важные выводы в свой мозг.\n🔍 УМНЫЙ ПОИСК: Очисти чат корзинкой, если хочешь начать с чистого листа. Я всё забуду, но если тебе понадобится что-нибудь вспомнить — просто скажи «посмотри в чате», «вспомни» или «найди». Я пойму тебя в любом падеже и склонении!\n⏰ КОМАНДЫ: Я легко поставлю будильник или напомню о делах, например: «напомни в 18.00 встреча в кафе».\n\nДавай общаться! Включи локальный движок Llama или облачный ИИ в шапке приложения, и погнали!"
+    // Блок приветствия при запуске (отсчет 20 секунд) с typewriter эффектом
+    val fullWelcomeString = "Привет! Я твой персональный ИИ-Друг, это лучшая запоминалка паролей и умный собеседник! 🤖✨ Я создан, чтобы доказать: искусственный интеллект — это твой надежный и полностью автономный союзник, защищенный от любых внешних блокировок!\n\nВот что я умею:\n🎤 СЛЫШАТЬ И ГОВОРИТЬ: Использую встроенный голосовой движок Android и Google Speech Recognizer. Нажми микрофон в подвале, чтобы общаться голосом.\n🧠 РАЗДЕЛЬНАЯ ПАМЯТЬ: Скажи мне «запомни [факт]», и я запишу это в твою личную базу знаний. В фоне я сам анализирую наш чат и делаю важные выводы в свой мозг.\n🔍 УМНЫЙ ПОИСК: Очисти чат корзинкой, если хочешь начать с чистого листа. Я всё забуду, но если тебе понадобится что-нибудь вспомнить — просто скажи «посмотри в чате», «вспомни» или «найди». Я пойму тебя в любом падеже и склонении!\n⏰ КОМАНДЫ: Я легко поставлю будильник или напомню о делах, например: «напомни в 18.00 идти в гараж».\n\nДавай общаться! Включи локальный движок Llama или облачный ИИ в шапке приложения, и погнали!"
 
     LaunchedEffect(Unit) {
-        // Асинхронная задержка в 15 секунд (15000 миллисекунд)
-        kotlinx.coroutines.delay(15000)
+        // Асинхронная задержка в 20 секунд (20000 миллисекунд)
+        kotlinx.coroutines.delay(20000)
         // Озвучка приветствия
         viewModel.speakText(fullWelcomeString)
         // Динамическая печать инструкции посимвольно через updateLastSystemMessage
@@ -262,22 +252,6 @@ fun ChatScreen(
         }
     }
 
-    // === НОВЫЙ УСЛОВНЫЙ РЕНДЕРИНГ: Проверка блокировки ===
-    if (isAppLocked) {
-        // Показываем только экран блокировки
-        LockScreen(
-            secretPhrase = secretPhraseInput,
-            onSecretPhraseChange = { secretPhraseInput = it },
-            onVerify = {
-                viewModel.verifySecretPhrase(secretPhraseInput)
-                secretPhraseInput = "" // Очищаем поле после проверки
-            },
-            viewModel = viewModel
-        )
-        return // Выходим из функции, чтобы не рендерить основной интерфейс
-    }
-
-    // === ОСНОВНОЙ ИНТЕРФЕЙС (показывается только если isAppLocked == false) ===
     if (showModelDialog) {
         ModelPickerDialog(
             currentModelPath = currentModelPath,
@@ -571,102 +545,6 @@ fun ChatScreen(
             speechRecognizerLauncher = speechRecognizerLauncher,
             modifier = Modifier.padding(8.dp)
         )
-    }
-}
-
-// === НОВЫЙ КОМПОНЕНТ: ЭКРАН БЛОКИРОВКИ ===
-@Composable
-private fun LockScreen(
-    secretPhrase: String,
-    onSecretPhraseChange: (String) -> Unit,
-    onVerify: () -> Unit,
-    viewModel: MainViewModel
-) {
-    val context = LocalContext.current
-
-    // Блокируем кнопку "Назад"
-    BackHandler(enabled = true) {
-        // Ничего не делаем — блокируем выход
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(SurfaceGray),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(
-                text = "🤖 Введите секретную фразу",
-                style = MaterialTheme.typography.headlineSmall,
-                color = DarkText,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(bottom = 24.dp)
-            )
-
-            OutlinedTextField(
-                value = secretPhrase,
-                onValueChange = onSecretPhraseChange,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                placeholder = { Text("Введите фразу...", color = DarkText.copy(alpha = 0.5f)) },
-                visualTransformation = PasswordVisualTransformation(),
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = DarkText,
-                    unfocusedTextColor = DarkText,
-                    focusedContainerColor = Color.White,
-                    unfocusedContainerColor = Color.White,
-                    focusedBorderColor = AccentColor,
-                    unfocusedBorderColor = BorderGray,
-                    cursorColor = AccentColor
-                )
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Button(
-                onClick = {
-                    // Вибрация 50 мс
-                    try {
-                        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            val vibratorManager = context.getSystemService(android.content.Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-                            vibratorManager.defaultVibrator
-                        } else {
-                            context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as Vibrator
-                        }
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            vibrator.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
-                        } else {
-                            vibrator.vibrate(50)
-                        }
-                    } catch (e: Exception) {
-                        // Игнорируем ошибки вибрации
-                    }
-                    onVerify()
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .height(56.dp)
-            ) {
-                Text(
-                    text = "Подтвердить",
-                    color = DarkText,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
-                )
-            }
-        }
     }
 }
 
