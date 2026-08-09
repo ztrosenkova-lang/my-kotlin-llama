@@ -359,7 +359,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             Log.e(TAG, "Failed to generate certificate from signature: ${e.message}")
                             null
                         }
-                    } as List<Certificate> // ЯВНОЕ ПРИВЕДЕНИЕ ТИПА ДЛЯ ИСПРАВЛЕНИЯ ОШИБКИ КОМПИЛЯЦИИ
+                    }.filterIsInstance<Certificate>() // БЕЗОПАСНАЯ ФИЛЬТРАЦИЯ ВМЕСТО ЯВНОГО ПРИВЕДЕНИЯ
                 } else {
                     emptyList()
                 }
