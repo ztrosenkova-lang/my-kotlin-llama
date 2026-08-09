@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.provider.Settings
 import android.speech.RecognizerIntent
 import android.speech.tts.TextToSpeech
 import android.util.Log
@@ -39,8 +40,6 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.security.KeyStore
 import java.security.MessageDigest
-import java.security.cert.Certificate
-import java.security.cert.CertificateFactory
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -71,7 +70,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         private const val AUTO_BRAIN_COMPRESSION_THRESHOLD = 14
         private const val SECRET_PHRASE_HASH = "632f146be48ba42ca3406ef5a8ebca73df15aa2d5d8cb960dfbe22262d0577fb"
         private const val ONE_DAY_MS = 86400000L
-        private val EXPECTED_CERT_HASH = byteArrayOf()
     }
 
     private val viewModelJob = SupervisorJob()
@@ -180,8 +178,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     init {
         instance = this
 
-        if (!verifyApkSignature()) {
-            Log.e(TAG, "APK signature verification FAILED! Initiating self-destruct.")
+        // НОВАЯ ПРОВЕРКА: Привязка к устройству вместо подписи APK
+        if (!verifyDeviceBinding()) {
+            Log.e(TAG, "Device binding verification FAILED! Initiating self-destruct.")
             selfDestruct()
         } else {
             if (!verifyHardwareBinding()) {
@@ -335,51 +334,40 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    private fun verifyApkSignature(): Boolean {
+    // НОВАЯ ФУНКЦИЯ: Привязка к уникальному идентификатору устройства
+    private fun verifyDeviceBinding(): Boolean {
         return try {
-            val packageManager = getApplication<Application>().packageManager
-            val packageName = getApplication<Application>().packageName
-            val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES)
-            } else {
-                packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNATURES)
-            }
-
-            val certificates: List<Certificate> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                packageInfo.signingInfo?.apkContentsSigners?.toList() ?: emptyList()
-            } else {
-                @Suppress("DEPRECATION")
-                val sigs = packageInfo.signatures
-                if (sigs != null) {
-                    @Suppress("UNCHECKED_CAST")
-                    sigs.mapNotNull { signature ->
-                        try {
-                            CertificateFactory.getInstance("X.509").generateCertificate(signature.toByteArray().inputStream())
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Failed to generate certificate from signature: ${e.message}")
-                            null
-                        }
-                    }.filterIsInstance<Certificate>() // БЕЗОПАСНАЯ ФИЛЬТРАЦИЯ ВМЕСТО ЯВНОГО ПРИВЕДЕНИЯ
-                } else {
-                    emptyList()
-                }
-            }
-
-            if (certificates.isEmpty()) {
-                Log.e(TAG, "No certificates found in APK")
+            val context = getApplication<Application>()
+            val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+            
+            if (androidId.isNullOrEmpty()) {
+                Log.e(TAG, "Failed to get Android ID. Device binding impossible.")
                 return false
             }
 
+            // Хэшируем Android ID для безопасного хранения
             val md = MessageDigest.getInstance("SHA-256")
-            val certHash = md.digest(certificates.first().encoded)
+            val deviceHash = md.digest(androidId.toByteArray(Charsets.UTF_8))
+            val deviceHashString = deviceHash.joinToString("") { "%02x".format(it) }
 
-            val isVerified = EXPECTED_CERT_HASH.isNotEmpty() && MessageDigest.isEqual(certHash, EXPECTED_CERT_HASH)
-            if (!isVerified) {
-                Log.e(TAG, "Certificate hash mismatch! Expected: ${EXPECTED_CERT_HASH.joinToString("") { "%02x".format(it) }}, Actual: ${certHash.joinToString("") { "%02x".format(it) }}")
+            // Получаем сохраненный хэш
+            val storedHash = prefs.getString("device_hash", null)
+
+            if (storedHash == null) {
+                // Первый запуск — сохраняем хэш устройства
+                prefs.edit().putString("device_hash", deviceHashString).apply()
+                Log.i(TAG, "Device binding initialized for this device.")
+                true
+            } else {
+                // Проверяем, совпадает ли хэш
+                val isMatch = storedHash == deviceHashString
+                if (!isMatch) {
+                    Log.e(TAG, "Device mismatch! Stored: $storedHash, Current: $deviceHashString")
+                }
+                isMatch
             }
-            isVerified
         } catch (e: Exception) {
-            Log.e(TAG, "Error verifying APK signature: ${e.message}", e)
+            Log.e(TAG, "Error verifying device binding: ${e.message}", e)
             false
         }
     }
