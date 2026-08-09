@@ -104,6 +104,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import androidx.compose.animation.core.*
 import androidx.compose.runtime.remember
+import java.io.File
+import java.io.BufferedReader
 
 private val AppBackground = Color(0xFFFFFFFF)
 private val SurfaceGray = Color(0xFFF1F3F5)
@@ -113,7 +115,8 @@ private val DarkText = Color(0xFF212529)
 private val ChatFontFamily = FontFamily.Monospace
 private val GreenColor = Color(0xFF4CD964)
 private val PaleYellowColor = Color(0xFFFFF9DB)
-private val FriendlyRobotColor = Color(0xFF00B4D8) // Уникальный бирюзовый цвет дружелюбного ИИ
+private val FriendlyRobotColor = Color(0xFF00B4D8)
+private val TemperatureColor = Color(0xFFFF8C00)
 
 enum class AIMode {
     LOCAL,
@@ -146,8 +149,6 @@ fun ChatScreen(
     val isTtsReady by viewModel.isTtsReady.collectAsStateWithLifecycle()
     val currentMode by viewModel.currentMode.collectAsStateWithLifecycle()
     val isAppLocked by viewModel.isAppLocked.collectAsStateWithLifecycle()
-    
-    // НОВАЯ ПОДПИСКА: Статус привязки устройства
     val isDeviceBound by viewModel.isDeviceBound.collectAsStateWithLifecycle(initialValue = false)
 
     var promptInput by remember { mutableStateOf("") }
@@ -518,7 +519,7 @@ fun ChatScreen(
             ImagePreview(imagePath = imagePath)
         }
 
-        // НОВЫЙ КОМПОНЕНТ: статус привязки устройства перед полем ввода
+        // ОБНОВЛЁННЫЙ КОМПОНЕНТ: статус привязки устройства с динамической надписью
         DeviceBindingStatus(
             isBound = isDeviceBound,
             modifier = Modifier
@@ -556,18 +557,112 @@ fun ChatScreen(
     }
 }
 
-// НОВЫЙ КОМПОНЕНТ: Отображение статуса привязки устройства
+// ОБНОВЛЁННЫЙ КОМПОНЕНТ: Отображение статуса привязки устройства с динамической надписью
 @Composable
 private fun DeviceBindingStatus(
     isBound: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val statusText = if (isBound) {
-        "✅ Устройство защищено"
-    } else {
-        "🔓 Устройство не привязано"
+    // Состояние для хранения текущей температуры
+    var cpuTemperature by remember { mutableStateOf("--") }
+    // Состояние для управления этапом отображения: 0 - защита, 1 - температура
+    var displayStage by remember { mutableStateOf(0) }
+    // Состояние для текста с эффектом печатной машинки
+    var displayedText by remember { mutableStateOf("") }
+    // Флаг, показывающий, завершена ли анимация печати
+    var isTypingComplete by remember { mutableStateOf(false) }
+
+    // Функция для чтения температуры процессора
+    fun getCpuTemperature(): String {
+        return try {
+            val thermalZones = File("/sys/class/thermal").listFiles()
+            thermalZones?.forEach { zone ->
+                val typeFile = File(zone, "type")
+                if (typeFile.exists()) {
+                    val type = typeFile.readText().trim()
+                    if (type.contains("cpu", ignoreCase = true) || type.contains("tsens", ignoreCase = true)) {
+                        val tempFile = File(zone, "temp")
+                        if (tempFile.exists()) {
+                            val tempRaw = tempFile.readText().trim().toFloatOrNull()
+                            if (tempRaw != null) {
+                                val tempCelsius = if (tempRaw > 1000) tempRaw / 1000 else tempRaw
+                                return String.format("%.1f", tempCelsius)
+                            }
+                        }
+                    }
+                }
+            }
+            "--"
+        } catch (e: Exception) {
+            "--"
+        }
     }
-    val statusColor = if (isBound) GreenColor else Color.Red
+
+    // Эффект для обновления температуры каждые 3 секунды
+    LaunchedEffect(Unit) {
+        while (true) {
+            cpuTemperature = getCpuTemperature()
+            delay(3000)
+        }
+    }
+
+    // Эффект для управления этапами отображения
+    LaunchedEffect(isBound) {
+        if (isBound) {
+            // Сброс состояний при изменении isBound
+            displayStage = 0
+            isTypingComplete = false
+            displayedText = ""
+        }
+    }
+
+    // Эффект для анимации печатной машинки на этапе 0 (защита)
+    LaunchedEffect(displayStage, isBound) {
+        if (isBound && displayStage == 0) {
+            val fullText = "Устройство защищено: идентификатор устройства верифицирован"
+            displayedText = ""
+            isTypingComplete = false
+            for (i in fullText.indices) {
+                displayedText += fullText[i]
+                delay(35) // Скорость печати
+            }
+            isTypingComplete = true
+            // Ждём 10 секунд после завершения печати
+            delay(10000)
+            // Переключаем на этап температуры
+            displayStage = 1
+            isTypingComplete = false
+            displayedText = ""
+        }
+    }
+
+    // Эффект для анимации печатной машинки на этапе 1 (температура)
+    LaunchedEffect(displayStage, cpuTemperature) {
+        if (isBound && displayStage == 1) {
+            val fullText = "Температура процессора: $cpuTemperature°C"
+            displayedText = ""
+            isTypingComplete = false
+            for (i in fullText.indices) {
+                displayedText += fullText[i]
+                delay(35)
+            }
+            isTypingComplete = true
+        }
+    }
+
+    // Определяем цвет текста в зависимости от этапа
+    val textColor = when {
+        !isBound -> Color.Red
+        displayStage == 0 -> GreenColor
+        else -> TemperatureColor
+    }
+
+    // Определяем текст для отображения
+    val statusText = when {
+        !isBound -> "🔓 Устройство не привязано"
+        displayStage == 0 -> displayedText
+        else -> displayedText
+    }
 
     Card(
         modifier = modifier,
@@ -579,7 +674,7 @@ private fun DeviceBindingStatus(
     ) {
         Text(
             text = statusText,
-            color = statusColor,
+            color = textColor,
             fontSize = 10.sp,
             fontFamily = ChatFontFamily,
             modifier = Modifier
