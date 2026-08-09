@@ -12,7 +12,6 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
-import android.provider.Settings
 import android.speech.RecognizerIntent
 import android.speech.tts.TextToSpeech
 import android.util.Log
@@ -170,8 +169,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _isDeviceBound = MutableStateFlow(false)
     val isDeviceBound: StateFlow<Boolean> = _isDeviceBound.asStateFlow()
 
-    private val _cpuTemperature = MutableStateFlow(0.0f)
-    val cpuTemperature: StateFlow<Float> = _cpuTemperature.asStateFlow()
+    // НОВОЕ ПОЛЕ: имя загруженной модели
+    private val _loadedModelName = MutableStateFlow("")
+    val loadedModelName: StateFlow<String> = _loadedModelName.asStateFlow()
 
     private val llamaHelper by lazy {
         LlamaHelper(
@@ -213,12 +213,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
 
-        scope.launch {
-            while (true) {
-                _cpuTemperature.value = getCpuTemperature()
-                delay(3000)
-            }
-        }
+        // УДАЛЁН БЛОК МОНИТОРИНГА ТЕМПЕРАТУРЫ
 
         initTts()
 
@@ -319,6 +314,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     is LlamaHelper.LLMEvent.Loaded -> {
                         _state.value = GenerationState.ModelLoaded(event.path)
                         _isModelLoaded.value = true
+                        // Обновляем имя модели
+                        val uri = Uri.parse(event.path)
+                        _loadedModelName.value = getFileNameFromUri(contentResolver, uri)
                     }
                 }
             }
@@ -347,35 +345,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    private fun getCpuTemperature(): Float {
-        return try {
-            val thermalZones = File("/sys/class/thermal").listFiles()
-            thermalZones?.forEach { zone ->
-                val typeFile = File(zone, "type")
-                if (typeFile.exists()) {
-                    val type = typeFile.readText().trim()
-                    if (type.contains("cpu", ignoreCase = true) || type.contains("tsens", ignoreCase = true)) {
-                        val tempFile = File(zone, "temp")
-                        if (tempFile.exists()) {
-                            val tempRaw = tempFile.readText().trim().toFloatOrNull()
-                            if (tempRaw != null) {
-                                return if (tempRaw > 1000) tempRaw / 1000 else tempRaw
-                            }
-                        }
-                    }
-                }
-            }
-            0.0f
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to read CPU temperature: ${e.message}")
-            0.0f
-        }
-    }
+    // УДАЛЕНА ФУНКЦИЯ getCpuTemperature()
 
     private fun verifyDeviceBinding(): Boolean {
         return try {
             val context = getApplication<Application>()
-            val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+            val androidId = android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ANDROID_ID)
             
             if (androidId.isNullOrEmpty()) {
                 Log.e(TAG, "Failed to get Android ID. Device binding impossible.")
@@ -656,21 +631,16 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         Log.d(TAG, "TTS disabled and unloaded")
     }
 
-    // ИСПРАВЛЕННАЯ ФУНКЦИЯ ФИЛЬТРАЦИИ ДЛЯ TTS
     private fun filterTextForSpeech(text: String): String {
         var result = text
 
-        // 1. Удаляем эмодзи и другие непечатаемые символы Юникода
         val emojiRegex = Regex("[^\\p{L}\\p{N}\\s.!?,;:\\-()]")
         result = result.replace(emojiRegex, "")
 
-        // 2. Удаляем квадратные скобки с содержимым или без
         result = result.replace(Regex("\\[.*?\\]"), "")
 
-        // 3. Удаляем круглые скобки, но оставляем текст внутри
         result = result.replace(Regex("[()]"), "")
 
-        // 4. Заменяем математические и валютные символы
         val symbolMap = mapOf(
             "×" to " умножить ",
             "÷" to " разделить ",
@@ -687,13 +657,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             result = result.replace(symbol, replacement)
         }
 
-        // 5. Удаляем символы форматирования
         result = result.replace(Regex("[*#_~`]"), "")
 
-        // 6. Заменяем переносы строк на пробелы
         result = result.replace(Regex("\\n"), " ")
 
-        // 7. Удаляем множественные пробелы
         result = result.replace(Regex("\\s+"), " ").trim()
 
         return result
@@ -1056,6 +1023,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         _isModelLoaded.value = true
                         val uri = Uri.parse(path)
                         currentModelName = getFileNameFromUri(contentResolver, uri)
+                        _loadedModelName.value = currentModelName
                     }
                 )
             } catch (e: Exception) {
@@ -1282,6 +1250,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     fun releaseModel() {
         _isModelLoaded.value = false
+        _loadedModelName.value = ""
         llamaHelper.release()
     }
 
