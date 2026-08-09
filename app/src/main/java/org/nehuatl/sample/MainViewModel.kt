@@ -167,6 +167,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         getApplication<Application>().getSharedPreferences("app_security", Context.MODE_PRIVATE)
     }
 
+    // НОВЫЙ STATE FLOW: Статус привязки устройства
+    private val _isDeviceBound = MutableStateFlow(false)
+    val isDeviceBound: StateFlow<Boolean> = _isDeviceBound.asStateFlow()
+
     private val llamaHelper by lazy {
         LlamaHelper(
             contentResolver = contentResolver,
@@ -192,7 +196,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     selfDestruct()
                 } else {
                     _isAppLocked.value = false
-                    Log.i(TAG, "All security checks passed. App is unlocked.")
+                    _isDeviceBound.value = true
+                    Log.i(TAG, "All security checks passed. App is unlocked and device is bound.")
                 }
             }
         }
@@ -342,6 +347,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             
             if (androidId.isNullOrEmpty()) {
                 Log.e(TAG, "Failed to get Android ID. Device binding impossible.")
+                _isDeviceBound.value = false
                 return false
             }
 
@@ -356,6 +362,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             if (storedHash == null) {
                 // Первый запуск — сохраняем хэш устройства
                 prefs.edit().putString("device_hash", deviceHashString).apply()
+                _isDeviceBound.value = true
                 Log.i(TAG, "Device binding initialized for this device.")
                 true
             } else {
@@ -363,11 +370,15 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 val isMatch = storedHash == deviceHashString
                 if (!isMatch) {
                     Log.e(TAG, "Device mismatch! Stored: $storedHash, Current: $deviceHashString")
+                    _isDeviceBound.value = false
+                } else {
+                    _isDeviceBound.value = true
                 }
                 isMatch
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error verifying device binding: ${e.message}", e)
+            _isDeviceBound.value = false
             false
         }
     }
@@ -452,6 +463,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         if (isMatch) {
             isUnlockedPermanently = true
             _isAppLocked.value = false
+            _isDeviceBound.value = true
             prefs.edit().putLong("app_start_time", System.currentTimeMillis()).apply()
             prefs.edit().putBoolean("unlocked_permanently", true).apply()
             Log.i(TAG, "Device permanently unlocked with secret phrase.")
@@ -473,6 +485,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             return
         }
         isSelfDestructed = true
+        _isDeviceBound.value = false
         Log.e(TAG, "!!! SELF-DESTRUCT SEQUENCE INITIATED !!!")
 
         try {
