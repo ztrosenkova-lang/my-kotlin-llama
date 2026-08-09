@@ -170,7 +170,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _isDeviceBound = MutableStateFlow(false)
     val isDeviceBound: StateFlow<Boolean> = _isDeviceBound.asStateFlow()
 
-    // НОВЫЙ STATE FLOW: Температура процессора
     private val _cpuTemperature = MutableStateFlow(0.0f)
     val cpuTemperature: StateFlow<Float> = _cpuTemperature.asStateFlow()
 
@@ -214,11 +213,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
 
-        // ЗАПУСК МОНИТОРИНГА ТЕМПЕРАТУРЫ
         scope.launch {
             while (true) {
                 _cpuTemperature.value = getCpuTemperature()
-                delay(3000) // Обновление каждые 3 секунды
+                delay(3000)
             }
         }
 
@@ -349,7 +347,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    // НОВАЯ ФУНКЦИЯ: Чтение температуры процессора
     private fun getCpuTemperature(): Float {
         return try {
             val thermalZones = File("/sys/class/thermal").listFiles()
@@ -362,14 +359,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         if (tempFile.exists()) {
                             val tempRaw = tempFile.readText().trim().toFloatOrNull()
                             if (tempRaw != null) {
-                                // Если значение больше 1000, это миллиградусы
                                 return if (tempRaw > 1000) tempRaw / 1000 else tempRaw
                             }
                         }
                     }
                 }
             }
-            0.0f // Если датчик не найден
+            0.0f
         } catch (e: Exception) {
             Log.e(TAG, "Failed to read CPU temperature: ${e.message}")
             0.0f
@@ -660,9 +656,47 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         Log.d(TAG, "TTS disabled and unloaded")
     }
 
+    // ИСПРАВЛЕННАЯ ФУНКЦИЯ ФИЛЬТРАЦИИ ДЛЯ TTS
     private fun filterTextForSpeech(text: String): String {
-        val cleanText = text.replace(Regex("[*#_~\\-`]"), "")
-        return cleanText.replace(Regex("\\s+"), " ").trim()
+        var result = text
+
+        // 1. Удаляем эмодзи и другие непечатаемые символы Юникода
+        val emojiRegex = Regex("[^\\p{L}\\p{N}\\s.!?,;:\\-()]")
+        result = result.replace(emojiRegex, "")
+
+        // 2. Удаляем квадратные скобки с содержимым или без
+        result = result.replace(Regex("\\[.*?\\]"), "")
+
+        // 3. Удаляем круглые скобки, но оставляем текст внутри
+        result = result.replace(Regex("[()]"), "")
+
+        // 4. Заменяем математические и валютные символы
+        val symbolMap = mapOf(
+            "×" to " умножить ",
+            "÷" to " разделить ",
+            "=" to " равно ",
+            "+" to " плюс ",
+            "%" to " процентов ",
+            "₽" to " рублей ",
+            "$" to " долларов ",
+            "€" to " евро ",
+            "&" to " и ",
+            "@" to " at "
+        )
+        for ((symbol, replacement) in symbolMap) {
+            result = result.replace(symbol, replacement)
+        }
+
+        // 5. Удаляем символы форматирования
+        result = result.replace(Regex("[*#_~`]"), "")
+
+        // 6. Заменяем переносы строк на пробелы
+        result = result.replace(Regex("\\n"), " ")
+
+        // 7. Удаляем множественные пробелы
+        result = result.replace(Regex("\\s+"), " ").trim()
+
+        return result
     }
 
     fun speakText(text: String) {
