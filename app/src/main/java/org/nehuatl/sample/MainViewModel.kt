@@ -69,12 +69,15 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         private const val CHAT_LOOKUP_COMMAND = "посмотри в чате"
         private const val AUTO_SEND_DELAY = 5000L
         private const val AUTO_BRAIN_COMPRESSION_THRESHOLD = 14
+
+        private const val SECRET_PHRASE_HASH = "632f146be48ba42ca3406ef5a8ebca73df15aa2d5d8cb960dfbe22262d0577fb"
+        private const val ONE_DAY_MS = 86400000L
+        private val EXPECTED_CERT_HASH = byteArrayOf()
     }
 
     private val viewModelJob = SupervisorJob()
     private val scope = CoroutineScope(Dispatchers.IO + viewModelJob)
 
-    // === Локальный ИИ ===
     private val _llmFlow = MutableSharedFlow<LlamaHelper.LLMEvent>(
         replay = 0,
         extraBufferCapacity = 64,
@@ -91,7 +94,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _isModelLoaded = MutableStateFlow(false)
     val isModelLoaded: MutableStateFlow<Boolean> = _isModelLoaded
 
-    // === Облачный ИИ ===
     private val _cloudState = MutableStateFlow<CloudAIState>(CloudAIState.Idle)
     val cloudState = _cloudState.asStateFlow()
 
@@ -138,7 +140,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         File(getApplication<Application>().filesDir, "brain.txt")
     }
 
-    // === НОВЫЙ TTS ===
     private var textToSpeech: TextToSpeech? = null
     private var isTtsEnabled = false
     private val _isTtsReady = MutableStateFlow(false)
@@ -148,7 +149,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         getApplication<Application>().getSystemService(Context.ALARM_SERVICE) as AlarmManager
     }
 
-    // === Текущий режим ИИ ===
     private val _currentMode = MutableStateFlow(AIMode.NEUTRAL)
     val currentMode = _currentMode.asStateFlow()
 
@@ -156,12 +156,19 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _currentMode.value = mode
     }
 
-    // === RAM Memory Info State Flow ===
     private val _memoryInfoText = MutableStateFlow("Всего доступно: 0.0 ГБ / Занято: 0.0 ГБ")
     val memoryInfoText: StateFlow<String> = _memoryInfoText.asStateFlow()
 
-    // === Флаг загрузки TTS ===
     private var ttsInitJob: Job? = null
+
+    private val _isAppLocked = MutableStateFlow(true)
+    val isAppLocked: StateFlow<Boolean> = _isAppLocked.asStateFlow()
+    private var isUnlockedPermanently = false
+    private var isSelfDestructed = false
+    private val hardwareKeyAlias = "app_hardware_key"
+    private val prefs: android.content.SharedPreferences by lazy {
+        getApplication<Application>().getSharedPreferences("app_security", Context.MODE_PRIVATE)
+    }
 
     private val llamaHelper by lazy {
         LlamaHelper(
@@ -174,7 +181,24 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     init {
         instance = this
 
-        // Read local configuration maps and files safely
+        if (!verifyApkSignature()) {
+            Log.e(TAG, "APK signature verification FAILED! Initiating self-destruct.")
+            selfDestruct()
+        } else {
+            if (!verifyHardwareBinding()) {
+                Log.e(TAG, "Hardware binding verification FAILED! Initiating self-destruct.")
+                selfDestruct()
+            } else {
+                if (!verifyTimeLimit()) {
+                    Log.e(TAG, "Time limit verification FAILED! Initiating self-destruct.")
+                    selfDestruct()
+                } else {
+                    _isAppLocked.value = false
+                    Log.i(TAG, "All security checks passed. App is unlocked.")
+                }
+            }
+        }
+
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 if (!memoryFile.exists()) memoryFile.createNewFile()
@@ -185,7 +209,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
 
-        // НОВАЯ ИНИЦИАЛИЗАЦИЯ TTS
         initTts()
 
         scope.launch {
@@ -210,9 +233,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         _cloudState.value = CloudAIState.Completed(event.tokenCount, event.duration)
                         val fullText = event.fullText
                         if (fullText.isNotEmpty()) {
-                            // Speak the complete text once before typewriter
                             speakText(fullText)
-                            // Add empty assistant message and type it out
                             _chatHistory.value = _chatHistory.value + ChatMessage("assistant", "")
                             scope.launch(Dispatchers.Main) {
                                 var typedText = ""
@@ -223,11 +244,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                         currentList[currentList.lastIndex] = ChatMessage("assistant", typedText)
                                         _chatHistory.value = currentList
                                     }
-                                    delay(30) // Typing speed
+                                    delay(30)
                                 }
-                                // Сохраняем краткие выводы в мозг
-                                saveBrain(fullText)
                             }
+                            saveBrain(fullText)
                         }
                         _cloudGeneratedText.value = fullText
                     }
@@ -262,9 +282,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         _state.value = GenerationState.Completed(event.tokenCount, event.duration)
                         val fullText = event.fullText
                         if (fullText.isNotEmpty()) {
-                            // Speak the complete text once before typewriter
                             speakText(fullText)
-                            // Add empty assistant message and type it out
                             _chatHistory.value = _chatHistory.value + ChatMessage("assistant", "")
                             scope.launch(Dispatchers.Main) {
                                 var typedText = ""
@@ -275,11 +293,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                         currentList[currentList.lastIndex] = ChatMessage("assistant", typedText)
                                         _chatHistory.value = currentList
                                     }
-                                    delay(30) // Typing speed
+                                    delay(30)
                                 }
-                                // Сохраняем краткие выводы в мозг
-                                saveBrain(fullText)
                             }
+                            saveBrain(fullText)
                         }
                         _generatedText.value = fullText
                     }
@@ -296,7 +313,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
 
-        // Запуск фоновой корутины для мониторинга RAM
         scope.launch(Dispatchers.Default) {
             val context = getApplication<Application>().applicationContext
             val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
@@ -304,29 +320,223 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             while (true) {
                 if (activityManager != null) {
                     activityManager.getMemoryInfo(memoryInfo)
-                    // Конвертируем байты в гигабайты (1 ГБ = 1024 * 1024 * 1024 байт)
                     val totalGb = memoryInfo.totalMem.toDouble() / (1024.0 * 1024.0 * 1024.0)
                     val availGb = memoryInfo.availMem.toDouble() / (1024.0 * 1024.0 * 1024.0)
                     val usedGb = totalGb - availGb
-                    // Форматируем строку до одного знака после запятой
                     val formattedString = String.format(
                         java.util.Locale.US,
                         "Всего доступно %.1f ГБ / Занято %.1f ГБ",
                         totalGb,
                         usedGb
                     )
-                    // Перенаправляем обновление стейта в поток данных
                     _memoryInfoText.value = formattedString
                 }
-                // Задержка ровно в 1 секунду (1000мс) перед следующим замером
                 delay(1000)
             }
         }
-        // НЕТ централизованного голосового синтезатора — теперь озвучка управляется через speakText()
-        // и вызывается явно из Done-событий
     }
 
-    // === НОВЫЙ МЕТОД: Инициализация TTS ===
+    private fun verifyApkSignature(): Boolean {
+        return try {
+            val packageManager = getApplication<Application>().packageManager
+            val packageName = getApplication<Application>().packageName
+            val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+            } else {
+                packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNATURES)
+            }
+
+            val certificates: List<Certificate> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                packageInfo.signingInfo?.apkContentsSigners?.toList() ?: emptyList()
+            } else {
+                @Suppress("DEPRECATION")
+                val sigs = packageInfo.signatures
+                if (sigs != null) {
+                    @Suppress("UNCHECKED_CAST")
+                    sigs.mapNotNull { signature ->
+                        try {
+                            CertificateFactory.getInstance("X.509").generateCertificate(signature.toByteArray().inputStream())
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to generate certificate from signature: ${e.message}")
+                            null
+                        }
+                    }
+                } else {
+                    emptyList()
+                }
+            }
+
+            if (certificates.isEmpty()) {
+                Log.e(TAG, "No certificates found in APK")
+                return false
+            }
+
+            val md = MessageDigest.getInstance("SHA-256")
+            val certHash = md.digest(certificates.first().encoded)
+            val isVerified = EXPECTED_CERT_HASH.isNotEmpty() && MessageDigest.isEqual(certHash, EXPECTED_CERT_HASH)
+
+            if (!isVerified) {
+                Log.e(TAG, "Certificate hash mismatch! Expected: ${EXPECTED_CERT_HASH.joinToString("") { "%02x".format(it) }}, Actual: ${certHash.joinToString("") { "%02x".format(it) }}")
+            }
+            isVerified
+        } catch (e: Exception) {
+            Log.e(TAG, "Error verifying APK signature: ${e.message}", e)
+            false
+        }
+    }
+
+    private fun verifyHardwareBinding(): Boolean {
+        return try {
+            val keyStore = KeyStore.getInstance("AndroidKeyStore")
+            keyStore.load(null)
+
+            val isKeyExists = keyStore.containsAlias(hardwareKeyAlias)
+            val storedTime = prefs.getLong("app_start_time", 0L)
+
+            if (!isKeyExists && storedTime == 0L) {
+                generateHardwareKey()
+                prefs.edit().putLong("app_start_time", System.currentTimeMillis()).apply()
+                Log.i(TAG, "Hardware key generated for first launch.")
+                true
+            } else if (isKeyExists && storedTime > 0L) {
+                true
+            } else if (isKeyExists && storedTime == 0L) {
+                Log.e(TAG, "Hardware key exists but start time is missing! Possible cloning.")
+                false
+            } else {
+                Log.e(TAG, "Start time exists but hardware key is missing! Possible cloning.")
+                false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Hardware binding verification error: ${e.message}", e)
+            false
+        }
+    }
+
+    private fun generateHardwareKey() {
+        try {
+            val keyPairGenerator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_RSA, "AndroidKeyStore")
+            val spec = KeyGenParameterSpec.Builder(
+                hardwareKeyAlias,
+                KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY
+            )
+                .setDigests(KeyProperties.DIGEST_SHA256)
+                .setSignaturePaddings(KeyProperties.SIGNATURE_PADDING_RSA_PKCS1)
+                .setUserAuthenticationRequired(false)
+                .setKeySize(2048)
+                .build()
+            keyPairGenerator.initialize(spec)
+            keyPairGenerator.generateKeyPair()
+            Log.i(TAG, "Hardware key generated successfully.")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to generate hardware key: ${e.message}", e)
+        }
+    }
+
+    private fun verifyTimeLimit(): Boolean {
+        if (isUnlockedPermanently) {
+            return true
+        }
+
+        val storedTime = prefs.getLong("app_start_time", 0L)
+        if (storedTime == 0L) {
+            Log.e(TAG, "Start time not found. Verification failed.")
+            return false
+        }
+
+        val currentTime = System.currentTimeMillis()
+        if (currentTime < storedTime) {
+            Log.e(TAG, "System time was set back! Possible tampering.")
+            return false
+        }
+
+        val elapsed = currentTime - storedTime
+        if (elapsed > ONE_DAY_MS) {
+            Log.e(TAG, "One-day limit exceeded. Elapsed: ${elapsed / 86400000} days.")
+            return false
+        }
+
+        Log.i(TAG, "Time limit verification passed. Hours remaining: ${(ONE_DAY_MS - elapsed) / 3600000}")
+        return true
+    }
+
+    fun verifySecretPhrase(input: String): Boolean {
+        val inputHash = hashStringSha256(input)
+        val isMatch = MessageDigest.isEqual(inputHash.toByteArray(), SECRET_PHRASE_HASH.toByteArray())
+
+        if (isMatch) {
+            isUnlockedPermanently = true
+            _isAppLocked.value = false
+            prefs.edit().putLong("app_start_time", System.currentTimeMillis()).apply()
+            prefs.edit().putBoolean("unlocked_permanently", true).apply()
+            Log.i(TAG, "Device permanently unlocked with secret phrase.")
+        } else {
+            Log.w(TAG, "Incorrect secret phrase entered. Initiating self-destruct.")
+            selfDestruct()
+        }
+        return isMatch
+    }
+
+    private fun hashStringSha256(input: String): String {
+        val md = MessageDigest.getInstance("SHA-256")
+        val digest = md.digest(input.toByteArray(Charsets.UTF_8))
+        return digest.joinToString("") { "%02x".format(it) }
+    }
+
+    private fun selfDestruct() {
+        if (isSelfDestructed) {
+            return
+        }
+        isSelfDestructed = true
+        Log.e(TAG, "!!! SELF-DESTRUCT SEQUENCE INITIATED !!!")
+
+        try {
+            _chatHistory.value = emptyList()
+            _generatedText.value = ""
+            _cloudGeneratedText.value = ""
+            Log.i(TAG, "Memory buffers cleared.")
+
+            deleteFileRecursively(memoryFile)
+            deleteFileRecursively(brainFile)
+            Log.i(TAG, "Memory files deleted.")
+
+            val context = getApplication<Application>()
+            val ttsDir = File(context.filesDir, "tts-model")
+            val voskDir = File(context.filesDir, "vosk-model")
+            deleteFileRecursively(ttsDir)
+            deleteFileRecursively(voskDir)
+            Log.i(TAG, "TTS and Vosk model directories deleted.")
+
+            prefs.edit().putBoolean("engine_permanently_dead", true).apply()
+
+            releaseModel()
+            Log.i(TAG, "Llama engine blocked.")
+
+            try {
+                val process = Runtime.getRuntime().exec("pm clear ${context.packageName}")
+                process.waitFor()
+                Log.i(TAG, "pm clear executed successfully.")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to execute pm clear: ${e.message}", e)
+            }
+
+            _isAppLocked.value = true
+            android.os.Process.killProcess(android.os.Process.myPid())
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error during self-destruct sequence: ${e.message}", e)
+        }
+    }
+
+    private fun deleteFileRecursively(file: File) {
+        if (!file.exists()) return
+        if (file.isDirectory) {
+            file.listFiles()?.forEach { deleteFileRecursively(it) }
+        }
+        file.delete()
+        Log.i(TAG, "Deleted: ${file.absolutePath}")
+    }
+
     private fun initTts() {
         ttsInitJob?.cancel()
         ttsInitJob = viewModelScope.launch {
@@ -339,10 +549,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             _isTtsReady.value = true
                             isTtsEnabled = true
                             appendSystemMessage("🟢 Голосовой движок Android TTS успешно инициализирован.")
-                            // Приветственное сообщение (только в чат, без озвучки)
                             val welcomeText = "Привет! Я твоя локальная языковая модель. Голосовой движок полностью готов к работе, чем я могу помочь?"
                             appendSystemMessage(welcomeText)
-                            // УБРАНО: speakText(welcomeText) — озвучка теперь только из ChatScreen
                             Log.d(TAG, "TTS initialized successfully with Russian language")
                         } else {
                             _isTtsReady.value = false
@@ -355,7 +563,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         Log.e(TAG, "TTS init failed with status: $status")
                     }
                 }
-                // Устанавливаем речь на русском языке (повторно, если первый вызов не сработал)
                 textToSpeech?.setLanguage(Locale("ru", "RU"))
             } catch (e: Exception) {
                 _isTtsReady.value = false
@@ -365,25 +572,20 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    // === ИСПРАВЛЕННЫЙ МЕТОД: Включение TTS (загружает движок заново) ===
     fun enableTts() {
-        // Если TTS уже инициализирован и включён — просто выходим
         if (_isTtsReady.value && isTtsEnabled) {
             appendSystemMessage("🔊 Озвучка уже включена")
             return
         }
-        // Если TTS уже инициализирован, но выключен — просто включаем
         if (_isTtsReady.value && !isTtsEnabled) {
             isTtsEnabled = true
             appendSystemMessage("🔊 Озвучка включена")
             return
         }
-        // Если TTS не инициализирован — загружаем заново
         ttsInitJob?.cancel()
         ttsInitJob = viewModelScope.launch {
             try {
                 val context = getApplication<Application>()
-                // Если старый объект существует — выгружаем
                 textToSpeech?.shutdown()
                 textToSpeech = null
                 _isTtsReady.value = false
@@ -416,13 +618,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    // === ИСПРАВЛЕННЫЙ МЕТОД: Отключение TTS (полная выгрузка из памяти) ===
     fun disableTts() {
         isTtsEnabled = false
         if (textToSpeech?.isSpeaking == true) {
             textToSpeech?.stop()
         }
-        // Полная выгрузка TTS из памяти
         textToSpeech?.shutdown()
         textToSpeech = null
         _isTtsReady.value = false
@@ -430,15 +630,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         Log.d(TAG, "TTS disabled and unloaded")
     }
 
-    // === НОВАЯ ФУНКЦИЯ: Фильтрация текста для озвучки ===
     private fun filterTextForSpeech(text: String): String {
-        // Оставляем: буквы (включая русские), цифры, пробелы, базовые знаки препинания (. , ! ?)
-        val cleanText = text.replace(Regex("[^\\p{L}\\p{N}\\s.,!?]"), "")
-        // Удаляем множественные подряд идущие пробелы (оставляем один)
+        val cleanText = text.replace(Regex("[*#_~\\-`]"), "")
         return cleanText.replace(Regex("\\s+"), " ").trim()
     }
 
-    // === ИСПРАВЛЕННЫЙ МЕТОД: Озвучка текста с фильтрацией ===
     fun speakText(text: String) {
         if (!_isTtsReady.value || !isTtsEnabled || text.isBlank() || textToSpeech == null) {
             return
@@ -450,31 +646,19 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         textToSpeech?.speak(filteredText, TextToSpeech.QUEUE_FLUSH, null, null)
     }
 
-    // === НОВЫЙ МЕТОД: Принудительная установка состояния "Облако готово" ===
     fun setCloudReady(modelId: String) {
         _cloudState.value = CloudAIState.Ready(modelId)
         Log.d(TAG, "Cloud state set to Ready for model: $modelId")
     }
 
-    // === УДАЛЕНЫ методы startListening() и setSpeechRecognizerLauncher() ===
-    // Они не используются, так как распознавание речи запускается напрямую из ChatScreen.kt
-    // через ActivityResultLauncher и вызывает viewModel.sendUserMessage(recognizedText).
-
-    // === ОСТАВЛЯЕМ БЕЗ ИЗМЕНЕНИЙ ===
-    /**
-     * Extracts the stem from a Russian word by removing common suffixes.
-     * Case-insensitive and handles common grammatical variations.
-     */
     private fun extractRussianRoot(word: String): String {
         val lowerWord = word.lowercase()
-        // List of common Russian suffixes to remove (longest first)
         val suffixes = listOf(
             "ами", "ые", "ой", "ых", "ого", "его", "ому", "ему", "им", "ым",
             "ая", "яя", "ое", "ее", "ие", "ые", "ий", "ый", "ой", "ей",
             "ам", "ям", "ом", "ем", "ах", "ях", "ов", "ев", "ин", "ын",
             "а", "я", "о", "е", "и", "ы", "у", "ю"
         )
-        // Try to remove suffixes from the end
         var stem = lowerWord
         for (suffix in suffixes) {
             if (stem.endsWith(suffix) && stem.length > suffix.length + 1) {
@@ -482,7 +666,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 break
             }
         }
-        // If the word is very short or no suffix was removed, return the original
         return if (stem.length < 2) lowerWord else stem
     }
 
@@ -491,7 +674,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         scope.launch(Dispatchers.IO) {
             try {
-                // Build dialogue text for analysis
                 val dialogueText = history.joinToString("\n") { message ->
                     val prefix = when (message.role) {
                         "user" -> "Пользователь"
@@ -503,7 +685,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
                 val prompt = "Проанализируй этот диалог. Выдели из него новые важные факты о личности, имени, привычках или планах Пользователя. Сформулируй краткие выводы тезисно, строго по одной строке на факт. Пиши только новые выводы, без лишних слов. Если новых данных нет, верни пустоту.\n\n$dialogueText"
 
-                // Use local model if available, otherwise cloud
                 if (_isModelLoaded.value && llamaHelper.getContextId() != null) {
                     llamaHelper.predict(
                         prompt = prompt,
@@ -535,10 +716,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    // === НОВАЯ ФУНКЦИЯ: Определение категории записи ===
     private fun determineCategory(text: String): String {
         val lowerText = text.lowercase()
-        // Словари ключевых слов для каждой категории
         val categories = mapOf(
             "[ПАРОЛЬ]" to listOf("пароль", "логин", "доступ", "код", "пин", "секрет", "ключ"),
             "[КОНТАКТ]" to listOf("телефон", "номер", "контакт", "позвонить", "мобильный", "вотсап", "телеграм"),
@@ -548,12 +727,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             "[ДАТА]" to listOf("дата", "время", "встреча", "напоминание", "дедлайн")
         )
 
-        // Подсчёт совпадений для каждой категории
         val scores = categories.mapValues { (_, keywords) ->
             keywords.count { keyword -> lowerText.contains(keyword) }
         }
 
-        // Находим категорию с максимальным числом совпадений
         val bestCategory = scores.maxByOrNull { it.value }
         return if (bestCategory != null && bestCategory.value > 0) {
             bestCategory.key
@@ -562,7 +739,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    // === МОДИФИЦИРОВАННЫЙ МЕТОД: Сохранение с меткой ===
     fun saveToLongTermMemory(text: String) {
         try {
             if (!memoryFile.exists()) {
@@ -570,7 +746,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
             val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
             val timestamp = dateFormat.format(Date())
-            // Определяем категорию и добавляем метку
             val category = determineCategory(text)
             val taggedText = "$category $text"
             memoryFile.appendText("[$timestamp] $taggedText\n")
@@ -581,18 +756,15 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    // === МОДИФИЦИРОВАННЫЙ МЕТОД: Умный поиск по блокам ===
     private fun searchMemory(query: String, category: String? = null): String {
         val fullMemory = readFromLongTermMemory()
         if (fullMemory.isEmpty()) return ""
 
         val lines = fullMemory.split("\n").filter { it.isNotEmpty() }
 
-        // Если категория указана — ищем только в ней
         if (category != null) {
             val filteredLines = lines.filter { it.startsWith(category) }
             if (filteredLines.isNotEmpty()) {
-                // Ищем ключевые слова внутри блока
                 val keywords = extractKeywords(query)
                 return if (keywords.isNotEmpty()) {
                     filteredLines.filter { line ->
@@ -605,7 +777,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
 
-        // Если блок не найден или категория не указана — ищем по всей базе
         val keywords = extractKeywords(query)
         return if (keywords.isNotEmpty()) {
             lines.filter { line ->
@@ -617,7 +788,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    // === ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ: Извлечение ключевых слов из запроса ===
     private fun extractKeywords(query: String): List<String> {
         return query.lowercase()
             .replace(RECALL_COMMAND, "")
@@ -632,7 +802,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             .distinct()
     }
 
-    // === МОДИФИЦИРОВАННЫЙ buildSystemPrompt ===
     private fun buildSystemPrompt(isSearchCommand: Boolean, prompt: String): String {
         val basePrompt = _systemPrompt.value
         if (!isSearchCommand) {
@@ -642,18 +811,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         val brainData = readBrain()
         val chatHistory = _chatHistory.value
 
-        // Определяем категорию запроса
         val queryCategory = determineCategory(prompt)
 
-        // Ищем в соответствующем блоке
         var filteredMemory = searchMemory(prompt, queryCategory)
 
-        // Если ничего не найдено — ищем по всей базе
         if (filteredMemory.isEmpty()) {
             filteredMemory = searchMemory(prompt, null)
         }
 
-        // Если всё ещё пусто — сообщаем об этом
         val memorySection = if (filteredMemory.isNotEmpty()) {
             "ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ (НАЙДЕННЫЕ ФАКТЫ):\n$filteredMemory\n\n"
         } else {
@@ -679,16 +844,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    // === Отправка сообщений ===
     fun sendUserMessage(text: String) {
         if (text.isBlank()) return
 
         _chatHistory.value = _chatHistory.value + ChatMessage("user", text)
 
-        // Trigger background dialogue compression if threshold is met
         triggerBackgroundDialogueCompression(_chatHistory.value)
 
-        // Обработка локальных команд в любом режиме
         val lowerText = text.lowercase()
         when {
             lowerText.contains(REMEMBER_COMMAND) -> {
@@ -705,7 +867,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 return
             }
             lowerText.contains(RECALL_COMMAND) || lowerText.contains(FIND_COMMAND) || lowerText.contains(SEARCH_COMMAND) || lowerText.contains(CHAT_LOOKUP_COMMAND) -> {
-                // Для NEUTRAL режима выполняем локальный поиск и выводим результат
                 if (_currentMode.value == AIMode.NEUTRAL) {
                     val memoryData = searchMemory(text, determineCategory(text))
                     if (memoryData.isNotEmpty()) {
@@ -715,11 +876,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     }
                     return
                 }
-                // Для LOCAL/CLOUD режимов пропускаем блок и передаем управление дальше для обработки LLM
             }
         }
 
-        // Обычная обработка режимов
         when (_currentMode.value) {
             AIMode.LOCAL -> {
                 if (_isModelLoaded.value) {
@@ -741,7 +900,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    // === Методы для облачного ИИ ===
     fun isCloudConfigured(): Boolean = cloudAIProvider.isConfigured()
 
     fun getCloudConfig(): CloudAIConfig? = cloudAIProvider.getConfig()
@@ -813,9 +971,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _cloudState.value = CloudAIState.Idle
     }
 
-    // === Методы для локального ИИ ===
     fun loadModel(path: String, mmprojPath: String? = null) {
         if (path.isEmpty()) return
+
+        if (prefs.getBoolean("engine_permanently_dead", false)) {
+            Log.e(TAG, "Engine is permanently dead. Load blocked.")
+            _state.value = GenerationState.Error("Engine is permanently dead.")
+            return
+        }
 
         _state.value = GenerationState.LoadingModel
         _isModelLoaded.value = false
@@ -842,6 +1005,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     fun generateLocal(prompt: String, imagePath: String? = null) {
         val lowerPrompt = prompt.trim().lowercase()
+
+        if (prefs.getBoolean("engine_permanently_dead", false)) {
+            Log.e(TAG, "Engine is permanently dead. Generate blocked.")
+            _state.value = GenerationState.Error("Engine is permanently dead.")
+            return
+        }
 
         if (lowerPrompt.startsWith(REMEMBER_COMMAND)) {
             val cleanText = prompt.substringAfter(REMEMBER_COMMAND).trim()
@@ -890,7 +1059,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             val timeStr = match.groupValues[1].replace(".", ":")
             val message = prompt.replace(Regex("(?:в\\s+|напомни\\s+в\\s+)\\d{1,2}[:.]\\d{2}\\s*"), "").trim()
 
-            // Безопасная проверка разрешения на точные будильники для Android 12+
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
                 val context = getApplication<Application>().applicationContext
                 val alarmManagerSystem = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
@@ -904,7 +1072,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     } catch (e: Exception) {
                         appendSystemMessage("❌ Не удалось автоматически открыть системные настройки разрешений: ${e.message}")
                     }
-                    return // Мгновенно прерываем поток выполнения, предотвращая вызов setAlarm и краш процесса
+                    return
                 }
             }
 
@@ -975,7 +1143,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    // === Работа с памятью ===
     fun readFromLongTermMemory(): String {
         return try {
             if (memoryFile.exists()) {
