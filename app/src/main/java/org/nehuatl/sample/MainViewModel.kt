@@ -69,7 +69,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         private const val CHAT_LOOKUP_COMMAND = "посмотри в чате"
         private const val AUTO_SEND_DELAY = 5000L
         private const val AUTO_BRAIN_COMPRESSION_THRESHOLD = 14
-
         private const val SECRET_PHRASE_HASH = "632f146be48ba42ca3406ef5a8ebca73df15aa2d5d8cb960dfbe22262d0577fb"
         private const val ONE_DAY_MS = 86400000L
         private val EXPECTED_CERT_HASH = byteArrayOf()
@@ -360,7 +359,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             Log.e(TAG, "Failed to generate certificate from signature: ${e.message}")
                             null
                         }
-                    }
+                    } as List<Certificate> // ЯВНОЕ ПРИВЕДЕНИЕ ТИПА ДЛЯ ИСПРАВЛЕНИЯ ОШИБКИ КОМПИЛЯЦИИ
                 } else {
                     emptyList()
                 }
@@ -373,8 +372,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
             val md = MessageDigest.getInstance("SHA-256")
             val certHash = md.digest(certificates.first().encoded)
-            val isVerified = EXPECTED_CERT_HASH.isNotEmpty() && MessageDigest.isEqual(certHash, EXPECTED_CERT_HASH)
 
+            val isVerified = EXPECTED_CERT_HASH.isNotEmpty() && MessageDigest.isEqual(certHash, EXPECTED_CERT_HASH)
             if (!isVerified) {
                 Log.e(TAG, "Certificate hash mismatch! Expected: ${EXPECTED_CERT_HASH.joinToString("") { "%02x".format(it) }}, Actual: ${certHash.joinToString("") { "%02x".format(it) }}")
             }
@@ -389,7 +388,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         return try {
             val keyStore = KeyStore.getInstance("AndroidKeyStore")
             keyStore.load(null)
-
             val isKeyExists = keyStore.containsAlias(hardwareKeyAlias)
             val storedTime = prefs.getLong("app_start_time", 0L)
 
@@ -463,7 +461,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     fun verifySecretPhrase(input: String): Boolean {
         val inputHash = hashStringSha256(input)
         val isMatch = MessageDigest.isEqual(inputHash.toByteArray(), SECRET_PHRASE_HASH.toByteArray())
-
         if (isMatch) {
             isUnlockedPermanently = true
             _isAppLocked.value = false
@@ -508,7 +505,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             Log.i(TAG, "TTS and Vosk model directories deleted.")
 
             prefs.edit().putBoolean("engine_permanently_dead", true).apply()
-
             releaseModel()
             Log.i(TAG, "Llama engine blocked.")
 
@@ -522,7 +518,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
             _isAppLocked.value = true
             android.os.Process.killProcess(android.os.Process.myPid())
-
         } catch (e: Exception) {
             Log.e(TAG, "Error during self-destruct sequence: ${e.message}", e)
         }
@@ -577,11 +572,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             appendSystemMessage("🔊 Озвучка уже включена")
             return
         }
+
         if (_isTtsReady.value && !isTtsEnabled) {
             isTtsEnabled = true
             appendSystemMessage("🔊 Озвучка включена")
             return
         }
+
         ttsInitJob?.cancel()
         ttsInitJob = viewModelScope.launch {
             try {
@@ -810,11 +807,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         val brainData = readBrain()
         val chatHistory = _chatHistory.value
-
         val queryCategory = determineCategory(prompt)
 
         var filteredMemory = searchMemory(prompt, queryCategory)
-
         if (filteredMemory.isEmpty()) {
             filteredMemory = searchMemory(prompt, null)
         }
@@ -848,10 +843,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         if (text.isBlank()) return
 
         _chatHistory.value = _chatHistory.value + ChatMessage("user", text)
-
         triggerBackgroundDialogueCompression(_chatHistory.value)
 
         val lowerText = text.lowercase()
+
         when {
             lowerText.contains(REMEMBER_COMMAND) -> {
                 val cleanText = text.substringAfter(REMEMBER_COMMAND).trim()
@@ -1055,6 +1050,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private fun handleAlarmCommand(prompt: String) {
         val timePattern = Regex("(?:в|в\\s+|напомни\\s+в\\s+)(\\d{1,2}[:.]\\d{2})")
         val match = timePattern.find(prompt)
+
         if (match != null) {
             val timeStr = match.groupValues[1].replace(".", ":")
             val message = prompt.replace(Regex("(?:в\\s+|напомни\\s+в\\s+)\\d{1,2}[:.]\\d{2}\\s*"), "").trim()
@@ -1107,7 +1103,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             val intent = Intent(getApplication(), AlarmReceiver::class.java).apply {
                 putExtra("message", message)
             }
-
             val pendingIntent = PendingIntent.getBroadcast(
                 getApplication(),
                 System.currentTimeMillis().toInt(),
