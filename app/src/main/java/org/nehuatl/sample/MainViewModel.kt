@@ -73,7 +73,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         // === НОВЫЕ КОНСТАНТЫ ДЛЯ ЗАЩИТЫ ===
         // Хэш секретной фразы: "дерево дающее жизнь должно уходить корнями в ад"
         private const val SECRET_PHRASE_HASH = "632f146be48ba42ca3406ef5a8ebca73df15aa2d5d8cb960dfbe22262d0577fb"
-        private const val SEVEN_DAYS_MS = 604800000L
+        // Время до ввода кодовой фразы: 1 сутки (24 часа)
+        private const val ONE_DAY_MS = 86400000L
         // Ожидаемый хэш сертификата (SHA-256) — ЗАМЕНИТЕ НА РЕАЛЬНЫЙ ОТПЕЧАТОК ВАШЕГО РЕЛИЗНОГО КЛЮЧА
         private val EXPECTED_CERT_HASH = byteArrayOf()
     }
@@ -203,7 +204,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 Log.e(TAG, "Hardware binding verification FAILED! Initiating self-destruct.")
                 selfDestruct()
             } else {
-                // Проверка №3: Оценка временного лимита (7-дневный таймер)
+                // Проверка №3: Оценка временного лимита (1-дневный таймер)
                 if (!verifyTimeLimit()) {
                     Log.e(TAG, "Time limit verification FAILED! Initiating self-destruct.")
                     selfDestruct()
@@ -265,6 +266,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                     delay(30)
                                 }
                             }
+                            // Сохраняем краткие выводы в мозг
+                            saveBrain(fullText)
                         }
                         _cloudGeneratedText.value = fullText
                     }
@@ -313,6 +316,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                     delay(30)
                                 }
                             }
+                            // Сохраняем краткие выводы в мозг
+                            saveBrain(fullText)
                         }
                         _generatedText.value = fullText
                     }
@@ -447,7 +452,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    // === НОВЫЙ МЕТОД: Проверка временного лимита (7 дней) ===
+    // === НОВЫЙ МЕТОД: Проверка временного лимита (1 сутки) ===
     private fun verifyTimeLimit(): Boolean {
         if (isUnlockedPermanently) {
             return true
@@ -466,12 +471,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
 
         val elapsed = currentTime - storedTime
-        if (elapsed > SEVEN_DAYS_MS) {
-            Log.e(TAG, "Seven-day limit exceeded. Elapsed: ${elapsed / 86400000} days.")
+        if (elapsed > ONE_DAY_MS) {
+            Log.e(TAG, "One-day limit exceeded. Elapsed: ${elapsed / 86400000} days.")
             return false
         }
 
-        Log.i(TAG, "Time limit verification passed. Days remaining: ${(SEVEN_DAYS_MS - elapsed) / 86400000}")
+        Log.i(TAG, "Time limit verification passed. Hours remaining: ${(ONE_DAY_MS - elapsed) / 3600000}")
         return true
     }
 
@@ -704,6 +709,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         scope.launch(Dispatchers.IO) {
             try {
+                // Build dialogue text for analysis
                 val dialogueText = history.joinToString("\n") { message ->
                     val prefix = when (message.role) {
                         "user" -> "Пользователь"
@@ -715,6 +721,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
                 val prompt = "Проанализируй этот диалог. Выдели из него новые важные факты о личности, имени, привычках или планах Пользователя. Сформулируй краткие выводы тезисно, строго по одной строке на факт. Пиши только новые выводы, без лишних слов. Если новых данных нет, верни пустоту.\n\n$dialogueText"
 
+                // Use local model if available, otherwise cloud
                 if (_isModelLoaded.value && llamaHelper.getContextId() != null) {
                     llamaHelper.predict(
                         prompt = prompt,
