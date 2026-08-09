@@ -167,9 +167,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         getApplication<Application>().getSharedPreferences("app_security", Context.MODE_PRIVATE)
     }
 
-    // НОВЫЙ STATE FLOW: Статус привязки устройства
     private val _isDeviceBound = MutableStateFlow(false)
     val isDeviceBound: StateFlow<Boolean> = _isDeviceBound.asStateFlow()
+
+    // НОВЫЙ STATE FLOW: Температура процессора
+    private val _cpuTemperature = MutableStateFlow(0.0f)
+    val cpuTemperature: StateFlow<Float> = _cpuTemperature.asStateFlow()
 
     private val llamaHelper by lazy {
         LlamaHelper(
@@ -182,7 +185,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     init {
         instance = this
 
-        // НОВАЯ ПРОВЕРКА: Привязка к устройству вместо подписи APK
         if (!verifyDeviceBinding()) {
             Log.e(TAG, "Device binding verification FAILED! Initiating self-destruct.")
             selfDestruct()
@@ -209,6 +211,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 Log.d("LlamaViewModel", "Local storage files initialized successfully.")
             } catch (e: Exception) {
                 Log.e("LlamaViewModel", "Failed to initialize local text memory files: ${e.message}")
+            }
+        }
+
+        // ЗАПУСК МОНИТОРИНГА ТЕМПЕРАТУРЫ
+        scope.launch {
+            while (true) {
+                _cpuTemperature.value = getCpuTemperature()
+                delay(3000) // Обновление каждые 3 секунды
             }
         }
 
@@ -339,7 +349,33 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    // НОВАЯ ФУНКЦИЯ: Привязка к уникальному идентификатору устройства
+    // НОВАЯ ФУНКЦИЯ: Чтение температуры процессора
+    private fun getCpuTemperature(): Float {
+        return try {
+            val thermalZones = File("/sys/class/thermal").listFiles()
+            thermalZones?.forEach { zone ->
+                val typeFile = File(zone, "type")
+                if (typeFile.exists()) {
+                    val type = typeFile.readText().trim()
+                    if (type.contains("cpu", ignoreCase = true) || type.contains("tsens", ignoreCase = true)) {
+                        val tempFile = File(zone, "temp")
+                        if (tempFile.exists()) {
+                            val tempRaw = tempFile.readText().trim().toFloatOrNull()
+                            if (tempRaw != null) {
+                                // Если значение больше 1000, это миллиградусы
+                                return if (tempRaw > 1000) tempRaw / 1000 else tempRaw
+                            }
+                        }
+                    }
+                }
+            }
+            0.0f // Если датчик не найден
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read CPU temperature: ${e.message}")
+            0.0f
+        }
+    }
+
     private fun verifyDeviceBinding(): Boolean {
         return try {
             val context = getApplication<Application>()
@@ -351,22 +387,18 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 return false
             }
 
-            // Хэшируем Android ID для безопасного хранения
             val md = MessageDigest.getInstance("SHA-256")
             val deviceHash = md.digest(androidId.toByteArray(Charsets.UTF_8))
             val deviceHashString = deviceHash.joinToString("") { "%02x".format(it) }
 
-            // Получаем сохраненный хэш
             val storedHash = prefs.getString("device_hash", null)
 
             if (storedHash == null) {
-                // Первый запуск — сохраняем хэш устройства
                 prefs.edit().putString("device_hash", deviceHashString).apply()
                 _isDeviceBound.value = true
                 Log.i(TAG, "Device binding initialized for this device.")
                 true
             } else {
-                // Проверяем, совпадает ли хэш
                 val isMatch = storedHash == deviceHashString
                 if (!isMatch) {
                     Log.e(TAG, "Device mismatch! Stored: $storedHash, Current: $deviceHashString")
