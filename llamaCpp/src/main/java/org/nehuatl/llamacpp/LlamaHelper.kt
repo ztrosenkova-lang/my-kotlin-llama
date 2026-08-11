@@ -27,28 +27,58 @@ class LlamaHelper(
 
     // Определение формата модели по имени файла
     private enum class ModelFormat {
-        LLAMA2, LLAMA3, MISTRAL, ZEPHYR, GEMMA, PHI, QWEN,
-        DEEPSEEK, YI, COMMAND_R, CHATML, VICUNA, ALPACA, FALCON, MP, NEUTRAL
+        LLAMA2,      // Llama 2 Chat
+        LLAMA3,      // Llama 3 Instruct
+        MISTRAL,     // Mistral Instruct
+        ZEPHYR,      // Zephyr (Mistral-based)
+        GEMMA,       // Gemma / Gemma 2 / Gemma 3
+        PHI,         // Phi-2 / Phi-3
+        QWEN,        // Qwen / Qwen2
+        DEEPSEEK,    // DeepSeek / DeepSeek Coder
+        YI,          // Yi Chat
+        COMMAND_R,   // Cohere Command-R
+        CHATML,      // ChatML (Orca, OpenChat, Nous Hermes, Dolphin)
+        VICUNA,      // Vicuna
+        ALPACA,      // Alpaca
+        FALCON,      // Falcon Instruct
+        MP,          // MPT Chat
+        NEUTRAL      // Универсальный формат
     }
 
     private fun detectModelFormat(modelPath: String): ModelFormat {
         val lowerPath = modelPath.lowercase()
         return when {
+            // Llama 3 / Llama 3.1 / Llama 3.2
             lowerPath.contains("llama-3") || lowerPath.contains("llama3") -> ModelFormat.LLAMA3
+            // Llama 2
             lowerPath.contains("llama-2") || lowerPath.contains("llama2") -> ModelFormat.LLAMA2
+            // Mistral / Mixtral
             lowerPath.contains("mistral") || lowerPath.contains("mixtral") -> ModelFormat.MISTRAL
+            // Zephyr (основан на Mistral)
             lowerPath.contains("zephyr") -> ModelFormat.ZEPHYR
+            // Gemma (все версии)
             lowerPath.contains("gemma") -> ModelFormat.GEMMA
+            // Phi-2 / Phi-3
             lowerPath.contains("phi-2") || lowerPath.contains("phi-3") || lowerPath.contains("phi2") || lowerPath.contains("phi3") -> ModelFormat.PHI
+            // Qwen / Qwen2
             lowerPath.contains("qwen") -> ModelFormat.QWEN
+            // DeepSeek
             lowerPath.contains("deepseek") -> ModelFormat.DEEPSEEK
+            // Yi
             lowerPath.contains("yi-") || lowerPath.contains("yi ") -> ModelFormat.YI
+            // Command-R / Command-R+
             lowerPath.contains("command-r") || lowerPath.contains("c4ai") -> ModelFormat.COMMAND_R
+            // ChatML (Orca, OpenChat, Nous Hermes, Dolphin)
             lowerPath.contains("orca") || lowerPath.contains("openchat") || lowerPath.contains("nous") || lowerPath.contains("hermes") || lowerPath.contains("dolphin") -> ModelFormat.CHATML
+            // Vicuna
             lowerPath.contains("vicuna") -> ModelFormat.VICUNA
+            // Alpaca
             lowerPath.contains("alpaca") -> ModelFormat.ALPACA
+            // Falcon
             lowerPath.contains("falcon") -> ModelFormat.FALCON
+            // MPT
             lowerPath.contains("mpt") -> ModelFormat.MP
+            // Универсальный формат
             else -> ModelFormat.NEUTRAL
         }
     }
@@ -62,6 +92,7 @@ class LlamaHelper(
         currentContext?.let { id -> llama.releaseContext(id) }
         
         try {
+            // Автоопределение формата модели
             currentModelFormat = detectModelFormat(path)
             Log.d("LlamaHelper", ">>> Detected model format: $currentModelFormat for path: $path")
 
@@ -96,15 +127,15 @@ class LlamaHelper(
                 "rope_freq_scale" to 0.0
             )
 
-            // Загрузка проектора — передаём URI строкой, а не файловый дескриптор
+            // Загрузка проектора — передаём URI строкой для LlamaContext
             mmprojPath?.let {
                 val mmUri = Uri.parse(it)
                 Log.d("LlamaHelper", ">>> Opening mmproj FD for URI: $mmUri")
                 val mmPfd = contentResolver.openFileDescriptor(mmUri, "r")
                 if (mmPfd != null) {
                     val mmFd = mmPfd.detachFd()
-                    config["mmproj"] = it  // URI проектора строкой
-                    config["mmproj_fd"] = mmFd
+                    config["mmproj"] = it       // URI проектора строкой
+                    config["mmproj_fd"] = mmFd  // Файловый дескриптор
                     Log.d("LlamaHelper", ">>> Mmproj URI: $it, FD: $mmFd")
                 }
             }
@@ -146,11 +177,14 @@ class LlamaHelper(
         tokenCount = 0
         allText = ""
 
+        // Формируем промпт в зависимости от формата модели
         val fullPrompt = buildPrompt(prompt, systemPrompt)
         
         Log.d("LlamaHelper", "=== predict: modelFormat = $currentModelFormat")
         Log.d("LlamaHelper", "=== predict: fullPrompt length = ${fullPrompt.length}")
+        Log.d("LlamaHelper", "=== predict: fullPrompt первые 300 символов = ${fullPrompt.take(300)}")
 
+        // Стоп-слова в зависимости от формата модели
         val stopWords = getStopWords()
         
         val params = mutableMapOf<String, Any>(
@@ -163,7 +197,7 @@ class LlamaHelper(
             "stop" to stopWords
         )
         
-        // Передаём изображение как путь к файлу, а не как FD
+        // Передаём изображение как путь к файлу (LlamaContext ожидает строку)
         imagePath?.let {
             params["image"] = it
             Log.d("LlamaHelper", ">>> Image path added to params: $it")
@@ -177,6 +211,7 @@ class LlamaHelper(
             )
             val duration = System.currentTimeMillis() - startTime
             
+            // Очищаем ответ от маркеров форматирования
             val cleanedText = cleanResponse(allText)
             
             sharedFlow.tryEmit(LLMEvent.Done(cleanedText, tokenCount, duration))
