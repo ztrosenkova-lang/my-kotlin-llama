@@ -197,8 +197,17 @@ class LlamaHelper(
         )
         
         imagePath?.let {
-            params["image"] = it
-            Log.d("LlamaHelper", ">>> Image path added to params: $it")
+            try {
+                val imgUri = Uri.parse(it)
+                Log.d("LlamaHelper", ">>> Opening image FD for URI: $imgUri")
+                contentResolver.openFileDescriptor(imgUri, "r")?.use { pfd ->
+                    val imgFd = pfd.detachFd()
+                    params["image_fds"] = listOf(imgFd)
+                    Log.d("LlamaHelper", ">>> Image FD added to params: $imgFd")
+                }
+            } catch (e: Exception) {
+                Log.e("LlamaHelper", "Failed to open image FD", e)
+            }
         }
 
         completionJob = scope.launch {
