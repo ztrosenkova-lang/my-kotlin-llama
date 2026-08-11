@@ -565,12 +565,10 @@ fun ChatScreen(
             prompt = promptInput,
             onPromptChange = { promptInput = it },
             onGenerate = {
-                if (promptInput.isNotBlank()) {
-                    keyboardController?.hide()
-                    viewModel.sendUserMessage(promptInput)
-                    promptInput = ""
-                    onImageUsed()
-                }
+                keyboardController?.hide()
+                viewModel.sendUserMessage(promptInput)
+                promptInput = ""
+                onImageUsed()
             },
             onAbort = {
                 keyboardController?.hide()
@@ -1824,13 +1822,13 @@ private fun PromptInput(
                             // Кнопка отправки сообщения
                             IconButton(
                                 onClick = onGenerate,
-                                enabled = enabled && prompt.isNotBlank(),
+                                enabled = enabled,
                                 modifier = Modifier.size(41.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.ArrowUpward,
                                     contentDescription = "Отправить",
-                                    tint = if (enabled && prompt.isNotBlank()) AccentColor else DarkText.copy(alpha = 0.4f)
+                                    tint = if (enabled) AccentColor else DarkText.copy(alpha = 0.4f)
                                 )
                             }
                         }
