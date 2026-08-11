@@ -242,8 +242,8 @@ Java_org_nehuatl_llamacpp_LlamaContext_initContextWithFd(
     }
     close(model_fd);
 
-    char fdString[32];
-    snprintf(fdString, 32, "%d", dupfd);
+    char fdString[64];
+    snprintf(fdString, 64, "/proc/self/fd/%d", dupfd);
     defaultParams.model.path = fdString;
 
     defaultParams.embedding = embedding;
@@ -267,10 +267,10 @@ Java_org_nehuatl_llamacpp_LlamaContext_initContextWithFd(
     if (mmproj_fd >= 0) {
         int dup_mmproj_fd = dup(mmproj_fd);
         if (dup_mmproj_fd != -1) {
-            char mmproj_path[32];
-            snprintf(mmproj_path, 32, "%d", dup_mmproj_fd);
+            char mmproj_path[64];
+            snprintf(mmproj_path, 64, "/proc/self/fd/%d", dup_mmproj_fd);
             defaultParams.mmproj.path = mmproj_path;
-            LOGI("mmproj set to FD: %s", defaultParams.mmproj.path.c_str());
+            LOGI("mmproj set to path: %s", defaultParams.mmproj.path.c_str());
         }
         close(mmproj_fd);
     }
@@ -458,8 +458,8 @@ Java_org_nehuatl_llamacpp_LlamaContext_doCompletion(
         for (jsize i = 0; i < len; i++) {
             int dup_img_fd = dup(fds[i]);
             if (dup_img_fd != -1) {
-                char img_path[32];
-                snprintf(img_path, 32, "%d", dup_img_fd);
+                char img_path[64];
+                snprintf(img_path, 64, "/proc/self/fd/%d", dup_img_fd);
                 images.push_back(img_path);
             }
             close(fds[i]);
