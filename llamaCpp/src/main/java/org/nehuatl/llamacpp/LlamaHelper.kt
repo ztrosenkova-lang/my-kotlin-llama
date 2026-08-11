@@ -21,8 +21,67 @@ class LlamaHelper(
     private var currentContext: Int? = null
     private var tokenCount = 0
     private var allText = ""
+    private var currentModelFormat: ModelFormat = ModelFormat.LLAMA2
 
     fun getContextId(): Int? = currentContext
+
+    // Определение формата модели по имени файла
+    private enum class ModelFormat {
+        LLAMA2,      // Llama 2 Chat
+        LLAMA3,      // Llama 3 Instruct
+        MISTRAL,     // Mistral Instruct
+        GEMMA,       // Gemma / Gemma 2 / Gemma 3
+        PHI,         // Phi-2 / Phi-3
+        QWEN,        // Qwen / Qwen2
+        DEEPSEEK,    // DeepSeek / DeepSeek Coder
+        YI,          // Yi Chat
+        COMMAND_R,   // Cohere Command-R
+        CHATML,      // ChatML формат (Orca, OpenChat, Nous Hermes)
+        ZEPHYR,      // Zephyr (Mistral-based)
+        VICUNA,      // Vicuna
+        ALPACA,      // Alpaca
+        FALCON,      // Falcon Instruct
+        MP,         // MPT Chat
+        NEUTRAL      // Универсальный формат без специальных токенов
+    }
+
+    private fun detectModelFormat(modelPath: String): ModelFormat {
+        val lowerPath = modelPath.lowercase()
+        return when {
+            // Llama 3 / Llama 3.1 / Llama 3.2
+            lowerPath.contains("llama-3") || lowerPath.contains("llama3") -> ModelFormat.LLAMA3
+            // Llama 2
+            lowerPath.contains("llama-2") || lowerPath.contains("llama2") -> ModelFormat.LLAMA2
+            // Mistral / Mixtral
+            lowerPath.contains("mistral") || lowerPath.contains("mixtral") -> ModelFormat.MISTRAL
+            // Zephyr (основан на Mistral)
+            lowerPath.contains("zephyr") -> ModelFormat.ZEPHYR
+            // Gemma (все версии)
+            lowerPath.contains("gemma") -> ModelFormat.GEMMA
+            // Phi-2 / Phi-3
+            lowerPath.contains("phi-2") || lowerPath.contains("phi-3") || lowerPath.contains("phi2") || lowerPath.contains("phi3") -> ModelFormat.PHI
+            // Qwen / Qwen2
+            lowerPath.contains("qwen") -> ModelFormat.QWEN
+            // DeepSeek
+            lowerPath.contains("deepseek") -> ModelFormat.DEEPSEEK
+            // Yi
+            lowerPath.contains("yi-") || lowerPath.contains("yi ") -> ModelFormat.YI
+            // Command-R / Command-R+
+            lowerPath.contains("command-r") || lowerPath.contains("c4ai") -> ModelFormat.COMMAND_R
+            // ChatML (Orca, OpenChat, Nous Hermes, Dolphin)
+            lowerPath.contains("orca") || lowerPath.contains("openchat") || lowerPath.contains("nous") || lowerPath.contains("hermes") || lowerPath.contains("dolphin") -> ModelFormat.CHATML
+            // Vicuna
+            lowerPath.contains("vicuna") -> ModelFormat.VICUNA
+            // Alpaca
+            lowerPath.contains("alpaca") -> ModelFormat.ALPACA
+            // Falcon
+            lowerPath.contains("falcon") -> ModelFormat.FALCON
+            // MPT
+            lowerPath.contains("mpt") -> ModelFormat.MP
+            // Универсальный формат
+            else -> ModelFormat.NEUTRAL
+        }
+    }
 
     fun load(
         path: String,
@@ -33,6 +92,10 @@ class LlamaHelper(
         currentContext?.let { id -> llama.releaseContext(id) }
         
         try {
+            // Автоопределение формата модели
+            currentModelFormat = detectModelFormat(path)
+            Log.d("LlamaHelper", ">>> Detected model format: $currentModelFormat for path: $path")
+
             val modelUri = Uri.parse(path)
             Log.d("LlamaHelper", ">>> Opening model FD for URI: $modelUri")
             
@@ -112,16 +175,15 @@ class LlamaHelper(
         tokenCount = 0
         allText = ""
 
-        // Формируем полный промпт в формате Llama 2 Chat
-        // Системный промпт уже содержит историю чата и данные памяти из MainViewModel
-        val fullPrompt = if (!systemPrompt.isNullOrEmpty()) {
-            "[INST] <<SYS>>\n$systemPrompt\n<</SYS>>\n\n$prompt [/INST]"
-        } else {
-            prompt
-        }
+        // Формируем промпт в зависимости от формата модели
+        val fullPrompt = buildPrompt(prompt, systemPrompt)
         
+        Log.d("LlamaHelper", "=== predict: modelFormat = $currentModelFormat")
         Log.d("LlamaHelper", "=== predict: fullPrompt length = ${fullPrompt.length}")
         Log.d("LlamaHelper", "=== predict: fullPrompt первые 300 символов = ${fullPrompt.take(300)}")
+
+        // Стоп-слова в зависимости от формата модели
+        val stopWords = getStopWords()
         
         val params = mutableMapOf<String, Any>(
             "prompt" to fullPrompt,
@@ -130,12 +192,7 @@ class LlamaHelper(
             "n_predict" to maxTokens,
             "top_k" to 40,
             "top_p" to 0.95,
-            "stop" to listOf(
-                "</s>",
-                "<|endoftext|>",
-                "<|eot_id|>",
-                "<|im_end|>"
-            )
+            "stop" to stopWords
         )
         
         imagePath?.let {
@@ -160,15 +217,181 @@ class LlamaHelper(
             )
             val duration = System.currentTimeMillis() - startTime
             
-            // Очищаем ответ от маркеров форматирования Llama 2
-            val cleanedText = allText
-                .replace(Regex("\\[/?INST\\]"), "")
-                .replace(Regex("<<SYS>>"), "")
-                .replace(Regex("<</SYS>>"), "")
-                .trim()
+            // Очищаем ответ от маркеров форматирования
+            val cleanedText = cleanResponse(allText)
             
             sharedFlow.tryEmit(LLMEvent.Done(cleanedText, tokenCount, duration))
         }
+    }
+
+    private fun buildPrompt(prompt: String, systemPrompt: String?): String {
+        return when (currentModelFormat) {
+            ModelFormat.LLAMA2 -> {
+                if (!systemPrompt.isNullOrEmpty()) {
+                    "[INST] <<SYS>>\n$systemPrompt\n<</SYS>>\n\n$prompt [/INST]"
+                } else {
+                    "[INST] $prompt [/INST]"
+                }
+            }
+            ModelFormat.LLAMA3 -> {
+                if (!systemPrompt.isNullOrEmpty()) {
+                    "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n$systemPrompt<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n$prompt<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+                } else {
+                    "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n$prompt<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+                }
+            }
+            ModelFormat.MISTRAL -> {
+                if (!systemPrompt.isNullOrEmpty()) {
+                    "<s>[INST] $systemPrompt [/INST]</s>\n[INST] $prompt [/INST]"
+                } else {
+                    "<s>[INST] $prompt [/INST]"
+                }
+            }
+            ModelFormat.ZEPHYR -> {
+                if (!systemPrompt.isNullOrEmpty()) {
+                    "<|system|>\n$systemPrompt</s>\n<|user|>\n$prompt</s>\n<|assistant|>\n"
+                } else {
+                    "<|user|>\n$prompt</s>\n<|assistant|>\n"
+                }
+            }
+            ModelFormat.GEMMA -> {
+                if (!systemPrompt.isNullOrEmpty()) {
+                    "<bos><start_of_turn>user\n$systemPrompt\n\n$prompt<end_of_turn>\n<start_of_turn>model\n"
+                } else {
+                    "<bos><start_of_turn>user\n$prompt<end_of_turn>\n<start_of_turn>model\n"
+                }
+            }
+            ModelFormat.PHI -> {
+                if (!systemPrompt.isNullOrEmpty()) {
+                    "<|system|>\n$systemPrompt<|end|>\n<|user|>\n$prompt<|end|>\n<|assistant|>\n"
+                } else {
+                    "<|user|>\n$prompt<|end|>\n<|assistant|>\n"
+                }
+            }
+            ModelFormat.QWEN -> {
+                if (!systemPrompt.isNullOrEmpty()) {
+                    "<|im_start|>system\n$systemPrompt<|im_end|>\n<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
+                } else {
+                    "<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
+                }
+            }
+            ModelFormat.DEEPSEEK -> {
+                if (!systemPrompt.isNullOrEmpty()) {
+                    "<|begin_of_sentence|>System: $systemPrompt\n\nUser: $prompt\n\nAssistant:"
+                } else {
+                    "<|begin_of_sentence|>User: $prompt\n\nAssistant:"
+                }
+            }
+            ModelFormat.YI -> {
+                if (!systemPrompt.isNullOrEmpty()) {
+                    "<|im_start|>system\n$systemPrompt<|im_end|>\n<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
+                } else {
+                    "<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
+                }
+            }
+            ModelFormat.COMMAND_R -> {
+                if (!systemPrompt.isNullOrEmpty()) {
+                    "<BOS_TOKEN><|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|>$systemPrompt<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|USER_TOKEN|>$prompt<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>"
+                } else {
+                    "<BOS_TOKEN><|START_OF_TURN_TOKEN|><|USER_TOKEN|>$prompt<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>"
+                }
+            }
+            ModelFormat.CHATML -> {
+                if (!systemPrompt.isNullOrEmpty()) {
+                    "<|im_start|>system\n$systemPrompt<|im_end|>\n<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
+                } else {
+                    "<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
+                }
+            }
+            ModelFormat.VICUNA -> {
+                if (!systemPrompt.isNullOrEmpty()) {
+                    "SYSTEM: $systemPrompt\nUSER: $prompt\nASSISTANT:"
+                } else {
+                    "USER: $prompt\nASSISTANT:"
+                }
+            }
+            ModelFormat.ALPACA -> {
+                if (!systemPrompt.isNullOrEmpty()) {
+                    "### System:\n$systemPrompt\n\n### User:\n$prompt\n\n### Assistant:\n"
+                } else {
+                    "### User:\n$prompt\n\n### Assistant:\n"
+                }
+            }
+            ModelFormat.FALCON -> {
+                if (!systemPrompt.isNullOrEmpty()) {
+                    "System: $systemPrompt\nUser: $prompt\nFalcon:"
+                } else {
+                    "User: $prompt\nFalcon:"
+                }
+            }
+            ModelFormat.MP -> {
+                if (!systemPrompt.isNullOrEmpty()) {
+                    "<|im_start|>system\n$systemPrompt<|im_end|>\n<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
+                } else {
+                    "<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
+                }
+            }
+            ModelFormat.NEUTRAL -> {
+                if (!systemPrompt.isNullOrEmpty()) {
+                    "System: $systemPrompt\n\nUser: $prompt\n\nAssistant:"
+                } else {
+                    "User: $prompt\n\nAssistant:"
+                }
+            }
+        }
+    }
+
+    private fun getStopWords(): List<String> {
+        return when (currentModelFormat) {
+            ModelFormat.LLAMA2 -> listOf("</s>", "<|endoftext|>", "<|eot_id|>", "<|im_end|>")
+            ModelFormat.LLAMA3 -> listOf("<|eot_id|>", "<|end_of_text|>", "<|endoftext|>")
+            ModelFormat.MISTRAL -> listOf("</s>", "[INST]", "<|endoftext|>", "<|im_end|>")
+            ModelFormat.ZEPHYR -> listOf("</s>", "<|endoftext|>", "<|user|>")
+            ModelFormat.GEMMA -> listOf("<end_of_turn>", "<eos>", "<|endoftext|>", "<|im_end|>")
+            ModelFormat.PHI -> listOf("<|end|>", "<|endoftext|>", "<|im_end|>")
+            ModelFormat.QWEN -> listOf("<|im_end|>", "<|endoftext|>", "<|end|>")
+            ModelFormat.DEEPSEEK -> listOf("<|end_of_sentence|>", "<|endoftext|>", "User:")
+            ModelFormat.YI -> listOf("<|im_end|>", "<|endoftext|>")
+            ModelFormat.COMMAND_R -> listOf("<|END_OF_TURN_TOKEN|>", "<|endoftext|>")
+            ModelFormat.CHATML -> listOf("<|im_end|>", "<|endoftext|>")
+            ModelFormat.VICUNA -> listOf("USER:", "ASSISTANT:", "</s>", "<|endoftext|>")
+            ModelFormat.ALPACA -> listOf("### User:", "### Assistant:", "<|endoftext|>")
+            ModelFormat.FALCON -> listOf("User:", "Falcon:", "<|endoftext|>")
+            ModelFormat.MP -> listOf("<|im_end|>", "<|endoftext|>")
+            ModelFormat.NEUTRAL -> listOf("</s>", "<|endoftext|>", "<|im_end|>", "<|eot_id|>")
+        }
+    }
+
+    private fun cleanResponse(text: String): String {
+        return text
+            .replace(Regex("\\[/?INST\\]"), "")
+            .replace(Regex("</?s>"), "")
+            .replace(Regex("<<SYS>>"), "")
+            .replace(Regex("<</SYS>>"), "")
+            .replace(Regex("<\\|im_start\\|>.*?(?=\\n|$)"), "")
+            .replace(Regex("<\\|im_end\\|>"), "")
+            .replace(Regex("<\\|start_header_id\\|>.*?<\\|end_header_id\\|>"), "")
+            .replace(Regex("<\\|eot_id\\|>"), "")
+            .replace(Regex("<\\|begin_of_text\\|>"), "")
+            .replace(Regex("<\\|end_of_text\\|>"), "")
+            .replace(Regex("<start_of_turn>.*?<end_of_turn>"), "")
+            .replace(Regex("<bos>"), "")
+            .replace(Regex("<eos>"), "")
+            .replace(Regex("<\\|system\\|>"), "")
+            .replace(Regex("<\\|user\\|>"), "")
+            .replace(Regex("<\\|assistant\\|>"), "")
+            .replace(Regex("<\\|end\\|>"), "")
+            .replace(Regex("<BOS_TOKEN>"), "")
+            .replace(Regex("<\\|START_OF_TURN_TOKEN\\|>"), "")
+            .replace(Regex("<\\|SYSTEM_TOKEN\\|>"), "")
+            .replace(Regex("<\\|USER_TOKEN\\|>"), "")
+            .replace(Regex("<\\|CHATBOT_TOKEN\\|>"), "")
+            .replace(Regex("<\\|END_OF_TURN_TOKEN\\|>"), "")
+            .replace(Regex("<\\|begin_of_sentence\\|>"), "")
+            .replace(Regex("<\\|end_of_sentence\\|>"), "")
+            .replace(Regex("### (System|User|Assistant):\\s*"), "")
+            .replace(Regex("(SYSTEM|USER|ASSISTANT|System|User|Falcon):\\s*"), "")
+            .trim()
     }
 
     fun stopPrediction() {
