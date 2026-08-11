@@ -242,8 +242,8 @@ Java_org_nehuatl_llamacpp_LlamaContext_initContextWithFd(
     }
     close(model_fd);
 
-    char fdString[64];
-    snprintf(fdString, 64, "/proc/self/fd/%d", dupfd);
+    char fdString[32];
+    snprintf(fdString, 32, "%d", dupfd);
     defaultParams.model.path = fdString;
 
     defaultParams.embedding = embedding;
