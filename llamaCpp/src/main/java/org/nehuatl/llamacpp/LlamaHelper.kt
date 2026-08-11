@@ -127,16 +127,15 @@ class LlamaHelper(
                 "rope_freq_scale" to 0.0
             )
 
-            // Загрузка проектора — передаём URI строкой для LlamaContext
             mmprojPath?.let {
                 val mmUri = Uri.parse(it)
                 Log.d("LlamaHelper", ">>> Opening mmproj FD for URI: $mmUri")
                 val mmPfd = contentResolver.openFileDescriptor(mmUri, "r")
                 if (mmPfd != null) {
                     val mmFd = mmPfd.detachFd()
-                    config["mmproj"] = it       // URI проектора строкой
-                    config["mmproj_fd"] = mmFd  // Файловый дескриптор
-                    Log.d("LlamaHelper", ">>> Mmproj URI: $it, FD: $mmFd")
+                    config["mmproj"] = it
+                    config["mmproj_fd"] = mmFd
+                    Log.d("LlamaHelper", ">>> Mmproj FD: $mmFd")
                 }
             }
 
@@ -177,166 +176,117 @@ class LlamaHelper(
         tokenCount = 0
         allText = ""
 
-        // Формируем промпт в зависимости от формата модели
-        val fullPrompt = buildPrompt(prompt, systemPrompt)
+        // Формируем полный промпт в зависимости от формата модели
+        val fullPrompt = if (!systemPrompt.isNullOrEmpty()) {
+            when (currentModelFormat) {
+                ModelFormat.LLAMA2 -> {
+                    "[INST] <<SYS>>\n$systemPrompt\n<</SYS>>\n\n$prompt [/INST]"
+                }
+                ModelFormat.LLAMA3 -> {
+                    "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n$systemPrompt<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n$prompt<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+                }
+                ModelFormat.MISTRAL -> {
+                    "<s>[INST] $systemPrompt [/INST]</s>\n[INST] $prompt [/INST]"
+                }
+                ModelFormat.ZEPHYR -> {
+                    "<|system|>\n$systemPrompt</s>\n<|user|>\n$prompt</s>\n<|assistant|>\n"
+                }
+                ModelFormat.GEMMA -> {
+                    "<bos><start_of_turn>user\n$systemPrompt\n\n$prompt<end_of_turn>\n<start_of_turn>model\n"
+                }
+                ModelFormat.PHI -> {
+                    "<|system|>\n$systemPrompt<|end|>\n<|user|>\n$prompt<|end|>\n<|assistant|>\n"
+                }
+                ModelFormat.QWEN -> {
+                    "<|im_start|>system\n$systemPrompt<|im_end|>\n<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
+                }
+                ModelFormat.DEEPSEEK -> {
+                    "<|begin_of_sentence|>System: $systemPrompt\n\nUser: $prompt\n\nAssistant:"
+                }
+                ModelFormat.YI -> {
+                    "<|im_start|>system\n$systemPrompt<|im_end|>\n<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
+                }
+                ModelFormat.COMMAND_R -> {
+                    "<BOS_TOKEN><|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|>$systemPrompt<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|USER_TOKEN|>$prompt<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>"
+                }
+                ModelFormat.CHATML -> {
+                    "<|im_start|>system\n$systemPrompt<|im_end|>\n<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
+                }
+                ModelFormat.VICUNA -> {
+                    "SYSTEM: $systemPrompt\nUSER: $prompt\nASSISTANT:"
+                }
+                ModelFormat.ALPACA -> {
+                    "### System:\n$systemPrompt\n\n### User:\n$prompt\n\n### Assistant:\n"
+                }
+                ModelFormat.FALCON -> {
+                    "System: $systemPrompt\nUser: $prompt\nFalcon:"
+                }
+                ModelFormat.MP -> {
+                    "<|im_start|>system\n$systemPrompt<|im_end|>\n<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
+                }
+                ModelFormat.NEUTRAL -> {
+                    "System: $systemPrompt\n\nUser: $prompt\n\nAssistant:"
+                }
+            }
+        } else {
+            when (currentModelFormat) {
+                ModelFormat.LLAMA2 -> {
+                    "[INST] $prompt [/INST]"
+                }
+                ModelFormat.LLAMA3 -> {
+                    "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n$prompt<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+                }
+                ModelFormat.MISTRAL -> {
+                    "<s>[INST] $prompt [/INST]"
+                }
+                ModelFormat.ZEPHYR -> {
+                    "<|user|>\n$prompt</s>\n<|assistant|>\n"
+                }
+                ModelFormat.GEMMA -> {
+                    "<bos><start_of_turn>user\n$prompt<end_of_turn>\n<start_of_turn>model\n"
+                }
+                ModelFormat.PHI -> {
+                    "<|user|>\n$prompt<|end|>\n<|assistant|>\n"
+                }
+                ModelFormat.QWEN -> {
+                    "<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
+                }
+                ModelFormat.DEEPSEEK -> {
+                    "<|begin_of_sentence|>User: $prompt\n\nAssistant:"
+                }
+                ModelFormat.YI -> {
+                    "<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
+                }
+                ModelFormat.COMMAND_R -> {
+                    "<BOS_TOKEN><|START_OF_TURN_TOKEN|><|USER_TOKEN|>$prompt<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>"
+                }
+                ModelFormat.CHATML -> {
+                    "<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
+                }
+                ModelFormat.VICUNA -> {
+                    "USER: $prompt\nASSISTANT:"
+                }
+                ModelFormat.ALPACA -> {
+                    "### User:\n$prompt\n\n### Assistant:\n"
+                }
+                ModelFormat.FALCON -> {
+                    "User: $prompt\nFalcon:"
+                }
+                ModelFormat.MP -> {
+                    "<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
+                }
+                ModelFormat.NEUTRAL -> {
+                    "User: $prompt\n\nAssistant:"
+                }
+            }
+        }
         
         Log.d("LlamaHelper", "=== predict: modelFormat = $currentModelFormat")
         Log.d("LlamaHelper", "=== predict: fullPrompt length = ${fullPrompt.length}")
         Log.d("LlamaHelper", "=== predict: fullPrompt первые 300 символов = ${fullPrompt.take(300)}")
 
         // Стоп-слова в зависимости от формата модели
-        val stopWords = getStopWords()
-        
-        val params = mutableMapOf<String, Any>(
-            "prompt" to fullPrompt,
-            "emit_partial_completion" to true,
-            "temperature" to 0.7,
-            "n_predict" to maxTokens,
-            "top_k" to 40,
-            "top_p" to 0.95,
-            "stop" to stopWords
-        )
-        
-        // Передаём изображение как путь к файлу (LlamaContext ожидает строку)
-        imagePath?.let {
-            params["image"] = it
-            Log.d("LlamaHelper", ">>> Image path added to params: $it")
-        }
-
-        completionJob = scope.launch {
-            sharedFlow.tryEmit(LLMEvent.Started(prompt))
-            llama.launchCompletion(
-                id = context,
-                params = params
-            )
-            val duration = System.currentTimeMillis() - startTime
-            
-            // Очищаем ответ от маркеров форматирования
-            val cleanedText = cleanResponse(allText)
-            
-            sharedFlow.tryEmit(LLMEvent.Done(cleanedText, tokenCount, duration))
-        }
-    }
-
-    private fun buildPrompt(prompt: String, systemPrompt: String?): String {
-        return when (currentModelFormat) {
-            ModelFormat.LLAMA2 -> {
-                if (!systemPrompt.isNullOrEmpty()) {
-                    "[INST] <<SYS>>\n$systemPrompt\n<</SYS>>\n\n$prompt [/INST]"
-                } else {
-                    "[INST] $prompt [/INST]"
-                }
-            }
-            ModelFormat.LLAMA3 -> {
-                if (!systemPrompt.isNullOrEmpty()) {
-                    "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n$systemPrompt<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n$prompt<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
-                } else {
-                    "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n$prompt<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
-                }
-            }
-            ModelFormat.MISTRAL -> {
-                if (!systemPrompt.isNullOrEmpty()) {
-                    "<s>[INST] $systemPrompt [/INST]</s>\n[INST] $prompt [/INST]"
-                } else {
-                    "<s>[INST] $prompt [/INST]"
-                }
-            }
-            ModelFormat.ZEPHYR -> {
-                if (!systemPrompt.isNullOrEmpty()) {
-                    "<|system|>\n$systemPrompt</s>\n<|user|>\n$prompt</s>\n<|assistant|>\n"
-                } else {
-                    "<|user|>\n$prompt</s>\n<|assistant|>\n"
-                }
-            }
-            ModelFormat.GEMMA -> {
-                if (!systemPrompt.isNullOrEmpty()) {
-                    "<bos><start_of_turn>user\n$systemPrompt\n\n$prompt<end_of_turn>\n<start_of_turn>model\n"
-                } else {
-                    "<bos><start_of_turn>user\n$prompt<end_of_turn>\n<start_of_turn>model\n"
-                }
-            }
-            ModelFormat.PHI -> {
-                if (!systemPrompt.isNullOrEmpty()) {
-                    "<|system|>\n$systemPrompt<|end|>\n<|user|>\n$prompt<|end|>\n<|assistant|>\n"
-                } else {
-                    "<|user|>\n$prompt<|end|>\n<|assistant|>\n"
-                }
-            }
-            ModelFormat.QWEN -> {
-                if (!systemPrompt.isNullOrEmpty()) {
-                    "<|im_start|>system\n$systemPrompt<|im_end|>\n<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
-                } else {
-                    "<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
-                }
-            }
-            ModelFormat.DEEPSEEK -> {
-                if (!systemPrompt.isNullOrEmpty()) {
-                    "<|begin_of_sentence|>System: $systemPrompt\n\nUser: $prompt\n\nAssistant:"
-                } else {
-                    "<|begin_of_sentence|>User: $prompt\n\nAssistant:"
-                }
-            }
-            ModelFormat.YI -> {
-                if (!systemPrompt.isNullOrEmpty()) {
-                    "<|im_start|>system\n$systemPrompt<|im_end|>\n<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
-                } else {
-                    "<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
-                }
-            }
-            ModelFormat.COMMAND_R -> {
-                if (!systemPrompt.isNullOrEmpty()) {
-                    "<BOS_TOKEN><|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|>$systemPrompt<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|USER_TOKEN|>$prompt<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>"
-                } else {
-                    "<BOS_TOKEN><|START_OF_TURN_TOKEN|><|USER_TOKEN|>$prompt<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>"
-                }
-            }
-            ModelFormat.CHATML -> {
-                if (!systemPrompt.isNullOrEmpty()) {
-                    "<|im_start|>system\n$systemPrompt<|im_end|>\n<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
-                } else {
-                    "<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
-                }
-            }
-            ModelFormat.VICUNA -> {
-                if (!systemPrompt.isNullOrEmpty()) {
-                    "SYSTEM: $systemPrompt\nUSER: $prompt\nASSISTANT:"
-                } else {
-                    "USER: $prompt\nASSISTANT:"
-                }
-            }
-            ModelFormat.ALPACA -> {
-                if (!systemPrompt.isNullOrEmpty()) {
-                    "### System:\n$systemPrompt\n\n### User:\n$prompt\n\n### Assistant:\n"
-                } else {
-                    "### User:\n$prompt\n\n### Assistant:\n"
-                }
-            }
-            ModelFormat.FALCON -> {
-                if (!systemPrompt.isNullOrEmpty()) {
-                    "System: $systemPrompt\nUser: $prompt\nFalcon:"
-                } else {
-                    "User: $prompt\nFalcon:"
-                }
-            }
-            ModelFormat.MP -> {
-                if (!systemPrompt.isNullOrEmpty()) {
-                    "<|im_start|>system\n$systemPrompt<|im_end|>\n<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
-                } else {
-                    "<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
-                }
-            }
-            ModelFormat.NEUTRAL -> {
-                if (!systemPrompt.isNullOrEmpty()) {
-                    "System: $systemPrompt\n\nUser: $prompt\n\nAssistant:"
-                } else {
-                    "User: $prompt\n\nAssistant:"
-                }
-            }
-        }
-    }
-
-    private fun getStopWords(): List<String> {
-        return when (currentModelFormat) {
+        val stopWords = when (currentModelFormat) {
             ModelFormat.LLAMA2 -> listOf("</s>", "<|endoftext|>", "<|eot_id|>", "<|im_end|>")
             ModelFormat.LLAMA3 -> listOf("<|eot_id|>", "<|end_of_text|>", "<|endoftext|>")
             ModelFormat.MISTRAL -> listOf("</s>", "[INST]", "<|endoftext|>", "<|im_end|>")
@@ -354,38 +304,63 @@ class LlamaHelper(
             ModelFormat.MP -> listOf("<|im_end|>", "<|endoftext|>")
             ModelFormat.NEUTRAL -> listOf("</s>", "<|endoftext|>", "<|im_end|>", "<|eot_id|>")
         }
-    }
+        
+        val params = mutableMapOf<String, Any>(
+            "prompt" to fullPrompt,
+            "emit_partial_completion" to true,
+            "temperature" to 0.7,
+            "n_predict" to maxTokens,
+            "top_k" to 40,
+            "top_p" to 0.95,
+            "stop" to stopWords
+        )
+        
+        imagePath?.let {
+            params["image"] = it
+            Log.d("LlamaHelper", ">>> Image path added to params: $it")
+        }
 
-    private fun cleanResponse(text: String): String {
-        return text
-            .replace(Regex("\\[/?INST\\]"), "")
-            .replace(Regex("</?s>"), "")
-            .replace(Regex("<<SYS>>"), "")
-            .replace(Regex("<</SYS>>"), "")
-            .replace(Regex("<\\|im_start\\|>.*?(?=\\n|$)"), "")
-            .replace(Regex("<\\|im_end\\|>"), "")
-            .replace(Regex("<\\|start_header_id\\|>.*?<\\|end_header_id\\|>"), "")
-            .replace(Regex("<\\|eot_id\\|>"), "")
-            .replace(Regex("<\\|begin_of_text\\|>"), "")
-            .replace(Regex("<\\|end_of_text\\|>"), "")
-            .replace(Regex("<start_of_turn>.*?<end_of_turn>"), "")
-            .replace(Regex("<bos>"), "")
-            .replace(Regex("<eos>"), "")
-            .replace(Regex("<\\|system\\|>"), "")
-            .replace(Regex("<\\|user\\|>"), "")
-            .replace(Regex("<\\|assistant\\|>"), "")
-            .replace(Regex("<\\|end\\|>"), "")
-            .replace(Regex("<BOS_TOKEN>"), "")
-            .replace(Regex("<\\|START_OF_TURN_TOKEN\\|>"), "")
-            .replace(Regex("<\\|SYSTEM_TOKEN\\|>"), "")
-            .replace(Regex("<\\|USER_TOKEN\\|>"), "")
-            .replace(Regex("<\\|CHATBOT_TOKEN\\|>"), "")
-            .replace(Regex("<\\|END_OF_TURN_TOKEN\\|>"), "")
-            .replace(Regex("<\\|begin_of_sentence\\|>"), "")
-            .replace(Regex("<\\|end_of_sentence\\|>"), "")
-            .replace(Regex("### (System|User|Assistant):\\s*"), "")
-            .replace(Regex("(SYSTEM|USER|ASSISTANT|System|User|Falcon):\\s*"), "")
-            .trim()
+        completionJob = scope.launch {
+            sharedFlow.tryEmit(LLMEvent.Started(prompt))
+            llama.launchCompletion(
+                id = context,
+                params = params
+            )
+            val duration = System.currentTimeMillis() - startTime
+            
+            // Очищаем ответ от маркеров форматирования
+            val cleanedText = allText
+                .replace(Regex("\\[/?INST\\]"), "")
+                .replace(Regex("</?s>"), "")
+                .replace(Regex("<<SYS>>"), "")
+                .replace(Regex("<</SYS>>"), "")
+                .replace(Regex("<\\|im_start\\|>.*?(?=\\n|$)"), "")
+                .replace(Regex("<\\|im_end\\|>"), "")
+                .replace(Regex("<\\|start_header_id\\|>.*?<\\|end_header_id\\|>"), "")
+                .replace(Regex("<\\|eot_id\\|>"), "")
+                .replace(Regex("<\\|begin_of_text\\|>"), "")
+                .replace(Regex("<\\|end_of_text\\|>"), "")
+                .replace(Regex("<start_of_turn>.*?<end_of_turn>"), "")
+                .replace(Regex("<bos>"), "")
+                .replace(Regex("<eos>"), "")
+                .replace(Regex("<\\|system\\|>"), "")
+                .replace(Regex("<\\|user\\|>"), "")
+                .replace(Regex("<\\|assistant\\|>"), "")
+                .replace(Regex("<\\|end\\|>"), "")
+                .replace(Regex("<BOS_TOKEN>"), "")
+                .replace(Regex("<\\|START_OF_TURN_TOKEN\\|>"), "")
+                .replace(Regex("<\\|SYSTEM_TOKEN\\|>"), "")
+                .replace(Regex("<\\|USER_TOKEN\\|>"), "")
+                .replace(Regex("<\\|CHATBOT_TOKEN\\|>"), "")
+                .replace(Regex("<\\|END_OF_TURN_TOKEN\\|>"), "")
+                .replace(Regex("<\\|begin_of_sentence\\|>"), "")
+                .replace(Regex("<\\|end_of_sentence\\|>"), "")
+                .replace(Regex("### (System|User|Assistant):\\s*"), "")
+                .replace(Regex("(SYSTEM|USER|ASSISTANT|System|User|Falcon):\\s*"), "")
+                .trim()
+            
+            sharedFlow.tryEmit(LLMEvent.Done(cleanedText, tokenCount, duration))
+        }
     }
 
     fun stopPrediction() {
