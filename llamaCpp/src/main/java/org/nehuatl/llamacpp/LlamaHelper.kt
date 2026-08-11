@@ -112,13 +112,16 @@ class LlamaHelper(
         tokenCount = 0
         allText = ""
 
-        // Формируем полный промпт: системный промпт + вопрос
+        // Формируем полный промпт в формате Llama 2 Chat
+        // Системный промпт уже содержит историю чата и данные памяти из MainViewModel
         val fullPrompt = if (!systemPrompt.isNullOrEmpty()) {
-            // Системный промпт уже содержит всю историю и память
             "[INST] <<SYS>>\n$systemPrompt\n<</SYS>>\n\n$prompt [/INST]"
         } else {
             prompt
         }
+        
+        Log.d("LlamaHelper", "=== predict: fullPrompt length = ${fullPrompt.length}")
+        Log.d("LlamaHelper", "=== predict: fullPrompt первые 300 символов = ${fullPrompt.take(300)}")
         
         val params = mutableMapOf<String, Any>(
             "prompt" to fullPrompt,
@@ -129,14 +132,9 @@ class LlamaHelper(
             "top_p" to 0.95,
             "stop" to listOf(
                 "</s>",
-                "[INST]",
-                "[/INST]",
                 "<|endoftext|>",
                 "<|eot_id|>",
-                "<|im_end|>",
-                "###",
-                "User:",
-                "Assistant:"
+                "<|im_end|>"
             )
         )
         
@@ -162,11 +160,11 @@ class LlamaHelper(
             )
             val duration = System.currentTimeMillis() - startTime
             
-            // Очищаем ответ от маркеров [INST] и [/INST]
+            // Очищаем ответ от маркеров форматирования Llama 2
             val cleanedText = allText
-                .replace(Regex("\\[/?INST\\]"), "") // Убираем [INST] и [/INST]
-                .replace(Regex("<<SYS>>"), "")      // Убираем <<SYS>>
-                .replace(Regex("<</SYS>>"), "")     // Убираем <</SYS>>
+                .replace(Regex("\\[/?INST\\]"), "")
+                .replace(Regex("<<SYS>>"), "")
+                .replace(Regex("<</SYS>>"), "")
                 .trim()
             
             sharedFlow.tryEmit(LLMEvent.Done(cleanedText, tokenCount, duration))
