@@ -594,7 +594,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             _isTtsReady.value = true
                             isTtsEnabled = true
                             appendSystemMessage("🟢 Голосовой движок Android TTS успешно инициализирован.")
-                            val welcomeText = "Привет! Я твоя локальная языковая модель. Голосовой движок полностью готов к работе, чем я могу помочь?"
+                            val welcomeText = "Голосовой движок полностью готов к работе."
                             appendSystemMessage(welcomeText)
                             Log.d(TAG, "TTS initialized successfully with Russian language")
                         } else {
