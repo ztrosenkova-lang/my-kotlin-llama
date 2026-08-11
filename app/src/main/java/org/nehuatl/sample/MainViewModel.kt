@@ -684,9 +684,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     /**
-     * Фильтрация текста для озвучки: удаление Markdown-символов.
+     * Фильтрация текста для озвучки: оставляет буквы, цифры, пробелы и базовую пунктуацию.
      */
-        private fun filterTextForSpeech(text: String): String {
+    private fun filterTextForSpeech(text: String): String {
         // Оставляем: буквы (включая русские), цифры, пробелы, базовые знаки препинания (. , ! ?)
         val cleanText = text.replace(Regex("[^\\p{L}\\p{N}\\s.,!?]"), "")
         // Удаляем множественные подряд идущие пробелы (оставляем один)
@@ -1126,6 +1126,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
      * Генерация ответа через локальный ИИ.
      * Блокируется, если движок помечен как "мёртвый".
      * При поисковых командах передаёт полный контекст памяти в системном промпте.
+     * При отправке изображения без текста автоматически добавляет промпт для описания.
      */
     fun generateLocal(prompt: String, imagePath: String? = null) {
         val lowerPrompt = prompt.trim().lowercase()
@@ -1156,19 +1157,31 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             return
         }
 
-        val isSearchCommand = prompt.contains(FIND_COMMAND, ignoreCase = true) ||
-                prompt.contains(SEARCH_COMMAND, ignoreCase = true) ||
-                prompt.contains(RECALL_COMMAND, ignoreCase = true) ||
-                prompt.contains(CHAT_LOOKUP_COMMAND, ignoreCase = true)
+        // Авто-промпт для изображений: если фото без текста — просим описать
+        val effectivePrompt = if (imagePath != null && prompt.isBlank()) {
+            "Опиши подробно, что изображено на этой картинке. Опиши все объекты, людей, текст, цвета и обстановку."
+        } else {
+            prompt
+        }
 
-        val fullSystemPrompt = buildSystemPrompt(isSearchCommand, prompt)
+        // Поисковые команды — только для текстовых запросов, не для изображений
+        val isSearchCommand = if (imagePath != null) {
+            false
+        } else {
+            effectivePrompt.contains(FIND_COMMAND, ignoreCase = true) ||
+                    effectivePrompt.contains(SEARCH_COMMAND, ignoreCase = true) ||
+                    effectivePrompt.contains(RECALL_COMMAND, ignoreCase = true) ||
+                    effectivePrompt.contains(CHAT_LOOKUP_COMMAND, ignoreCase = true)
+        }
+
+        val fullSystemPrompt = buildSystemPrompt(isSearchCommand, effectivePrompt)
 
         _generatedText.value = ""
-        _state.value = GenerationState.Generating(prompt = prompt, tokensGenerated = 0)
+        _state.value = GenerationState.Generating(prompt = effectivePrompt, tokensGenerated = 0)
 
         scope.launch {
             try {
-                llamaHelper.predict(prompt, imagePath, fullSystemPrompt, maxTokens.value)
+                llamaHelper.predict(effectivePrompt, imagePath, fullSystemPrompt, maxTokens.value)
             } catch (e: Exception) {
                 _state.value = GenerationState.Error(e.message ?: "Unknown error")
                 _isModelLoaded.value = false
