@@ -686,8 +686,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     /**
      * Фильтрация текста для озвучки: удаление Markdown-символов.
      */
-    private fun filterTextForSpeech(text: String): String {
-        val cleanText = text.replace(Regex("[*#_~\\-`]"), "")
+        private fun filterTextForSpeech(text: String): String {
+        // Оставляем: буквы (включая русские), цифры, пробелы, базовые знаки препинания (. , ! ?)
+        val cleanText = text.replace(Regex("[^\\p{L}\\p{N}\\s.,!?]"), "")
+        // Удаляем множественные подряд идущие пробелы (оставляем один)
         return cleanText.replace(Regex("\\s+"), " ").trim()
     }
 
