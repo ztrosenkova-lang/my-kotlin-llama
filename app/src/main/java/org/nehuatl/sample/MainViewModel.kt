@@ -49,13 +49,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         private const val TAG = "MainViewModel"
         
         // Команды для работы с памятью
-        private const val REMEMBER_COMMAND = "запомни"
-        private const val FIND_COMMAND = "найди"
-        private const val SEARCH_COMMAND = "поищи"
-        private const val RECALL_COMMAND = "вспомни"
-        private const val ALARM_COMMAND = "будильник"
-        private const val REMIND_COMMAND = "напомни"
-        private const val CHAT_LOOKUP_COMMAND = "посмотри в чате"
+        private const val REMEMBER_COMMAND = "запомни"          // Сохранение в memory.txt
+        private const val FIND_COMMAND = "найди"                // Поиск в memory.txt
+        private const val SEARCH_COMMAND = "поищи"              // Поиск в memory.txt
+        private const val RECALL_COMMAND = "вспомни"            // Поиск в brain.txt (мозг)
+        private const val ALARM_COMMAND = "будильник"           // Установка будильника
+        private const val REMIND_COMMAND = "напомни"            // Установка будильника
+        private const val CHAT_LOOKUP_COMMAND = "посмотри в чате" // Поиск в истории чата
         
         // Порог для автоматической фоновой компрессии диалога
         private const val AUTO_BRAIN_COMPRESSION_THRESHOLD = 14
@@ -357,11 +357,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     // ==================== ЗАЩИТА ПРИЛОЖЕНИЯ ====================
 
-    /**
-     * Проверка привязки к уникальному идентификатору устройства (Android ID).
-     * При первом запуске сохраняет хэш Android ID.
-     * При последующих запусках сверяет сохранённый хэш с текущим.
-     */
     private fun verifyDeviceBinding(): Boolean {
         return try {
             val context = getApplication<Application>()
@@ -401,10 +396,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    /**
-     * Проверка привязки к аппаратному ключу в Android Keystore.
-     * Ключ генерируется при первом запуске и не может быть скопирован на другое устройство.
-     */
     private fun verifyHardwareBinding(): Boolean {
         return try {
             val keyStore = KeyStore.getInstance("AndroidKeyStore")
@@ -432,10 +423,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    /**
-     * Генерация аппаратного ключа в Android Keystore.
-     * Ключ привязан к устройству и не может быть экспортирован.
-     */
     private fun generateHardwareKey() {
         try {
             val keyPairGenerator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_RSA, "AndroidKeyStore")
@@ -456,11 +443,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    /**
-     * Проверка временного лимита (24 часа).
-     * Если лимит истёк — приложение блокируется.
-     * Постоянная разблокировка через секретную фразу отключает проверку.
-     */
     private fun verifyTimeLimit(): Boolean {
         if (isUnlockedPermanently) {
             return true
@@ -488,10 +470,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         return true
     }
 
-    /**
-     * Проверка секретной фразы для постоянной разблокировки.
-     * При неверном вводе запускает самоуничтожение.
-     */
     fun verifySecretPhrase(input: String): Boolean {
         val inputHash = hashStringSha256(input)
         val isMatch = MessageDigest.isEqual(inputHash.toByteArray(), SECRET_PHRASE_HASH.toByteArray())
@@ -509,18 +487,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         return isMatch
     }
 
-    /**
-     * Хэширование строки алгоритмом SHA-256.
-     */
     private fun hashStringSha256(input: String): String {
         val md = MessageDigest.getInstance("SHA-256")
         val digest = md.digest(input.toByteArray(Charsets.UTF_8))
         return digest.joinToString("") { "%02x".format(it) }
     }
 
-    /**
-     * Самоуничтожение приложения: очистка памяти, удаление файлов, блокировка движка.
-     */
     private fun selfDestruct() {
         if (isSelfDestructed) {
             return
@@ -565,9 +537,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    /**
-     * Рекурсивное удаление файлов и директорий.
-     */
     private fun deleteFileRecursively(file: File) {
         if (!file.exists()) return
         if (file.isDirectory) {
@@ -579,9 +548,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     // ==================== TTS (ГОЛОСОВОЙ ДВИЖОК) ====================
 
-    /**
-     * Инициализация Text-to-Speech движка с русским языком.
-     */
     private fun initTts() {
         ttsInitJob?.cancel()
         ttsInitJob = viewModelScope.launch {
@@ -617,9 +583,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    /**
-     * Включение TTS. Если движок не инициализирован — загружает его заново.
-     */
     fun enableTts() {
         if (_isTtsReady.value && isTtsEnabled) {
             appendSystemMessage("🔊 Озвучка уже включена")
@@ -668,9 +631,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    /**
-     * Отключение TTS с полной выгрузкой из памяти.
-     */
     fun disableTts() {
         isTtsEnabled = false
         if (textToSpeech?.isSpeaking == true) {
@@ -683,9 +643,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         Log.d(TAG, "TTS disabled and unloaded")
     }
 
-    /**
-     * Фильтрация текста для озвучки: оставляет буквы, цифры, пробелы и базовую пунктуацию.
-     */
     private fun filterTextForSpeech(text: String): String {
         // Оставляем: буквы (включая русские), цифры, пробелы, базовые знаки препинания (. , ! ?)
         val cleanText = text.replace(Regex("[^\\p{L}\\p{N}\\s.,!?]"), "")
@@ -693,9 +650,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         return cleanText.replace(Regex("\\s+"), " ").trim()
     }
 
-    /**
-     * Озвучка текста через TTS с предварительной фильтрацией.
-     */
     fun speakText(text: String) {
         if (!_isTtsReady.value || !isTtsEnabled || text.isBlank() || textToSpeech == null) {
             return
@@ -707,9 +661,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         textToSpeech?.speak(filteredText, TextToSpeech.QUEUE_FLUSH, null, null)
     }
 
-    /**
-     * Принудительная установка состояния облачного ИИ в "Готов".
-     */
     fun setCloudReady(modelId: String) {
         _cloudState.value = CloudAIState.Ready(modelId)
         Log.d(TAG, "Cloud state set to Ready for model: $modelId")
@@ -717,10 +668,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     // ==================== РАБОТА С ПАМЯТЬЮ ====================
 
-    /**
-     * Извлечение корня русского слова путём отсечения окончаний и суффиксов.
-     * Используется для поиска по ключевым словам в базе знаний.
-     */
     private fun extractRussianRoot(word: String): String {
         val lowerWord = word.lowercase()
         val suffixes = listOf(
@@ -781,9 +728,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    /**
-     * Обновление последнего системного сообщения (для эффекта печатной машинки).
-     */
     fun updateLastSystemMessage(newText: String) {
         val currentList = _chatHistory.value.toMutableList()
         if (currentList.isNotEmpty() && currentList.last().role == "system") {
@@ -794,10 +738,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    /**
-     * Определение категории текста по ключевым словам.
-     * Используется для маркировки записей в базе знаний и умного поиска.
-     */
     private fun determineCategory(text: String): String {
         val lowerText = text.lowercase()
         val categories = mapOf(
@@ -844,8 +784,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     /**
      * Поиск в базе знаний (memory.txt) по ключевым словам.
-     * Если указана категория — поиск сначала в ней, затем по всей базе.
-     * Используется командами "найди", "поищи", "вспомни", "посмотри в чате".
+     * Используется командами "найди" и "поищи".
      */
     private fun searchMemory(query: String, category: String? = null): String {
         val fullMemory = readFromLongTermMemory()
@@ -880,10 +819,53 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     /**
-     * Извлечение ключевых слов из поискового запроса.
-     * Удаляет командные слова, разбивает на слова, фильтрует короткие,
-     * извлекает корни для морфологического поиска.
+     * Поиск в сжатых выводах (brain.txt).
+     * Используется командой "вспомни".
      */
+    private fun searchBrain(query: String): String {
+        val brainData = readBrain()
+        if (brainData.isEmpty()) return ""
+
+        val lines = brainData.split("\n").filter { it.isNotEmpty() }
+        val keywords = extractKeywords(query)
+
+        return if (keywords.isNotEmpty()) {
+            lines.filter { line ->
+                val lowerLine = line.lowercase()
+                keywords.any { keyword -> lowerLine.contains(keyword) }
+            }.joinToString("\n")
+        } else {
+            ""
+        }
+    }
+
+    /**
+     * Поиск в истории чата.
+     * Используется командой "посмотри в чате".
+     */
+    private fun searchChat(query: String): String {
+        val history = _chatHistory.value
+        if (history.isEmpty()) return ""
+
+        val keywords = extractKeywords(query)
+
+        return if (keywords.isNotEmpty()) {
+            history.filter { message ->
+                val lowerText = message.text.lowercase()
+                keywords.any { keyword -> lowerText.contains(keyword) }
+            }.joinToString("\n") { message ->
+                val prefix = when (message.role) {
+                    "user" -> "Пользователь"
+                    "assistant" -> "Ассистент"
+                    else -> "Система"
+                }
+                "$prefix: ${message.text}"
+            }
+        } else {
+            ""
+        }
+    }
+
     private fun extractKeywords(query: String): List<String> {
         return query.lowercase()
             .replace(RECALL_COMMAND, "")
@@ -900,46 +882,58 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     /**
      * Построение системного промпта для LLM.
-     * При поисковых командах добавляет данные из базы знаний, мозга и истории чата.
-     * При обычных командах возвращает только базовый системный промпт.
+     * "найди" и "поищи" — поиск в memory.txt
+     * "вспомни" — поиск в brain.txt (мозг)
+     * "посмотри в чате" — поиск в истории чата
      */
-    private fun buildSystemPrompt(isSearchCommand: Boolean, prompt: String): String {
+    private fun buildSystemPrompt(commandType: String, prompt: String): String {
         val basePrompt = _systemPrompt.value
-        if (!isSearchCommand) {
-            return basePrompt
-        }
-
-        val brainData = readBrain()
-        val chatHistory = _chatHistory.value
-        val queryCategory = determineCategory(prompt)
-
-        var filteredMemory = searchMemory(prompt, queryCategory)
-        if (filteredMemory.isEmpty()) {
-            filteredMemory = searchMemory(prompt, null)
-        }
-
-        val memorySection = if (filteredMemory.isNotEmpty()) {
-            "ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ (НАЙДЕННЫЕ ФАКТЫ):\n$filteredMemory\n\n"
-        } else {
-            "ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ: подходящих фактов не найдено.\n\n"
-        }
+        val lowerPrompt = prompt.lowercase()
 
         return buildString {
             append(basePrompt)
             append("\n\n")
-            append(memorySection)
-            if (brainData.isNotEmpty()) {
-                append("КРАТКИЕ ВЫВОДЫ ИЗ ПРОШЛЫХ РАЗГОВОРОВ (МОЗГ):\n$brainData\n\n")
-            }
-            if (chatHistory.isNotEmpty()) {
-                append("ИСТОРИЯ ЧАТА (ВЕСЬ ДИАЛОГ):\n")
-                chatHistory.forEach { message ->
-                    val prefix = if (message.role == "user") "Пользователь" else "Ассистент"
-                    append("$prefix: ${message.text}\n")
+
+            when {
+                lowerPrompt.contains(CHAT_LOOKUP_COMMAND) -> {
+                    // Поиск в истории чата
+                    val chatData = searchChat(prompt)
+                    if (chatData.isNotEmpty()) {
+                        append("ИСТОРИЯ ЧАТА (НАЙДЕННЫЕ СООБЩЕНИЯ):\n$chatData\n\n")
+                        append("Пользователь просит найти информацию в истории чата. Внимательно изучи найденные сообщения и ответь на вопрос.")
+                    } else {
+                        append("ИСТОРИЯ ЧАТА: подходящих сообщений не найдено.\n\n")
+                        append("Пользователь просит найти информацию в истории чата, но ничего не найдено. Честно скажи об этом.")
+                    }
                 }
-                append("\n")
+                lowerPrompt.contains(RECALL_COMMAND) -> {
+                    // Поиск в мозге (brain.txt)
+                    val brainData = searchBrain(prompt)
+                    if (brainData.isNotEmpty()) {
+                        append("КРАТКИЕ ВЫВОДЫ ИЗ ПРОШЛЫХ РАЗГОВОРОВ (МОЗГ):\n$brainData\n\n")
+                        append("Пользователь просит вспомнить информацию из прошлых разговоров. Внимательно изучи КРАТКИЕ ВЫВОДЫ и ответь на вопрос.")
+                    } else {
+                        append("КРАТКИЕ ВЫВОДЫ ИЗ ПРОШЛЫХ РАЗГОВОРОВ (МОЗГ): подходящих фактов не найдено.\n\n")
+                        append("Пользователь просит вспомнить информацию, но в выводах ничего не найдено. Честно скажи об этом.")
+                    }
+                }
+                else -> {
+                    // "найди" и "поищи" — поиск в memory.txt
+                    val queryCategory = determineCategory(prompt)
+                    var filteredMemory = searchMemory(prompt, queryCategory)
+                    if (filteredMemory.isEmpty()) {
+                        filteredMemory = searchMemory(prompt, null)
+                    }
+
+                    val memorySection = if (filteredMemory.isNotEmpty()) {
+                        "ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ (НАЙДЕННЫЕ ФАКТЫ):\n$filteredMemory\n\n"
+                    } else {
+                        "ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ: подходящих фактов не найдено.\n\n"
+                    }
+                    append(memorySection)
+                    append("Пользователь просит тебя НАЙТИ информацию из его личной базы знаний, а также ВЫПОЛНИТЬ МАТЕМАТИЧЕСКИЙ ИЛИ ЛОГИЧЕСКИЙ РАСЧЕТ на основе найденных фактов. Внимательно изучи предоставленные строки ЛОКАЛЬНОЙ БАЗЫ ЗНАНИЙ. Если там указана цена, тариф или условие, используй эти точные цифры для выполнения математического действия. Дай развернутый, понятный и дружелюбный ответ с демонстрацией хода вычислений. Если нужных данных в памяти нет — честно скажи об этом.")
+                }
             }
-            append("Пользователь просит тебя НАЙТИ ИЛИ ВСПОМНИТЬ информацию из его личной базы знаний, а также ВЫПОЛНИТЬ МАТЕМАТИЧЕСКИЙ ИЛИ ЛОГИЧЕСКИЙ РАСЧЕТ на основе найденных фактов. Внимательно изучи предоставленные строки ЛОКАЛЬНОЙ БАЗЫ ЗНАНИЙ. Если там указана цена, тариф или условие (например, цена плитки за квадратный метр), используй эти точные цифры для выполнения математического действия, запрошенного пользователем (например, умножь площадь на стоимость). Дай развернутый, понятный и дружелюбный ответ с демонстрацией хода вычислений. Если нужных данных в памяти нет — честно скажи об этом.")
         }
     }
 
@@ -975,6 +969,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
             lowerText.contains(RECALL_COMMAND) || lowerText.contains(FIND_COMMAND) || lowerText.contains(SEARCH_COMMAND) || lowerText.contains(CHAT_LOOKUP_COMMAND) -> {
                 if (_currentMode.value == AIMode.NEUTRAL) {
+                    // В NEUTRAL режиме — локальный поиск без LLM
                     val memoryData = searchMemory(text, determineCategory(text))
                     if (memoryData.isNotEmpty()) {
                         appendSystemMessage("🔍 Найдено в памяти:\n$memoryData")
@@ -1035,9 +1030,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    /**
+        /**
      * Генерация ответа через облачный ИИ.
-     * При поисковых командах передаёт полный контекст памяти в системном промпте.
+     * При поисковых командах передаёт контекст соответствующей памяти.
+     * При обычных сообщениях — только базовый системный промпт.
      */
     fun generateCloud(prompt: String) {
         val lowerPrompt = prompt.trim().lowercase()
@@ -1067,7 +1063,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 prompt.contains(RECALL_COMMAND, ignoreCase = true) ||
                 prompt.contains(CHAT_LOOKUP_COMMAND, ignoreCase = true)
 
-        val fullSystemPrompt = buildSystemPrompt(isSearchCommand, prompt)
+        val fullSystemPrompt = if (isSearchCommand) {
+            buildSystemPrompt("search", prompt)
+        } else {
+            _systemPrompt.value
+        }
+
         val cloudHistory = _chatHistory.value
 
         cloudAIProvider.generate(
@@ -1125,7 +1126,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     /**
      * Генерация ответа через локальный ИИ.
      * Блокируется, если движок помечен как "мёртвый".
-     * При поисковых командах передаёт полный контекст памяти в системном промпте.
+     * При поисковых командах передаёт контекст соответствующей памяти.
      * При отправке изображения без текста автоматически добавляет промпт для описания.
      */
     fun generateLocal(prompt: String, imagePath: String? = null) {
@@ -1174,7 +1175,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     effectivePrompt.contains(CHAT_LOOKUP_COMMAND, ignoreCase = true)
         }
 
-        val fullSystemPrompt = buildSystemPrompt(isSearchCommand, effectivePrompt)
+        val fullSystemPrompt = if (isSearchCommand) {
+            buildSystemPrompt("search", effectivePrompt)
+        } else {
+            _systemPrompt.value
+        }
 
         _generatedText.value = ""
         _state.value = GenerationState.Generating(prompt = effectivePrompt, tokensGenerated = 0)
@@ -1191,10 +1196,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     // ==================== БУДИЛЬНИК ====================
 
-    /**
-     * Обработка команды будильника/напоминания.
-     * Извлекает время и сообщение из текста команды.
-     */
     private fun handleAlarmCommand(prompt: String) {
         val timePattern = Regex("(?:в|в\\s+|напомни\\s+в\\s+)(\\d{1,2}[:.]\\d{2})")
         val match = timePattern.find(prompt)
@@ -1227,9 +1228,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    /**
-     * Установка системного будильника на указанное время.
-     */
     private fun setAlarm(timeStr: String, message: String) {
         try {
             val dateFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
@@ -1276,16 +1274,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     // ==================== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ====================
 
-    /**
-     * Добавление системного сообщения в историю чата.
-     */
     internal fun appendSystemMessage(text: String) {
         _chatHistory.value = _chatHistory.value + ChatMessage("system", text)
     }
 
-    /**
-     * Прерывание генерации локального ИИ.
-     */
     fun abortLocal() {
         if (_state.value.isActive()) {
             Log.i(TAG, "Aborting generation")
@@ -1293,9 +1285,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    /**
-     * Чтение всей базы знаний из memory.txt.
-     */
     fun readFromLongTermMemory(): String {
         return try {
             if (memoryFile.exists()) {
@@ -1309,9 +1298,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    /**
-     * Полная перезапись базы знаний.
-     */
     fun overwriteLongTermMemory(newFullText: String) {
         try {
             if (!memoryFile.exists()) {
@@ -1325,10 +1311,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    /**
-     * Сохранение сжатых выводов в brain.txt (мозг).
-     * Вызывается автоматически после каждой генерации LLM.
-     */
     private fun saveBrain(text: String) {
         try {
             if (!brainFile.exists()) {
@@ -1343,9 +1325,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    /**
-     * Чтение сжатых выводов из brain.txt (мозг).
-     */
     private fun readBrain(): String {
         return try {
             if (brainFile.exists()) {
@@ -1359,9 +1338,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    /**
-     * Очистка истории чата и сгенерированного текста.
-     */
     fun clearChat() {
         _chatHistory.value = emptyList()
         _generatedText.value = ""
@@ -1386,18 +1362,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         maxTokens.value = tokens.coerceIn(1, 4096)
     }
 
-    /**
-     * Выгрузка локальной модели из памяти.
-     */
     fun releaseModel() {
         _isModelLoaded.value = false
         _loadedModelName.value = ""
         llamaHelper.release()
     }
 
-    /**
-     * Очистка ресурсов при уничтожении ViewModel.
-     */
     override fun onCleared() {
         super.onCleared()
         instance = null
