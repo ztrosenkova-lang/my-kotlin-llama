@@ -443,6 +443,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
+        /**
+     * Проверка временного лимита (24 часа).
+     * Если лимит истёк — приложение блокируется, но НЕ самоуничтожается.
+     * Пользователь должен ввести секретную фразу для разблокировки.
+     * Постоянная разблокировка через секретную фразу отключает проверку.
+     */
     private fun verifyTimeLimit(): Boolean {
         if (isUnlockedPermanently) {
             return true
@@ -462,7 +468,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         val elapsed = currentTime - storedTime
         if (elapsed > ONE_DAY_MS) {
-            Log.e(TAG, "One-day limit exceeded. Elapsed: ${elapsed / 86400000} days.")
+            Log.e(TAG, "One-day limit exceeded. App locked. Secret phrase required.")
+            // Блокируем приложение, но НЕ вызываем selfDestruct
+            _isAppLocked.value = true
             return false
         }
 
