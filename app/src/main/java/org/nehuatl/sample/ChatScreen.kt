@@ -155,6 +155,8 @@ fun ChatScreen(
     val isAppLocked by viewModel.isAppLocked.collectAsStateWithLifecycle()
     val isDeviceBound by viewModel.isDeviceBound.collectAsStateWithLifecycle(initialValue = false)
     val loadedModelName by viewModel.loadedModelName.collectAsStateWithLifecycle(initialValue = "")
+    val remainingTimeText by viewModel.remainingTimeText.collectAsStateWithLifecycle(initialValue = "")
+    val isPermanentlyUnlocked by viewModel.isPermanentlyUnlocked.collectAsStateWithLifecycle(initialValue = false)
 
     // Локальные состояния UI
     var promptInput by remember { mutableStateOf("") }           // Текст в поле ввода
@@ -212,8 +214,13 @@ fun ChatScreen(
     }
 
     // Приветственное сообщение с эффектом печатной машинки
-    val fullWelcomeString = "Привет!\n Я твой персональный ИИ-Друг,\n я лучший хранитель паролей,\n переводчик со всех языков\n и просто умный собеседник!\n 🤖✨ Я создан, чтобы доказать:\n искусственный интеллект — это твой надежный и полностью автономный союзник,\n защищенный от любых внешних блокировок!\n\n Вот что я умею:\n  🎤 СЛЫШАТЬ И ГОВОРИТЬ:\n Нажми микрофон в подвале, чтобы общаться голосом.\n 🧠 РАЗДЕЛЬНАЯ ПАМЯТЬ:\n Я обладаю тремя видами памяти и\n об этом ты можешь узнать в справке.\n А также я могу напоминать тебе о важных событиях! \n Давай общаться!\n Включи локальный движок Llama или облачный ИИ в шапке приложения, и погнали!"
-
+   val fullWelcomeString = "Привет! Я твой персональный ИИ-Друг. 🤖✨ " +
+        "Я храню пароли, перевожу с разных языков и просто общаюсь. " +
+        "Я создан, чтобы быть твоим надежным и автономным союзником. " +
+        "Я умею слышать и говорить. 🎤 Нажми на микрофон внизу, чтобы общаться голосом. " +
+        "У меня есть три вида памяти. 🧠 Подробнее узнаешь в справке. " +
+        "А ещё я могу напоминать о важных событиях. ⏰ " +
+        "Давай общаться! Включи локальный движок Llama или облачный ИИ в шапке приложения, и погнали! 🚀"
     // Запуск приветственного сообщения с задержкой и анимацией печати
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(15000)
@@ -551,10 +558,12 @@ fun ChatScreen(
             ImagePreview(imagePath = imagePath)
         }
 
-        // Статус привязки устройства и имя загруженной модели
+        // Статус привязки устройства, имя модели, таймер
         DeviceBindingStatus(
             isBound = isDeviceBound,
             modelName = loadedModelName,
+            remainingTimeText = remainingTimeText,
+            isPermanentlyUnlocked = isPermanentlyUnlocked,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 4.dp)
@@ -590,48 +599,43 @@ fun ChatScreen(
 }
 
 /**
- * Компонент отображения статуса привязки устройства и имени загруженной модели.
- * Показывает анимированный текст с эффектом печатной машинки.
+ * Компонент отображения статуса привязки устройства, оставшегося времени
+ * и имени загруженной модели с эффектом печатной машинки.
  */
 @Composable
 private fun DeviceBindingStatus(
     isBound: Boolean,
     modelName: String,
+    remainingTimeText: String,
+    isPermanentlyUnlocked: Boolean,
     modifier: Modifier = Modifier
 ) {
     var displayedText by remember { mutableStateOf("") }
-    var isTypingComplete by remember { mutableStateOf(false) }
 
-    // Анимация печатной машинки при изменении статуса или имени модели
-    LaunchedEffect(isBound, modelName) {
-        if (isBound && modelName.isNotEmpty()) {
-            val fullText = "Модель: $modelName"
-            displayedText = ""
-            isTypingComplete = false
-            for (i in fullText.indices) {
-                displayedText += fullText[i]
-                delay(35)
-            }
-            isTypingComplete = true
-        } else if (!isBound) {
-            displayedText = "🔓 Устройство не привязано"
-            isTypingComplete = true
-        } else if (isBound && modelName.isEmpty()) {
-            displayedText = "✅ Устройство защищено"
-            isTypingComplete = true
+    // Анимация печатной машинки при изменении любого параметра
+    LaunchedEffect(isBound, modelName, remainingTimeText, isPermanentlyUnlocked) {
+        val fullText = when {
+            !isBound -> "🔴 Приложение заблокировано"
+            isPermanentlyUnlocked && modelName.isEmpty() -> "✅ Приложение привязано к данному устройству"
+            isPermanentlyUnlocked && modelName.isNotEmpty() -> "✅ Приложение привязано • Модель: $modelName"
+            modelName.isNotEmpty() && remainingTimeText.isNotEmpty() -> "✅ Приложение привязано • Модель: $modelName • $remainingTimeText"
+            modelName.isNotEmpty() -> "✅ Приложение привязано • Модель: $modelName"
+            remainingTimeText.isNotEmpty() -> "✅ Приложение привязано • $remainingTimeText"
+            else -> "✅ Приложение привязано к данному устройству"
+        }
+
+        displayedText = ""
+        for (i in fullText.indices) {
+            displayedText += fullText[i]
+            delay(35)
         }
     }
 
     val textColor = when {
         !isBound -> Color.Red
-        modelName.isNotEmpty() -> GreenColor
+        remainingTimeText.contains("🔴") -> Color.Red
+        remainingTimeText.contains("⏳") -> Color(0xFFFFA500) // Оранжевый
         else -> GreenColor
-    }
-
-    val statusText = when {
-        !isBound -> "🔓 Устройство не привязано"
-        modelName.isNotEmpty() && displayedText.isNotEmpty() -> displayedText
-        else -> "✅ Устройство защищено"
     }
 
     Card(
@@ -643,7 +647,7 @@ private fun DeviceBindingStatus(
         shape = RoundedCornerShape(8.dp)
     ) {
         Text(
-            text = statusText,
+            text = displayedText,
             color = textColor,
             fontSize = 10.sp,
             fontFamily = ChatFontFamily,
