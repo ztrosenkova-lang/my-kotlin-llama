@@ -180,6 +180,15 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _isDeviceBound = MutableStateFlow(false)
     val isDeviceBound: StateFlow<Boolean> = _isDeviceBound.asStateFlow()
 
+    // ==================== НОВЫЕ ПОЛЯ ДЛЯ СТАТУС-БАРА ====================
+    // Оставшееся время до блокировки
+    private val _remainingTimeText = MutableStateFlow("")
+    val remainingTimeText: StateFlow<String> = _remainingTimeText.asStateFlow()
+
+    // Статус постоянной разблокировки
+    private val _isPermanentlyUnlocked = MutableStateFlow(false)
+    val isPermanentlyUnlocked: StateFlow<Boolean> = _isPermanentlyUnlocked.asStateFlow()
+
     // ==================== LlamaHelper ====================
     private val llamaHelper by lazy {
         LlamaHelper(
@@ -195,21 +204,34 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         // Проверка привязки к устройству
         if (!verifyDeviceBinding()) {
-            Log.e(TAG, "Device binding verification FAILED! Initiating self-destruct.")
-            selfDestruct()
+            Log.e(TAG, "Device binding verification FAILED!")
+            _isAppLocked.value = true
+            _isDeviceBound.value = false
+            _remainingTimeText.value = "🔴 Приложение заблокировано"
         } else {
             if (!verifyHardwareBinding()) {
-                Log.e(TAG, "Hardware binding verification FAILED! Initiating self-destruct.")
-                selfDestruct()
+                Log.e(TAG, "Hardware binding verification FAILED!")
+                _isAppLocked.value = true
+                _isDeviceBound.value = false
+                _remainingTimeText.value = "🔴 Приложение заблокировано"
             } else {
                 if (!verifyTimeLimit()) {
-                    Log.e(TAG, "Time limit verification FAILED! Initiating self-destruct.")
-                    selfDestruct()
+                    Log.e(TAG, "Time limit verification FAILED!")
+                    // verifyTimeLimit сам устанавливает _isAppLocked и _remainingTimeText
                 } else {
                     _isAppLocked.value = false
                     _isDeviceBound.value = true
+                    _remainingTimeText.value = ""
                     Log.i(TAG, "All security checks passed. App is unlocked and device is bound.")
                 }
+            }
+        }
+
+        // Запуск обновления оставшегося времени
+        scope.launch(Dispatchers.Default) {
+            while (true) {
+                updateRemainingTime()
+                delay(60000) // Обновление раз в минуту
             }
         }
 
@@ -357,6 +379,36 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     // ==================== ЗАЩИТА ПРИЛОЖЕНИЯ ====================
 
+    private fun updateRemainingTime() {
+        if (isUnlockedPermanently) {
+            _remainingTimeText.value = ""
+            _isPermanentlyUnlocked.value = true
+            return
+        }
+
+        _isPermanentlyUnlocked.value = false
+
+        val storedTime = prefs.getLong("app_start_time", 0L)
+        if (storedTime == 0L) {
+            _remainingTimeText.value = "⚠️ Время не установлено"
+            return
+        }
+
+        val currentTime = System.currentTimeMillis()
+        val elapsed = currentTime - storedTime
+        val remaining = ONE_DAY_MS - elapsed
+
+        if (remaining <= 0) {
+            _remainingTimeText.value = "🔴 Приложение заблокировано. Введите секретную фразу."
+            _isAppLocked.value = true
+            return
+        }
+
+        val hours = remaining / 3600000
+        val minutes = (remaining % 3600000) / 60000
+        _remainingTimeText.value = "⏳ До блокировки: ${hours}ч ${minutes}мин"
+    }
+
     private fun verifyDeviceBinding(): Boolean {
         return try {
             val context = getApplication<Application>()
@@ -365,6 +417,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             if (androidId.isNullOrEmpty()) {
                 Log.e(TAG, "Failed to get Android ID. Device binding impossible.")
                 _isDeviceBound.value = false
+                _isAppLocked.value = true
+                _remainingTimeText.value = "🔴 Приложение заблокировано"
                 return false
             }
 
@@ -384,6 +438,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 if (!isMatch) {
                     Log.e(TAG, "Device mismatch! Stored: $storedHash, Current: $deviceHashString")
                     _isDeviceBound.value = false
+                    _isAppLocked.value = true
+                    _remainingTimeText.value = "🔴 Приложение заблокировано"
                 } else {
                     _isDeviceBound.value = true
                 }
@@ -392,6 +448,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         } catch (e: Exception) {
             Log.e(TAG, "Error verifying device binding: ${e.message}", e)
             _isDeviceBound.value = false
+            _isAppLocked.value = true
+            _remainingTimeText.value = "🔴 Приложение заблокировано"
             false
         }
     }
@@ -412,13 +470,19 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 true
             } else if (isKeyExists && storedTime == 0L) {
                 Log.e(TAG, "Hardware key exists but start time is missing! Possible cloning.")
+                _isAppLocked.value = true
+                _remainingTimeText.value = "🔴 Приложение заблокировано"
                 false
             } else {
                 Log.e(TAG, "Start time exists but hardware key is missing! Possible cloning.")
+                _isAppLocked.value = true
+                _remainingTimeText.value = "🔴 Приложение заблокировано"
                 false
             }
         } catch (e: Exception) {
             Log.e(TAG, "Hardware binding verification error: ${e.message}", e)
+            _isAppLocked.value = true
+            _remainingTimeText.value = "🔴 Приложение заблокировано"
             false
         }
     }
@@ -443,7 +507,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-        /**
+    /**
      * Проверка временного лимита (24 часа).
      * Если лимит истёк — приложение блокируется, но НЕ самоуничтожается.
      * Пользователь должен ввести секретную фразу для разблокировки.
@@ -451,26 +515,31 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
      */
     private fun verifyTimeLimit(): Boolean {
         if (isUnlockedPermanently) {
+            _isPermanentlyUnlocked.value = true
             return true
         }
 
         val storedTime = prefs.getLong("app_start_time", 0L)
         if (storedTime == 0L) {
             Log.e(TAG, "Start time not found. Verification failed.")
+            _isAppLocked.value = true
+            _remainingTimeText.value = "🔴 Приложение заблокировано"
             return false
         }
 
         val currentTime = System.currentTimeMillis()
         if (currentTime < storedTime) {
             Log.e(TAG, "System time was set back! Possible tampering.")
+            _isAppLocked.value = true
+            _remainingTimeText.value = "🔴 Приложение заблокировано"
             return false
         }
 
         val elapsed = currentTime - storedTime
         if (elapsed > ONE_DAY_MS) {
             Log.e(TAG, "One-day limit exceeded. App locked. Secret phrase required.")
-            // Блокируем приложение, но НЕ вызываем selfDestruct
             _isAppLocked.value = true
+            _remainingTimeText.value = "🔴 Приложение заблокировано. Введите секретную фразу."
             return false
         }
 
@@ -483,8 +552,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         val isMatch = MessageDigest.isEqual(inputHash.toByteArray(), SECRET_PHRASE_HASH.toByteArray())
         if (isMatch) {
             isUnlockedPermanently = true
+            _isPermanentlyUnlocked.value = true
             _isAppLocked.value = false
             _isDeviceBound.value = true
+            _remainingTimeText.value = ""
             prefs.edit().putLong("app_start_time", System.currentTimeMillis()).apply()
             prefs.edit().putBoolean("unlocked_permanently", true).apply()
             Log.i(TAG, "Device permanently unlocked with secret phrase.")
@@ -507,6 +578,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
         isSelfDestructed = true
         _isDeviceBound.value = false
+        _isAppLocked.value = true
+        _remainingTimeText.value = "🔴 Приложение заблокировано"
         Log.e(TAG, "!!! SELF-DESTRUCT SEQUENCE INITIATED !!!")
 
         try {
@@ -538,7 +611,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 Log.e(TAG, "Failed to execute pm clear: ${e.message}", e)
             }
 
-            _isAppLocked.value = true
             android.os.Process.killProcess(android.os.Process.myPid())
         } catch (e: Exception) {
             Log.e(TAG, "Error during self-destruct sequence: ${e.message}", e)
@@ -652,9 +724,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     private fun filterTextForSpeech(text: String): String {
-        // Оставляем: буквы (включая русские), цифры, пробелы, базовые знаки препинания (. , ! ?)
         val cleanText = text.replace(Regex("[^\\p{L}\\p{N}\\s.,!?]"), "")
-        // Удаляем множественные подряд идущие пробелы (оставляем один)
         return cleanText.replace(Regex("\\s+"), " ").trim()
     }
 
@@ -694,11 +764,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         return if (stem.length < 2) lowerWord else stem
     }
 
-    /**
-     * Фоновая компрессия диалога: при достижении порога сообщений
-     * отправляет диалог в LLM для выделения ключевых фактов.
-     * Результат сохраняется в brain.txt (мозг).
-     */
     private fun triggerBackgroundDialogueCompression(history: List<ChatMessage>) {
         if (history.size < AUTO_BRAIN_COMPRESSION_THRESHOLD) return
 
@@ -769,10 +834,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    /**
-     * Сохранение текста в долговременную память (memory.txt) с меткой категории и временной меткой.
-     * Вызывается командой "запомни" в любом режиме.
-     */
     fun saveToLongTermMemory(text: String) {
         try {
             if (!memoryFile.exists()) {
@@ -790,10 +851,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    /**
-     * Поиск в базе знаний (memory.txt) по ключевым словам.
-     * Используется командами "найди" и "поищи".
-     */
     private fun searchMemory(query: String, category: String? = null): String {
         val fullMemory = readFromLongTermMemory()
         if (fullMemory.isEmpty()) return ""
@@ -826,10 +883,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    /**
-     * Поиск в сжатых выводах (brain.txt).
-     * Используется командой "вспомни".
-     */
     private fun searchBrain(query: String): String {
         val brainData = readBrain()
         if (brainData.isEmpty()) return ""
@@ -847,10 +900,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    /**
-     * Поиск в истории чата.
-     * Используется командой "посмотри в чате".
-     */
     private fun searchChat(query: String): String {
         val history = _chatHistory.value
         if (history.isEmpty()) return ""
@@ -888,12 +937,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             .distinct()
     }
 
-    /**
-     * Построение системного промпта для LLM.
-     * "найди" и "поищи" — поиск в memory.txt
-     * "вспомни" — поиск в brain.txt (мозг)
-     * "посмотри в чате" — поиск в истории чата
-     */
     private fun buildSystemPrompt(commandType: String, prompt: String): String {
         val basePrompt = _systemPrompt.value
         val lowerPrompt = prompt.lowercase()
@@ -904,7 +947,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
             when {
                 lowerPrompt.contains(CHAT_LOOKUP_COMMAND) -> {
-                    // Поиск в истории чата
                     val chatData = searchChat(prompt)
                     if (chatData.isNotEmpty()) {
                         append("ИСТОРИЯ ЧАТА (НАЙДЕННЫЕ СООБЩЕНИЯ):\n$chatData\n\n")
@@ -915,7 +957,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     }
                 }
                 lowerPrompt.contains(RECALL_COMMAND) -> {
-                    // Поиск в мозге (brain.txt)
                     val brainData = searchBrain(prompt)
                     if (brainData.isNotEmpty()) {
                         append("КРАТКИЕ ВЫВОДЫ ИЗ ПРОШЛЫХ РАЗГОВОРОВ (МОЗГ):\n$brainData\n\n")
@@ -926,7 +967,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     }
                 }
                 else -> {
-                    // "найди" и "поищи" — поиск в memory.txt
                     val queryCategory = determineCategory(prompt)
                     var filteredMemory = searchMemory(prompt, queryCategory)
                     if (filteredMemory.isEmpty()) {
@@ -947,12 +987,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     // ==================== ОТПРАВКА СООБЩЕНИЙ ====================
 
-    /**
-     * Главный метод отправки сообщения пользователя.
-     * Обрабатывает команды: "запомни", "будильник", "напомни", поисковые команды.
-     * В NEUTRAL режиме поисковые команды выполняются локально без LLM.
-     * В LOCAL/CLOUD режимах поисковые команды передаются в LLM с полным контекстом памяти.
-     */
     fun sendUserMessage(text: String) {
         if (text.isBlank()) return
 
@@ -977,7 +1011,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
             lowerText.contains(RECALL_COMMAND) || lowerText.contains(FIND_COMMAND) || lowerText.contains(SEARCH_COMMAND) || lowerText.contains(CHAT_LOOKUP_COMMAND) -> {
                 if (_currentMode.value == AIMode.NEUTRAL) {
-                    // В NEUTRAL режиме — локальный поиск без LLM
                     val memoryData = searchMemory(text, determineCategory(text))
                     if (memoryData.isNotEmpty()) {
                         appendSystemMessage("🔍 Найдено в памяти:\n$memoryData")
@@ -1038,11 +1071,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-        /**
-     * Генерация ответа через облачный ИИ.
-     * При поисковых командах передаёт контекст соответствующей памяти.
-     * При обычных сообщениях — только базовый системный промпт.
-     */
     fun generateCloud(prompt: String) {
         val lowerPrompt = prompt.trim().lowercase()
 
@@ -1094,10 +1122,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     // ==================== ЛОКАЛЬНЫЙ ИИ ====================
 
-    /**
-     * Загрузка локальной модели.
-     * Блокируется, если движок помечен как "мёртвый" после самоуничтожения.
-     */
     fun loadModel(path: String, mmprojPath: String? = null) {
         if (path.isEmpty()) return
 
@@ -1131,12 +1155,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    /**
-     * Генерация ответа через локальный ИИ.
-     * Блокируется, если движок помечен как "мёртвый".
-     * При поисковых командах передаёт контекст соответствующей памяти.
-     * При отправке изображения без текста автоматически добавляет промпт для описания.
-     */
     fun generateLocal(prompt: String, imagePath: String? = null) {
         val lowerPrompt = prompt.trim().lowercase()
 
@@ -1166,14 +1184,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             return
         }
 
-        // Авто-промпт для изображений: если фото без текста — просим описать
         val effectivePrompt = if (imagePath != null && prompt.isBlank()) {
             "Опиши подробно, что изображено на этой картинке. Опиши все объекты, людей, текст, цвета и обстановку."
         } else {
             prompt
         }
 
-        // Поисковые команды — только для текстовых запросов, не для изображений
         val isSearchCommand = if (imagePath != null) {
             false
         } else {
