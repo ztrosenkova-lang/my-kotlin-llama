@@ -744,7 +744,7 @@ private fun VoiceWaveAnimation(
         val step = 4f
 
         for (x in 0..width.toInt() step step.toInt()) {
-            val normalizedX = x / width
+            val normalizedX = x.toFloat() / width
             // Хаотичная волна: сумма нескольких синусоид с разными частотами
             val wave = sin(normalizedX * 10f + phase) * 0.5f +
                     sin(normalizedX * 23f + phase * 1.7f) * 0.3f +
@@ -753,9 +753,9 @@ private fun VoiceWaveAnimation(
             val y = midY + wave * amplitude
 
             if (x == 0) {
-                path.moveTo(x, y)
+                path.moveTo(x.toFloat(), y)
             } else {
-                path.lineTo(x, y)
+                path.lineTo(x.toFloat(), y)
             }
         }
 
