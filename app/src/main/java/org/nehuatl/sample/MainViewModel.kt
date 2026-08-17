@@ -170,7 +170,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _isAppLocked = MutableStateFlow(true)
     val isAppLocked: StateFlow<Boolean> = _isAppLocked.asStateFlow()
     private var isUnlockedPermanently = false
-    private var isSelfDestructed = false
     private val hardwareKeyAlias = "app_hardware_key"
     private val prefs: android.content.SharedPreferences by lazy {
         getApplication<Application>().getSharedPreferences("app_security", Context.MODE_PRIVATE)
@@ -189,6 +188,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _isPermanentlyUnlocked = MutableStateFlow(false)
     val isPermanentlyUnlocked: StateFlow<Boolean> = _isPermanentlyUnlocked.asStateFlow()
 
+    // Статус вечной блокировки
+    private val _isPermanentlyBlocked = MutableStateFlow(false)
+    val isPermanentlyBlocked: StateFlow<Boolean> = _isPermanentlyBlocked.asStateFlow()
+
     // ==================== LlamaHelper ====================
     private val llamaHelper by lazy {
         LlamaHelper(
@@ -202,27 +205,48 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     init {
         instance = this
 
-        // Проверка привязки к устройству
-        if (!verifyDeviceBinding()) {
-            Log.e(TAG, "Device binding verification FAILED!")
+        // Проверка вечной блокировки
+        if (prefs.getBoolean("is_permanently_blocked", false)) {
+            Log.e(TAG, "App is permanently blocked.")
             _isAppLocked.value = true
             _isDeviceBound.value = false
+            _isPermanentlyBlocked.value = true
             _remainingTimeText.value = "🔴 Приложение заблокировано"
         } else {
-            if (!verifyHardwareBinding()) {
-                Log.e(TAG, "Hardware binding verification FAILED!")
-                _isAppLocked.value = true
-                _isDeviceBound.value = false
-                _remainingTimeText.value = "🔴 Приложение заблокировано"
+            // Проверка постоянной разблокировки
+            isUnlockedPermanently = prefs.getBoolean("unlocked_permanently", false)
+            if (isUnlockedPermanently) {
+                _isPermanentlyUnlocked.value = true
+                _isAppLocked.value = false
+                _isDeviceBound.value = true
+                _remainingTimeText.value = "✅ Приложение разблокировано"
+                Log.i(TAG, "App is permanently unlocked.")
             } else {
-                if (!verifyTimeLimit()) {
-                    Log.e(TAG, "Time limit verification FAILED!")
-                    // verifyTimeLimit сам устанавливает _isAppLocked и _remainingTimeText
+                // Проверка привязки к устройству
+                if (!verifyDeviceBinding()) {
+                    Log.e(TAG, "Device binding verification FAILED!")
+                    _isAppLocked.value = true
+                    _isDeviceBound.value = false
+                    _isPermanentlyBlocked.value = true
+                    _remainingTimeText.value = "🔴 Приложение заблокировано"
                 } else {
-                    _isAppLocked.value = false
-                    _isDeviceBound.value = true
-                    _remainingTimeText.value = ""
-                    Log.i(TAG, "All security checks passed. App is unlocked and device is bound.")
+                    if (!verifyHardwareBinding()) {
+                        Log.e(TAG, "Hardware binding verification FAILED!")
+                        _isAppLocked.value = true
+                        _isDeviceBound.value = false
+                        _isPermanentlyBlocked.value = true
+                        _remainingTimeText.value = "🔴 Приложение заблокировано"
+                    } else {
+                        if (!verifyTimeLimit()) {
+                            Log.e(TAG, "Time limit verification FAILED!")
+                            // verifyTimeLimit сам устанавливает _isAppLocked и _remainingTimeText
+                        } else {
+                            _isAppLocked.value = false
+                            _isDeviceBound.value = true
+                            _remainingTimeText.value = ""
+                            Log.i(TAG, "All security checks passed. App is unlocked and device is bound.")
+                        }
+                    }
                 }
             }
         }
@@ -380,8 +404,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     // ==================== ЗАЩИТА ПРИЛОЖЕНИЯ ====================
 
     private fun updateRemainingTime() {
+        if (_isPermanentlyBlocked.value) {
+            _remainingTimeText.value = "🔴 Приложение заблокировано"
+            return
+        }
+
         if (isUnlockedPermanently) {
-            _remainingTimeText.value = ""
+            _remainingTimeText.value = "✅ Приложение разблокировано"
             _isPermanentlyUnlocked.value = true
             return
         }
@@ -418,6 +447,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 Log.e(TAG, "Failed to get Android ID. Device binding impossible.")
                 _isDeviceBound.value = false
                 _isAppLocked.value = true
+                _isPermanentlyBlocked.value = true
+                prefs.edit().putBoolean("is_permanently_blocked", true).apply()
                 _remainingTimeText.value = "🔴 Приложение заблокировано"
                 return false
             }
@@ -439,6 +470,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     Log.e(TAG, "Device mismatch! Stored: $storedHash, Current: $deviceHashString")
                     _isDeviceBound.value = false
                     _isAppLocked.value = true
+                    _isPermanentlyBlocked.value = true
+                    prefs.edit().putBoolean("is_permanently_blocked", true).apply()
                     _remainingTimeText.value = "🔴 Приложение заблокировано"
                 } else {
                     _isDeviceBound.value = true
@@ -449,6 +482,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             Log.e(TAG, "Error verifying device binding: ${e.message}", e)
             _isDeviceBound.value = false
             _isAppLocked.value = true
+            _isPermanentlyBlocked.value = true
+            prefs.edit().putBoolean("is_permanently_blocked", true).apply()
             _remainingTimeText.value = "🔴 Приложение заблокировано"
             false
         }
@@ -471,17 +506,26 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             } else if (isKeyExists && storedTime == 0L) {
                 Log.e(TAG, "Hardware key exists but start time is missing! Possible cloning.")
                 _isAppLocked.value = true
+                _isDeviceBound.value = false
+                _isPermanentlyBlocked.value = true
+                prefs.edit().putBoolean("is_permanently_blocked", true).apply()
                 _remainingTimeText.value = "🔴 Приложение заблокировано"
                 false
             } else {
                 Log.e(TAG, "Start time exists but hardware key is missing! Possible cloning.")
                 _isAppLocked.value = true
+                _isDeviceBound.value = false
+                _isPermanentlyBlocked.value = true
+                prefs.edit().putBoolean("is_permanently_blocked", true).apply()
                 _remainingTimeText.value = "🔴 Приложение заблокировано"
                 false
             }
         } catch (e: Exception) {
             Log.e(TAG, "Hardware binding verification error: ${e.message}", e)
             _isAppLocked.value = true
+            _isDeviceBound.value = false
+            _isPermanentlyBlocked.value = true
+            prefs.edit().putBoolean("is_permanently_blocked", true).apply()
             _remainingTimeText.value = "🔴 Приложение заблокировано"
             false
         }
@@ -531,6 +575,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         if (currentTime < storedTime) {
             Log.e(TAG, "System time was set back! Possible tampering.")
             _isAppLocked.value = true
+            _isPermanentlyBlocked.value = true
+            prefs.edit().putBoolean("is_permanently_blocked", true).apply()
             _remainingTimeText.value = "🔴 Приложение заблокировано"
             return false
         }
@@ -553,15 +599,21 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         if (isMatch) {
             isUnlockedPermanently = true
             _isPermanentlyUnlocked.value = true
+            _isPermanentlyBlocked.value = false
             _isAppLocked.value = false
             _isDeviceBound.value = true
-            _remainingTimeText.value = ""
+            _remainingTimeText.value = "✅ Приложение разблокировано"
             prefs.edit().putLong("app_start_time", System.currentTimeMillis()).apply()
             prefs.edit().putBoolean("unlocked_permanently", true).apply()
+            prefs.edit().putBoolean("is_permanently_blocked", false).apply()
             Log.i(TAG, "Device permanently unlocked with secret phrase.")
         } else {
-            Log.w(TAG, "Incorrect secret phrase entered. Initiating self-destruct.")
-            selfDestruct()
+            Log.w(TAG, "Incorrect secret phrase entered. Permanent block.")
+            _isPermanentlyBlocked.value = true
+            _isAppLocked.value = true
+            _isDeviceBound.value = false
+            _remainingTimeText.value = "🔴 Приложение заблокировано"
+            prefs.edit().putBoolean("is_permanently_blocked", true).apply()
         }
         return isMatch
     }
@@ -570,60 +622,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         val md = MessageDigest.getInstance("SHA-256")
         val digest = md.digest(input.toByteArray(Charsets.UTF_8))
         return digest.joinToString("") { "%02x".format(it) }
-    }
-
-    private fun selfDestruct() {
-        if (isSelfDestructed) {
-            return
-        }
-        isSelfDestructed = true
-        _isDeviceBound.value = false
-        _isAppLocked.value = true
-        _remainingTimeText.value = "🔴 Приложение заблокировано"
-        Log.e(TAG, "!!! SELF-DESTRUCT SEQUENCE INITIATED !!!")
-
-        try {
-            _chatHistory.value = emptyList()
-            _generatedText.value = ""
-            _cloudGeneratedText.value = ""
-            Log.i(TAG, "Memory buffers cleared.")
-
-            deleteFileRecursively(memoryFile)
-            deleteFileRecursively(brainFile)
-            Log.i(TAG, "Memory files deleted.")
-
-            val context = getApplication<Application>()
-            val ttsDir = File(context.filesDir, "tts-model")
-            val voskDir = File(context.filesDir, "vosk-model")
-            deleteFileRecursively(ttsDir)
-            deleteFileRecursively(voskDir)
-            Log.i(TAG, "TTS and Vosk model directories deleted.")
-
-            prefs.edit().putBoolean("engine_permanently_dead", true).apply()
-            releaseModel()
-            Log.i(TAG, "Llama engine blocked.")
-
-            try {
-                val process = Runtime.getRuntime().exec("pm clear ${context.packageName}")
-                process.waitFor()
-                Log.i(TAG, "pm clear executed successfully.")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to execute pm clear: ${e.message}", e)
-            }
-
-            android.os.Process.killProcess(android.os.Process.myPid())
-        } catch (e: Exception) {
-            Log.e(TAG, "Error during self-destruct sequence: ${e.message}", e)
-        }
-    }
-
-    private fun deleteFileRecursively(file: File) {
-        if (!file.exists()) return
-        if (file.isDirectory) {
-            file.listFiles()?.forEach { deleteFileRecursively(it) }
-        }
-        file.delete()
-        Log.i(TAG, "Deleted: ${file.absolutePath}")
     }
 
     // ==================== TTS (ГОЛОСОВОЙ ДВИЖОК) ====================
