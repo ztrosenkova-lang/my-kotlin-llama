@@ -163,6 +163,7 @@ fun ChatScreen(
     val loadedModelName by viewModel.loadedModelName.collectAsStateWithLifecycle(initialValue = "")
     val remainingTimeText by viewModel.remainingTimeText.collectAsStateWithLifecycle(initialValue = "")
     val isPermanentlyUnlocked by viewModel.isPermanentlyUnlocked.collectAsStateWithLifecycle(initialValue = false)
+    val isPermanentlyBlocked by viewModel.isPermanentlyBlocked.collectAsStateWithLifecycle(initialValue = false)
 
     // Локальные состояния UI
     var promptInput by remember { mutableStateOf("") }           // Текст в поле ввода
@@ -285,7 +286,8 @@ fun ChatScreen(
                 viewModel.verifySecretPhrase(secretPhraseInput)
                 secretPhraseInput = ""
             },
-            viewModel = viewModel
+            viewModel = viewModel,
+            isPermanentlyBlocked = isPermanentlyBlocked
         )
         return
     }
@@ -665,7 +667,8 @@ private fun LockScreen(
     secretPhrase: String,
     onSecretPhraseChange: (String) -> Unit,
     onVerify: () -> Unit,
-    viewModel: MainViewModel
+    viewModel: MainViewModel,
+    isPermanentlyBlocked: Boolean
 ) {
     val context = LocalContext.current
 
@@ -680,77 +683,102 @@ private fun LockScreen(
             .background(SurfaceGray),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(
-                text = "🤖 Введите секретную фразу",
-                style = MaterialTheme.typography.headlineSmall,
-                color = DarkText,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(bottom = 24.dp)
-            )
-
-            // Поле ввода секретной фразы (скрытый ввод)
-            OutlinedTextField(
-                value = secretPhrase,
-                onValueChange = onSecretPhraseChange,
+        if (isPermanentlyBlocked) {
+            // Вечная блокировка без вариантов
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                placeholder = { Text("Введите фразу...", color = DarkText.copy(alpha = 0.5f)) },
-                visualTransformation = PasswordVisualTransformation(),
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = DarkText,
-                    unfocusedTextColor = DarkText,
-                    focusedContainerColor = Color.White,
-                    unfocusedContainerColor = Color.White,
-                    focusedBorderColor = AccentColor,
-                    unfocusedBorderColor = BorderGray,
-                    cursorColor = AccentColor
-                )
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Кнопка подтверждения с вибрацией
-            Button(
-                onClick = {
-                    try {
-                        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            val vibratorManager = context.getSystemService(android.content.Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-                            vibratorManager.defaultVibrator
-                        } else {
-                            context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as Vibrator
-                        }
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            vibrator.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
-                        } else {
-                            vibrator.vibrate(50)
-                        }
-                    } catch (e: Exception) {
-                        // Игнорируем ошибки вибрации
-                    }
-                    onVerify()
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .height(56.dp)
+                    .padding(32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
                 Text(
-                    text = "Подтвердить",
-                    color = DarkText,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
+                    text = "🔴 Приложение заблокировано",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = Color.Red,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(bottom = 16.dp)
                 )
+                Text(
+                    text = "Удалите приложение.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = DarkText,
+                    textAlign = TextAlign.Center
+                )
+            }
+        } else {
+            // Обычный экран ввода секретной фразы
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "🤖 Введите секретную фразу",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = DarkText,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(bottom = 24.dp)
+                )
+
+                // Поле ввода секретной фразы (текст виден)
+                OutlinedTextField(
+                    value = secretPhrase,
+                    onValueChange = onSecretPhraseChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    placeholder = { Text("Введите фразу...", color = DarkText.copy(alpha = 0.5f)) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = DarkText,
+                        unfocusedTextColor = DarkText,
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = Color.White,
+                        focusedBorderColor = AccentColor,
+                        unfocusedBorderColor = BorderGray,
+                        cursorColor = AccentColor
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Кнопка подтверждения с вибрацией
+                Button(
+                    onClick = {
+                        try {
+                            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                val vibratorManager = context.getSystemService(android.content.Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                                vibratorManager.defaultVibrator
+                            } else {
+                                context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as Vibrator
+                            }
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                vibrator.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
+                            } else {
+                                vibrator.vibrate(50)
+                            }
+                        } catch (e: Exception) {
+                            // Игнорируем ошибки вибрации
+                        }
+                        onVerify()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .height(56.dp)
+                ) {
+                    Text(
+                        text = "Подтвердить",
+                        color = DarkText,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
             }
         }
     }
@@ -1677,29 +1705,47 @@ private fun PromptInput(
 
     var printedText by remember { mutableStateOf("") }
     var offsetX by remember { mutableStateOf(0f) }
+    var currentPhraseIndex by remember { mutableStateOf(0) }
 
-    // Полный текст для бегущей строки
-    val fullStatusText = when {
-        !isBound -> "🔴 Приложение заблокировано"
-        isPermanentlyUnlocked -> "✅ Приложение привязано к данному устройству"
-        modelName.isNotEmpty() && remainingTimeText.isNotEmpty() ->
-            "✅ Приложение привязано • Модель: $modelName • $remainingTimeText"
-        modelName.isNotEmpty() ->
-            "✅ Приложение привязано • Модель: $modelName"
-        remainingTimeText.isNotEmpty() ->
-            "✅ Приложение привязано • $remainingTimeText"
-        else -> "✅ Приложение привязано к данному устройству"
+    // Список информативных фраз
+    val phrases = buildList {
+        if (!isBound) {
+            add("🔴 Приложение заблокировано")
+        } else if (isPermanentlyUnlocked) {
+            add("✅ Приложение разблокировано")
+        } else {
+            if (modelName.isNotEmpty()) {
+                add("✅ Приложение привязано • Модель: $modelName")
+            }
+            if (remainingTimeText.isNotEmpty()) {
+                add("✅ Приложение привязано • $remainingTimeText")
+            }
+            if (modelName.isEmpty() && remainingTimeText.isEmpty()) {
+                add("✅ Приложение привязано к данному устройству")
+            }
+        }
     }
 
-    // Эффект бегущей строки
+    // Эффект бегущей строки: фразы одна за другой через 2 минуты
     LaunchedEffect(isBound, modelName, remainingTimeText, isPermanentlyUnlocked) {
         while (true) {
+            if (phrases.isEmpty()) {
+                delay(120000)
+                continue
+            }
+
+            val currentPhrase = phrases[currentPhraseIndex % phrases.size]
+            currentPhraseIndex = (currentPhraseIndex + 1) % phrases.size
+
             // Печатаем текст
             printedText = ""
-            for (i in fullStatusText.indices) {
-                printedText += fullStatusText[i]
+            for (i in currentPhrase.indices) {
+                printedText += currentPhrase[i]
                 delay(35)
             }
+
+            // Задержка 2 секунды
+            delay(2000)
 
             // Сдвигаем текст влево, пока он не уйдёт за край
             val textWidth = printedText.length * 8f
@@ -1712,8 +1758,8 @@ private fun PromptInput(
             offsetX = 0f
             printedText = ""
 
-            // Пауза 3 минуты
-            delay(180000)
+            // Пауза 2 минуты
+            delay(120000)
         }
     }
 
