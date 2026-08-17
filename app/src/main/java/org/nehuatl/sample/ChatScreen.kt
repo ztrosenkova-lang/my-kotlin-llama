@@ -565,19 +565,6 @@ fun ChatScreen(
             ImagePreview(imagePath = imagePath)
         }
 
-        // Статус привязки устройства, имя модели, таймер
-        DeviceBindingStatus(
-            isBound = isDeviceBound,
-            modelName = loadedModelName,
-            remainingTimeText = remainingTimeText,
-            isPermanentlyUnlocked = isPermanentlyUnlocked,
-            isGenerating = state.isActive() || cloudState.isActive(),
-            currentMode = currentMode,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp)
-        )
-
         // Поле ввода сообщения с кнопками
         PromptInput(
             prompt = promptInput,
@@ -602,115 +589,13 @@ fun ChatScreen(
             viewModel = viewModel,
             context = context,
             speechRecognizerLauncher = speechRecognizerLauncher,
+            isBound = isDeviceBound,
+            modelName = loadedModelName,
+            remainingTimeText = remainingTimeText,
+            isPermanentlyUnlocked = isPermanentlyUnlocked,
+            currentMode = currentMode,
             modifier = Modifier.padding(8.dp)
         )
-    }
-}
-
-/**
- * Компонент статус-бара: имя модели, бегущая строка с привязкой/таймером,
- * анимированная синусоида при генерации.
- */
-@Composable
-private fun DeviceBindingStatus(
-    isBound: Boolean,
-    modelName: String,
-    remainingTimeText: String,
-    isPermanentlyUnlocked: Boolean,
-    isGenerating: Boolean,
-    currentMode: AIMode,
-    modifier: Modifier = Modifier
-) {
-    var printedText by remember { mutableStateOf("") }
-    var offsetX by remember { mutableStateOf(0f) }
-
-    // Полный текст для бегущей строки
-    val fullStatusText = when {
-        !isBound -> "🔴 Приложение заблокировано"
-        isPermanentlyUnlocked -> "✅ Приложение привязано к данному устройству"
-        modelName.isNotEmpty() && remainingTimeText.isNotEmpty() ->
-            "✅ Приложение привязано • Модель: $modelName • $remainingTimeText"
-        modelName.isNotEmpty() ->
-            "✅ Приложение привязано • Модель: $modelName"
-        remainingTimeText.isNotEmpty() ->
-            "✅ Приложение привязано • $remainingTimeText"
-        else -> "✅ Приложение привязано к данному устройству"
-    }
-
-    // Эффект бегущей строки
-    LaunchedEffect(isBound, modelName, remainingTimeText, isPermanentlyUnlocked) {
-        while (true) {
-            // Печатаем текст
-            printedText = ""
-            for (i in fullStatusText.indices) {
-                printedText += fullStatusText[i]
-                delay(35)
-            }
-
-            // Сдвигаем текст влево, пока он не уйдёт за край
-            val textWidth = printedText.length * 8f
-            for (step in 0..textWidth.toInt() step 4) {
-                offsetX = -step.toFloat()
-                delay(16)
-            }
-
-            // Сброс
-            offsetX = 0f
-            printedText = ""
-
-            // Пауза 3 минуты
-            delay(180000)
-        }
-    }
-
-    // Цвет синусоиды
-    val waveColor = if (currentMode == AIMode.CLOUD) Color(0xFF00B4D8) else GreenColor
-
-    val textColor = when {
-        !isBound -> Color.Red
-        remainingTimeText.contains("🔴") -> Color.Red
-        remainingTimeText.contains("⏳") -> Color(0xFFFFA500)
-        else -> GreenColor
-    }
-
-    Card(
-        modifier = modifier.height(20.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceGray.copy(alpha = 0.7f)),
-        border = BorderStroke(1.dp, BorderGray),
-        shape = RoundedCornerShape(8.dp)
-    ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            if (isGenerating) {
-                // Анимированная синусоида
-                VoiceWaveAnimation(
-                    color = waveColor,
-                    modifier = Modifier
-                        .fillMaxWidth(0.6f)
-                        .fillMaxHeight()
-                )
-            } else {
-                // Текст с печатной машинкой и бегущей строкой
-                Text(
-                    text = when {
-                        !isBound -> "🔴 Приложение заблокировано"
-                        printedText.isNotEmpty() -> printedText
-                        modelName.isNotEmpty() -> "✅ Модель: $modelName"
-                        else -> "✅ Приложение привязано"
-                    },
-                    color = textColor,
-                    fontSize = 10.sp,
-                    fontFamily = ChatFontFamily,
-                    modifier = Modifier
-                        .padding(horizontal = 4.dp)
-                        .offset(x = offsetX.dp),
-                    maxLines = 1,
-                    softWrap = false
-                )
-            }
-        }
     }
 }
 
@@ -1781,9 +1666,66 @@ private fun PromptInput(
     viewModel: MainViewModel,
     context: android.content.Context,
     speechRecognizerLauncher: androidx.activity.result.ActivityResultLauncher<Intent>,
+    isBound: Boolean,
+    modelName: String,
+    remainingTimeText: String,
+    isPermanentlyUnlocked: Boolean,
+    currentMode: AIMode,
     modifier: Modifier = Modifier
 ) {
     val memoryInfoText by viewModel.memoryInfoText.collectAsStateWithLifecycle(initialValue = "Загрузка памяти...")
+
+    var printedText by remember { mutableStateOf("") }
+    var offsetX by remember { mutableStateOf(0f) }
+
+    // Полный текст для бегущей строки
+    val fullStatusText = when {
+        !isBound -> "🔴 Приложение заблокировано"
+        isPermanentlyUnlocked -> "✅ Приложение привязано к данному устройству"
+        modelName.isNotEmpty() && remainingTimeText.isNotEmpty() ->
+            "✅ Приложение привязано • Модель: $modelName • $remainingTimeText"
+        modelName.isNotEmpty() ->
+            "✅ Приложение привязано • Модель: $modelName"
+        remainingTimeText.isNotEmpty() ->
+            "✅ Приложение привязано • $remainingTimeText"
+        else -> "✅ Приложение привязано к данному устройству"
+    }
+
+    // Эффект бегущей строки
+    LaunchedEffect(isBound, modelName, remainingTimeText, isPermanentlyUnlocked) {
+        while (true) {
+            // Печатаем текст
+            printedText = ""
+            for (i in fullStatusText.indices) {
+                printedText += fullStatusText[i]
+                delay(35)
+            }
+
+            // Сдвигаем текст влево, пока он не уйдёт за край
+            val textWidth = printedText.length * 8f
+            for (step in 0..textWidth.toInt() step 4) {
+                offsetX = -step.toFloat()
+                delay(16)
+            }
+
+            // Сброс
+            offsetX = 0f
+            printedText = ""
+
+            // Пауза 3 минуты
+            delay(180000)
+        }
+    }
+
+    // Цвет синусоиды
+    val waveColor = if (currentMode == AIMode.CLOUD) Color(0xFF00B4D8) else GreenColor
+
+    val textColor = when {
+        !isBound -> Color.Red
+        remainingTimeText.contains("🔴") -> Color.Red
+        remainingTimeText.contains("⏳") -> Color(0xFFFFA500)
+        else -> GreenColor
+    }
 
     Card(
         modifier = modifier
@@ -1797,6 +1739,42 @@ private fun PromptInput(
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp, vertical = 4.dp)
         ) {
+            // Первая строка: статус (текст или синусоида)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(20.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isGenerating) {
+                    // Анимированная синусоида
+                    VoiceWaveAnimation(
+                        color = waveColor,
+                        modifier = Modifier
+                            .fillMaxWidth(0.6f)
+                            .fillMaxHeight()
+                    )
+                } else {
+                    // Текст с печатной машинкой и бегущей строкой
+                    Text(
+                        text = when {
+                            !isBound -> "🔴 Приложение заблокировано"
+                            printedText.isNotEmpty() -> printedText
+                            modelName.isNotEmpty() -> "✅ Модель: $modelName"
+                            else -> "✅ Приложение привязано"
+                        },
+                        color = textColor,
+                        fontSize = 8.sp,
+                        fontFamily = ChatFontFamily,
+                        modifier = Modifier
+                            .padding(horizontal = 4.dp)
+                            .offset(x = offsetX.dp),
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
