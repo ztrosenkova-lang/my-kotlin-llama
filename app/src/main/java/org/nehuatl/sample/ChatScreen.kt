@@ -14,6 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -29,6 +30,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -83,6 +85,9 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -104,6 +109,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import androidx.compose.animation.core.*
 import androidx.compose.runtime.remember
+import kotlin.math.sin
 
 // Цветовая схема приложения
 private val AppBackground = Color(0xFFFFFFFF)       // Белый фон
@@ -214,13 +220,14 @@ fun ChatScreen(
     }
 
     // Приветственное сообщение с эффектом печатной машинки
-   val fullWelcomeString = "Привет! Я твой персональный ИИ-Друг. 🤖✨ " +
+    val fullWelcomeString = "Привет! Я твой персональный ИИ-Друг. 🤖✨ " +
         "Я храню пароли, перевожу с разных языков и просто общаюсь. " +
         "Я создан, чтобы быть твоим надежным и автономным союзником. " +
         "Я умею слышать и говорить. 🎤 Нажми на микрофон внизу, чтобы общаться голосом. " +
         "У меня есть три вида памяти. 🧠 Подробнее узнаешь в справке. " +
         "А ещё я могу напоминать о важных событиях. ⏰ " +
         "Давай общаться! Включи локальный движок Llama или облачный ИИ в шапке приложения, и погнали! 🚀"
+
     // Запуск приветственного сообщения с задержкой и анимацией печати
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(15000)
@@ -564,6 +571,8 @@ fun ChatScreen(
             modelName = loadedModelName,
             remainingTimeText = remainingTimeText,
             isPermanentlyUnlocked = isPermanentlyUnlocked,
+            isGenerating = state.isActive() || cloudState.isActive(),
+            currentMode = currentMode,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 4.dp)
@@ -599,8 +608,8 @@ fun ChatScreen(
 }
 
 /**
- * Компонент отображения статуса привязки устройства, оставшегося времени
- * и имени загруженной модели с эффектом печатной машинки.
+ * Компонент статус-бара: имя модели, бегущая строка с привязкой/таймером,
+ * анимированная синусоида при генерации.
  */
 @Composable
 private fun DeviceBindingStatus(
@@ -608,53 +617,155 @@ private fun DeviceBindingStatus(
     modelName: String,
     remainingTimeText: String,
     isPermanentlyUnlocked: Boolean,
+    isGenerating: Boolean,
+    currentMode: AIMode,
     modifier: Modifier = Modifier
 ) {
-    var displayedText by remember { mutableStateOf("") }
+    var printedText by remember { mutableStateOf("") }
+    var offsetX by remember { mutableStateOf(0f) }
 
-    // Анимация печатной машинки при изменении любого параметра
+    // Полный текст для бегущей строки
+    val fullStatusText = when {
+        !isBound -> "🔴 Приложение заблокировано"
+        isPermanentlyUnlocked -> "✅ Приложение привязано к данному устройству"
+        modelName.isNotEmpty() && remainingTimeText.isNotEmpty() ->
+            "✅ Приложение привязано • Модель: $modelName • $remainingTimeText"
+        modelName.isNotEmpty() ->
+            "✅ Приложение привязано • Модель: $modelName"
+        remainingTimeText.isNotEmpty() ->
+            "✅ Приложение привязано • $remainingTimeText"
+        else -> "✅ Приложение привязано к данному устройству"
+    }
+
+    // Эффект бегущей строки
     LaunchedEffect(isBound, modelName, remainingTimeText, isPermanentlyUnlocked) {
-        val fullText = when {
-            !isBound -> "🔴 Приложение заблокировано"
-            isPermanentlyUnlocked && modelName.isEmpty() -> "✅ Приложение привязано к данному устройству"
-            isPermanentlyUnlocked && modelName.isNotEmpty() -> "✅ Приложение привязано • Модель: $modelName"
-            modelName.isNotEmpty() && remainingTimeText.isNotEmpty() -> "✅ Приложение привязано • Модель: $modelName • $remainingTimeText"
-            modelName.isNotEmpty() -> "✅ Приложение привязано • Модель: $modelName"
-            remainingTimeText.isNotEmpty() -> "✅ Приложение привязано • $remainingTimeText"
-            else -> "✅ Приложение привязано к данному устройству"
-        }
+        while (true) {
+            // Печатаем текст
+            printedText = ""
+            for (i in fullStatusText.indices) {
+                printedText += fullStatusText[i]
+                delay(35)
+            }
 
-        displayedText = ""
-        for (i in fullText.indices) {
-            displayedText += fullText[i]
-            delay(35)
+            // Сдвигаем текст влево, пока он не уйдёт за край
+            val textWidth = printedText.length * 8f
+            for (step in 0..textWidth.toInt() step 4) {
+                offsetX = -step.toFloat()
+                delay(16)
+            }
+
+            // Сброс
+            offsetX = 0f
+            printedText = ""
+
+            // Пауза 3 минуты
+            delay(180000)
         }
     }
+
+    // Цвет синусоиды
+    val waveColor = if (currentMode == AIMode.CLOUD) Color(0xFF00B4D8) else GreenColor
 
     val textColor = when {
         !isBound -> Color.Red
         remainingTimeText.contains("🔴") -> Color.Red
-        remainingTimeText.contains("⏳") -> Color(0xFFFFA500) // Оранжевый
+        remainingTimeText.contains("⏳") -> Color(0xFFFFA500)
         else -> GreenColor
     }
 
     Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = SurfaceGray.copy(alpha = 0.7f)
-        ),
+        modifier = modifier.height(20.dp),
+        colors = CardDefaults.cardColors(containerColor = SurfaceGray.copy(alpha = 0.7f)),
         border = BorderStroke(1.dp, BorderGray),
         shape = RoundedCornerShape(8.dp)
     ) {
-        Text(
-            text = displayedText,
-            color = textColor,
-            fontSize = 10.sp,
-            fontFamily = ChatFontFamily,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
-            textAlign = TextAlign.Center
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isGenerating) {
+                // Анимированная синусоида
+                VoiceWaveAnimation(
+                    color = waveColor,
+                    modifier = Modifier
+                        .fillMaxWidth(0.6f)
+                        .fillMaxHeight()
+                )
+            } else {
+                // Текст с печатной машинкой и бегущей строкой
+                Text(
+                    text = when {
+                        !isBound -> "🔴 Приложение заблокировано"
+                        printedText.isNotEmpty() -> printedText
+                        modelName.isNotEmpty() -> "✅ Модель: $modelName"
+                        else -> "✅ Приложение привязано"
+                    },
+                    color = textColor,
+                    fontSize = 10.sp,
+                    fontFamily = ChatFontFamily,
+                    modifier = Modifier
+                        .padding(horizontal = 4.dp)
+                        .offset(x = offsetX.dp),
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Анимированная хаотичная синусоида (имитация звуковой волны).
+ */
+@Composable
+private fun VoiceWaveAnimation(
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    val infiniteTransition = rememberInfiniteTransition()
+    val phase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 4f * Math.PI.toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = 800,
+                easing = LinearEasing
+            )
+        )
+    )
+
+    Canvas(modifier = modifier) {
+        val width = size.width
+        val height = size.height
+        val midY = height / 2
+        val amplitude = height * 0.3f
+
+        val path = Path()
+        val step = 4f
+
+        for (x in 0..width.toInt() step step.toInt()) {
+            val normalizedX = x / width
+            // Хаотичная волна: сумма нескольких синусоид с разными частотами
+            val wave = sin(normalizedX * 10f + phase) * 0.5f +
+                    sin(normalizedX * 23f + phase * 1.7f) * 0.3f +
+                    sin(normalizedX * 41f + phase * 2.3f) * 0.2f
+
+            val y = midY + wave * amplitude
+
+            if (x == 0) {
+                path.moveTo(x, y)
+            } else {
+                path.lineTo(x, y)
+            }
+        }
+
+        drawPath(
+            path = path,
+            color = color,
+            style = Stroke(
+                width = 2f,
+                cap = StrokeCap.Round
+            )
         )
     }
 }
