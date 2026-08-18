@@ -14,6 +14,7 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.provider.Settings
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -146,6 +147,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private var isTtsEnabled = false
     private val _isTtsReady = MutableStateFlow(false)
     val isTtsReady: StateFlow<Boolean> = _isTtsReady.asStateFlow()
+
+    // Статус "говорит" для анимации рта
+    private val _isSpeaking = MutableStateFlow(false)
+    val isSpeaking: StateFlow<Boolean> = _isSpeaking.asStateFlow()
 
     // ==================== Будильник ====================
     private val alarmManager by lazy {
@@ -637,6 +642,19 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         if (result == TextToSpeech.LANG_AVAILABLE || result == TextToSpeech.LANG_COUNTRY_AVAILABLE) {
                             _isTtsReady.value = true
                             isTtsEnabled = true
+                            textToSpeech?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                                override fun onStart(utteranceId: String?) {
+                                    _isSpeaking.value = true
+                                }
+
+                                override fun onDone(utteranceId: String?) {
+                                    _isSpeaking.value = false
+                                }
+
+                                override fun onError(utteranceId: String?) {
+                                    _isSpeaking.value = false
+                                }
+                            })
                             appendSystemMessage("🟢 Голосовой движок Android TTS успешно инициализирован.")
                             val welcomeText = "Голосовой движок полностью готов к работе."
                             appendSystemMessage(welcomeText)
@@ -687,6 +705,19 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         if (result == TextToSpeech.LANG_AVAILABLE || result == TextToSpeech.LANG_COUNTRY_AVAILABLE) {
                             _isTtsReady.value = true
                             isTtsEnabled = true
+                            textToSpeech?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                                override fun onStart(utteranceId: String?) {
+                                    _isSpeaking.value = true
+                                }
+
+                                override fun onDone(utteranceId: String?) {
+                                    _isSpeaking.value = false
+                                }
+
+                                override fun onError(utteranceId: String?) {
+                                    _isSpeaking.value = false
+                                }
+                            })
                             appendSystemMessage("🟢 Голосовой движок Android TTS успешно загружен.")
                             Log.d(TAG, "TTS enabled successfully")
                         } else {
@@ -711,6 +742,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     fun disableTts() {
         isTtsEnabled = false
+        _isSpeaking.value = false
         if (textToSpeech?.isSpeaking == true) {
             textToSpeech?.stop()
         }
@@ -734,7 +766,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         if (filteredText.isBlank()) {
             return
         }
-        textToSpeech?.speak(filteredText, TextToSpeech.QUEUE_FLUSH, null, null)
+        val utteranceId = System.currentTimeMillis().toString()
+        textToSpeech?.speak(filteredText, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
     }
 
     fun setCloudReady(modelId: String) {
@@ -1396,6 +1429,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         textToSpeech?.shutdown()
         textToSpeech = null
         _isTtsReady.value = false
+        _isSpeaking.value = false
         _isModelLoaded.value = false
         llamaHelper.abort()
         llamaHelper.release()
