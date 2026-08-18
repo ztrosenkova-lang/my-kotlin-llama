@@ -110,6 +110,7 @@ import kotlinx.coroutines.delay
 import androidx.compose.animation.core.*
 import androidx.compose.runtime.remember
 import kotlin.math.sin
+import kotlin.math.cos
 
 // Цветовая схема приложения
 private val AppBackground = Color(0xFFFFFFFF)       // Белый фон
@@ -164,6 +165,7 @@ fun ChatScreen(
     val remainingTimeText by viewModel.remainingTimeText.collectAsStateWithLifecycle(initialValue = "")
     val isPermanentlyUnlocked by viewModel.isPermanentlyUnlocked.collectAsStateWithLifecycle(initialValue = false)
     val isPermanentlyBlocked by viewModel.isPermanentlyBlocked.collectAsStateWithLifecycle(initialValue = false)
+    val isSpeaking by viewModel.isSpeaking.collectAsStateWithLifecycle(initialValue = false)
 
     // Локальные состояния UI
     var promptInput by remember { mutableStateOf("") }           // Текст в поле ввода
@@ -586,6 +588,7 @@ fun ChatScreen(
             onPickImage = onPickImage,
             enabled = true,
             isGenerating = state.isActive() || cloudState.isActive(),
+            isSpeaking = isSpeaking,
             focusRequester = focusRequester,
             isTtsReady = isTtsReady,
             viewModel = viewModel,
@@ -602,7 +605,9 @@ fun ChatScreen(
 }
 
 /**
- * Анимированная хаотичная синусоида (имитация звуковой волны).
+ * Анимированный график синусоид — имитация говорящего рта ИИ.
+ * Две синусоиды бегут по клетчатому полю, соединяются в концах,
+ * расходятся в разных направлениях.
  */
 @Composable
 private fun VoiceWaveAnimation(
@@ -615,7 +620,7 @@ private fun VoiceWaveAnimation(
         targetValue = 4f * Math.PI.toFloat(),
         animationSpec = infiniteRepeatable(
             animation = tween(
-                durationMillis = 800,
+                durationMillis = 600,
                 easing = LinearEasing
             )
         )
@@ -625,34 +630,133 @@ private fun VoiceWaveAnimation(
         val width = size.width
         val height = size.height
         val midY = height / 2
-        val amplitude = height * 0.3f
+        val amplitude = height * 0.35f
 
-        val path = Path()
-        val step = 4f
+        // Рисуем клетчатое поле (фон)
+        val cellSize = 8f
+        val gridColor = Color(0xFFE0E0E0)
+        val gridLineWidth = 0.5f
+
+        var gridX = 0f
+        while (gridX <= width) {
+            drawLine(
+                color = gridColor,
+                start = androidx.compose.ui.geometry.Offset(gridX, 0f),
+                end = androidx.compose.ui.geometry.Offset(gridX, height),
+                strokeWidth = gridLineWidth
+            )
+            gridX += cellSize
+        }
+
+        var gridY = 0f
+        while (gridY <= height) {
+            drawLine(
+                color = gridColor,
+                start = androidx.compose.ui.geometry.Offset(0f, gridY),
+                end = androidx.compose.ui.geometry.Offset(width, gridY),
+                strokeWidth = gridLineWidth
+            )
+            gridY += cellSize
+        }
+
+        // Первая синусоида (основная)
+        val path1 = Path()
+        val step = 2f
+        var firstPoint = true
 
         for (x in 0..width.toInt() step step.toInt()) {
             val normalizedX = x.toFloat() / width
-            // Хаотичная волна: сумма нескольких синусоид с разными частотами
-            val wave = sin(normalizedX * 10f + phase) * 0.5f +
-                    sin(normalizedX * 23f + phase * 1.7f) * 0.3f +
-                    sin(normalizedX * 41f + phase * 2.3f) * 0.2f
-
+            val wave = sin(normalizedX * 10f + phase) * 0.6f +
+                    sin(normalizedX * 17f + phase * 1.3f) * 0.3f +
+                    sin(normalizedX * 29f + phase * 2.1f) * 0.1f
             val y = midY + wave * amplitude
 
-            if (x == 0) {
-                path.moveTo(x.toFloat(), y)
+            if (firstPoint) {
+                path1.moveTo(x.toFloat(), y)
+                firstPoint = false
             } else {
-                path.lineTo(x.toFloat(), y)
+                path1.lineTo(x.toFloat(), y)
             }
         }
 
         drawPath(
-            path = path,
+            path = path1,
             color = color,
+            style = Stroke(
+                width = 2.5f,
+                cap = StrokeCap.Round
+            )
+        )
+
+        // Вторая синусоида (встречная)
+        val path2 = Path()
+        firstPoint = true
+
+        for (x in 0..width.toInt() step step.toInt()) {
+            val normalizedX = x.toFloat() / width
+            val wave = sin(normalizedX * 12f - phase * 1.1f) * 0.55f +
+                    sin(normalizedX * 21f - phase * 1.8f) * 0.25f +
+                    sin(normalizedX * 37f - phase * 2.5f) * 0.15f
+            val y = midY + wave * amplitude
+
+            if (firstPoint) {
+                path2.moveTo(x.toFloat(), y)
+                firstPoint = false
+            } else {
+                path2.lineTo(x.toFloat(), y)
+            }
+        }
+
+        drawPath(
+            path = path2,
+            color = color.copy(alpha = 0.7f),
             style = Stroke(
                 width = 2f,
                 cap = StrokeCap.Round
             )
+        )
+
+        // Соединительные линии на концах (по 3 мм = ~8.5px)
+        val connectorLength = 8.5f
+
+        // Левое соединение
+        val leftY1 = midY + (sin(0f + phase) * 0.6f + sin(0f + phase * 1.3f) * 0.3f + sin(0f + phase * 2.1f) * 0.1f) * amplitude
+        val leftY2 = midY + (sin(0f - phase * 1.1f) * 0.55f + sin(0f - phase * 1.8f) * 0.25f + sin(0f - phase * 2.5f) * 0.15f) * amplitude
+
+        drawLine(
+            color = color,
+            start = androidx.compose.ui.geometry.Offset(0f, leftY1),
+            end = androidx.compose.ui.geometry.Offset(connectorLength, (leftY1 + leftY2) / 2),
+            strokeWidth = 2.5f,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = color,
+            start = androidx.compose.ui.geometry.Offset(0f, leftY2),
+            end = androidx.compose.ui.geometry.Offset(connectorLength, (leftY1 + leftY2) / 2),
+            strokeWidth = 2f,
+            cap = StrokeCap.Round
+        )
+
+        // Правое соединение
+        val rightX = width
+        val rightNormX = 1f
+        val rightY1 = midY + (sin(rightNormX * 10f + phase) * 0.6f + sin(rightNormX * 17f + phase * 1.3f) * 0.3f + sin(rightNormX * 29f + phase * 2.1f) * 0.1f) * amplitude
+        val rightY2 = midY + (sin(rightNormX * 12f - phase * 1.1f) * 0.55f + sin(rightNormX * 21f - phase * 1.8f) * 0.25f + sin(rightNormX * 37f - phase * 2.5f) * 0.15f) * amplitude
+
+        drawLine(
+            color = color,
+            start = androidx.compose.ui.geometry.Offset(rightX, rightY1),
+            end = androidx.compose.ui.geometry.Offset(rightX - connectorLength, (rightY1 + rightY2) / 2),
+            strokeWidth = 2.5f,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = color,
+            start = androidx.compose.ui.geometry.Offset(rightX, rightY2),
+            end = androidx.compose.ui.geometry.Offset(rightX - connectorLength, (rightY1 + rightY2) / 2),
+            strokeWidth = 2f,
+            cap = StrokeCap.Round
         )
     }
 }
@@ -1689,6 +1793,7 @@ private fun PromptInput(
     onPickImage: () -> Unit,
     enabled: Boolean,
     isGenerating: Boolean,
+    isSpeaking: Boolean,
     focusRequester: FocusRequester,
     isTtsReady: Boolean,
     viewModel: MainViewModel,
@@ -1792,8 +1897,8 @@ private fun PromptInput(
                     .height(20.dp),
                 contentAlignment = Alignment.Center
             ) {
-                if (isGenerating) {
-                    // Анимированная синусоида
+                if (isSpeaking) {
+                    // Анимированный график "говорящего рта"
                     VoiceWaveAnimation(
                         color = waveColor,
                         modifier = Modifier
@@ -1841,13 +1946,13 @@ private fun PromptInput(
                     ) {
                         IconButton(
                             onClick = onPickImage,
-                            enabled = enabled && !isGenerating,
+                            enabled = enabled && !isGenerating && !isSpeaking,
                             modifier = Modifier.size(41.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Add,
                                 contentDescription = "Добавить изображение",
-                                tint = if (enabled && !isGenerating) AccentColor else DarkText.copy(alpha = 0.4f)
+                                tint = if (enabled && !isGenerating && !isSpeaking) AccentColor else DarkText.copy(alpha = 0.4f)
                             )
                         }
                     }
@@ -1881,7 +1986,7 @@ private fun PromptInput(
                     modifier = Modifier
                         .weight(1f)
                         .focusRequester(focusRequester),
-                    enabled = enabled && !isGenerating,
+                    enabled = enabled && !isGenerating && !isSpeaking,
                     placeholder = { Text("Введите запрос...", color = DarkText.copy(alpha = 0.5f)) },
                     maxLines = 3,
                     singleLine = false,
@@ -1945,7 +2050,7 @@ private fun PromptInput(
                             .border(1.dp, BorderGray, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (isGenerating) {
+                        if (isGenerating || isSpeaking) {
                             // Кнопка остановки генерации
                             IconButton(
                                 onClick = onAbort,
