@@ -606,7 +606,8 @@ fun ChatScreen(
 
 /**
  * Анимированный график "говорящего рта" — две синусоиды
- * пульсируют, сходятся и расходятся, имитируя движение губ.
+ * плавно расходятся от краёв к середине, имитируя
+ * открывающийся и закрывающийся рот.
  */
 @Composable
 private fun VoiceWaveAnimation(
@@ -621,19 +622,19 @@ private fun VoiceWaveAnimation(
         targetValue = 4f * Math.PI.toFloat(),
         animationSpec = infiniteRepeatable(
             animation = tween(
-                durationMillis = 400,
+                durationMillis = 500,
                 easing = LinearEasing
             )
         )
     )
 
-    // Пульсация амплитуды (рот открывается/закрывается)
-    val pulse by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
+    // Пульсация раскрытия рта (амплитуда меняется плавно)
+    val mouthOpen by infiniteTransition.animateFloat(
+        initialValue = 0.05f,
         targetValue = 1.0f,
         animationSpec = infiniteRepeatable(
             animation = tween(
-                durationMillis = 350,
+                durationMillis = 450,
                 easing = FastOutSlowInEasing
             ),
             repeatMode = RepeatMode.Reverse
@@ -644,12 +645,13 @@ private fun VoiceWaveAnimation(
         val width = size.width
         val height = size.height
         val midY = height / 2
-        val baseAmplitude = height * 0.3f
-        val currentAmplitude = baseAmplitude * pulse
+        val maxAmplitude = height * 0.45f
+        val currentAmplitude = maxAmplitude * mouthOpen
 
-        // Рисуем клетчатое поле (фон)
-        val cellSize = 7f
-        val gridColor = Color(0xFFD4D4D4)
+        // Рисуем клетчатое поле (фон) — крупнее и заметнее
+        val cellSize = 12f
+        val gridColor = Color(0xFFBDBDBD)
+        val gridLineWidth = 1.2f
 
         var gridX = 0f
         while (gridX <= width) {
@@ -657,7 +659,7 @@ private fun VoiceWaveAnimation(
                 color = gridColor,
                 start = androidx.compose.ui.geometry.Offset(gridX, 0f),
                 end = androidx.compose.ui.geometry.Offset(gridX, height),
-                strokeWidth = 0.5f
+                strokeWidth = gridLineWidth
             )
             gridX += cellSize
         }
@@ -668,22 +670,25 @@ private fun VoiceWaveAnimation(
                 color = gridColor,
                 start = androidx.compose.ui.geometry.Offset(0f, gridY),
                 end = androidx.compose.ui.geometry.Offset(width, gridY),
-                strokeWidth = 0.5f
+                strokeWidth = gridLineWidth
             )
             gridY += cellSize
         }
 
-        // Верхняя синусоида (верхняя губа)
+        // Верхняя губа (верхняя синусоида)
         val upperPath = Path()
         var firstUpperPoint = true
         val step = 2f
 
         for (x in 0..width.toInt() step step.toInt()) {
             val normalizedX = x.toFloat() / width
-            val wave = sin(normalizedX * 14f + phase) * 0.7f +
-                    sin(normalizedX * 27f + phase * 1.6f) * 0.2f +
-                    sin(normalizedX * 43f + phase * 2.4f) * 0.1f
-            val y = midY - wave * currentAmplitude
+            // Расстояние от края: 0 на краях, 1 в центре
+            val edgeFactor = sin(normalizedX * Math.PI.toFloat())  // 0 → 1 → 0
+            // Волна с учётом раскрытия: больше всего расходится в центре
+            val wave = sin(normalizedX * 10f + phase) * 0.5f +
+                    sin(normalizedX * 19f + phase * 1.4f) * 0.3f +
+                    sin(normalizedX * 31f + phase * 2.2f) * 0.2f
+            val y = midY - wave * currentAmplitude * edgeFactor
 
             if (firstUpperPoint) {
                 upperPath.moveTo(x.toFloat(), y)
@@ -697,21 +702,22 @@ private fun VoiceWaveAnimation(
             path = upperPath,
             color = color,
             style = Stroke(
-                width = 3f,
+                width = 3.5f,
                 cap = StrokeCap.Round
             )
         )
 
-        // Нижняя синусоида (нижняя губа)
+        // Нижняя губа (нижняя синусоида)
         val lowerPath = Path()
         var firstLowerPoint = true
 
         for (x in 0..width.toInt() step step.toInt()) {
             val normalizedX = x.toFloat() / width
-            val wave = sin(normalizedX * 14f + phase + Math.PI.toFloat()) * 0.7f +
-                    sin(normalizedX * 27f + phase * 1.6f + Math.PI.toFloat()) * 0.2f +
-                    sin(normalizedX * 43f + phase * 2.4f + Math.PI.toFloat()) * 0.1f
-            val y = midY + wave * currentAmplitude
+            val edgeFactor = sin(normalizedX * Math.PI.toFloat())
+            val wave = sin(normalizedX * 10f + phase + Math.PI.toFloat()) * 0.5f +
+                    sin(normalizedX * 19f + phase * 1.4f + Math.PI.toFloat()) * 0.3f +
+                    sin(normalizedX * 31f + phase * 2.2f + Math.PI.toFloat()) * 0.2f
+            val y = midY + wave * currentAmplitude * edgeFactor
 
             if (firstLowerPoint) {
                 lowerPath.moveTo(x.toFloat(), y)
@@ -723,58 +729,57 @@ private fun VoiceWaveAnimation(
 
         drawPath(
             path = lowerPath,
-            color = color.copy(alpha = 0.8f),
+            color = color.copy(alpha = 0.85f),
             style = Stroke(
-                width = 2.5f,
+                width = 3f,
                 cap = StrokeCap.Round
             )
         )
 
-        // Соединительные линии по краям (уголки рта)
-        val connectorLength = 10f
+        // Соединительные линии по краям (уголки рта) — фиксированные
+        val connectorLength = 12f
 
-        // Левый уголок
-        val leftUpperY = midY - (sin(0f + phase) * 0.7f + sin(0f + phase * 1.6f) * 0.2f + sin(0f + phase * 2.4f) * 0.1f) * currentAmplitude
-        val leftLowerY = midY + (sin(0f + phase + Math.PI.toFloat()) * 0.7f + sin(0f + phase * 1.6f + Math.PI.toFloat()) * 0.2f + sin(0f + phase * 2.4f + Math.PI.toFloat()) * 0.1f) * currentAmplitude
+        // Левый уголок — верхняя и нижняя губы сходятся в одной точке
+        val leftUpperY = midY - (sin(0f + phase) * 0.5f + sin(0f + phase * 1.4f) * 0.3f + sin(0f + phase * 2.2f) * 0.2f) * currentAmplitude * 0f
+        val leftLowerY = midY + (sin(0f + phase + Math.PI.toFloat()) * 0.5f + sin(0f + phase * 1.4f + Math.PI.toFloat()) * 0.3f + sin(0f + phase * 2.2f + Math.PI.toFloat()) * 0.2f) * currentAmplitude * 0f
 
         drawLine(
             color = color,
             start = androidx.compose.ui.geometry.Offset(0f, leftUpperY),
-            end = androidx.compose.ui.geometry.Offset(connectorLength, (leftUpperY + leftLowerY) / 2),
-            strokeWidth = 3f,
+            end = androidx.compose.ui.geometry.Offset(connectorLength, midY),
+            strokeWidth = 3.5f,
             cap = StrokeCap.Round
         )
         drawLine(
             color = color,
             start = androidx.compose.ui.geometry.Offset(0f, leftLowerY),
-            end = androidx.compose.ui.geometry.Offset(connectorLength, (leftUpperY + leftLowerY) / 2),
-            strokeWidth = 2.5f,
+            end = androidx.compose.ui.geometry.Offset(connectorLength, midY),
+            strokeWidth = 3f,
             cap = StrokeCap.Round
         )
 
         // Правый уголок
         val rightX = width
         val rightNormX = 1f
-        val rightUpperY = midY - (sin(rightNormX * 14f + phase) * 0.7f + sin(rightNormX * 27f + phase * 1.6f) * 0.2f + sin(rightNormX * 43f + phase * 2.4f) * 0.1f) * currentAmplitude
-        val rightLowerY = midY + (sin(rightNormX * 14f + phase + Math.PI.toFloat()) * 0.7f + sin(rightNormX * 27f + phase * 1.6f + Math.PI.toFloat()) * 0.2f + sin(rightNormX * 43f + phase * 2.4f + Math.PI.toFloat()) * 0.1f) * currentAmplitude
+        val rightUpperY = midY - (sin(rightNormX * 10f + phase) * 0.5f + sin(rightNormX * 19f + phase * 1.4f) * 0.3f + sin(rightNormX * 31f + phase * 2.2f) * 0.2f) * currentAmplitude * 0f
+        val rightLowerY = midY + (sin(rightNormX * 10f + phase + Math.PI.toFloat()) * 0.5f + sin(rightNormX * 19f + phase * 1.4f + Math.PI.toFloat()) * 0.3f + sin(rightNormX * 31f + phase * 2.2f + Math.PI.toFloat()) * 0.2f) * currentAmplitude * 0f
 
         drawLine(
             color = color,
             start = androidx.compose.ui.geometry.Offset(rightX, rightUpperY),
-            end = androidx.compose.ui.geometry.Offset(rightX - connectorLength, (rightUpperY + rightLowerY) / 2),
-            strokeWidth = 3f,
+            end = androidx.compose.ui.geometry.Offset(rightX - connectorLength, midY),
+            strokeWidth = 3.5f,
             cap = StrokeCap.Round
         )
         drawLine(
             color = color,
             start = androidx.compose.ui.geometry.Offset(rightX, rightLowerY),
-            end = androidx.compose.ui.geometry.Offset(rightX - connectorLength, (rightUpperY + rightLowerY) / 2),
-            strokeWidth = 2.5f,
+            end = androidx.compose.ui.geometry.Offset(rightX - connectorLength, midY),
+            strokeWidth = 3f,
             cap = StrokeCap.Round
         )
     }
 }
-
 /**
  * Экран блокировки приложения.
  * Запрашивает секретную фразу для разблокировки.
