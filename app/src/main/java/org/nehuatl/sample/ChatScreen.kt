@@ -605,94 +605,94 @@ fun ChatScreen(
 }
 
 /**
- * Анимированный график "говорящего рта" — две синусоиды
- * плавно расходятся от краёв к середине, имитируя
- * открывающийся и закрывающийся рот.
+ * Анимированный контур говорящих губ.
+ * Математическая модель имитирует артикуляцию (речь) и анатомическую форму рта.
  */
 @Composable
-private fun VoiceWaveAnimation(
+fun VoiceWaveAnimation(
     color: Color,
     modifier: Modifier = Modifier
 ) {
-    val infiniteTransition = rememberInfiniteTransition()
+    val infiniteTransition = rememberInfiniteTransition(label = "MouthAnimation")
 
-    // Фаза для бега волны
-    val phase by infiniteTransition.animateFloat(
+    // Базовое время для генерации псевдослучайной речи (симуляция слогов)
+    val speechTime by infiniteTransition.animateFloat(
         initialValue = 0f,
-        targetValue = 4f * Math.PI.toFloat(),
+        targetValue = 2 * PI.toFloat(),
         animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = 500,
-                easing = LinearEasing
-            )
-        )
+            animation = tween(durationMillis = 1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "SpeechTime"
     )
 
-    // Пульсация раскрытия рта (амплитуда меняется плавно)
-    val mouthOpen by infiniteTransition.animateFloat(
-        initialValue = 0.05f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = 450,
-                easing = FastOutSlowInEasing
-            ),
-            repeatMode = RepeatMode.Reverse
-        )
+    // Вычисляем артикуляцию: смешиваем 3 частоты, чтобы получить неравномерное открывание рта
+    val rawMouthOpen = (
+        sin(speechTime * 2f) * 0.5f + 
+        sin(speechTime * 5.3f) * 0.3f + 
+        sin(speechTime * 11.1f) * 0.2f
     )
+    // Переводим в диапазон от 0.05 (почти закрыт) до 1.0 (максимально открыт)
+    val mouthOpen = 0.05f + 0.95f * abs(rawMouthOpen)
 
     Canvas(modifier = modifier) {
         val width = size.width
         val height = size.height
         val midY = height / 2
-        val maxAmplitude = height * 0.45f
-        val currentAmplitude = maxAmplitude * mouthOpen
 
-        // Рисуем клетчатое поле (фон) — крупнее и заметнее
+        // Настройки сетки (задний фон)
         val cellSize = 12f
-        val gridColor = Color(0xFFBDBDBD)
-        val gridLineWidth = 1.2f
+        val gridColor = Color(0xFFE0E0E0)
+        val gridLineWidth = 1f
 
+        // Рисуем вертикальные линии сетки
         var gridX = 0f
         while (gridX <= width) {
-            drawLine(
-                color = gridColor,
-                start = androidx.compose.ui.geometry.Offset(gridX, 0f),
-                end = androidx.compose.ui.geometry.Offset(gridX, height),
-                strokeWidth = gridLineWidth
-            )
+            drawLine(gridColor, Offset(gridX, 0f), Offset(gridX, height), gridLineWidth)
             gridX += cellSize
         }
 
+        // Рисуем горизонтальные линии сетки
         var gridY = 0f
         while (gridY <= height) {
-            drawLine(
-                color = gridColor,
-                start = androidx.compose.ui.geometry.Offset(0f, gridY),
-                end = androidx.compose.ui.geometry.Offset(width, gridY),
-                strokeWidth = gridLineWidth
-            )
+            drawLine(gridColor, Offset(0f, gridY), Offset(width, gridY), gridLineWidth)
             gridY += cellSize
         }
 
-        // Верхняя губа (верхняя синусоида)
+        // Параметры амплитуды движения губ
+        val maxTotalOpen = height * 0.35f // Максимальная высота раскрытия рта
+        val currentOpen = maxTotalOpen * mouthOpen
+
+        // Распределение движения: нижняя губа двигается сильнее (75% амплитуды), верхняя — слабее (25%)
+        val upperLipShift = currentOpen * 0.25f
+        val lowerLipShift = currentOpen * 0.75f
+
+        // Шаг отрисовки контура рта
+        val step = 2
+        val widthInt = width.toInt()
+
+        // --- 1. ВЕРХНЯЯ ГУБА (С луком Купидона по центру) ---
         val upperPath = Path()
-        var firstUpperPoint = true
-        val step = 2f
+        var isFirstUpper = true
 
-        for (x in 0..width.toInt() step step.toInt()) {
-            val normalizedX = x.toFloat() / width
-            // Расстояние от края: 0 на краях, 1 в центре
-            val edgeFactor = sin(normalizedX * Math.PI.toFloat())  // 0 → 1 → 0
-            // Волна с учётом раскрытия: больше всего расходится в центре
-            val wave = sin(normalizedX * 10f + phase) * 0.5f +
-                    sin(normalizedX * 19f + phase * 1.4f) * 0.3f +
-                    sin(normalizedX * 31f + phase * 2.2f) * 0.2f
-            val y = midY - wave * currentAmplitude * edgeFactor
+        for (x in 0..widthInt step step) {
+            val normX = x.toFloat() / width
+            
+            // Базовая форма: фиксируем края в 0, поднимаем к центру
+            val edgeFactor = sin(normX * PI.toFloat())
+            
+            // Создаем анатомическую ложбинку (лук Купидона) в самом центре (normX = 0.5)
+            // Для этого вычитаем острый провал из гладкого купола
+            val centerDip = 1.0f - abs(normX - 0.5f) * 6f
+            val cupidBow = if (centerDip > 0f) centerDip * centerDip * 0.18f else 0f
+            
+            // Финальная геометрия верхней губы
+            val lipShape = edgeFactor - cupidBow
+            val y = midY - (upperLipShift * lipShape)
 
-            if (firstUpperPoint) {
+            if (isFirstUpper) {
                 upperPath.moveTo(x.toFloat(), y)
-                firstUpperPoint = false
+                isFirstUpper = false
             } else {
                 upperPath.lineTo(x.toFloat(), y)
             }
@@ -701,27 +701,26 @@ private fun VoiceWaveAnimation(
         drawPath(
             path = upperPath,
             color = color,
-            style = Stroke(
-                width = 3.5f,
-                cap = StrokeCap.Round
-            )
+            style = Stroke(width = 4f, cap = StrokeCap.Round)
         )
 
-        // Нижняя губа (нижняя синусоида)
+        // --- 2. НИЖНЯЯ ГУБА (Плавный округлый контур) ---
         val lowerPath = Path()
-        var firstLowerPoint = true
+        var isFirstLower = true
 
-        for (x in 0..width.toInt() step step.toInt()) {
-            val normalizedX = x.toFloat() / width
-            val edgeFactor = sin(normalizedX * Math.PI.toFloat())
-            val wave = sin(normalizedX * 10f + phase + Math.PI.toFloat()) * 0.5f +
-                    sin(normalizedX * 19f + phase * 1.4f + Math.PI.toFloat()) * 0.3f +
-                    sin(normalizedX * 31f + phase * 2.2f + Math.PI.toFloat()) * 0.2f
-            val y = midY + wave * currentAmplitude * edgeFactor
+        for (x in 0..widthInt step step) {
+            val normX = x.toFloat() / width
+            
+            // Базовая форма: края зафиксированы в 0, к центру идет плавное расширение
+            val edgeFactor = sin(normX * PI.toFloat())
+            
+            // Делаем нижнюю губу чуть более плоской/наполненной в центральной части (степень 1.2)
+            val lipShape = Math.pow(edgeFactor.toDouble(), 1.2).toFloat()
+            val y = midY + (lowerLipShift * lipShape)
 
-            if (firstLowerPoint) {
+            if (isFirstLower) {
                 lowerPath.moveTo(x.toFloat(), y)
-                firstLowerPoint = false
+                isFirstLower = false
             } else {
                 lowerPath.lineTo(x.toFloat(), y)
             }
@@ -729,54 +728,8 @@ private fun VoiceWaveAnimation(
 
         drawPath(
             path = lowerPath,
-            color = color.copy(alpha = 0.85f),
-            style = Stroke(
-                width = 3f,
-                cap = StrokeCap.Round
-            )
-        )
-
-        // Соединительные линии по краям (уголки рта) — фиксированные
-        val connectorLength = 12f
-
-        // Левый уголок — верхняя и нижняя губы сходятся в одной точке
-        val leftUpperY = midY - (sin(0f + phase) * 0.5f + sin(0f + phase * 1.4f) * 0.3f + sin(0f + phase * 2.2f) * 0.2f) * currentAmplitude * 0f
-        val leftLowerY = midY + (sin(0f + phase + Math.PI.toFloat()) * 0.5f + sin(0f + phase * 1.4f + Math.PI.toFloat()) * 0.3f + sin(0f + phase * 2.2f + Math.PI.toFloat()) * 0.2f) * currentAmplitude * 0f
-
-        drawLine(
-            color = color,
-            start = androidx.compose.ui.geometry.Offset(0f, leftUpperY),
-            end = androidx.compose.ui.geometry.Offset(connectorLength, midY),
-            strokeWidth = 3.5f,
-            cap = StrokeCap.Round
-        )
-        drawLine(
-            color = color,
-            start = androidx.compose.ui.geometry.Offset(0f, leftLowerY),
-            end = androidx.compose.ui.geometry.Offset(connectorLength, midY),
-            strokeWidth = 3f,
-            cap = StrokeCap.Round
-        )
-
-        // Правый уголок
-        val rightX = width
-        val rightNormX = 1f
-        val rightUpperY = midY - (sin(rightNormX * 10f + phase) * 0.5f + sin(rightNormX * 19f + phase * 1.4f) * 0.3f + sin(rightNormX * 31f + phase * 2.2f) * 0.2f) * currentAmplitude * 0f
-        val rightLowerY = midY + (sin(rightNormX * 10f + phase + Math.PI.toFloat()) * 0.5f + sin(rightNormX * 19f + phase * 1.4f + Math.PI.toFloat()) * 0.3f + sin(rightNormX * 31f + phase * 2.2f + Math.PI.toFloat()) * 0.2f) * currentAmplitude * 0f
-
-        drawLine(
-            color = color,
-            start = androidx.compose.ui.geometry.Offset(rightX, rightUpperY),
-            end = androidx.compose.ui.geometry.Offset(rightX - connectorLength, midY),
-            strokeWidth = 3.5f,
-            cap = StrokeCap.Round
-        )
-        drawLine(
-            color = color,
-            start = androidx.compose.ui.geometry.Offset(rightX, rightLowerY),
-            end = androidx.compose.ui.geometry.Offset(rightX - connectorLength, midY),
-            strokeWidth = 3f,
-            cap = StrokeCap.Round
+            color = color.copy(alpha = 0.9f),
+            style = Stroke(width = 3.5f, cap = StrokeCap.Round)
         )
     }
 }
