@@ -607,94 +607,97 @@ fun ChatScreen(
 }
 
 /**
- * Анимированный контур говорящих губ.
- * Математическая модель имитирует артикуляцию (речь) и анатомическую форму рта.
+ * Анимированный график "говорящего рта" — верхняя синусоида колеблется
+ * выше центральной линии, нижняя — ниже. Имитация раскрытия губ.
  */
 @Composable
-fun VoiceWaveAnimation(
+private fun VoiceWaveAnimation(
     color: Color,
     modifier: Modifier = Modifier
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "MouthAnimation")
+    val infiniteTransition = rememberInfiniteTransition()
 
-    // Базовое время для генерации псевдослучайной речи (симуляция слогов)
-    val speechTime by infiniteTransition.animateFloat(
+    // Фаза для бега волны
+    val phase by infiniteTransition.animateFloat(
         initialValue = 0f,
-        targetValue = 2 * PI.toFloat(),
+        targetValue = 4f * Math.PI.toFloat(),
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "SpeechTime"
+            animation = tween(
+                durationMillis = 500,
+                easing = LinearEasing
+            )
+        )
     )
 
-    // Вычисляем артикуляцию: смешиваем 3 частоты, чтобы получить неравномерное открывание рта
-    val rawMouthOpen = (
-        sin(speechTime * 2f) * 0.5f + 
-        sin(speechTime * 5.3f) * 0.3f + 
-        sin(speechTime * 11.1f) * 0.2f
+    // Пульсация раскрытия рта
+    val mouthOpen by infiniteTransition.animateFloat(
+        initialValue = 0.1f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = 450,
+                easing = FastOutSlowInEasing
+            ),
+            repeatMode = RepeatMode.Reverse
+        )
     )
-    // Переводим в диапазон от 0.05 (почти закрыт) до 1.0 (максимально открыт)
-    val mouthOpen = 0.05f + 0.95f * abs(rawMouthOpen)
 
     Canvas(modifier = modifier) {
         val width = size.width
         val height = size.height
         val midY = height / 2
+        val maxAmplitude = height * 0.35f
+        val currentAmplitude = maxAmplitude * mouthOpen
 
-        // Настройки сетки (задний фон)
+        // Рисуем клетчатое поле (фон)
         val cellSize = 12f
-        val gridColor = Color(0xFFE0E0E0)
-        val gridLineWidth = 1f
+        val gridColor = Color(0xFFBDBDBD)
+        val gridLineWidth = 1.2f
 
-        // Рисуем вертикальные линии сетки
         var gridX = 0f
         while (gridX <= width) {
-            drawLine(gridColor, Offset(gridX, 0f), Offset(gridX, height), gridLineWidth)
+            drawLine(
+                color = gridColor,
+                start = Offset(gridX, 0f),
+                end = Offset(gridX, height),
+                strokeWidth = gridLineWidth
+            )
             gridX += cellSize
         }
 
-        // Рисуем горизонтальные линии сетки
         var gridY = 0f
         while (gridY <= height) {
-            drawLine(gridColor, Offset(0f, gridY), Offset(width, gridY), gridLineWidth)
+            drawLine(
+                color = gridColor,
+                start = Offset(0f, gridY),
+                end = Offset(width, gridY),
+                strokeWidth = gridLineWidth
+            )
             gridY += cellSize
         }
 
-        // Параметры амплитуды движения губ
-        val maxTotalOpen = height * 0.35f // Максимальная высота раскрытия рта
-        val currentOpen = maxTotalOpen * mouthOpen
+        val step = 2f
 
-        // Распределение движения: нижняя губа двигается сильнее (75% амплитуды), верхняя — слабее (25%)
-        val upperLipShift = currentOpen * 0.25f
-        val lowerLipShift = currentOpen * 0.75f
-
-        // Шаг отрисовки контура рта
-        val step = 2
-        val widthInt = width.toInt()
-
-        // --- 1. ВЕРХНЯЯ ГУБА (С луком Купидона по центру) ---
+        // === ВЕРХНЯЯ ГУБА ===
+        // Центр верхней синусоиды всегда ВЫШЕ центральной линии (midY)
+        // Она колеблется от midY - maxAmplitude до midY - minAmplitude
         val upperPath = Path()
-        var isFirstUpper = true
+        var firstUpperPoint = true
 
-        for (x in 0..widthInt step step) {
-            val normX = x.toFloat() / width
-            
-            // Базовая форма: фиксируем края в 0, поднимаем к центру
-            val edgeFactor = sin(normX * PI.toFloat())
-            
-            // Создаем анатомическую ложбинку (лук Купидона) в самом центре (normX = 0.5)
-            // Для этого вычитаем острый провал из гладкого купола
-            val centerDip = 1.0f - abs(normX - 0.5f) * 6f
-            val cupidBow = if (centerDip > 0f) centerDip * centerDip * 0.18f else 0f
-            
-            // Финальная геометрия верхней губы
-            val lipShape = edgeFactor - cupidBow
-            val y = midY - (upperLipShift * lipShape)
+        for (x in 0..width.toInt() step step.toInt()) {
+            val normalizedX = x.toFloat() / width
+            // Форма: края зафиксированы в midY, к центру поднимается вверх
+            val edgeFactor = sin(normalizedX * PI.toFloat())
+            // Волна для верхней губы
+            val wave = sin(normalizedX * 12f + phase) * 0.5f +
+                    sin(normalizedX * 23f + phase * 1.7f) * 0.3f +
+                    sin(normalizedX * 37f + phase * 2.3f) * 0.2f
+            // Верхняя губа: смещение ВВЕРХ от midY
+            val y = midY - (currentAmplitude * 0.4f + currentAmplitude * 0.6f * abs(wave)) * edgeFactor
 
-            if (isFirstUpper) {
+            if (firstUpperPoint) {
                 upperPath.moveTo(x.toFloat(), y)
-                isFirstUpper = false
+                firstUpperPoint = false
             } else {
                 upperPath.lineTo(x.toFloat(), y)
             }
@@ -703,26 +706,30 @@ fun VoiceWaveAnimation(
         drawPath(
             path = upperPath,
             color = color,
-            style = Stroke(width = 4f, cap = StrokeCap.Round)
+            style = Stroke(
+                width = 3.5f,
+                cap = StrokeCap.Round
+            )
         )
 
-        // --- 2. НИЖНЯЯ ГУБА (Плавный округлый контур) ---
+        // === НИЖНЯЯ ГУБА ===
+        // Центр нижней синусоиды всегда НИЖЕ центральной линии (midY)
+        // Она колеблется от midY + minAmplitude до midY + maxAmplitude
         val lowerPath = Path()
-        var isFirstLower = true
+        var firstLowerPoint = true
 
-        for (x in 0..widthInt step step) {
-            val normX = x.toFloat() / width
-            
-            // Базовая форма: края зафиксированы в 0, к центру идет плавное расширение
-            val edgeFactor = sin(normX * PI.toFloat())
-            
-            // Делаем нижнюю губу чуть более плоской/наполненной в центральной части (степень 1.2)
-            val lipShape = Math.pow(edgeFactor.toDouble(), 1.2).toFloat()
-            val y = midY + (lowerLipShift * lipShape)
+        for (x in 0..width.toInt() step step.toInt()) {
+            val normalizedX = x.toFloat() / width
+            val edgeFactor = sin(normalizedX * PI.toFloat())
+            val wave = sin(normalizedX * 12f + phase + PI.toFloat()) * 0.5f +
+                    sin(normalizedX * 23f + phase * 1.7f + PI.toFloat()) * 0.3f +
+                    sin(normalizedX * 37f + phase * 2.3f + PI.toFloat()) * 0.2f
+            // Нижняя губа: смещение ВНИЗ от midY
+            val y = midY + (currentAmplitude * 0.4f + currentAmplitude * 0.6f * abs(wave)) * edgeFactor
 
-            if (isFirstLower) {
+            if (firstLowerPoint) {
                 lowerPath.moveTo(x.toFloat(), y)
-                isFirstLower = false
+                firstLowerPoint = false
             } else {
                 lowerPath.lineTo(x.toFloat(), y)
             }
@@ -730,8 +737,29 @@ fun VoiceWaveAnimation(
 
         drawPath(
             path = lowerPath,
-            color = color.copy(alpha = 0.9f),
-            style = Stroke(width = 3.5f, cap = StrokeCap.Round)
+            color = color.copy(alpha = 0.85f),
+            style = Stroke(
+                width = 3f,
+                cap = StrokeCap.Round
+            )
+        )
+
+        // Соединительные линии по краям (уголки рта)
+        val connectorLength = 10f
+
+        drawLine(
+            color = color,
+            start = Offset(0f, midY),
+            end = Offset(connectorLength, midY),
+            strokeWidth = 3.5f,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = color,
+            start = Offset(width, midY),
+            end = Offset(width - connectorLength, midY),
+            strokeWidth = 3.5f,
+            cap = StrokeCap.Round
         )
     }
 }
