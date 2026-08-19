@@ -84,6 +84,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -109,9 +110,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import androidx.compose.animation.core.*
 import androidx.compose.runtime.remember
+import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.sin
 import kotlin.math.cos
-
 // Цветовая схема приложения
 private val AppBackground = Color(0xFFFFFFFF)       // Белый фон
 private val SurfaceGray = Color(0xFFF1F3F5)        // Серый для поверхностей
