@@ -115,7 +115,7 @@ dependencies {
 // ============================================================
 val ttsModelDir = file("$projectDir/src/main/assets/tts-model")
 val ttsModelArchive = file("$buildDir/tts-model/vits-piper-ru_RU-denis-medium.tar.bz2")
-val ttsModelUrl = "http://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-ru_RU-denis-medium.tar.bz2"
+val ttsModelUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-ru_RU-denis-medium.tar.bz2"
 
 tasks.register("downloadTtsModel") {
     doLast {
@@ -130,12 +130,24 @@ tasks.register("downloadTtsModel") {
 
         println("Downloading TTS model from $ttsModelUrl")
         ttsModelArchive.parentFile.mkdirs()
-        URL(ttsModelUrl).openStream().use { input ->
+
+        val connection = URL(ttsModelUrl).openConnection() as java.net.HttpURLConnection
+        connection.instanceFollowRedirects = true
+        connection.connectTimeout = 60000
+        connection.readTimeout = 300000
+
+        connection.inputStream.use { input ->
             ttsModelArchive.outputStream().use { output ->
                 input.copyTo(output)
             }
         }
-        println("TTS model downloaded to $ttsModelArchive")
+        connection.disconnect()
+
+        println("TTS model downloaded to $ttsModelArchive (${ttsModelArchive.length()} bytes)")
+
+        if (ttsModelArchive.length() < 1000000) {
+            throw GradleException("Downloaded file is too small (${ttsModelArchive.length()} bytes). Download failed.")
+        }
 
         println("Extracting TTS model...")
         ttsModelDir.mkdirs()
@@ -147,9 +159,13 @@ tasks.register("downloadTtsModel") {
         val output = process.inputStream.bufferedReader().readText()
         val exitCode = process.waitFor()
         if (exitCode != 0) {
+            ttsModelArchive.delete()
             throw GradleException("Failed to extract TTS model: $output")
         }
         println("TTS model extracted to $ttsModelDir")
+
+        ttsModelArchive.delete()
+        println("Archive deleted.")
     }
 }
 
