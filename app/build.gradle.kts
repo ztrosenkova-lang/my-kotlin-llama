@@ -64,7 +64,7 @@ android {
             useLegacyPackaging = true
         }
         androidResources {
-            noCompress.addAll(listOf("bin", "gguf", "txt"))
+            noCompress.addAll(listOf("bin", "gguf", "txt", "onnx", "json"))
         }
     }
 }
@@ -94,9 +94,8 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging.interceptor)
 
-    // ===== УДАЛЕНО: Vosk и ONNX Runtime =====
-    // Вместо них используем встроенный Android TTS и Speech Recognizer
-    // Они уже есть в системе и не требуют дополнительных зависимостей
+    // Sherpa-ONNX для офлайн TTS
+    implementation("com.k2fsa.sherpa.onnx:sherpa-onnx:1.12.12")
 
     // Llama.cpp - Local module reference (оставляем для локального ИИ)
     implementation(project(":llamaCpp"))
@@ -112,15 +111,56 @@ dependencies {
 }
 
 // ============================================================
-// УДАЛЕНО: ЗАДАЧА ДЛЯ СКАЧИВАНИЯ МОДЕЛИ TTS
+// ЗАДАЧА ДЛЯ СКАЧИВАНИЯ МОДЕЛИ TTS ПРИ СБОРКЕ
 // ============================================================
-// Модель TTS больше не требуется, так как используем
-// встроенный Android TextToSpeech (Google TTS)
-//
-// Соответственно, удалены:
-// - val ttsModelDir
-// - val ttsModelFile
-// - val ttsModelUrl
-// - tasks.register("downloadTtsModel")
-// - tasks.named("preBuild") { dependsOn("downloadTtsModel") }
-// - tasks.register("checkTtsModel")
+val ttsModelDir = file("$projectDir/src/main/assets/tts-model")
+val ttsModelArchive = file("$buildDir/tts-model/vits-piper-ru_RU-denis-medium.tar.bz2")
+val ttsModelUrl = "http://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-ru_RU-denis-medium.tar.bz2"
+
+tasks.register("downloadTtsModel") {
+    doLast {
+        if (ttsModelDir.exists() && ttsModelDir.listFiles()?.isNotEmpty() == true) {
+            println("TTS model already exists. Skipping download.")
+            return@doLast
+        }
+
+        println("Downloading TTS model from $ttsModelUrl")
+        ttsModelArchive.parentFile.mkdirs()
+        URL(ttsModelUrl).openStream().use { input ->
+            ttsModelArchive.outputStream().use { output ->
+                input.copyTo(output)
+            }
+        }
+        println("TTS model downloaded to $ttsModelArchive")
+
+        println("Extracting TTS model...")
+        ttsModelDir.mkdirs()
+        val process = ProcessBuilder(
+            "tar", "xjf", ttsModelArchive.absolutePath,
+            "-C", ttsModelDir.absolutePath,
+            "--strip-components=2"
+        ).redirectErrorStream(true).start()
+        val output = process.inputStream.bufferedReader().readText()
+        val exitCode = process.waitFor()
+        if (exitCode != 0) {
+            throw GradleException("Failed to extract TTS model: $output")
+        }
+        println("TTS model extracted to $ttsModelDir")
+    }
+}
+
+tasks.register("checkTtsModel") {
+    doLast {
+        val modelFile = File(ttsModelDir, "ru_RU-denis-medium.onnx")
+        val tokensFile = File(ttsModelDir, "tokens.txt")
+        if (!modelFile.exists() || !tokensFile.exists()) {
+            throw GradleException("TTS model files are missing. Run downloadTtsModel first.")
+        }
+        println("TTS model files verified.")
+    }
+}
+
+tasks.named("preBuild") {
+    dependsOn("downloadTtsModel")
+    dependsOn("checkTtsModel")
+}
