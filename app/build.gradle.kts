@@ -150,17 +150,17 @@ tasks.register("downloadTtsModel") {
 }
 
 tasks.register("checkTtsModel") {
+    dependsOn("downloadTtsModel")
     doLast {
         val modelFile = File(ttsModelDir, "ru_RU-denis-medium.onnx")
         val tokensFile = File(ttsModelDir, "tokens.txt")
         if (!modelFile.exists() || !tokensFile.exists()) {
-            throw GradleException("TTS model files are missing. Run downloadTtsModel first.")
+            throw GradleException("TTS model files are missing. Download failed.")
         }
         println("TTS model files verified.")
     }
 }
 
 tasks.named("preBuild") {
-    dependsOn("downloadTtsModel")
     dependsOn("checkTtsModel")
 }
