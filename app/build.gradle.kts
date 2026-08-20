@@ -94,8 +94,8 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging.interceptor)
 
-    // Sherpa-ONNX для офлайн TTS (AAR скачивается автоматически)
-    implementation(files("libs/sherpa-onnx-android-1.12.12.aar"))
+    // Sherpa-ONNX для офлайн TTS (Android)
+    implementation("com.github.k2-fsa.sherpa-onnx:sherpa-onnx-android:v1.13.5")
 
     // Llama.cpp - Local module reference (оставляем для локального ИИ)
     implementation(project(":llamaCpp"))
@@ -111,45 +111,11 @@ dependencies {
 }
 
 // ============================================================
-// ЗАДАЧА ДЛЯ СКАЧИВАНИЯ МОДЕЛИ TTS И БИБЛИОТЕКИ ПРИ СБОРКЕ
+// ЗАДАЧА ДЛЯ СКАЧИВАНИЯ МОДЕЛИ TTS ПРИ СБОРКЕ
 // ============================================================
 val ttsModelDir = file("$projectDir/src/main/assets/tts-model")
 val ttsModelArchive = file("$buildDir/tts-model/vits-piper-ru_RU-denis-medium.tar.bz2")
 val ttsModelUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-ru_RU-denis-medium.tar.bz2"
-
-val libsDir = file("$projectDir/libs")
-val sherpaAarFile = file("$libsDir/sherpa-onnx-android-1.12.12.aar")
-val sherpaAarUrl = "https://k2-fsa.github.io/sherpa/onnx/maven_repo/com/k2fsa/sherpa/onnx/sherpa-onnx-android/1.12.12/sherpa-onnx-android-1.12.12.aar"
-
-tasks.register("downloadSherpaAar") {
-    doLast {
-        if (sherpaAarFile.exists() && sherpaAarFile.length() > 100000) {
-            println("Sherpa AAR already exists. Skipping download.")
-            return@doLast
-        }
-
-        println("Downloading Sherpa AAR from $sherpaAarUrl")
-        libsDir.mkdirs()
-
-        val connection = URL(sherpaAarUrl).openConnection() as java.net.HttpURLConnection
-        connection.instanceFollowRedirects = true
-        connection.connectTimeout = 60000
-        connection.readTimeout = 300000
-
-        connection.inputStream.use { input ->
-            sherpaAarFile.outputStream().use { output ->
-                input.copyTo(output)
-            }
-        }
-        connection.disconnect()
-
-        println("Sherpa AAR downloaded to $sherpaAarFile (${sherpaAarFile.length()} bytes)")
-
-        if (sherpaAarFile.length() < 100000) {
-            throw GradleException("Downloaded AAR is too small (${sherpaAarFile.length()} bytes). Download failed.")
-        }
-    }
-}
 
 tasks.register("downloadTtsModel") {
     doLast {
@@ -232,6 +198,5 @@ tasks.register("checkTtsModel") {
 }
 
 tasks.named("preBuild") {
-    dependsOn("downloadSherpaAar")
     dependsOn("checkTtsModel")
 }
