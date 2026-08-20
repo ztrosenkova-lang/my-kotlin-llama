@@ -226,11 +226,11 @@ fun ChatScreen(
 
     // Приветственное сообщение с эффектом печатной машинки
     val fullWelcomeString = "Привет! Я твой персональный ИИ-Друг. 🤖✨ " +
-        "Я храню пароли, перевожу с разных языков и просто общаюсь. " +
+        "Я лучший хранитель паролей, переводчик с разных языков и просто умный собеседник. " +
         "Я создан, чтобы быть твоим надежным и автономным союзником. " +
-        "Я умею слышать и говорить. 🎤 Нажми на микрофон внизу, чтобы общаться голосом. " +
-        "У меня есть три вида памяти. 🧠 Подробнее узнаешь в справке. " +
-        "А ещё я могу напоминать о важных событиях. ⏰ " +
+        "Я умею слышать и говорить. 🎤 Нажимай на микрофон внизу, чтобы общаться голосом. " +
+        "В меня встроено три вида памяти. 🧠 Подробнее об этом ты можешь узнать в справке. " +
+        "А ещё я могу напоминать тебе о важных событиях,заменяя тебе календарь-органайзер. ⏰ " +
         "Давай общаться! Включи локальный движок Llama или облачный ИИ в шапке приложения, и погнали! 🚀"
 
     // Запуск приветственного сообщения с задержкой и анимацией печати
@@ -609,6 +609,8 @@ fun ChatScreen(
 /**
  * Анимированный график "говорящего рта" — верхняя синусоида колеблется
  * выше центральной линии, нижняя — ниже. Имитация раскрытия губ.
+ * Сетка с закруглёнными краями, губы не доходят до краёв на 4 мм.
+ * Хаотичное открывание рта через разные промежутки времени.
  */
 @Composable
 private fun VoiceWaveAnimation(
@@ -617,89 +619,121 @@ private fun VoiceWaveAnimation(
 ) {
     val infiniteTransition = rememberInfiniteTransition()
 
-    // Фаза для бега волны
+    // Фаза для бега волны — медленнее
     val phase by infiniteTransition.animateFloat(
         initialValue = 0f,
-        targetValue = 4f * Math.PI.toFloat(),
+        targetValue = 4f * PI.toFloat(),
         animationSpec = infiniteRepeatable(
             animation = tween(
-                durationMillis = 500,
+                durationMillis = 800,
                 easing = LinearEasing
             )
         )
     )
 
-    // Пульсация раскрытия рта
-    val mouthOpen by infiniteTransition.animateFloat(
-        initialValue = 0.1f,
-        targetValue = 1.0f,
+    // Псевдослучайное открывание рта через разные промежутки времени
+    val speechTime by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 2f * PI.toFloat(),
         animationSpec = infiniteRepeatable(
             animation = tween(
-                durationMillis = 450,
-                easing = FastOutSlowInEasing
+                durationMillis = 1800,
+                easing = LinearEasing
             ),
-            repeatMode = RepeatMode.Reverse
+            repeatMode = RepeatMode.Restart
         )
     )
+
+    // Вычисляем хаотичное открывание: смешиваем 3 частоты
+    val rawMouthOpen = (
+        sin(speechTime * 2.3f) * 0.5f +
+        sin(speechTime * 5.7f) * 0.3f +
+        sin(speechTime * 11.3f) * 0.2f
+    )
+    val mouthOpen = 0.15f + 0.85f * abs(rawMouthOpen)
 
     Canvas(modifier = modifier) {
         val width = size.width
         val height = size.height
         val midY = height / 2
-        val maxAmplitude = height * 0.35f
+        // Увеличенная амплитуда для более широкого открывания рта
+        val maxAmplitude = height * 0.48f
         val currentAmplitude = maxAmplitude * mouthOpen
 
-        // Рисуем клетчатое поле (фон)
+        // Поля по краям: 4 мм ≈ 11.3 px
+        val paddingPx = 11.3f
+        val gridLeft = paddingPx
+        val gridRight = width - paddingPx
+        val gridTop = paddingPx
+        val gridBottom = height - paddingPx
+        val gridWidth = gridRight - gridLeft
+        val gridHeight = gridBottom - gridTop
+
+        // Рисуем закруглённую рамку сетки
+        val cornerRadius = 16f
+        val borderColor = Color(0xFF9E9E9E)
+        val borderWidth = 2f
+
+        drawRoundRect(
+            color = Color.Transparent,
+            topLeft = Offset(gridLeft, gridTop),
+            size = androidx.compose.ui.geometry.Size(gridWidth, gridHeight),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(cornerRadius, cornerRadius),
+            style = Stroke(width = borderWidth)
+        )
+
+        // Рисуем клетчатое поле внутри рамки
         val cellSize = 12f
         val gridColor = Color(0xFFBDBDBD)
-        val gridLineWidth = 1.2f
+        val gridLineWidth = 1f
 
-        var gridX = 0f
-        while (gridX <= width) {
+        var gridX = gridLeft + cellSize
+        while (gridX < gridRight) {
             drawLine(
                 color = gridColor,
-                start = Offset(gridX, 0f),
-                end = Offset(gridX, height),
+                start = Offset(gridX, gridTop),
+                end = Offset(gridX, gridBottom),
                 strokeWidth = gridLineWidth
             )
             gridX += cellSize
         }
 
-        var gridY = 0f
-        while (gridY <= height) {
+        var gridY = gridTop + cellSize
+        while (gridY < gridBottom) {
             drawLine(
                 color = gridColor,
-                start = Offset(0f, gridY),
-                end = Offset(width, gridY),
+                start = Offset(gridLeft, gridY),
+                end = Offset(gridRight, gridY),
                 strokeWidth = gridLineWidth
             )
             gridY += cellSize
         }
 
+        // Рабочая область для губ: от gridLeft до gridRight, от gridTop до gridBottom
         val step = 2f
+        val startX = gridLeft
+        val endX = gridRight
 
         // === ВЕРХНЯЯ ГУБА ===
-        // Центр верхней синусоиды всегда ВЫШЕ центральной линии (midY)
-        // Она колеблется от midY - maxAmplitude до midY - minAmplitude
         val upperPath = Path()
         var firstUpperPoint = true
 
         for (x in 0..width.toInt() step step.toInt()) {
-            val normalizedX = x.toFloat() / width
-            // Форма: края зафиксированы в midY, к центру поднимается вверх
+            val xf = x.toFloat()
+            if (xf < startX || xf > endX) continue
+
+            val normalizedX = (xf - startX) / (endX - startX)
             val edgeFactor = sin(normalizedX * PI.toFloat())
-            // Волна для верхней губы
             val wave = sin(normalizedX * 12f + phase) * 0.5f +
                     sin(normalizedX * 23f + phase * 1.7f) * 0.3f +
                     sin(normalizedX * 37f + phase * 2.3f) * 0.2f
-            // Верхняя губа: смещение ВВЕРХ от midY
-            val y = midY - (currentAmplitude * 0.4f + currentAmplitude * 0.6f * abs(wave)) * edgeFactor
+            val y = midY - (currentAmplitude * 0.35f + currentAmplitude * 0.65f * abs(wave)) * edgeFactor
 
             if (firstUpperPoint) {
-                upperPath.moveTo(x.toFloat(), y)
+                upperPath.moveTo(xf, y)
                 firstUpperPoint = false
             } else {
-                upperPath.lineTo(x.toFloat(), y)
+                upperPath.lineTo(xf, y)
             }
         }
 
@@ -707,31 +741,31 @@ private fun VoiceWaveAnimation(
             path = upperPath,
             color = color,
             style = Stroke(
-                width = 3.5f,
+                width = 4f,
                 cap = StrokeCap.Round
             )
         )
 
         // === НИЖНЯЯ ГУБА ===
-        // Центр нижней синусоиды всегда НИЖЕ центральной линии (midY)
-        // Она колеблется от midY + minAmplitude до midY + maxAmplitude
         val lowerPath = Path()
         var firstLowerPoint = true
 
         for (x in 0..width.toInt() step step.toInt()) {
-            val normalizedX = x.toFloat() / width
+            val xf = x.toFloat()
+            if (xf < startX || xf > endX) continue
+
+            val normalizedX = (xf - startX) / (endX - startX)
             val edgeFactor = sin(normalizedX * PI.toFloat())
             val wave = sin(normalizedX * 12f + phase + PI.toFloat()) * 0.5f +
                     sin(normalizedX * 23f + phase * 1.7f + PI.toFloat()) * 0.3f +
                     sin(normalizedX * 37f + phase * 2.3f + PI.toFloat()) * 0.2f
-            // Нижняя губа: смещение ВНИЗ от midY
-            val y = midY + (currentAmplitude * 0.4f + currentAmplitude * 0.6f * abs(wave)) * edgeFactor
+            val y = midY + (currentAmplitude * 0.35f + currentAmplitude * 0.65f * abs(wave)) * edgeFactor
 
             if (firstLowerPoint) {
-                lowerPath.moveTo(x.toFloat(), y)
+                lowerPath.moveTo(xf, y)
                 firstLowerPoint = false
             } else {
-                lowerPath.lineTo(x.toFloat(), y)
+                lowerPath.lineTo(xf, y)
             }
         }
 
@@ -739,26 +773,26 @@ private fun VoiceWaveAnimation(
             path = lowerPath,
             color = color.copy(alpha = 0.85f),
             style = Stroke(
-                width = 3f,
+                width = 3.5f,
                 cap = StrokeCap.Round
             )
         )
 
-        // Соединительные линии по краям (уголки рта)
-        val connectorLength = 10f
+        // Уголки рта — соединительные линии у краёв сетки
+        val connectorLength = 8f
 
         drawLine(
             color = color,
-            start = Offset(0f, midY),
-            end = Offset(connectorLength, midY),
-            strokeWidth = 3.5f,
+            start = Offset(startX, midY),
+            end = Offset(startX + connectorLength, midY),
+            strokeWidth = 4f,
             cap = StrokeCap.Round
         )
         drawLine(
             color = color,
-            start = Offset(width, midY),
-            end = Offset(width - connectorLength, midY),
-            strokeWidth = 3.5f,
+            start = Offset(endX, midY),
+            end = Offset(endX - connectorLength, midY),
+            strokeWidth = 4f,
             cap = StrokeCap.Round
         )
     }
