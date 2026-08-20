@@ -154,7 +154,7 @@ tasks.register("downloadTtsModel") {
         val process = ProcessBuilder(
             "tar", "xjf", ttsModelArchive.absolutePath,
             "-C", ttsModelDir.absolutePath,
-            "--strip-components=2"
+            "--strip-components=1"
         ).redirectErrorStream(true).start()
         val output = process.inputStream.bufferedReader().readText()
         val exitCode = process.waitFor()
@@ -163,6 +163,22 @@ tasks.register("downloadTtsModel") {
             throw GradleException("Failed to extract TTS model: $output")
         }
         println("TTS model extracted to $ttsModelDir")
+
+        // Перемещаем файлы из вложенной папки в корень ttsModelDir
+        val extractedDir = File(ttsModelDir, "vits-piper-ru_RU-denis-medium")
+        if (extractedDir.exists() && extractedDir.isDirectory) {
+            extractedDir.listFiles()?.forEach { file ->
+                val target = File(ttsModelDir, file.name)
+                file.copyTo(target, overwrite = true)
+                if (file.isDirectory) {
+                    file.deleteRecursively()
+                } else {
+                    file.delete()
+                }
+            }
+            extractedDir.deleteRecursively()
+            println("Files moved to root of ttsModelDir")
+        }
 
         ttsModelArchive.delete()
         println("Archive deleted.")
@@ -174,7 +190,12 @@ tasks.register("checkTtsModel") {
     doLast {
         val modelFile = File(ttsModelDir, "ru_RU-denis-medium.onnx")
         val tokensFile = File(ttsModelDir, "tokens.txt")
-        if (!modelFile.exists() || !tokensFile.exists()) {
+        val espeakDataDir = File(ttsModelDir, "espeak-ng-data")
+        if (!modelFile.exists() || !tokensFile.exists() || !espeakDataDir.exists()) {
+            println("Contents of $ttsModelDir:")
+            ttsModelDir.listFiles()?.forEach { file ->
+                println("  ${file.name} (${if (file.isDirectory) "dir" else "file"})")
+            }
             throw GradleException("TTS model files are missing. Download failed.")
         }
         println("TTS model files verified.")
