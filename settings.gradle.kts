@@ -12,7 +12,6 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven { url = java.net.URI("https://jitpack.io") }
-        maven { url = java.net.URI("https://k2-fsa.github.io/sherpa/onnx/maven_repo/") }
     }
 }
 
