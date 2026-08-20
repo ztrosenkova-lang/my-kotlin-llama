@@ -119,7 +119,11 @@ val ttsModelUrl = "http://github.com/k2-fsa/sherpa-onnx/releases/download/tts-mo
 
 tasks.register("downloadTtsModel") {
     doLast {
-        if (ttsModelDir.exists() && ttsModelDir.listFiles()?.isNotEmpty() == true) {
+        val modelFile = File(ttsModelDir, "ru_RU-denis-medium.onnx")
+        val tokensFile = File(ttsModelDir, "tokens.txt")
+        val espeakDataDir = File(ttsModelDir, "espeak-ng-data")
+
+        if (modelFile.exists() && tokensFile.exists() && espeakDataDir.exists()) {
             println("TTS model already exists. Skipping download.")
             return@doLast
         }
