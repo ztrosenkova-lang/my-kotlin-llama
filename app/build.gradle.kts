@@ -95,7 +95,7 @@ dependencies {
     implementation(libs.okhttp.logging.interceptor)
 
     // Sherpa-ONNX для офлайн TTS
-    implementation("com.k2fsa.sherpa.onnx:sherpa-onnx:1.12.12")
+    implementation("com.k2fsa.sherpa.onnx:sherpa-onnx:1.10.32")
 
     // Llama.cpp - Local module reference (оставляем для локального ИИ)
     implementation(project(":llamaCpp"))
