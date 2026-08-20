@@ -7,17 +7,22 @@ import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioFormat
+import android.media.AudioTrack
 import android.net.Uri
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.provider.Settings
-import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.k2fsa.sherpa.onnx.OfflineTts
+import com.k2fsa.sherpa.onnx.OfflineTtsConfig
+import com.k2fsa.sherpa.onnx.OfflineTtsKaiosModelConfig
+import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
+import com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -142,8 +147,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         File(getApplication<Application>().filesDir, "brain.txt")
     }
 
-    // ==================== TTS (голосовой движок) ====================
-    private var textToSpeech: TextToSpeech? = null
+    // ==================== TTS (Sherpa-ONNX офлайн) ====================
+    private var offlineTts: OfflineTts? = null
+    private var audioTrack: AudioTrack? = null
+    private var ttsPlaybackJob: Job? = null
     private var isTtsEnabled = false
     private val _isTtsReady = MutableStateFlow(false)
     val isTtsReady: StateFlow<Boolean> = _isTtsReady.asStateFlow()
@@ -275,7 +282,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
 
-        // Инициализация TTS
+        // Инициализация TTS (Sherpa-ONNX)
         initTts()
 
         // Подписка на события облачного ИИ
@@ -629,52 +636,83 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         return digest.joinToString("") { "%02x".format(it) }
     }
 
-    // ==================== TTS (ГОЛОСОВОЙ ДВИЖОК) ====================
+    // ==================== TTS (Sherpa-ONNX офлайн) ====================
 
     private fun initTts() {
         ttsInitJob?.cancel()
-        ttsInitJob = viewModelScope.launch {
+        ttsInitJob = viewModelScope.launch(Dispatchers.IO) {
             try {
                 val context = getApplication<Application>()
-                textToSpeech = TextToSpeech(context) { status ->
-                    if (status == TextToSpeech.SUCCESS) {
-                        val result = textToSpeech?.setLanguage(Locale("ru", "RU"))
-                        if (result == TextToSpeech.LANG_AVAILABLE || result == TextToSpeech.LANG_COUNTRY_AVAILABLE) {
-                            _isTtsReady.value = true
-                            isTtsEnabled = true
-                            textToSpeech?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                                override fun onStart(utteranceId: String?) {
-                                    _isSpeaking.value = true
-                                }
+                val modelDir = File(context.filesDir, "tts-model")
+                if (!modelDir.exists()) {
+                    modelDir.mkdirs()
+                }
 
-                                override fun onDone(utteranceId: String?) {
-                                    _isSpeaking.value = false
-                                }
+                // Копируем модель из assets в filesDir при первом запуске
+                val modelFile = File(modelDir, "ru_RU-denis-medium.onnx")
+                val tokensFile = File(modelDir, "tokens.txt")
+                val espeakDataDir = File(modelDir, "espeak-ng-data")
 
-                                override fun onError(utteranceId: String?) {
-                                    _isSpeaking.value = false
-                                }
-                            })
-                            appendSystemMessage("🟢 Голосовой движок Android TTS успешно инициализирован.")
-                            val welcomeText = "Голосовой движок полностью готов к работе."
-                            appendSystemMessage(welcomeText)
-                            Log.d(TAG, "TTS initialized successfully with Russian language")
-                        } else {
-                            _isTtsReady.value = false
-                            appendSystemMessage("⚠️ Русский язык не поддерживается TTS. Проверьте настройки.")
-                            Log.w(TAG, "TTS init: Russian language not available")
+                if (!modelFile.exists()) {
+                    context.assets.open("tts-model/ru_RU-denis-medium.onnx").use { input ->
+                        modelFile.outputStream().use { output ->
+                            input.copyTo(output)
                         }
-                    } else {
-                        _isTtsReady.value = false
-                        appendSystemMessage("🔴 Ошибка инициализации TTS: $status")
-                        Log.e(TAG, "TTS init failed with status: $status")
                     }
                 }
-                textToSpeech?.setLanguage(Locale("ru", "RU"))
+                if (!tokensFile.exists()) {
+                    context.assets.open("tts-model/tokens.txt").use { input ->
+                        tokensFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                }
+                if (!espeakDataDir.exists()) {
+                    copyAssetsDirectory(context, "tts-model/espeak-ng-data", espeakDataDir)
+                }
+
+                // Настройка модели VITS
+                val modelConfig = OfflineTtsVitsModelConfig(
+                    model = modelFile.absolutePath,
+                    tokens = tokensFile.absolutePath,
+                    dataDir = espeakDataDir.absolutePath
+                )
+                val ttsConfig = OfflineTtsConfig(
+                    model = OfflineTtsModelConfig(vits = modelConfig),
+                    ruleFsts = "",
+                    maxNumSentences = 1
+                )
+                offlineTts = OfflineTts(ttsConfig)
+
+                _isTtsReady.value = true
+                isTtsEnabled = true
+                appendSystemMessage("🟢 Офлайн голосовой движок успешно загружен.")
+                appendSystemMessage("Голосовой движок полностью готов к работе.")
+                Log.d(TAG, "Sherpa-ONNX TTS initialized successfully")
             } catch (e: Exception) {
                 _isTtsReady.value = false
-                appendSystemMessage("🔴 Ошибка инициализации TTS: ${e.message}")
-                Log.e(TAG, "TTS init error: ${e.message}", e)
+                appendSystemMessage("🔴 Ошибка инициализации офлайн TTS: ${e.message}")
+                Log.e(TAG, "Sherpa-ONNX TTS init error: ${e.message}", e)
+            }
+        }
+    }
+
+    private fun copyAssetsDirectory(context: Context, assetPath: String, targetDir: File) {
+        targetDir.mkdirs()
+        val assetsList = context.assets.list(assetPath) ?: return
+        if (assetsList.isEmpty()) return
+        for (fileName in assetsList) {
+            val fullAssetPath = "$assetPath/$fileName"
+            val targetFile = File(targetDir, fileName)
+            val subAssets = context.assets.list(fullAssetPath)
+            if (subAssets != null && subAssets.isNotEmpty()) {
+                copyAssetsDirectory(context, fullAssetPath, targetFile)
+            } else {
+                context.assets.open(fullAssetPath).use { input ->
+                    targetFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
             }
         }
     }
@@ -692,50 +730,56 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
 
         ttsInitJob?.cancel()
-        ttsInitJob = viewModelScope.launch {
+        ttsInitJob = viewModelScope.launch(Dispatchers.IO) {
             try {
                 val context = getApplication<Application>()
-                textToSpeech?.shutdown()
-                textToSpeech = null
-                _isTtsReady.value = false
+                val modelDir = File(context.filesDir, "tts-model")
+                if (!modelDir.exists()) {
+                    modelDir.mkdirs()
+                }
 
-                textToSpeech = TextToSpeech(context) { status ->
-                    if (status == TextToSpeech.SUCCESS) {
-                        val result = textToSpeech?.setLanguage(Locale("ru", "RU"))
-                        if (result == TextToSpeech.LANG_AVAILABLE || result == TextToSpeech.LANG_COUNTRY_AVAILABLE) {
-                            _isTtsReady.value = true
-                            isTtsEnabled = true
-                            textToSpeech?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                                override fun onStart(utteranceId: String?) {
-                                    _isSpeaking.value = true
-                                }
+                val modelFile = File(modelDir, "ru_RU-denis-medium.onnx")
+                val tokensFile = File(modelDir, "tokens.txt")
+                val espeakDataDir = File(modelDir, "espeak-ng-data")
 
-                                override fun onDone(utteranceId: String?) {
-                                    _isSpeaking.value = false
-                                }
-
-                                override fun onError(utteranceId: String?) {
-                                    _isSpeaking.value = false
-                                }
-                            })
-                            appendSystemMessage("🟢 Голосовой движок Android TTS успешно загружен.")
-                            Log.d(TAG, "TTS enabled successfully")
-                        } else {
-                            _isTtsReady.value = false
-                            appendSystemMessage("⚠️ Русский язык не поддерживается TTS. Проверьте настройки.")
-                            Log.w(TAG, "TTS enable: Russian language not available")
+                if (!modelFile.exists()) {
+                    context.assets.open("tts-model/ru_RU-denis-medium.onnx").use { input ->
+                        modelFile.outputStream().use { output ->
+                            input.copyTo(output)
                         }
-                    } else {
-                        _isTtsReady.value = false
-                        appendSystemMessage("🔴 Ошибка загрузки TTS: $status")
-                        Log.e(TAG, "TTS enable failed with status: $status")
                     }
                 }
-                textToSpeech?.setLanguage(Locale("ru", "RU"))
+                if (!tokensFile.exists()) {
+                    context.assets.open("tts-model/tokens.txt").use { input ->
+                        tokensFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                }
+                if (!espeakDataDir.exists()) {
+                    copyAssetsDirectory(context, "tts-model/espeak-ng-data", espeakDataDir)
+                }
+
+                val modelConfig = OfflineTtsVitsModelConfig(
+                    model = modelFile.absolutePath,
+                    tokens = tokensFile.absolutePath,
+                    dataDir = espeakDataDir.absolutePath
+                )
+                val ttsConfig = OfflineTtsConfig(
+                    model = OfflineTtsModelConfig(vits = modelConfig),
+                    ruleFsts = "",
+                    maxNumSentences = 1
+                )
+                offlineTts = OfflineTts(ttsConfig)
+
+                _isTtsReady.value = true
+                isTtsEnabled = true
+                appendSystemMessage("🟢 Офлайн голосовой движок успешно загружен.")
+                Log.d(TAG, "Sherpa-ONNX TTS enabled successfully")
             } catch (e: Exception) {
                 _isTtsReady.value = false
-                appendSystemMessage("🔴 Ошибка загрузки TTS: ${e.message}")
-                Log.e(TAG, "TTS enable error: ${e.message}", e)
+                appendSystemMessage("🔴 Ошибка загрузки офлайн TTS: ${e.message}")
+                Log.e(TAG, "Sherpa-ONNX TTS enable error: ${e.message}", e)
             }
         }
     }
@@ -743,14 +787,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     fun disableTts() {
         isTtsEnabled = false
         _isSpeaking.value = false
-        if (textToSpeech?.isSpeaking == true) {
-            textToSpeech?.stop()
-        }
-        textToSpeech?.shutdown()
-        textToSpeech = null
+        ttsPlaybackJob?.cancel()
+        audioTrack?.stop()
+        audioTrack?.release()
+        audioTrack = null
+        offlineTts = null
         _isTtsReady.value = false
         appendSystemMessage("🔇 Озвучка отключена, TTS выгружен из памяти")
-        Log.d(TAG, "TTS disabled and unloaded")
+        Log.d(TAG, "Sherpa-ONNX TTS disabled and unloaded")
     }
 
     private fun filterTextForSpeech(text: String): String {
@@ -759,15 +803,52 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     fun speakText(text: String) {
-        if (!_isTtsReady.value || !isTtsEnabled || text.isBlank() || textToSpeech == null) {
+        if (!_isTtsReady.value || !isTtsEnabled || text.isBlank() || offlineTts == null) {
             return
         }
         val filteredText = filterTextForSpeech(text)
         if (filteredText.isBlank()) {
             return
         }
-        val utteranceId = System.currentTimeMillis().toString()
-        textToSpeech?.speak(filteredText, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
+
+        ttsPlaybackJob?.cancel()
+        ttsPlaybackJob = scope.launch(Dispatchers.IO) {
+            try {
+                _isSpeaking.value = true
+                val audio = offlineTts!!.generate(filteredText, sid = 0, speed = 1.0f)
+                if (audio.samples.isNotEmpty()) {
+                    val sampleRate = audio.sampleRate
+                    val bufferSize = AudioTrack.getMinBufferSize(
+                        sampleRate,
+                        AudioFormat.CHANNEL_OUT_MONO,
+                        AudioFormat.ENCODING_PCM_FLOAT
+                    )
+                    audioTrack = AudioTrack(
+                        android.media.AudioAttributes.Builder()
+                            .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build(),
+                        AudioFormat.Builder()
+                            .setSampleRate(sampleRate)
+                            .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
+                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                            .build(),
+                        bufferSize,
+                        AudioTrack.MODE_STREAM,
+                        android.media.AudioManager.AUDIO_SESSION_ID_GENERATE
+                    )
+                    audioTrack?.play()
+                    audioTrack?.write(audio.samples, 0, audio.samples.size, AudioTrack.WRITE_BLOCKING)
+                    audioTrack?.stop()
+                    audioTrack?.release()
+                    audioTrack = null
+                }
+                _isSpeaking.value = false
+            } catch (e: Exception) {
+                _isSpeaking.value = false
+                Log.e(TAG, "TTS playback error: ${e.message}", e)
+            }
+        }
     }
 
     fun setCloudReady(modelId: String) {
@@ -1426,8 +1507,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     override fun onCleared() {
         super.onCleared()
         instance = null
-        textToSpeech?.shutdown()
-        textToSpeech = null
+        ttsPlaybackJob?.cancel()
+        audioTrack?.stop()
+        audioTrack?.release()
+        audioTrack = null
+        offlineTts = null
         _isTtsReady.value = false
         _isSpeaking.value = false
         _isModelLoaded.value = false
