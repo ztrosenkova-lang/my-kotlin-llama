@@ -20,7 +20,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
-import com.k2fsa.sherpa.onnx.OfflineTtsKaiosModelConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig
 import kotlinx.coroutines.CoroutineScope
@@ -671,7 +670,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     copyAssetsDirectory(context, "tts-model/espeak-ng-data", espeakDataDir)
                 }
 
-                // Настройка модели VITS
+                // Настройка модели VITS для новой версии Sherpa-ONNX
                 val modelConfig = OfflineTtsVitsModelConfig(
                     model = modelFile.absolutePath,
                     tokens = tokensFile.absolutePath,
@@ -682,7 +681,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     ruleFsts = "",
                     maxNumSentences = 1
                 )
-                offlineTts = OfflineTts(ttsConfig)
+                offlineTts = OfflineTts(
+                    config = ttsConfig,
+                    assetManager = context.assets
+                )
 
                 _isTtsReady.value = true
                 isTtsEnabled = true
@@ -770,7 +772,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     ruleFsts = "",
                     maxNumSentences = 1
                 )
-                offlineTts = OfflineTts(ttsConfig)
+                offlineTts = OfflineTts(
+                    config = ttsConfig,
+                    assetManager = context.assets
+                )
 
                 _isTtsReady.value = true
                 isTtsEnabled = true
