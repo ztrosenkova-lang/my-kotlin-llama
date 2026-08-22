@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import org.nehuatl.llamacpp.LlamaHelper
 import java.io.File
 import java.security.KeyStore
@@ -670,24 +671,26 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     copyAssetsDirectory(context, "tts-model/espeak-ng-data", espeakDataDir)
                 }
 
-                // Настройка модели VITS для новой версии Sherpa-ONNX
-                val modelConfig = OfflineTtsVitsModelConfig(
-                    model = modelFile.absolutePath,
-                    tokens = tokensFile.absolutePath,
-                    dataDir = espeakDataDir.absolutePath
-                )
-                val ttsConfig = OfflineTtsConfig(
-                    model = OfflineTtsModelConfig(vits = modelConfig),
-                    ruleFsts = "",
-                    maxNumSentences = 1
-                )
-                offlineTts = OfflineTts(context.assets, ttsConfig)
+                // Создание OfflineTts на главном потоке
+                withContext(Dispatchers.Main) {
+                    val modelConfig = OfflineTtsVitsModelConfig(
+                        model = modelFile.absolutePath,
+                        tokens = tokensFile.absolutePath,
+                        dataDir = espeakDataDir.absolutePath
+                    )
+                    val ttsConfig = OfflineTtsConfig(
+                        model = OfflineTtsModelConfig(vits = modelConfig),
+                        ruleFsts = "",
+                        maxNumSentences = 1
+                    )
+                    offlineTts = OfflineTts(context.assets, ttsConfig)
 
-                _isTtsReady.value = true
-                isTtsEnabled = true
-                appendSystemMessage("🟢 Офлайн голосовой движок успешно загружен.")
-                appendSystemMessage("Голосовой движок полностью готов к работе.")
-                Log.d(TAG, "Sherpa-ONNX TTS initialized successfully")
+                    _isTtsReady.value = true
+                    isTtsEnabled = true
+                    appendSystemMessage("🟢 Офлайн голосовой движок успешно загружен.")
+                    appendSystemMessage("Голосовой движок полностью готов к работе.")
+                    Log.d(TAG, "Sherpa-ONNX TTS initialized successfully")
+                }
             } catch (e: Exception) {
                 _isTtsReady.value = false
                 appendSystemMessage("🔴 Ошибка инициализации офлайн TTS: ${e.message}")
@@ -759,22 +762,25 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     copyAssetsDirectory(context, "tts-model/espeak-ng-data", espeakDataDir)
                 }
 
-                val modelConfig = OfflineTtsVitsModelConfig(
-                    model = modelFile.absolutePath,
-                    tokens = tokensFile.absolutePath,
-                    dataDir = espeakDataDir.absolutePath
-                )
-                val ttsConfig = OfflineTtsConfig(
-                    model = OfflineTtsModelConfig(vits = modelConfig),
-                    ruleFsts = "",
-                    maxNumSentences = 1
-                )
-                offlineTts = OfflineTts(context.assets, ttsConfig)
+                // Создание OfflineTts на главном потоке
+                withContext(Dispatchers.Main) {
+                    val modelConfig = OfflineTtsVitsModelConfig(
+                        model = modelFile.absolutePath,
+                        tokens = tokensFile.absolutePath,
+                        dataDir = espeakDataDir.absolutePath
+                    )
+                    val ttsConfig = OfflineTtsConfig(
+                        model = OfflineTtsModelConfig(vits = modelConfig),
+                        ruleFsts = "",
+                        maxNumSentences = 1
+                    )
+                    offlineTts = OfflineTts(context.assets, ttsConfig)
 
-                _isTtsReady.value = true
-                isTtsEnabled = true
-                appendSystemMessage("🟢 Офлайн голосовой движок успешно загружен.")
-                Log.d(TAG, "Sherpa-ONNX TTS enabled successfully")
+                    _isTtsReady.value = true
+                    isTtsEnabled = true
+                    appendSystemMessage("🟢 Офлайн голосовой движок успешно загружен.")
+                    Log.d(TAG, "Sherpa-ONNX TTS enabled successfully")
+                }
             } catch (e: Exception) {
                 _isTtsReady.value = false
                 appendSystemMessage("🔴 Ошибка загрузки офлайн TTS: ${e.message}")
