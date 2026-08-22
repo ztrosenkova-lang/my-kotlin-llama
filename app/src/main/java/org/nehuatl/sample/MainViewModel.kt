@@ -304,9 +304,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
 
         // Автоматическое включение TTS при старте
-        _isTtsReady.value = true
         isTtsEnabled = true
-        Log.d(TAG, "TTS auto-enabled")
+        _isTtsReady.value = false
+        appendSystemMessage("🔄 Инициализация офлайн голосового движка...")
+        Log.d(TAG, "TTS auto-enabled, waiting for initialization")
+        
+        // Запуск TTS сервиса
+        val ttsStartIntent = Intent(getApplication<Application>(), TtsService::class.java)
+        getApplication<Application>().startService(ttsStartIntent)
 
         // Подписка на события облачного ИИ
         scope.launch {
@@ -673,10 +678,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             return
         }
 
-        _isTtsReady.value = true
         isTtsEnabled = true
-        appendSystemMessage("🟢 Офлайн голосовой движок успешно загружен.")
-        Log.d(TAG, "TTS service started")
+        _isTtsReady.value = false
+        appendSystemMessage("🔄 Инициализация офлайн голосового движка...")
+        Log.d(TAG, "TTS service starting")
+        
+        // Запуск TTS сервиса
+        val ttsStartIntent = Intent(getApplication<Application>(), TtsService::class.java)
+        getApplication<Application>().startService(ttsStartIntent)
     }
 
     fun disableTts() {
@@ -685,6 +694,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _isTtsReady.value = false
         appendSystemMessage("🔇 Озвучка отключена, TTS выгружен из памяти")
         Log.d(TAG, "TTS disabled")
+        
+        // Остановка TTS сервиса
+        val ttsStopIntent = Intent(getApplication<Application>(), TtsService::class.java)
+        getApplication<Application>().stopService(ttsStopIntent)
     }
 
     private fun filterTextForSpeech(text: String): String {
@@ -1378,6 +1391,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         llamaHelper.abort()
         llamaHelper.release()
         viewModelJob.cancel()
+        
+        // Остановка TTS сервиса
+        try {
+            val ttsStopIntent = Intent(getApplication<Application>(), TtsService::class.java)
+            getApplication<Application>().stopService(ttsStopIntent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping TTS service: ${e.message}")
+        }
         
         // Отмена регистрации приёмника Broadcast
         try {
