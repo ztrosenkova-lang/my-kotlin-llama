@@ -118,8 +118,8 @@ val sherpaAarFile = file("$libsDir/sherpa-onnx-1.13.6.aar")
 val sherpaAarUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.6/sherpa-onnx-1.13.6.aar"
 
 val ttsModelDir = file("$projectDir/src/main/assets/tts-model")
-val ttsModelArchive = file("$buildDir/tts-model/vits-piper-ru_RU-denis-medium.tar.bz2")
-val ttsModelUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-ru_RU-denis-medium.tar.bz2"
+val ttsModelArchive = file("$buildDir/tts-model/sherpa-onnx-silero-tts-kseniya-ru-v1.tar.bz2")
+val ttsModelUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-silero-tts-kseniya-ru-v1.tar.bz2"
 
 tasks.register("downloadSherpaAar") {
     doLast {
@@ -153,11 +153,10 @@ tasks.register("downloadSherpaAar") {
 
 tasks.register("downloadTtsModel") {
     doLast {
-        val modelFile = File(ttsModelDir, "ru_RU-denis-medium.onnx")
+        val modelFile = File(ttsModelDir, "model.onnx")
         val tokensFile = File(ttsModelDir, "tokens.txt")
-        val espeakDataDir = File(ttsModelDir, "espeak-ng-data")
 
-        if (modelFile.exists() && tokensFile.exists() && espeakDataDir.exists()) {
+        if (modelFile.exists() && tokensFile.exists()) {
             println("TTS model already exists. Skipping download.")
             return@doLast
         }
@@ -198,7 +197,7 @@ tasks.register("downloadTtsModel") {
         }
         println("TTS model extracted to $ttsModelDir")
 
-        val extractedDir = File(ttsModelDir, "vits-piper-ru_RU-denis-medium")
+        val extractedDir = File(ttsModelDir, "sherpa-onnx-silero-tts-kseniya-ru-v1")
         if (extractedDir.exists() && extractedDir.isDirectory) {
             extractedDir.listFiles()?.forEach { file ->
                 val target = File(ttsModelDir, file.name)
@@ -221,10 +220,9 @@ tasks.register("downloadTtsModel") {
 tasks.register("checkTtsModel") {
     dependsOn("downloadTtsModel")
     doLast {
-        val modelFile = File(ttsModelDir, "ru_RU-denis-medium.onnx")
+        val modelFile = File(ttsModelDir, "model.onnx")
         val tokensFile = File(ttsModelDir, "tokens.txt")
-        val espeakDataDir = File(ttsModelDir, "espeak-ng-data")
-        if (!modelFile.exists() || !tokensFile.exists() || !espeakDataDir.exists()) {
+        if (!modelFile.exists() || !tokensFile.exists()) {
             throw GradleException("TTS model files are missing. Download failed.")
         }
         println("TTS model files verified.")
