@@ -270,6 +270,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
 
+        // Автоматическое включение TTS при старте
+        _isTtsReady.value = true
+        isTtsEnabled = true
+        Log.d(TAG, "TTS auto-enabled")
+
         // Подписка на события облачного ИИ
         scope.launch {
             _cloudFlow.collect { event ->
