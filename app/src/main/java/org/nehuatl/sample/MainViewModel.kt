@@ -18,7 +18,6 @@ import android.provider.Settings
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.k2fsa.sherpa.onnx.GenerationConfig
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
@@ -36,7 +35,6 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
 import org.nehuatl.llamacpp.LlamaHelper
 import java.io.File
 import java.security.KeyStore
@@ -641,81 +639,33 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     private fun initTts() {
         ttsInitJob?.cancel()
-        ttsInitJob = viewModelScope.launch(Dispatchers.IO) {
+        ttsInitJob = viewModelScope.launch {
             try {
+                _isTtsReady.value = false
                 val context = getApplication<Application>()
-                val modelDir = File(context.filesDir, "tts-model")
-                if (!modelDir.exists()) {
-                    modelDir.mkdirs()
-                }
 
-                // Копируем модель из assets в filesDir при первом запуске
-                val modelFile = File(modelDir, "ru_RU-denis-medium.onnx")
-                val tokensFile = File(modelDir, "tokens.txt")
-                val espeakDataDir = File(modelDir, "espeak-ng-data")
+                val modelConfig = OfflineTtsVitsModelConfig(
+                    model = "tts-model/ru_RU-denis-medium.onnx",
+                    tokens = "tts-model/tokens.txt",
+                    dataDir = "tts-model/espeak-ng-data"
+                )
+                val ttsConfig = OfflineTtsConfig(
+                    model = OfflineTtsModelConfig(vits = modelConfig),
+                    ruleFsts = "",
+                    maxNumSentences = 1,
+                    numThreads = 2
+                )
+                offlineTts = OfflineTts(context.assets, ttsConfig)
 
-                if (!modelFile.exists()) {
-                    context.assets.open("tts-model/ru_RU-denis-medium.onnx").use { input ->
-                        modelFile.outputStream().use { output ->
-                            input.copyTo(output)
-                        }
-                    }
-                }
-                if (!tokensFile.exists()) {
-                    context.assets.open("tts-model/tokens.txt").use { input ->
-                        tokensFile.outputStream().use { output ->
-                            input.copyTo(output)
-                        }
-                    }
-                }
-                if (!espeakDataDir.exists()) {
-                    copyAssetsDirectory(context, "tts-model/espeak-ng-data", espeakDataDir)
-                }
-
-                // Создание OfflineTts на главном потоке
-                withContext(Dispatchers.Main) {
-                    val modelConfig = OfflineTtsVitsModelConfig(
-    model = "tts-model/ru_RU-denis-medium.onnx",
-    tokens = "tts-model/tokens.txt",
-    dataDir = "tts-model/espeak-ng-data"
-)
-                    val ttsConfig = OfflineTtsConfig(
-                        model = OfflineTtsModelConfig(vits = modelConfig),
-                        ruleFsts = "",
-                        maxNumSentences = 1
-                    )
-                    offlineTts = OfflineTts(assetManager = context.assets, config = ttsConfig)
-
-                    _isTtsReady.value = true
-                    isTtsEnabled = true
-                    appendSystemMessage("🟢 Офлайн голосовой движок успешно загружен.")
-                    appendSystemMessage("Голосовой движок полностью готов к работе.")
-                    Log.d(TAG, "Sherpa-ONNX TTS initialized successfully")
-                }
+                _isTtsReady.value = true
+                isTtsEnabled = true
+                appendSystemMessage("🟢 Офлайн голосовой движок успешно загружен.")
+                appendSystemMessage("Голосовой движок полностью готов к работе.")
+                Log.d(TAG, "Sherpa-ONNX TTS initialized successfully")
             } catch (e: Exception) {
                 _isTtsReady.value = false
                 appendSystemMessage("🔴 Ошибка инициализации офлайн TTS: ${e.message}")
                 Log.e(TAG, "Sherpa-ONNX TTS init error: ${e.message}", e)
-            }
-        }
-    }
-
-    private fun copyAssetsDirectory(context: Context, assetPath: String, targetDir: File) {
-        targetDir.mkdirs()
-        val assetsList = context.assets.list(assetPath) ?: return
-        if (assetsList.isEmpty()) return
-        for (fileName in assetsList) {
-            val fullAssetPath = "$assetPath/$fileName"
-            val targetFile = File(targetDir, fileName)
-            val subAssets = context.assets.list(fullAssetPath)
-            if (subAssets != null && subAssets.isNotEmpty()) {
-                copyAssetsDirectory(context, fullAssetPath, targetFile)
-            } else {
-                context.assets.open(fullAssetPath).use { input ->
-                    targetFile.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
-                }
             }
         }
     }
@@ -733,55 +683,27 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
 
         ttsInitJob?.cancel()
-        ttsInitJob = viewModelScope.launch(Dispatchers.IO) {
+        ttsInitJob = viewModelScope.launch {
             try {
                 val context = getApplication<Application>()
-                val modelDir = File(context.filesDir, "tts-model")
-                if (!modelDir.exists()) {
-                    modelDir.mkdirs()
-                }
 
-                val modelFile = File(modelDir, "ru_RU-denis-medium.onnx")
-                val tokensFile = File(modelDir, "tokens.txt")
-                val espeakDataDir = File(modelDir, "espeak-ng-data")
+                val modelConfig = OfflineTtsVitsModelConfig(
+                    model = "tts-model/ru_RU-denis-medium.onnx",
+                    tokens = "tts-model/tokens.txt",
+                    dataDir = "tts-model/espeak-ng-data"
+                )
+                val ttsConfig = OfflineTtsConfig(
+                    model = OfflineTtsModelConfig(vits = modelConfig),
+                    ruleFsts = "",
+                    maxNumSentences = 1,
+                    numThreads = 2
+                )
+                offlineTts = OfflineTts(context.assets, ttsConfig)
 
-                if (!modelFile.exists()) {
-                    context.assets.open("tts-model/ru_RU-denis-medium.onnx").use { input ->
-                        modelFile.outputStream().use { output ->
-                            input.copyTo(output)
-                        }
-                    }
-                }
-                if (!tokensFile.exists()) {
-                    context.assets.open("tts-model/tokens.txt").use { input ->
-                        tokensFile.outputStream().use { output ->
-                            input.copyTo(output)
-                        }
-                    }
-                }
-                if (!espeakDataDir.exists()) {
-                    copyAssetsDirectory(context, "tts-model/espeak-ng-data", espeakDataDir)
-                }
-
-                // Создание OfflineTts на главном потоке
-                withContext(Dispatchers.Main) {
-                    val modelConfig = OfflineTtsVitsModelConfig(
-    model = "tts-model/ru_RU-denis-medium.onnx",
-    tokens = "tts-model/tokens.txt",
-    dataDir = "tts-model/espeak-ng-data"
-)
-                    val ttsConfig = OfflineTtsConfig(
-                        model = OfflineTtsModelConfig(vits = modelConfig),
-                        ruleFsts = "",
-                        maxNumSentences = 1
-                    )
-                    offlineTts = OfflineTts(assetManager = context.assets, config = ttsConfig)
-
-                    _isTtsReady.value = true
-                    isTtsEnabled = true
-                    appendSystemMessage("🟢 Офлайн голосовой движок успешно загружен.")
-                    Log.d(TAG, "Sherpa-ONNX TTS enabled successfully")
-                }
+                _isTtsReady.value = true
+                isTtsEnabled = true
+                appendSystemMessage("🟢 Офлайн голосовой движок успешно загружен.")
+                Log.d(TAG, "Sherpa-ONNX TTS enabled successfully")
             } catch (e: Exception) {
                 _isTtsReady.value = false
                 appendSystemMessage("🔴 Ошибка загрузки офлайн TTS: ${e.message}")
@@ -821,41 +743,34 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         ttsPlaybackJob = scope.launch(Dispatchers.IO) {
             try {
                 _isSpeaking.value = true
-                val sampleRate = offlineTts!!.sampleRate()
-                val bufferSize = AudioTrack.getMinBufferSize(
-                    sampleRate,
-                    AudioFormat.CHANNEL_OUT_MONO,
-                    AudioFormat.ENCODING_PCM_FLOAT
-                )
-                audioTrack = AudioTrack(
-                    android.media.AudioAttributes.Builder()
-                        .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
-                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
-                        .build(),
-                    AudioFormat.Builder()
-                        .setSampleRate(sampleRate)
-                        .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
-                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                        .build(),
-                    bufferSize,
-                    AudioTrack.MODE_STREAM,
-                    android.media.AudioManager.AUDIO_SESSION_ID_GENERATE
-                )
-                audioTrack?.play()
-
-                val genConfig = GenerationConfig(sid = 0, speed = 1.0f)
-                offlineTts!!.generateWithConfigAndCallback(
-                    text = filteredText,
-                    config = genConfig,
-                    callback = { samples ->
-                        audioTrack?.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
-                        1
-                    }
-                )
-
-                audioTrack?.stop()
-                audioTrack?.release()
-                audioTrack = null
+                val audio = offlineTts!!.generate(filteredText, sid = 0, speed = 1.0f)
+                if (audio.samples.isNotEmpty()) {
+                    val sampleRate = audio.sampleRate
+                    val bufferSize = AudioTrack.getMinBufferSize(
+                        sampleRate,
+                        AudioFormat.CHANNEL_OUT_MONO,
+                        AudioFormat.ENCODING_PCM_FLOAT
+                    )
+                    audioTrack = AudioTrack(
+                        android.media.AudioAttributes.Builder()
+                            .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build(),
+                        AudioFormat.Builder()
+                            .setSampleRate(sampleRate)
+                            .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
+                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                            .build(),
+                        bufferSize,
+                        AudioTrack.MODE_STREAM,
+                        0
+                    )
+                    audioTrack?.play()
+                    audioTrack?.write(audio.samples, 0, audio.samples.size, AudioTrack.WRITE_BLOCKING)
+                    audioTrack?.stop()
+                    audioTrack?.release()
+                    audioTrack = null
+                }
                 _isSpeaking.value = false
             } catch (e: Exception) {
                 _isSpeaking.value = false
