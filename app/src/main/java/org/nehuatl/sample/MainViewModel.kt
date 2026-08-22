@@ -146,7 +146,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         File(getApplication<Application>().filesDir, "brain.txt")
     }
 
-    // ==================== TTS (Sherpa-ONNX Silero) ====================
+    // ==================== TTS (Sherpa-ONNX Piper Ruslan) ====================
     private var offlineTts: OfflineTts? = null
     private var audioTrack: AudioTrack? = null
     private var ttsPlaybackJob: Job? = null
@@ -281,7 +281,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
 
-        // Инициализация TTS (Sherpa-ONNX Silero)
+        // Инициализация TTS (Sherpa-ONNX Piper Ruslan)
         initTts()
 
         // Подписка на события облачного ИИ
@@ -635,7 +635,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         return digest.joinToString("") { "%02x".format(it) }
     }
 
-    // ==================== TTS (Sherpa-ONNX Silero) ====================
+    // ==================== TTS (Sherpa-ONNX Piper Ruslan) ====================
 
     private fun initTts() {
         ttsInitJob?.cancel()
@@ -645,9 +645,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 val context = getApplication<Application>()
 
                 val modelConfig = OfflineTtsVitsModelConfig(
-                    model = "tts-model/model.onnx",
+                    model = "tts-model/ru_RU-ruslan-medium.onnx",
                     tokens = "tts-model/tokens.txt",
-                    dataDir = ""
+                    dataDir = "tts-model/espeak-ng-data"
                 )
                 val ttsConfig = OfflineTtsConfig(
                     model = OfflineTtsModelConfig(vits = modelConfig),
@@ -687,9 +687,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 val context = getApplication<Application>()
 
                 val modelConfig = OfflineTtsVitsModelConfig(
-                    model = "tts-model/model.onnx",
+                    model = "tts-model/ru_RU-ruslan-medium.onnx",
                     tokens = "tts-model/tokens.txt",
-                    dataDir = ""
+                    dataDir = "tts-model/espeak-ng-data"
                 )
                 val ttsConfig = OfflineTtsConfig(
                     model = OfflineTtsModelConfig(vits = modelConfig),
