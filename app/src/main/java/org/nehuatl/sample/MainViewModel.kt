@@ -681,7 +681,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     ruleFsts = "",
                     maxNumSentences = 1
                 )
-                offlineTts = OfflineTts(ttsConfig)
+                offlineTts = OfflineTts(context.assets, ttsConfig)
 
                 _isTtsReady.value = true
                 isTtsEnabled = true
@@ -769,7 +769,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     ruleFsts = "",
                     maxNumSentences = 1
                 )
-                offlineTts = OfflineTts(ttsConfig)
+                offlineTts = OfflineTts(context.assets, ttsConfig)
 
                 _isTtsReady.value = true
                 isTtsEnabled = true
