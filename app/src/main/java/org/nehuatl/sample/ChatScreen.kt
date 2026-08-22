@@ -220,9 +220,7 @@ fun ChatScreen(
             context,
             Manifest.permission.RECORD_AUDIO
         ) == PackageManager.PERMISSION_GRANTED
-        if (hasRecordPermission) {
-            viewModel.enableTts()
-        } else {
+        if (!hasRecordPermission) {
             viewModel.appendSystemMessage("⚠️ Для работы распознавания речи требуется разрешение на запись аудио.")
         }
     }
