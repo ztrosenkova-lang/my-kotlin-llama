@@ -114,6 +114,7 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sin
 import kotlin.math.cos
+
 // Цветовая схема приложения
 private val AppBackground = Color(0xFFFFFFFF)       // Белый фон
 private val SurfaceGray = Color(0xFFF1F3F5)        // Серый для поверхностей
@@ -185,6 +186,8 @@ fun ChatScreen(
     var cloudIsGigaChat by remember { mutableStateOf(true) }     // Флаг GigaChat
     var isGeneratingToken by remember { mutableStateOf(false) }  // Индикатор генерации токена
     var secretPhraseInput by remember { mutableStateOf("") }     // Ввод секретной фразы
+    var welcomeSpoken by remember { mutableStateOf(false) }      // Флаг озвучивания приветствия
+    var welcomeTextShown by remember { mutableStateOf(false) }   // Флаг показа приветствия
 
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -233,15 +236,25 @@ fun ChatScreen(
         "А ещё я могу напоминать тебе о важных событиях,заменяя тебе органайзер. ⏰ " +
         "Давай общаться! Включи локальный движок Llama или облачный ИИ в шапке приложения, и погнали! 🚀"
 
-    // Запуск приветственного сообщения с задержкой и анимацией печати
+    // Показ приветственного сообщения с эффектом печатной машинки
     LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(15000)
-        viewModel.speakText(fullWelcomeString)
-        var runningText = ""
-        for (i in fullWelcomeString.indices) {
-            runningText += fullWelcomeString[i]
-            viewModel.updateLastSystemMessage(runningText)
-            delay(35)
+        if (!welcomeTextShown) {
+            welcomeTextShown = true
+            var runningText = ""
+            for (i in fullWelcomeString.indices) {
+                runningText += fullWelcomeString[i]
+                viewModel.updateLastSystemMessage(runningText)
+                delay(35)
+            }
+        }
+    }
+
+    // Озвучивание приветствия когда TTS станет готов
+    LaunchedEffect(isTtsReady) {
+        if (isTtsReady && !welcomeSpoken) {
+            welcomeSpoken = true
+            delay(500)
+            viewModel.speakText(fullWelcomeString)
         }
     }
 
@@ -797,6 +810,7 @@ private fun VoiceWaveAnimation(
         )
     }
 }
+
 /**
  * Экран блокировки приложения.
  * Запрашивает секретную фразу для разблокировки.
