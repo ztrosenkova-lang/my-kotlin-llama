@@ -32,7 +32,10 @@ class TtsService : Service() {
         private const val NOTIFICATION_ID = 1
         const val ACTION_SPEAK = "org.nehuatl.sample.action.SPEAK"
         const val ACTION_STOP = "org.nehuatl.sample.action.STOP"
+        const val ACTION_TTS_READY = "org.nehuatl.sample.action.TTS_READY"
+        const val ACTION_TTS_ERROR = "org.nehuatl.sample.action.TTS_ERROR"
         const val EXTRA_TEXT = "extra_text"
+        const val EXTRA_MESSAGE = "extra_message"
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -108,9 +111,21 @@ class TtsService : Service() {
                     offlineTts = OfflineTts(assets, ttsConfig)
                     isTtsInitialized = true
                     Log.d(TAG, "Sherpa-ONNX TTS initialized in separate process")
+
+                    val readyIntent = Intent(ACTION_TTS_READY).apply {
+                        setPackage(packageName)
+                        putExtra(EXTRA_MESSAGE, "✅ Офлайн голосовой движок успешно загружен")
+                    }
+                    sendBroadcast(readyIntent)
                 } catch (e: Exception) {
                     Log.e(TAG, "TTS init error: ${e.message}", e)
                     isTtsInitialized = false
+
+                    val errorIntent = Intent(ACTION_TTS_ERROR).apply {
+                        setPackage(packageName)
+                        putExtra(EXTRA_MESSAGE, "❌ Ошибка инициализации офлайн TTS: ${e.message}")
+                    }
+                    sendBroadcast(errorIntent)
                 }
             }
         }
