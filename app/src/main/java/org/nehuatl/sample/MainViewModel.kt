@@ -3,9 +3,11 @@ package org.nehuatl.sample
 import android.app.Application
 import android.app.AlarmManager
 import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -149,6 +151,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _isSpeaking = MutableStateFlow(false)
     val isSpeaking: StateFlow<Boolean> = _isSpeaking.asStateFlow()
 
+    // Приёмник Broadcast для TTS
+    private lateinit var ttsReceiver: BroadcastReceiver
+
     // ==================== Будильник ====================
     private val alarmManager by lazy {
         getApplication<Application>().getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -204,6 +209,34 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     // ==================== ИНИЦИАЛИЗАЦИЯ ====================
     init {
         instance = this
+
+        // Регистрация приёмника Broadcast для TTS
+        ttsReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                when (intent?.action) {
+                    TtsService.ACTION_TTS_READY -> {
+                        val message = intent.getStringExtra(TtsService.EXTRA_MESSAGE) ?: "✅ Офлайн голосовой движок успешно загружен"
+                        _isTtsReady.value = true
+                        isTtsEnabled = true
+                        appendSystemMessage(message)
+                        Log.d(TAG, "TTS ready broadcast received: $message")
+                    }
+                    TtsService.ACTION_TTS_ERROR -> {
+                        val message = intent.getStringExtra(TtsService.EXTRA_MESSAGE) ?: "❌ Ошибка инициализации офлайн TTS"
+                        _isTtsReady.value = false
+                        isTtsEnabled = false
+                        appendSystemMessage(message)
+                        Log.e(TAG, "TTS error broadcast received: $message")
+                    }
+                }
+            }
+        }
+
+        val ttsFilter = IntentFilter().apply {
+            addAction(TtsService.ACTION_TTS_READY)
+            addAction(TtsService.ACTION_TTS_ERROR)
+        }
+        getApplication<Application>().registerReceiver(ttsReceiver, ttsFilter)
 
         // Проверка вечной блокировки
         if (prefs.getBoolean("is_permanently_blocked", false)) {
@@ -1345,6 +1378,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         llamaHelper.abort()
         llamaHelper.release()
         viewModelJob.cancel()
+        
+        // Отмена регистрации приёмника Broadcast
+        try {
+            getApplication<Application>().unregisterReceiver(ttsReceiver)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error unregistering TTS receiver: ${e.message}")
+        }
     }
 }
 
