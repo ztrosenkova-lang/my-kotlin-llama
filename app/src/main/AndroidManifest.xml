@@ -62,6 +62,14 @@
             android:enabled="true"
             android:exported="false" />
 
+        <!-- TTS-сервис в отдельном процессе для изоляции Sherpa от Llama -->
+        <service
+            android:name=".TtsService"
+            android:enabled="true"
+            android:exported="false"
+            android:process=":tts"
+            android:foregroundServiceType="mediaPlayback" />
+
     </application>
 
 </manifest>
