@@ -706,7 +706,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     fun speakText(text: String) {
-        if (!_isTtsReady.value || !isTtsEnabled || text.isBlank()) {
+        if (!isTtsEnabled || text.isBlank()) {
             return
         }
         val filteredText = filterTextForSpeech(text)
