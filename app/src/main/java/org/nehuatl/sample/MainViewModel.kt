@@ -675,10 +675,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 // Создание OfflineTts на главном потоке
                 withContext(Dispatchers.Main) {
                     val modelConfig = OfflineTtsVitsModelConfig(
-                        model = modelFile.absolutePath,
-                        tokens = tokensFile.absolutePath,
-                        dataDir = espeakDataDir.absolutePath
-                    )
+    model = "tts-model/ru_RU-denis-medium.onnx",
+    tokens = "tts-model/tokens.txt",
+    dataDir = "tts-model/espeak-ng-data"
+)
                     val ttsConfig = OfflineTtsConfig(
                         model = OfflineTtsModelConfig(vits = modelConfig),
                         ruleFsts = "",
@@ -766,10 +766,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 // Создание OfflineTts на главном потоке
                 withContext(Dispatchers.Main) {
                     val modelConfig = OfflineTtsVitsModelConfig(
-                        model = modelFile.absolutePath,
-                        tokens = tokensFile.absolutePath,
-                        dataDir = espeakDataDir.absolutePath
-                    )
+    model = "tts-model/ru_RU-denis-medium.onnx",
+    tokens = "tts-model/tokens.txt",
+    dataDir = "tts-model/espeak-ng-data"
+)
                     val ttsConfig = OfflineTtsConfig(
                         model = OfflineTtsModelConfig(vits = modelConfig),
                         ruleFsts = "",
