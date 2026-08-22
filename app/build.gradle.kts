@@ -61,7 +61,7 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
         jniLibs {
-            useLegacyPackaging = true
+            // useLegacyPackaging = true  // УБРАНО для совместимости с Sherpa-ONNX
         }
         androidResources {
             noCompress.addAll(listOf("bin", "gguf", "txt", "onnx", "json"))
