@@ -21,6 +21,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class TtsService : Service() {
     companion object {
@@ -33,8 +36,10 @@ class TtsService : Service() {
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val ttsMutex = Mutex()
     private var offlineTts: OfflineTts? = null
     private var audioTrack: AudioTrack? = null
+    private var isTtsInitialized = false
 
     override fun onCreate() {
         super.onCreate()
@@ -47,7 +52,10 @@ class TtsService : Service() {
             ACTION_SPEAK -> {
                 val text = intent.getStringExtra(EXTRA_TEXT) ?: ""
                 if (text.isNotBlank()) {
-                    speakText(text)
+                    serviceScope.launch {
+                        waitForTts()
+                        speakText(text)
+                    }
                 }
             }
             ACTION_STOP -> {
@@ -85,33 +93,45 @@ class TtsService : Service() {
 
     private fun initTts() {
         serviceScope.launch {
-            try {
-                val modelConfig = OfflineTtsVitsModelConfig(
-                    model = "tts-model/ru_RU-ruslan-medium.onnx",
-                    tokens = "tts-model/tokens.txt",
-                    dataDir = "tts-model/espeak-ng-data"
-                )
-                val ttsConfig = OfflineTtsConfig(
-                    model = OfflineTtsModelConfig(vits = modelConfig),
-                    ruleFsts = "",
-                    maxNumSentences = 1
-                )
-                offlineTts = OfflineTts(assets, ttsConfig)
-                Log.d(TAG, "Sherpa-ONNX TTS initialized in separate process")
-            } catch (e: Exception) {
-                Log.e(TAG, "TTS init error: ${e.message}", e)
+            ttsMutex.withLock {
+                try {
+                    val modelConfig = OfflineTtsVitsModelConfig(
+                        model = "tts-model/ru_RU-ruslan-medium.onnx",
+                        tokens = "tts-model/tokens.txt",
+                        dataDir = "tts-model/espeak-ng-data"
+                    )
+                    val ttsConfig = OfflineTtsConfig(
+                        model = OfflineTtsModelConfig(vits = modelConfig),
+                        ruleFsts = "",
+                        maxNumSentences = 1
+                    )
+                    offlineTts = OfflineTts(assets, ttsConfig)
+                    isTtsInitialized = true
+                    Log.d(TAG, "Sherpa-ONNX TTS initialized in separate process")
+                } catch (e: Exception) {
+                    Log.e(TAG, "TTS init error: ${e.message}", e)
+                    isTtsInitialized = false
+                }
             }
         }
     }
 
-    private fun speakText(text: String) {
-        serviceScope.launch {
+    private suspend fun waitForTts() {
+        var attempts = 0
+        while (!isTtsInitialized && attempts < 100) {
+            delay(100)
+            attempts++
+        }
+    }
+
+    private suspend fun speakText(text: String) {
+        ttsMutex.withLock {
             try {
-                val tts = offlineTts ?: return@launch
+                val tts = offlineTts ?: return
                 val filtered = text.replace(Regex("[^\\p{L}\\p{N}\\s.,!?]"), "")
                     .replace(Regex("\\s+"), " ")
                     .trim()
-                if (filtered.isBlank()) return@launch
+                if (filtered.isBlank()) return
 
                 val audio = tts.generate(filtered, sid = 0, speed = 1.0f)
                 if (audio.samples.isNotEmpty()) {
