@@ -7,8 +7,6 @@ import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.media.AudioFormat
-import android.media.AudioTrack
 import android.net.Uri
 import android.os.Build
 import android.os.VibrationEffect
@@ -18,10 +16,6 @@ import android.provider.Settings
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.k2fsa.sherpa.onnx.OfflineTts
-import com.k2fsa.sherpa.onnx.OfflineTtsConfig
-import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
-import com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -146,10 +140,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         File(getApplication<Application>().filesDir, "brain.txt")
     }
 
-    // ==================== TTS (Sherpa-ONNX Piper Ruslan) ====================
-    private var offlineTts: OfflineTts? = null
-    private var audioTrack: AudioTrack? = null
-    private var ttsPlaybackJob: Job? = null
+    // ==================== TTS (Sherpa-ONNX в отдельном процессе) ====================
     private var isTtsEnabled = false
     private val _isTtsReady = MutableStateFlow(false)
     val isTtsReady: StateFlow<Boolean> = _isTtsReady.asStateFlow()
@@ -174,8 +165,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     // ==================== Мониторинг памяти устройства ====================
     private val _memoryInfoText = MutableStateFlow("Всего доступно: 0.0 ГБ / Занято: 0.0 ГБ")
     val memoryInfoText: StateFlow<String> = _memoryInfoText.asStateFlow()
-
-    private var ttsInitJob: Job? = null
 
     // ==================== Защита приложения ====================
     private val _isAppLocked = MutableStateFlow(true)
@@ -280,9 +269,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 Log.e(TAG, "Failed to initialize local text memory files: ${e.message}")
             }
         }
-
-        // Инициализация TTS (Sherpa-ONNX Piper Ruslan)
-        initTts()
 
         // Подписка на события облачного ИИ
         scope.launch {
@@ -635,39 +621,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         return digest.joinToString("") { "%02x".format(it) }
     }
 
-    // ==================== TTS (Sherpa-ONNX Piper Ruslan) ====================
-
-    private fun initTts() {
-        ttsInitJob?.cancel()
-        ttsInitJob = viewModelScope.launch {
-            try {
-                _isTtsReady.value = false
-                val context = getApplication<Application>()
-
-                val modelConfig = OfflineTtsVitsModelConfig(
-                    model = "tts-model/ru_RU-ruslan-medium.onnx",
-                    tokens = "tts-model/tokens.txt",
-                    dataDir = "tts-model/espeak-ng-data"
-                )
-                val ttsConfig = OfflineTtsConfig(
-                    model = OfflineTtsModelConfig(vits = modelConfig),
-                    ruleFsts = "",
-                    maxNumSentences = 1
-                )
-                offlineTts = OfflineTts(context.assets, ttsConfig)
-
-                _isTtsReady.value = true
-                isTtsEnabled = true
-                appendSystemMessage("🟢 Офлайн голосовой движок успешно загружен.")
-                appendSystemMessage("Голосовой движок полностью готов к работе.")
-                Log.d(TAG, "Sherpa-ONNX TTS initialized successfully")
-            } catch (e: Exception) {
-                _isTtsReady.value = false
-                appendSystemMessage("🔴 Ошибка инициализации офлайн TTS: ${e.message}")
-                Log.e(TAG, "Sherpa-ONNX TTS init error: ${e.message}", e)
-            }
-        }
-    }
+    // ==================== TTS (Sherpa-ONNX в отдельном процессе) ====================
 
     fun enableTts() {
         if (_isTtsReady.value && isTtsEnabled) {
@@ -681,46 +635,18 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             return
         }
 
-        ttsInitJob?.cancel()
-        ttsInitJob = viewModelScope.launch {
-            try {
-                val context = getApplication<Application>()
-
-                val modelConfig = OfflineTtsVitsModelConfig(
-                    model = "tts-model/ru_RU-ruslan-medium.onnx",
-                    tokens = "tts-model/tokens.txt",
-                    dataDir = "tts-model/espeak-ng-data"
-                )
-                val ttsConfig = OfflineTtsConfig(
-                    model = OfflineTtsModelConfig(vits = modelConfig),
-                    ruleFsts = "",
-                    maxNumSentences = 1
-                )
-                offlineTts = OfflineTts(context.assets, ttsConfig)
-
-                _isTtsReady.value = true
-                isTtsEnabled = true
-                appendSystemMessage("🟢 Офлайн голосовой движок успешно загружен.")
-                Log.d(TAG, "Sherpa-ONNX TTS enabled successfully")
-            } catch (e: Exception) {
-                _isTtsReady.value = false
-                appendSystemMessage("🔴 Ошибка загрузки офлайн TTS: ${e.message}")
-                Log.e(TAG, "Sherpa-ONNX TTS enable error: ${e.message}", e)
-            }
-        }
+        _isTtsReady.value = true
+        isTtsEnabled = true
+        appendSystemMessage("🟢 Офлайн голосовой движок успешно загружен.")
+        Log.d(TAG, "TTS service started")
     }
 
     fun disableTts() {
         isTtsEnabled = false
         _isSpeaking.value = false
-        ttsPlaybackJob?.cancel()
-        audioTrack?.stop()
-        audioTrack?.release()
-        audioTrack = null
-        offlineTts = null
         _isTtsReady.value = false
         appendSystemMessage("🔇 Озвучка отключена, TTS выгружен из памяти")
-        Log.d(TAG, "Sherpa-ONNX TTS disabled and unloaded")
+        Log.d(TAG, "TTS disabled")
     }
 
     private fun filterTextForSpeech(text: String): String {
@@ -729,7 +655,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     fun speakText(text: String) {
-        if (!_isTtsReady.value || !isTtsEnabled || text.isBlank() || offlineTts == null) {
+        if (!_isTtsReady.value || !isTtsEnabled || text.isBlank()) {
             return
         }
         val filteredText = filterTextForSpeech(text)
@@ -737,43 +663,18 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             return
         }
 
-        ttsPlaybackJob?.cancel()
-        ttsPlaybackJob = scope.launch(Dispatchers.IO) {
-            try {
-                _isSpeaking.value = true
-                val audio = offlineTts!!.generate(filteredText, sid = 0, speed = 1.0f)
-                if (audio.samples.isNotEmpty()) {
-                    val sampleRate = audio.sampleRate
-                    val bufferSize = AudioTrack.getMinBufferSize(
-                        sampleRate,
-                        AudioFormat.CHANNEL_OUT_MONO,
-                        AudioFormat.ENCODING_PCM_FLOAT
-                    )
-                    audioTrack = AudioTrack(
-                        android.media.AudioAttributes.Builder()
-                            .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
-                            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
-                            .build(),
-                        AudioFormat.Builder()
-                            .setSampleRate(sampleRate)
-                            .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
-                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                            .build(),
-                        bufferSize,
-                        AudioTrack.MODE_STREAM,
-                        0
-                    )
-                    audioTrack?.play()
-                    audioTrack?.write(audio.samples, 0, audio.samples.size, AudioTrack.WRITE_BLOCKING)
-                    audioTrack?.stop()
-                    audioTrack?.release()
-                    audioTrack = null
-                }
-                _isSpeaking.value = false
-            } catch (e: Exception) {
-                _isSpeaking.value = false
-                Log.e(TAG, "TTS playback error: ${e.message}", e)
-            }
+        _isSpeaking.value = true
+
+        val context = getApplication<Application>()
+        val intent = Intent(context, TtsService::class.java).apply {
+            action = TtsService.ACTION_SPEAK
+            putExtra(TtsService.EXTRA_TEXT, filteredText)
+        }
+        context.startService(intent)
+
+        scope.launch(Dispatchers.Main) {
+            delay(filteredText.length * 60L)
+            _isSpeaking.value = false
         }
     }
 
@@ -1433,11 +1334,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     override fun onCleared() {
         super.onCleared()
         instance = null
-        ttsPlaybackJob?.cancel()
-        audioTrack?.stop()
-        audioTrack?.release()
-        audioTrack = null
-        offlineTts = null
         _isTtsReady.value = false
         _isSpeaking.value = false
         _isModelLoaded.value = false
