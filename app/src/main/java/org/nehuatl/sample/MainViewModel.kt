@@ -18,6 +18,7 @@ import android.provider.Settings
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.k2fsa.sherpa.onnx.GenerationConfig
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
@@ -674,16 +675,16 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 // Создание OfflineTts на главном потоке
                 withContext(Dispatchers.Main) {
                     val modelConfig = OfflineTtsVitsModelConfig(
-    model = "tts-model/ru_RU-denis-medium.onnx",
-    tokens = "tts-model/tokens.txt",
-    dataDir = "tts-model/espeak-ng-data"
-)
+                        model = modelFile.absolutePath,
+                        tokens = tokensFile.absolutePath,
+                        dataDir = espeakDataDir.absolutePath
+                    )
                     val ttsConfig = OfflineTtsConfig(
                         model = OfflineTtsModelConfig(vits = modelConfig),
                         ruleFsts = "",
                         maxNumSentences = 1
                     )
-                    offlineTts = OfflineTts(context.assets, ttsConfig)
+                    offlineTts = OfflineTts(assetManager = context.assets, config = ttsConfig)
 
                     _isTtsReady.value = true
                     isTtsEnabled = true
@@ -765,16 +766,16 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 // Создание OfflineTts на главном потоке
                 withContext(Dispatchers.Main) {
                     val modelConfig = OfflineTtsVitsModelConfig(
-    model = "tts-model/ru_RU-denis-medium.onnx",
-    tokens = "tts-model/tokens.txt",
-    dataDir = "tts-model/espeak-ng-data"
-)
+                        model = modelFile.absolutePath,
+                        tokens = tokensFile.absolutePath,
+                        dataDir = espeakDataDir.absolutePath
+                    )
                     val ttsConfig = OfflineTtsConfig(
                         model = OfflineTtsModelConfig(vits = modelConfig),
                         ruleFsts = "",
                         maxNumSentences = 1
                     )
-                    offlineTts = OfflineTts(context.assets, ttsConfig)
+                    offlineTts = OfflineTts(assetManager = context.assets, config = ttsConfig)
 
                     _isTtsReady.value = true
                     isTtsEnabled = true
@@ -820,34 +821,41 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         ttsPlaybackJob = scope.launch(Dispatchers.IO) {
             try {
                 _isSpeaking.value = true
-                val audio = offlineTts!!.generate(filteredText, sid = 0, speed = 1.0f)
-                if (audio.samples.isNotEmpty()) {
-                    val sampleRate = audio.sampleRate
-                    val bufferSize = AudioTrack.getMinBufferSize(
-                        sampleRate,
-                        AudioFormat.CHANNEL_OUT_MONO,
-                        AudioFormat.ENCODING_PCM_FLOAT
-                    )
-                    audioTrack = AudioTrack(
-                        android.media.AudioAttributes.Builder()
-                            .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
-                            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
-                            .build(),
-                        AudioFormat.Builder()
-                            .setSampleRate(sampleRate)
-                            .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
-                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                            .build(),
-                        bufferSize,
-                        AudioTrack.MODE_STREAM,
-                        android.media.AudioManager.AUDIO_SESSION_ID_GENERATE
-                    )
-                    audioTrack?.play()
-                    audioTrack?.write(audio.samples, 0, audio.samples.size, AudioTrack.WRITE_BLOCKING)
-                    audioTrack?.stop()
-                    audioTrack?.release()
-                    audioTrack = null
-                }
+                val sampleRate = offlineTts!!.sampleRate()
+                val bufferSize = AudioTrack.getMinBufferSize(
+                    sampleRate,
+                    AudioFormat.CHANNEL_OUT_MONO,
+                    AudioFormat.ENCODING_PCM_FLOAT
+                )
+                audioTrack = AudioTrack(
+                    android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build(),
+                    AudioFormat.Builder()
+                        .setSampleRate(sampleRate)
+                        .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .build(),
+                    bufferSize,
+                    AudioTrack.MODE_STREAM,
+                    android.media.AudioManager.AUDIO_SESSION_ID_GENERATE
+                )
+                audioTrack?.play()
+
+                val genConfig = GenerationConfig(sid = 0, speed = 1.0f)
+                offlineTts!!.generateWithConfigAndCallback(
+                    text = filteredText,
+                    config = genConfig,
+                    callback = { samples ->
+                        audioTrack?.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
+                        1
+                    }
+                )
+
+                audioTrack?.stop()
+                audioTrack?.release()
+                audioTrack = null
                 _isSpeaking.value = false
             } catch (e: Exception) {
                 _isSpeaking.value = false
