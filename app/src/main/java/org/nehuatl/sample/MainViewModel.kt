@@ -231,6 +231,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         appendSystemMessage(message)
                         Log.e(TAG, "TTS error broadcast received: $message")
                     }
+                    TtsService.ACTION_SPEAK_START -> {
+                        _isSpeaking.value = true
+                        Log.d(TAG, "SPEAK_START broadcast received")
+                    }
+                    TtsService.ACTION_SPEAK_END -> {
+                        _isSpeaking.value = false
+                        Log.d(TAG, "SPEAK_END broadcast received")
+                    }
                 }
             }
         }
@@ -238,6 +246,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         val ttsFilter = IntentFilter().apply {
             addAction(TtsService.ACTION_TTS_READY)
             addAction(TtsService.ACTION_TTS_ERROR)
+            addAction(TtsService.ACTION_SPEAK_START)
+            addAction(TtsService.ACTION_SPEAK_END)
         }
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -740,19 +750,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             return
         }
 
-        _isSpeaking.value = true
-
         val context = getApplication<Application>()
         val intent = Intent(context, TtsService::class.java).apply {
             action = TtsService.ACTION_SPEAK
             putExtra(TtsService.EXTRA_TEXT, filteredText)
         }
         context.startService(intent)
-
-        scope.launch(Dispatchers.Main) {
-            delay(filteredText.length * 60L)
-            _isSpeaking.value = false
-        }
     }
 
     fun setCloudReady(modelId: String) {
