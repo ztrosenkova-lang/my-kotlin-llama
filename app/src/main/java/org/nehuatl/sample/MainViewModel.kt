@@ -236,7 +236,16 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             addAction(TtsService.ACTION_TTS_READY)
             addAction(TtsService.ACTION_TTS_ERROR)
         }
-        getApplication<Application>().registerReceiver(ttsReceiver, ttsFilter)
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getApplication<Application>().registerReceiver(
+                ttsReceiver,
+                ttsFilter,
+                Context.RECEIVER_NOT_EXPORTED
+            )
+        } else {
+            getApplication<Application>().registerReceiver(ttsReceiver, ttsFilter)
+        }
 
         // Проверка вечной блокировки
         if (prefs.getBoolean("is_permanently_blocked", false)) {
