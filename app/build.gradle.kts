@@ -1,3 +1,6 @@
+import java.net.URL
+import java.net.HttpURLConnection
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -116,7 +119,7 @@ val sherpaAarFile = file("$libsDir/sherpa-onnx-1.13.6.aar")
 val sherpaAarUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.6/sherpa-onnx-1.13.6.aar"
 
 val ttsModelDir = file("$projectDir/src/main/assets/tts-model")
-val ttsModelArchive = file("$buildDir/tts-model/vits-piper-ru_RU-ruslan-medium-int8.tar.bz2")
+val ttsModelArchive = file("${layout.buildDirectory.get().asFile}/tts-model/vits-piper-ru_RU-ruslan-medium-int8.tar.bz2")
 val ttsModelUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-ru_RU-ruslan-medium-int8.tar.bz2"
 
 tasks.register("downloadSherpaAar") {
@@ -129,7 +132,7 @@ tasks.register("downloadSherpaAar") {
         println("Downloading Sherpa AAR from $sherpaAarUrl")
         libsDir.mkdirs()
 
-        val connection = java.net.URL(sherpaAarUrl).openConnection() as java.net.HttpURLConnection
+        val connection = URL(sherpaAarUrl).openConnection() as HttpURLConnection
         connection.instanceFollowRedirects = true
         connection.connectTimeout = 60000
         connection.readTimeout = 300000
@@ -163,7 +166,7 @@ tasks.register("downloadTtsModel") {
         println("Downloading TTS model from $ttsModelUrl")
         ttsModelArchive.parentFile.mkdirs()
 
-        val connection = java.net.URL(ttsModelUrl).openConnection() as java.net.HttpURLConnection
+        val connection = URL(ttsModelUrl).openConnection() as HttpURLConnection
         connection.instanceFollowRedirects = true
         connection.connectTimeout = 60000
         connection.readTimeout = 300000
