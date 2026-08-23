@@ -165,7 +165,7 @@ class TtsService : Service() {
                 Log.d(TAG, "SPEAK_START broadcast sent")
 
                 try {
-                    val audio = tts.generate(filtered, sid = 0, speed = 1.0f)
+                    val audio = tts.generate(filtered, sid = 0, speed = 0.85f)
                     if (audio.samples.isNotEmpty()) {
                         val sampleRate = audio.sampleRate
                         val bufferSize = AudioTrack.getMinBufferSize(
