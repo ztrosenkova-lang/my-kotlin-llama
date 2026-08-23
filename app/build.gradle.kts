@@ -119,8 +119,8 @@ val sherpaAarFile = file("$libsDir/sherpa-onnx-1.13.6.aar")
 val sherpaAarUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.6/sherpa-onnx-1.13.6.aar"
 
 val ttsModelDir = file("$projectDir/src/main/assets/tts-model")
-val ttsModelArchive = file("${layout.buildDirectory.get().asFile}/tts-model/vits-piper-ru_RU-ruslan-medium-int8.tar.bz2")
-val ttsModelUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-ru_RU-ruslan-medium-int8.tar.bz2"
+val ttsModelArchive = file("${layout.buildDirectory.get().asFile}/tts-model/vits-piper-ru_RU-ruslan-medium.tar.bz2")
+val ttsModelUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-ru_RU-ruslan-medium.tar.bz2"
 
 tasks.register("downloadSherpaAar") {
     doLast {
@@ -199,7 +199,7 @@ tasks.register("downloadTtsModel") {
         }
         println("TTS model extracted to $ttsModelDir")
 
-        val extractedDir = File(ttsModelDir, "vits-piper-ru_RU-ruslan-medium-int8")
+        val extractedDir = File(ttsModelDir, "vits-piper-ru_RU-ruslan-medium")
         if (extractedDir.exists() && extractedDir.isDirectory) {
             extractedDir.listFiles()?.forEach { file ->
                 val target = File(ttsModelDir, file.name)
