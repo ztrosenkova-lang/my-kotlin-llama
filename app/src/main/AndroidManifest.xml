@@ -29,6 +29,9 @@
     <!-- НОВОЕ: Разрешение на запуск фоновых сервисов -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
+    <!-- НОВОЕ: Разрешение для foreground-сервиса mediaPlayback на Android 14+ -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+
     <!-- НОВОЕ: Разрешение на игнорирование оптимизации батареи -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
