@@ -37,6 +37,8 @@ class TtsService : Service() {
         const val ACTION_STOP = "org.nehuatl.sample.action.STOP"
         const val ACTION_TTS_READY = "org.nehuatl.sample.action.TTS_READY"
         const val ACTION_TTS_ERROR = "org.nehuatl.sample.action.TTS_ERROR"
+        const val ACTION_SPEAK_START = "org.nehuatl.sample.action.SPEAK_START"
+        const val ACTION_SPEAK_END = "org.nehuatl.sample.action.SPEAK_END"
         const val EXTRA_TEXT = "extra_text"
         const val EXTRA_MESSAGE = "extra_message"
     }
@@ -155,36 +157,57 @@ class TtsService : Service() {
                     .trim()
                 if (filtered.isBlank()) return
 
-                val audio = tts.generate(filtered, sid = 0, speed = 1.0f)
-                if (audio.samples.isNotEmpty()) {
-                    val sampleRate = audio.sampleRate
-                    val bufferSize = AudioTrack.getMinBufferSize(
-                        sampleRate,
-                        AudioFormat.CHANNEL_OUT_MONO,
-                        AudioFormat.ENCODING_PCM_FLOAT
-                    )
-                    audioTrack = AudioTrack(
-                        android.media.AudioAttributes.Builder()
-                            .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
-                            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
-                            .build(),
-                        AudioFormat.Builder()
-                            .setSampleRate(sampleRate)
-                            .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
-                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                            .build(),
-                        bufferSize,
-                        AudioTrack.MODE_STREAM,
-                        0
-                    )
-                    audioTrack?.play()
-                    audioTrack?.write(audio.samples, 0, audio.samples.size, AudioTrack.WRITE_BLOCKING)
-                    audioTrack?.stop()
-                    audioTrack?.release()
-                    audioTrack = null
+                // Отправляем Broadcast — начало озвучивания
+                val startIntent = Intent(ACTION_SPEAK_START).apply {
+                    setPackage(packageName)
+                }
+                sendBroadcast(startIntent)
+                Log.d(TAG, "SPEAK_START broadcast sent")
+
+                try {
+                    val audio = tts.generate(filtered, sid = 0, speed = 1.0f)
+                    if (audio.samples.isNotEmpty()) {
+                        val sampleRate = audio.sampleRate
+                        val bufferSize = AudioTrack.getMinBufferSize(
+                            sampleRate,
+                            AudioFormat.CHANNEL_OUT_MONO,
+                            AudioFormat.ENCODING_PCM_FLOAT
+                        )
+                        audioTrack = AudioTrack(
+                            android.media.AudioAttributes.Builder()
+                                .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                                .build(),
+                            AudioFormat.Builder()
+                                .setSampleRate(sampleRate)
+                                .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
+                                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                                .build(),
+                            bufferSize,
+                            AudioTrack.MODE_STREAM,
+                            0
+                        )
+                        audioTrack?.play()
+                        audioTrack?.write(audio.samples, 0, audio.samples.size, AudioTrack.WRITE_BLOCKING)
+                        audioTrack?.stop()
+                        audioTrack?.release()
+                        audioTrack = null
+                    }
+                } finally {
+                    // Отправляем Broadcast — конец озвучивания
+                    val endIntent = Intent(ACTION_SPEAK_END).apply {
+                        setPackage(packageName)
+                    }
+                    sendBroadcast(endIntent)
+                    Log.d(TAG, "SPEAK_END broadcast sent")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "TTS playback error: ${e.message}", e)
+                // В случае ошибки тоже отправляем конец озвучивания
+                val endIntent = Intent(ACTION_SPEAK_END).apply {
+                    setPackage(packageName)
+                }
+                sendBroadcast(endIntent)
             }
         }
     }
