@@ -24,6 +24,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
 
 class TtsService : Service() {
     companion object {
@@ -98,10 +101,14 @@ class TtsService : Service() {
         serviceScope.launch {
             ttsMutex.withLock {
                 try {
+                    // Копируем espeak-ng-data из assets в файловую систему
+                    val dataDir = copyDataDir("tts-model/espeak-ng-data")
+                    Log.d(TAG, "espeak-ng-data copied to: $dataDir")
+
                     val modelConfig = OfflineTtsVitsModelConfig(
                         model = "tts-model/ru_RU-ruslan-medium.onnx",
                         tokens = "tts-model/tokens.txt",
-                        dataDir = "tts-model/espeak-ng-data"
+                        dataDir = dataDir
                     )
                     val ttsConfig = OfflineTtsConfig(
                         model = OfflineTtsModelConfig(vits = modelConfig),
@@ -189,6 +196,64 @@ class TtsService : Service() {
             audioTrack = null
         } catch (e: Exception) {
             Log.e(TAG, "Stop error: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Копирует директорию espeak-ng-data из assets во внешнее хранилище.
+     * Возвращает полный путь к скопированной директории.
+     */
+    private fun copyDataDir(dataDir: String): String {
+        Log.i(TAG, "data dir is $dataDir")
+        copyAssets(dataDir)
+
+        val newDataDir = getExternalFilesDir(null)!!.absolutePath
+        Log.i(TAG, "newDataDir: $newDataDir")
+        return "$newDataDir/$dataDir"
+    }
+
+    /**
+     * Рекурсивно копирует файлы и директории из assets в файловую систему.
+     */
+    private fun copyAssets(path: String) {
+        val assets: Array<String>?
+        try {
+            assets = application.assets.list(path)
+            if (assets!!.isEmpty()) {
+                copyFile(path)
+            } else {
+                val fullPath = "${getExternalFilesDir(null)}/$path"
+                val dir = File(fullPath)
+                dir.mkdirs()
+                for (asset in assets.iterator()) {
+                    val p: String = if (path == "") "" else path + "/"
+                    copyAssets(p + asset)
+                }
+            }
+        } catch (ex: IOException) {
+            Log.e(TAG, "Failed to copy $path. $ex")
+        }
+    }
+
+    /**
+     * Копирует одиночный файл из assets в файловую систему.
+     */
+    private fun copyFile(filename: String) {
+        try {
+            val istream = application.assets.open(filename)
+            val newFilename = getExternalFilesDir(null).toString() + "/" + filename
+            val ostream = FileOutputStream(newFilename)
+            val buffer = ByteArray(1024)
+            var read = 0
+            while (read != -1) {
+                ostream.write(buffer, 0, read)
+                read = istream.read(buffer)
+            }
+            istream.close()
+            ostream.flush()
+            ostream.close()
+        } catch (ex: Exception) {
+            Log.e(TAG, "Failed to copy $filename, $ex")
         }
     }
 }
