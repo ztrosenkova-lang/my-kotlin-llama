@@ -154,6 +154,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _isSpeaking = MutableStateFlow(false)
     val isSpeaking: StateFlow<Boolean> = _isSpeaking.asStateFlow()
 
+    // Flow для отслеживания реального начала озвучивания
+    private val _speakStartFlow = MutableSharedFlow<Unit>(
+        replay = 0,
+        extraBufferCapacity = 8,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val speakStartFlow: SharedFlow<Unit> = _speakStartFlow.asSharedFlow()
+
     // Приёмник Broadcast для TTS
     private lateinit var ttsReceiver: BroadcastReceiver
 
@@ -233,6 +241,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     }
                     TtsService.ACTION_SPEAK_START -> {
                         _isSpeaking.value = true
+                        _speakStartFlow.tryEmit(Unit)
                         Log.d(TAG, "SPEAK_START broadcast received")
                     }
                     TtsService.ACTION_SPEAK_END -> {
@@ -363,19 +372,22 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                 saveBrain(fullText)
                                 isCompressionRequest = false
                             } else {
-                                // Обычный ответ — озвучиваем и печатаем
+                                // Обычный ответ — сначала озвучиваем, потом печатаем
                                 speakText(fullText)
-                                _chatHistory.value = _chatHistory.value + ChatMessage("assistant", "")
                                 scope.launch(Dispatchers.Main) {
-                                    var typedText = ""
-                                    for (char in fullText) {
-                                        typedText += char
-                                        val currentList = _chatHistory.value.toMutableList()
-                                        if (currentList.isNotEmpty() && currentList.last().role == "assistant") {
-                                            currentList[currentList.lastIndex] = ChatMessage("assistant", typedText)
-                                            _chatHistory.value = currentList
+                                    // Ждём реального начала озвучивания
+                                    speakStartFlow.collect {
+                                        _chatHistory.value = _chatHistory.value + ChatMessage("assistant", "")
+                                        var typedText = ""
+                                        for (char in fullText) {
+                                            typedText += char
+                                            val currentList = _chatHistory.value.toMutableList()
+                                            if (currentList.isNotEmpty() && currentList.last().role == "assistant") {
+                                                currentList[currentList.lastIndex] = ChatMessage("assistant", typedText)
+                                                _chatHistory.value = currentList
+                                            }
+                                            delay(30)
                                         }
-                                        delay(30)
                                     }
                                 }
                             }
@@ -420,19 +432,22 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                 saveBrain(fullText)
                                 isCompressionRequest = false
                             } else {
-                                // Обычный ответ — озвучиваем и печатаем
+                                // Обычный ответ — сначала озвучиваем, потом печатаем
                                 speakText(fullText)
-                                _chatHistory.value = _chatHistory.value + ChatMessage("assistant", "")
                                 scope.launch(Dispatchers.Main) {
-                                    var typedText = ""
-                                    for (char in fullText) {
-                                        typedText += char
-                                        val currentList = _chatHistory.value.toMutableList()
-                                        if (currentList.isNotEmpty() && currentList.last().role == "assistant") {
-                                            currentList[currentList.lastIndex] = ChatMessage("assistant", typedText)
-                                            _chatHistory.value = currentList
+                                    // Ждём реального начала озвучивания
+                                    speakStartFlow.collect {
+                                        _chatHistory.value = _chatHistory.value + ChatMessage("assistant", "")
+                                        var typedText = ""
+                                        for (char in fullText) {
+                                            typedText += char
+                                            val currentList = _chatHistory.value.toMutableList()
+                                            if (currentList.isNotEmpty() && currentList.last().role == "assistant") {
+                                                currentList[currentList.lastIndex] = ChatMessage("assistant", typedText)
+                                                _chatHistory.value = currentList
+                                            }
+                                            delay(30)
                                         }
-                                        delay(30)
                                     }
                                 }
                             }
