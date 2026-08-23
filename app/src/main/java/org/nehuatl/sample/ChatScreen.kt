@@ -452,7 +452,10 @@ fun ChatScreen(
                 showPromptSettings = !showPromptSettings
                 viewModel.speakText("Настройка роли ИИ")
             },
-            onHelpClick = { showHelpDialog = true },
+            onHelpClick = {
+                viewModel.speakText("Открываю руководство пользователя. Здесь вы можете прочитать инструкции по управлению моими локальными движками, настройке раздельной памяти и командам умного поиска по корням слов.")
+                showHelpDialog = true
+            },
             isTtsReady = isTtsReady,
             viewModel = viewModel,
             context = context,
@@ -1545,10 +1548,6 @@ private fun HelpDialog(
     onDismiss: () -> Unit,
     viewModel: MainViewModel
 ) {
-    LaunchedEffect(Unit) {
-        viewModel.speakText("Открываю руководство пользователя. Здесь вы можете прочитать инструкции по управлению моими локальными движками, настройке раздельной памяти и командам умного поиска по корням слов.")
-    }
-
     AlertDialog(
         onDismissRequest = {
             viewModel.abortLocal()
