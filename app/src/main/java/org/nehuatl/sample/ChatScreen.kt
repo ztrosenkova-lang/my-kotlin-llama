@@ -186,8 +186,7 @@ fun ChatScreen(
     var cloudIsGigaChat by remember { mutableStateOf(true) }     // Флаг GigaChat
     var isGeneratingToken by remember { mutableStateOf(false) }  // Индикатор генерации токена
     var secretPhraseInput by remember { mutableStateOf("") }     // Ввод секретной фразы
-    var welcomeSpoken by remember { mutableStateOf(false) }      // Флаг озвучивания приветствия
-    var welcomeTextShown by remember { mutableStateOf(false) }   // Флаг показа приветствия
+    var welcomeStarted by remember { mutableStateOf(false) }     // Флаг начала приветствия
 
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -225,7 +224,7 @@ fun ChatScreen(
         }
     }
 
-    // Приветственное сообщение с эффектом печатной машинки
+    // Приветственное сообщение
     val fullWelcomeString = "Привет! Я твой персональный ИИ-Друг. 🤖✨ " +
         "Я лучший хранитель паролей, переводчик с разных языков и просто умный собеседник. " +
         "Я создан, чтобы быть твоим надежным и автономным союзником. " +
@@ -234,25 +233,21 @@ fun ChatScreen(
         "А ещё я могу напоминать тебе о важных событиях,заменяя тебе органайзер. ⏰ " +
         "Давай общаться! Включи локальный движок Llama или облачный ИИ в шапке приложения, и погнали! 🚀"
 
-    // Показ приветственного сообщения с эффектом печатной машинки
-    LaunchedEffect(Unit) {
-        if (!welcomeTextShown) {
-            welcomeTextShown = true
+    // Приветствие: ждём готовности TTS, затем одновременно печатаем и озвучиваем
+    LaunchedEffect(isTtsReady) {
+        if (isTtsReady && !welcomeStarted) {
+            welcomeStarted = true
+            
+            // Запускаем озвучивание полного текста
+            viewModel.speakText(fullWelcomeString)
+            
+            // Одновременно печатаем текст с эффектом печатной машинки
             var runningText = ""
             for (i in fullWelcomeString.indices) {
                 runningText += fullWelcomeString[i]
                 viewModel.updateLastSystemMessage(runningText)
                 delay(35)
             }
-        }
-    }
-
-    // Озвучивание приветствия когда TTS станет готов
-    LaunchedEffect(isTtsReady) {
-        if (isTtsReady && !welcomeSpoken) {
-            welcomeSpoken = true
-            delay(500)
-            viewModel.speakText(fullWelcomeString)
         }
     }
 
