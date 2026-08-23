@@ -142,6 +142,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         File(getApplication<Application>().filesDir, "brain.txt")
     }
 
+    // Флаг для отслеживания, что текущий запрос — сжатие диалога
+    private var isCompressionRequest = false
+
     // ==================== TTS (Sherpa-ONNX в отдельном процессе) ====================
     private var isTtsEnabled = false
     private val _isTtsReady = MutableStateFlow(false)
@@ -345,26 +348,33 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         _cloudState.value = CloudAIState.Completed(event.tokenCount, event.duration)
                         val fullText = event.fullText
                         if (fullText.isNotEmpty()) {
-                            speakText(fullText)
-                            _chatHistory.value = _chatHistory.value + ChatMessage("assistant", "")
-                            scope.launch(Dispatchers.Main) {
-                                var typedText = ""
-                                for (char in fullText) {
-                                    typedText += char
-                                    val currentList = _chatHistory.value.toMutableList()
-                                    if (currentList.isNotEmpty() && currentList.last().role == "assistant") {
-                                        currentList[currentList.lastIndex] = ChatMessage("assistant", typedText)
-                                        _chatHistory.value = currentList
+                            if (isCompressionRequest) {
+                                // Сохраняем только сжатие диалога
+                                saveBrain(fullText)
+                                isCompressionRequest = false
+                            } else {
+                                // Обычный ответ — озвучиваем и печатаем
+                                speakText(fullText)
+                                _chatHistory.value = _chatHistory.value + ChatMessage("assistant", "")
+                                scope.launch(Dispatchers.Main) {
+                                    var typedText = ""
+                                    for (char in fullText) {
+                                        typedText += char
+                                        val currentList = _chatHistory.value.toMutableList()
+                                        if (currentList.isNotEmpty() && currentList.last().role == "assistant") {
+                                            currentList[currentList.lastIndex] = ChatMessage("assistant", typedText)
+                                            _chatHistory.value = currentList
+                                        }
+                                        delay(30)
                                     }
-                                    delay(30)
                                 }
                             }
-                            saveBrain(fullText)
                         }
                         _cloudGeneratedText.value = fullText
                     }
                     is CloudAIEvent.Error -> {
                         _cloudState.value = CloudAIState.Error(event.message)
+                        isCompressionRequest = false
                         Log.e(TAG, "Ошибка облачного ИИ: ${event.message}")
                     }
                     is CloudAIEvent.TokenReceived -> {
@@ -395,26 +405,33 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         _state.value = GenerationState.Completed(event.tokenCount, event.duration)
                         val fullText = event.fullText
                         if (fullText.isNotEmpty()) {
-                            speakText(fullText)
-                            _chatHistory.value = _chatHistory.value + ChatMessage("assistant", "")
-                            scope.launch(Dispatchers.Main) {
-                                var typedText = ""
-                                for (char in fullText) {
-                                    typedText += char
-                                    val currentList = _chatHistory.value.toMutableList()
-                                    if (currentList.isNotEmpty() && currentList.last().role == "assistant") {
-                                        currentList[currentList.lastIndex] = ChatMessage("assistant", typedText)
-                                        _chatHistory.value = currentList
+                            if (isCompressionRequest) {
+                                // Сохраняем только сжатие диалога
+                                saveBrain(fullText)
+                                isCompressionRequest = false
+                            } else {
+                                // Обычный ответ — озвучиваем и печатаем
+                                speakText(fullText)
+                                _chatHistory.value = _chatHistory.value + ChatMessage("assistant", "")
+                                scope.launch(Dispatchers.Main) {
+                                    var typedText = ""
+                                    for (char in fullText) {
+                                        typedText += char
+                                        val currentList = _chatHistory.value.toMutableList()
+                                        if (currentList.isNotEmpty() && currentList.last().role == "assistant") {
+                                            currentList[currentList.lastIndex] = ChatMessage("assistant", typedText)
+                                            _chatHistory.value = currentList
+                                        }
+                                        delay(30)
                                     }
-                                    delay(30)
                                 }
                             }
-                            saveBrain(fullText)
                         }
                         _generatedText.value = fullText
                     }
                     is LlamaHelper.LLMEvent.Error -> {
                         _state.value = GenerationState.Error(event.message)
+                        isCompressionRequest = false
                         Log.e(TAG, "Ошибка локального ИИ: ${event.message}")
                         _isModelLoaded.value = false
                     }
@@ -777,24 +794,29 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     "$prefix: ${message.text}"
                 }
 
-                val prompt = "Проанализируй этот диалог. Выдели из него новые важные факты о личности, имени, привычках или планах Пользователя. Сформулируй краткие выводы тезисно, строго по одной строке на факт. Пиши только новые выводы, без лишних слов. Если новых данных нет, верни пустоту.\n\n$dialogueText"
+                val prompt = "Сожми кратко этот диалог. Выдели самое важное из того, о чём говорили. Сохрани факты, договорённости, планы, имена, пароли, контакты, цены, адреса — всё что может понадобиться в будущем. Пиши тезисно, строго по одной строке на факт. Без лишних слов.\n\n$dialogueText"
+
+                isCompressionRequest = true
 
                 if (_isModelLoaded.value && llamaHelper.getContextId() != null) {
                     llamaHelper.predict(
                         prompt = prompt,
                         imagePath = null,
-                        systemPrompt = "Ты — умный аналитик. Выделяй только новые факты из диалога.",
+                        systemPrompt = "Ты — полезный, умный и лаконичный ИИ-ассистент. Отвечай строго на русском языке.",
                         maxTokens = 512
                     )
                 } else if (cloudAIProvider.isConfigured()) {
                     cloudAIProvider.generate(
                         prompt = prompt,
-                        systemPrompt = "Ты — умный аналитик. Выделяй только новые факты из диалога.",
+                        systemPrompt = "Ты — полезный, умный и лаконичный ИИ-ассистент. Отвечай строго на русском языке.",
                         chatHistory = history,
                         maxTokens = maxTokens.value
                     )
+                } else {
+                    isCompressionRequest = false
                 }
             } catch (e: Exception) {
+                isCompressionRequest = false
                 Log.e(TAG, "Background compression failed: ${e.message}")
             }
         }
@@ -946,23 +968,27 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
             when {
                 lowerPrompt.contains(CHAT_LOOKUP_COMMAND) -> {
-                    val chatData = searchChat(prompt)
-                    if (chatData.isNotEmpty()) {
-                        append("ИСТОРИЯ ЧАТА (НАЙДЕННЫЕ СООБЩЕНИЯ):\n$chatData\n\n")
-                        append("Пользователь просит найти информацию в истории чата. Внимательно изучи найденные сообщения и ответь на вопрос.")
-                    } else {
-                        append("ИСТОРИЯ ЧАТА: подходящих сообщений не найдено.\n\n")
-                        append("Пользователь просит найти информацию в истории чата, но ничего не найдено. Честно скажи об этом.")
+                    // Отправляем ВЕСЬ чат в модель
+                    val fullChatHistory = _chatHistory.value.joinToString("\n") { message ->
+                        val prefix = when (message.role) {
+                            "user" -> "Пользователь"
+                            "assistant" -> "Ассистент"
+                            else -> "Система"
+                        }
+                        "$prefix: ${message.text}"
                     }
+                    append("ПОЛНАЯ ИСТОРИЯ ЧАТА:\n$fullChatHistory\n\n")
+                    append("Пользователь просит найти информацию в истории чата. Изучи ВСЮ историю выше и ответь на вопрос.")
                 }
                 lowerPrompt.contains(RECALL_COMMAND) -> {
-                    val brainData = searchBrain(prompt)
+                    // Отправляем ВЕСЬ brain.txt в модель
+                    val brainData = readBrain()
                     if (brainData.isNotEmpty()) {
-                        append("КРАТКИЕ ВЫВОДЫ ИЗ ПРОШЛЫХ РАЗГОВОРОВ (МОЗГ):\n$brainData\n\n")
-                        append("Пользователь просит вспомнить информацию из прошлых разговоров. Внимательно изучи КРАТКИЕ ВЫВОДЫ и ответь на вопрос.")
+                        append("СЖАТАЯ ИСТОРИЯ ПРОШЛЫХ РАЗГОВОРОВ (МОЗГ):\n$brainData\n\n")
+                        append("Пользователь просит вспомнить информацию из прошлых разговоров. Изучи СЖАТУЮ ИСТОРИЮ выше и ответь на вопрос.")
                     } else {
-                        append("КРАТКИЕ ВЫВОДЫ ИЗ ПРОШЛЫХ РАЗГОВОРОВ (МОЗГ): подходящих фактов не найдено.\n\n")
-                        append("Пользователь просит вспомнить информацию, но в выводах ничего не найдено. Честно скажи об этом.")
+                        append("СЖАТАЯ ИСТОРИЯ ПРОШЛЫХ РАЗГОВОРОВ (МОЗГ): пока пусто.\n\n")
+                        append("Пользователь просит вспомнить информацию, но сжатой истории пока нет. Честно скажи об этом.")
                     }
                 }
                 else -> {
