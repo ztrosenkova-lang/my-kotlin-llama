@@ -233,7 +233,7 @@ fun ChatScreen(
         "А ещё я могу напоминать тебе о важных событиях,заменяя тебе органайзер. ⏰ " +
         "Давай общаться! Включи локальный движок Llama или облачный ИИ в шапке приложения, и погнали! 🚀"
 
-    // Приветствие: ждём готовности TTS, затем отправляем в сервис, ждём SPEAK_START, печатаем
+        // Приветствие: ждём готовности TTS, затем отправляем в сервис, ждём задержку, печатаем
     LaunchedEffect(isTtsReady) {
         if (isTtsReady && !welcomeStarted) {
             welcomeStarted = true
@@ -241,15 +241,15 @@ fun ChatScreen(
             // Запускаем озвучивание — сервис начнёт генерацию аудио
             viewModel.speakText(fullWelcomeString)
             
-            // Ждём реального начала озвучивания (SPEAK_START от сервиса)
-            viewModel.speakStartFlow.collect {
-                // Теперь печатаем текст с эффектом печатной машинки
-                var runningText = ""
-                for (i in fullWelcomeString.indices) {
-                    runningText += fullWelcomeString[i]
-                    viewModel.updateLastSystemMessage(runningText)
-                    delay(35)
-                }
+            // Ждём генерацию аудио сервисом
+            delay(500)
+            
+            // Теперь печатаем текст с эффектом печатной машинки
+            var runningText = ""
+            for (i in fullWelcomeString.indices) {
+                runningText += fullWelcomeString[i]
+                viewModel.updateLastSystemMessage(runningText)
+                delay(35)
             }
         }
     }
