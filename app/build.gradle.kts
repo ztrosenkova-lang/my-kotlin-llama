@@ -1,5 +1,3 @@
-import java.net.URL
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -131,7 +129,7 @@ tasks.register("downloadSherpaAar") {
         println("Downloading Sherpa AAR from $sherpaAarUrl")
         libsDir.mkdirs()
 
-        val connection = URL(sherpaAarUrl).openConnection() as java.net.HttpURLConnection
+        val connection = java.net.URL(sherpaAarUrl).openConnection() as java.net.HttpURLConnection
         connection.instanceFollowRedirects = true
         connection.connectTimeout = 60000
         connection.readTimeout = 300000
@@ -165,7 +163,7 @@ tasks.register("downloadTtsModel") {
         println("Downloading TTS model from $ttsModelUrl")
         ttsModelArchive.parentFile.mkdirs()
 
-        val connection = URL(ttsModelUrl).openConnection() as java.net.HttpURLConnection
+        val connection = java.net.URL(ttsModelUrl).openConnection() as java.net.HttpURLConnection
         connection.instanceFollowRedirects = true
         connection.connectTimeout = 60000
         connection.readTimeout = 300000
