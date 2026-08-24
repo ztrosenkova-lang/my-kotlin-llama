@@ -248,7 +248,7 @@ fun ChatScreen(
     // Печать текста при получении SPEAK_START
     LaunchedEffect(speakStartTrigger, pendingTextToPrint) {
         // Печать приветствия
-        if (speakStartTrigger && !welcomeTextPrinted && !welcomeStarted) {
+        if (speakStartTrigger && welcomeStarted && !welcomeTextPrinted) {
             welcomeTextPrinted = true
             var runningText = ""
             for (i in fullWelcomeString.indices) {
@@ -272,7 +272,7 @@ fun ChatScreen(
         }
     }
 
-    // Сброс флагов при новом цикле
+    // Сброс флагов при завершении озвучивания
     LaunchedEffect(isSpeaking) {
         if (!isSpeaking) {
             welcomeTextPrinted = false
