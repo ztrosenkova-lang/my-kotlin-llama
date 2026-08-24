@@ -41,7 +41,6 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import java.security.KeyPairGenerator
 
-// Модель данных для сообщений чата
 data class ChatMessage(val role: String, val text: String)
 
 class MainViewModel(application: Application, val contentResolver: ContentResolver) : AndroidViewModel(application) {
@@ -49,28 +48,23 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         @Volatile var instance: MainViewModel? = null
         private const val TAG = "MainViewModel"
         
-        // Команды для работы с памятью
-        private const val REMEMBER_COMMAND = "запомни"          // Сохранение в memory.txt
-        private const val FIND_COMMAND = "найди"                // Поиск в memory.txt
-        private const val SEARCH_COMMAND = "поищи"              // Поиск в memory.txt
-        private const val RECALL_COMMAND = "вспомни"            // Поиск в brain.txt (мозг)
-        private const val ALARM_COMMAND = "будильник"           // Установка будильника
-        private const val REMIND_COMMAND = "напомни"            // Установка будильника
-        private const val CHAT_LOOKUP_COMMAND = "посмотри в чате" // Поиск в истории чата
+        private const val REMEMBER_COMMAND = "запомни"
+        private const val FIND_COMMAND = "найди"
+        private const val SEARCH_COMMAND = "поищи"
+        private const val RECALL_COMMAND = "вспомни"
+        private const val ALARM_COMMAND = "будильник"
+        private const val REMIND_COMMAND = "напомни"
+        private const val CHAT_LOOKUP_COMMAND = "посмотри в чате"
         
-        // Порог для автоматической фоновой компрессии диалога
         private const val AUTO_BRAIN_COMPRESSION_THRESHOLD = 14
         
-        // Секретная фраза и лимит времени для защиты
         private const val SECRET_PHRASE_HASH = "632f146be48ba42ca3406ef5a8ebca73df15aa2d5d8cb960dfbe22262d0577fb"
         private const val ONE_DAY_MS = 86400000L
     }
 
-    // Скоупы корутин
     private val viewModelJob = SupervisorJob()
     private val scope = CoroutineScope(Dispatchers.IO + viewModelJob)
 
-    // ==================== Локальный ИИ ====================
     private val _llmFlow = MutableSharedFlow<LlamaHelper.LLMEvent>(
         replay = 0,
         extraBufferCapacity = 64,
@@ -87,7 +81,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _isModelLoaded = MutableStateFlow(false)
     val isModelLoaded: MutableStateFlow<Boolean> = _isModelLoaded
 
-    // ==================== Облачный ИИ ====================
     private val _cloudState = MutableStateFlow<CloudAIState>(CloudAIState.Idle)
     val cloudState = _cloudState.asStateFlow()
 
@@ -114,10 +107,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         )
     }
 
-    // ==================== Настройки ИИ ====================
     private var currentModelName: String = ""
     
-    // Публичное поле для отображения имени загруженной модели в UI
     private val _loadedModelName = MutableStateFlow("")
     val loadedModelName: StateFlow<String> = _loadedModelName.asStateFlow()
 
@@ -131,46 +122,35 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     val contextSize = MutableStateFlow(2048)
     val maxTokens = MutableStateFlow(512)
 
-    // ==================== Файлы памяти ====================
-    // Основная база знаний (долговременная память)
     private val memoryFile: File by lazy {
         File(getApplication<Application>().filesDir, "memory.txt")
     }
     
-    // Сжатые выводы из диалогов (мозг)
     private val brainFile: File by lazy {
         File(getApplication<Application>().filesDir, "brain.txt")
     }
 
-    // Флаг для отслеживания, что текущий запрос — сжатие диалога
     private var isCompressionRequest = false
 
-    // ==================== TTS (Sherpa-ONNX в отдельном процессе) ====================
     private var isTtsEnabled = false
     private val _isTtsReady = MutableStateFlow(false)
     val isTtsReady: StateFlow<Boolean> = _isTtsReady.asStateFlow()
 
-    // Статус "говорит" для анимации рта
     private val _isSpeaking = MutableStateFlow(false)
     val isSpeaking: StateFlow<Boolean> = _isSpeaking.asStateFlow()
 
-    // Триггер начала озвучивания — MutableStateFlow хранит текущее значение
     private val _speakStartTrigger = MutableStateFlow(false)
     val speakStartTrigger: StateFlow<Boolean> = _speakStartTrigger.asStateFlow()
 
-    // Текст для печати (передаётся из ChatScreen после SPEAK_START)
     private val _pendingTextToPrint = MutableStateFlow("")
     val pendingTextToPrint: StateFlow<String> = _pendingTextToPrint.asStateFlow()
 
-    // Приёмник Broadcast для TTS
     private lateinit var ttsReceiver: BroadcastReceiver
 
-    // ==================== Будильник ====================
     private val alarmManager by lazy {
         getApplication<Application>().getSystemService(Context.ALARM_SERVICE) as AlarmManager
     }
 
-    // ==================== Режим работы ИИ ====================
     private val _currentMode = MutableStateFlow(AIMode.NEUTRAL)
     val currentMode = _currentMode.asStateFlow()
 
@@ -178,11 +158,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _currentMode.value = mode
     }
 
-    // ==================== Мониторинг памяти устройства ====================
     private val _memoryInfoText = MutableStateFlow("Всего доступно: 0.0 ГБ / Занято: 0.0 ГБ")
     val memoryInfoText: StateFlow<String> = _memoryInfoText.asStateFlow()
 
-    // ==================== Защита приложения ====================
     private val _isAppLocked = MutableStateFlow(true)
     val isAppLocked: StateFlow<Boolean> = _isAppLocked.asStateFlow()
     private var isUnlockedPermanently = false
@@ -191,24 +169,18 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         getApplication<Application>().getSharedPreferences("app_security", Context.MODE_PRIVATE)
     }
 
-    // Статус привязки устройства
     private val _isDeviceBound = MutableStateFlow(false)
     val isDeviceBound: StateFlow<Boolean> = _isDeviceBound.asStateFlow()
 
-    // ==================== НОВЫЕ ПОЛЯ ДЛЯ СТАТУС-БАРА ====================
-    // Оставшееся время до блокировки
     private val _remainingTimeText = MutableStateFlow("")
     val remainingTimeText: StateFlow<String> = _remainingTimeText.asStateFlow()
 
-    // Статус постоянной разблокировки
     private val _isPermanentlyUnlocked = MutableStateFlow(false)
     val isPermanentlyUnlocked: StateFlow<Boolean> = _isPermanentlyUnlocked.asStateFlow()
 
-    // Статус вечной блокировки
     private val _isPermanentlyBlocked = MutableStateFlow(false)
     val isPermanentlyBlocked: StateFlow<Boolean> = _isPermanentlyBlocked.asStateFlow()
 
-    // ==================== LlamaHelper ====================
     private val llamaHelper by lazy {
         LlamaHelper(
             contentResolver = contentResolver,
@@ -217,11 +189,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         )
     }
 
-    // ==================== ИНИЦИАЛИЗАЦИЯ ====================
     init {
         instance = this
 
-        // Регистрация приёмника Broadcast для TTS
         ttsReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 when (intent?.action) {
@@ -270,7 +240,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             getApplication<Application>().registerReceiver(ttsReceiver, ttsFilter)
         }
 
-        // Проверка вечной блокировки
         if (prefs.getBoolean("is_permanently_blocked", false)) {
             Log.e(TAG, "App is permanently blocked.")
             _isAppLocked.value = true
@@ -278,7 +247,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             _isPermanentlyBlocked.value = true
             _remainingTimeText.value = "🔴 Приложение заблокировано"
         } else {
-            // Проверка постоянной разблокировки
             isUnlockedPermanently = prefs.getBoolean("unlocked_permanently", false)
             if (isUnlockedPermanently) {
                 _isPermanentlyUnlocked.value = true
@@ -287,7 +255,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 _remainingTimeText.value = "✅ Приложение разблокировано"
                 Log.i(TAG, "App is permanently unlocked.")
             } else {
-                // Проверка привязки к устройству
                 if (!verifyDeviceBinding()) {
                     Log.e(TAG, "Device binding verification FAILED!")
                     _isAppLocked.value = true
@@ -304,7 +271,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     } else {
                         if (!verifyTimeLimit()) {
                             Log.e(TAG, "Time limit verification FAILED!")
-                            // verifyTimeLimit сам устанавливает _isAppLocked и _remainingTimeText
                         } else {
                             _isAppLocked.value = false
                             _isDeviceBound.value = true
@@ -316,15 +282,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
 
-        // Запуск обновления оставшегося времени
         scope.launch(Dispatchers.Default) {
             while (true) {
                 updateRemainingTime()
-                delay(60000) // Обновление раз в минуту
+                delay(60000)
             }
         }
 
-        // Инициализация файлов памяти
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 if (!memoryFile.exists()) memoryFile.createNewFile()
@@ -335,17 +299,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
 
-        // Автоматическое включение TTS при старте
         isTtsEnabled = true
         _isTtsReady.value = false
         appendSystemMessage("🔄 Инициализация офлайн голосового движка...")
         Log.d(TAG, "TTS auto-enabled, waiting for initialization")
         
-        // Запуск TTS сервиса
         val ttsStartIntent = Intent(getApplication<Application>(), TtsService::class.java)
         getApplication<Application>().startService(ttsStartIntent)
 
-        // Подписка на события облачного ИИ
         scope.launch {
             _cloudFlow.collect { event ->
                 when (event) {
@@ -369,12 +330,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         val fullText = event.fullText
                         if (fullText.isNotEmpty()) {
                             if (isCompressionRequest) {
-                                // Сохраняем только сжатие диалога
                                 saveBrain(fullText)
                                 isCompressionRequest = false
                             } else {
-                                // Отправляем текст в TTS, печать начнётся после SPEAK_START
-                                _pendingTextToPrint.value = fullText
+                                _cloudGeneratedText.value = fullText
                                 speakText(fullText)
                             }
                         }
@@ -395,7 +354,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
 
-        // Подписка на события локального ИИ
         scope.launch {
             _llmFlow.collect { event ->
                 when (event) {
@@ -414,12 +372,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         val fullText = event.fullText
                         if (fullText.isNotEmpty()) {
                             if (isCompressionRequest) {
-                                // Сохраняем только сжатие диалога
                                 saveBrain(fullText)
                                 isCompressionRequest = false
                             } else {
-                                // Отправляем текст в TTS, печать начнётся после SPEAK_START
-                                _pendingTextToPrint.value = fullText
+                                _generatedText.value = fullText
                                 speakText(fullText)
                             }
                         }
@@ -439,7 +395,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
 
-        // Мониторинг оперативной памяти устройства
         scope.launch(Dispatchers.Default) {
             val context = getApplication<Application>().applicationContext
             val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
@@ -462,8 +417,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
     }
-
-    // ==================== ЗАЩИТА ПРИЛОЖЕНИЯ ====================
 
     private fun updateRemainingTime() {
         if (_isPermanentlyBlocked.value) {
@@ -613,12 +566,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    /**
-     * Проверка временного лимита (24 часа).
-     * Если лимит истёк — приложение блокируется, но НЕ самоуничтожается.
-     * Пользователь должен ввести секретную фразу для разблокировки.
-     * Постоянная разблокировка через секретную фразу отключает проверку.
-     */
     private fun verifyTimeLimit(): Boolean {
         if (isUnlockedPermanently) {
             _isPermanentlyUnlocked.value = true
@@ -686,8 +633,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         return digest.joinToString("") { "%02x".format(it) }
     }
 
-    // ==================== TTS (Sherpa-ONNX в отдельном процессе) ====================
-
     fun enableTts() {
         if (_isTtsReady.value && isTtsEnabled) {
             appendSystemMessage("🔊 Озвучка уже включена")
@@ -705,7 +650,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         appendSystemMessage("🔄 Инициализация офлайн голосового движка...")
         Log.d(TAG, "TTS service starting")
         
-        // Запуск TTS сервиса
         val ttsStartIntent = Intent(getApplication<Application>(), TtsService::class.java)
         getApplication<Application>().startService(ttsStartIntent)
     }
@@ -717,7 +661,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         appendSystemMessage("🔇 Озвучка отключена, TTS выгружен из памяти")
         Log.d(TAG, "TTS disabled")
         
-        // Остановка TTS сервиса
         val ttsStopIntent = Intent(getApplication<Application>(), TtsService::class.java)
         getApplication<Application>().stopService(ttsStopIntent)
     }
@@ -752,8 +695,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _cloudState.value = CloudAIState.Ready(modelId)
         Log.d(TAG, "Cloud state set to Ready for model: $modelId")
     }
-
-    // ==================== РАБОТА С ПАМЯТЬЮ ====================
 
     private fun extractRussianRoot(word: String): String {
         val lowerWord = word.lowercase()
@@ -961,7 +902,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
             when {
                 lowerPrompt.contains(CHAT_LOOKUP_COMMAND) -> {
-                    // Отправляем ВЕСЬ чат в модель
                     val fullChatHistory = _chatHistory.value.joinToString("\n") { message ->
                         val prefix = when (message.role) {
                             "user" -> "Пользователь"
@@ -974,7 +914,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     append("Пользователь просит найти информацию в истории чата. Изучи ВСЮ историю выше и ответь на вопрос.")
                 }
                 lowerPrompt.contains(RECALL_COMMAND) -> {
-                    // Отправляем ВЕСЬ brain.txt в модель
                     val brainData = readBrain()
                     if (brainData.isNotEmpty()) {
                         append("СЖАТАЯ ИСТОРИЯ ПРОШЛЫХ РАЗГОВОРОВ (МОЗГ):\n$brainData\n\n")
@@ -1002,8 +941,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
     }
-
-    // ==================== ОТПРАВКА СООБЩЕНИЙ ====================
 
     fun sendUserMessage(text: String) {
         if (text.isBlank()) return
@@ -1060,8 +997,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
     }
-
-    // ==================== ОБЛАЧНЫЙ ИИ ====================
 
     fun isCloudConfigured(): Boolean = cloudAIProvider.isConfigured()
     fun getCloudConfig(): CloudAIConfig? = cloudAIProvider.getConfig()
@@ -1137,8 +1072,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         cloudAIProvider.abort()
         _cloudState.value = CloudAIState.Idle
     }
-
-    // ==================== ЛОКАЛЬНЫЙ ИИ ====================
 
     fun loadModel(path: String, mmprojPath: String? = null) {
         if (path.isEmpty()) return
@@ -1236,8 +1169,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    // ==================== БУДИЛЬНИК ====================
-
     private fun handleAlarmCommand(prompt: String) {
         val timePattern = Regex("(?:в|в\\s+|напомни\\s+в\\s+)(\\d{1,2}[:.]\\d{2})")
         val match = timePattern.find(prompt)
@@ -1314,8 +1245,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    // ==================== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ====================
-
     internal fun appendSystemMessage(text: String) {
         _chatHistory.value = _chatHistory.value + ChatMessage("system", text)
     }
@@ -1386,8 +1315,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _cloudGeneratedText.value = ""
     }
 
-    // ==================== НАСТРОЙКИ ====================
-
     fun updateSystemPrompt(newPrompt: String) {
         _systemPrompt.value = newPrompt
     }
@@ -1420,7 +1347,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         llamaHelper.release()
         viewModelJob.cancel()
         
-        // Остановка TTS сервиса
         try {
             val ttsStopIntent = Intent(getApplication<Application>(), TtsService::class.java)
             getApplication<Application>().stopService(ttsStopIntent)
@@ -1428,7 +1354,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             Log.e(TAG, "Error stopping TTS service: ${e.message}")
         }
         
-        // Отмена регистрации приёмника Broadcast
         try {
             getApplication<Application>().unregisterReceiver(ttsReceiver)
         } catch (e: Exception) {
@@ -1437,9 +1362,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 }
 
-/**
- * Получение имени файла из URI контента.
- */
 private fun getFileNameFromUri(contentResolver: ContentResolver, uri: Uri): String {
     var name = ""
     try {
