@@ -157,13 +157,6 @@ class TtsService : Service() {
                     .trim()
                 if (filtered.isBlank()) return
 
-                // Отправляем Broadcast — начало озвучивания
-                val startIntent = Intent(ACTION_SPEAK_START).apply {
-                    setPackage(packageName)
-                }
-                sendBroadcast(startIntent)
-                Log.d(TAG, "SPEAK_START broadcast sent")
-
                 try {
                     val audio = tts.generate(filtered, sid = 0, speed = 0.85f)
                     if (audio.samples.isNotEmpty()) {
@@ -188,6 +181,15 @@ class TtsService : Service() {
                             0
                         )
                         audioTrack?.play()
+                        
+                        // Отправляем Broadcast — начало озвучивания
+                        // Только после того, как звук реально начал воспроизводиться
+                        val startIntent = Intent(ACTION_SPEAK_START).apply {
+                            setPackage(packageName)
+                        }
+                        sendBroadcast(startIntent)
+                        Log.d(TAG, "SPEAK_START broadcast sent")
+                        
                         audioTrack?.write(audio.samples, 0, audio.samples.size, AudioTrack.WRITE_BLOCKING)
                         audioTrack?.stop()
                         audioTrack?.release()
