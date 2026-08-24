@@ -13,9 +13,7 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.k2fsa.sherpa.onnx.GenerationConfig
-import com.k2fsa.sherpa.onnx.LibraryUtils
 import com.k2fsa.sherpa.onnx.OfflineTts
-import com.k2fsa.sherpa.onnx.OfflineTtsCallback
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsSupertonicModelConfig
@@ -104,32 +102,27 @@ class TtsService : Service() {
         serviceScope.launch {
             ttsMutex.withLock {
                 try {
-                    LibraryUtils.enableDebug()
+                    val supertonicModelConfig = OfflineTtsSupertonicModelConfig(
+                        durationPredictor = "tts-model/duration_predictor.int8.onnx",
+                        textEncoder = "tts-model/text_encoder.int8.onnx",
+                        vectorEstimator = "tts-model/vector_estimator.int8.onnx",
+                        vocoder = "tts-model/vocoder.int8.onnx",
+                        ttsJson = "tts-model/tts.json",
+                        unicodeIndexer = "tts-model/unicode_indexer.bin",
+                        voiceStyle = "tts-model/voice.bin",
+                    )
 
-                    val supertonicModelConfig =
-                        OfflineTtsSupertonicModelConfig.builder()
-                            .setDurationPredictor("tts-model/duration_predictor.int8.onnx")
-                            .setTextEncoder("tts-model/text_encoder.int8.onnx")
-                            .setVectorEstimator("tts-model/vector_estimator.int8.onnx")
-                            .setVocoder("tts-model/vocoder.int8.onnx")
-                            .setTtsJson("tts-model/tts.json")
-                            .setUnicodeIndexer("tts-model/unicode_indexer.bin")
-                            .setVoiceStyle("tts-model/voice.bin")
-                            .build()
+                    val modelConfig = OfflineTtsModelConfig(
+                        supertonic = supertonicModelConfig,
+                        numThreads = 2,
+                        debug = true,
+                    )
 
-                    val modelConfig =
-                        OfflineTtsModelConfig.builder()
-                            .setSupertonic(supertonicModelConfig)
-                            .setNumThreads(2)
-                            .setDebug(true)
-                            .build()
+                    val ttsConfig = OfflineTtsConfig(
+                        model = modelConfig,
+                    )
 
-                    val ttsConfig =
-                        OfflineTtsConfig.builder()
-                            .setModel(modelConfig)
-                            .build()
-
-                    offlineTts = OfflineTts(ttsConfig)
+                    offlineTts = OfflineTts(config = ttsConfig)
                     isTtsInitialized = true
                     Log.d(TAG, "Supertonic TTS initialized in separate process")
 
@@ -183,24 +176,18 @@ class TtsService : Service() {
                 val lang = detectLanguage(filtered)
                 Log.d(TAG, "Detected language: $lang")
 
-                val genConfig = GenerationConfig()
-                genConfig.setSid(0)
-                genConfig.setSpeed(1.0f)
-                genConfig.setNumSteps(8)
-
-                val extra = HashMap<String, String>()
-                extra["lang"] = lang
-                genConfig.setExtra(extra)
+                val genConfig = GenerationConfig(
+                    sid = 0,
+                    speed = 1.0f,
+                    numSteps = 8,
+                    extra = mapOf("lang" to lang),
+                )
 
                 try {
                     val audio = tts.generateWithConfigAndCallback(
-                        filtered,
-                        genConfig,
-                        object : OfflineTtsCallback {
-                            override fun invoke(samples: FloatArray): Int {
-                                return 1
-                            }
-                        }
+                        text = filtered,
+                        config = genConfig,
+                        callback = { _ -> 1 }
                     )
 
                     if (audio.samples.isNotEmpty()) {
