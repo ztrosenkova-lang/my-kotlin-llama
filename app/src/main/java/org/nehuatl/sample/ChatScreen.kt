@@ -109,7 +109,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import androidx.compose.animation.core.*
-import androidx.compose.runtime.remember
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sin
@@ -169,6 +168,8 @@ fun ChatScreen(
     val isPermanentlyUnlocked by viewModel.isPermanentlyUnlocked.collectAsStateWithLifecycle(initialValue = false)
     val isPermanentlyBlocked by viewModel.isPermanentlyBlocked.collectAsStateWithLifecycle(initialValue = false)
     val isSpeaking by viewModel.isSpeaking.collectAsStateWithLifecycle(initialValue = false)
+    val speakStartTrigger by viewModel.speakStartTrigger.collectAsStateWithLifecycle(initialValue = false)
+    val pendingTextToPrint by viewModel.pendingTextToPrint.collectAsStateWithLifecycle(initialValue = "")
 
     // Локальные состояния UI
     var promptInput by remember { mutableStateOf("") }           // Текст в поле ввода
@@ -187,6 +188,8 @@ fun ChatScreen(
     var isGeneratingToken by remember { mutableStateOf(false) }  // Индикатор генерации токена
     var secretPhraseInput by remember { mutableStateOf("") }     // Ввод секретной фразы
     var welcomeStarted by remember { mutableStateOf(false) }     // Флаг начала приветствия
+    var welcomeTextPrinted by remember { mutableStateOf(false) } // Флаг, что приветствие напечатано
+    var pendingTextPrinted by remember { mutableStateOf(false) } // Флаг, что текст ответа напечатан
 
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -233,24 +236,47 @@ fun ChatScreen(
         "А ещё я могу напоминать тебе о важных событиях,заменяя тебе органайзер. ⏰ " +
         "Давай общаться! Включи локальный движок Llama или облачный ИИ в шапке приложения, и погнали! 🚀"
 
-        // Приветствие: ждём готовности TTS, затем отправляем в сервис, ждём задержку, печатаем
+    // Приветствие: ждём готовности TTS, затем отправляем в сервис, ждём SPEAK_START
     LaunchedEffect(isTtsReady) {
         if (isTtsReady && !welcomeStarted) {
             welcomeStarted = true
-            
-            // Запускаем озвучивание — сервис начнёт генерацию аудио
+            // Отправляем текст в TTS, но НЕ печатаем сразу
             viewModel.speakText(fullWelcomeString)
-            
-            // Ждём генерацию аудио сервисом
-            delay(500)
-            
-            // Теперь печатаем текст с эффектом печатной машинки
+        }
+    }
+
+    // Печать текста при получении SPEAK_START
+    LaunchedEffect(speakStartTrigger, pendingTextToPrint) {
+        // Печать приветствия
+        if (speakStartTrigger && !welcomeTextPrinted && !welcomeStarted) {
+            welcomeTextPrinted = true
             var runningText = ""
             for (i in fullWelcomeString.indices) {
                 runningText += fullWelcomeString[i]
                 viewModel.updateLastSystemMessage(runningText)
                 delay(35)
             }
+        }
+
+        // Печать ответа ИИ
+        if (speakStartTrigger && pendingTextToPrint.isNotEmpty() && !pendingTextPrinted) {
+            pendingTextPrinted = true
+            var runningText = ""
+            for (i in pendingTextToPrint.indices) {
+                runningText += pendingTextToPrint[i]
+                viewModel.updateLastSystemMessage(runningText)
+                delay(35)
+            }
+            // Сбрасываем pendingTextToPrint после печати
+            viewModel.clearPendingText()
+        }
+    }
+
+    // Сброс флагов при новом цикле
+    LaunchedEffect(isSpeaking) {
+        if (!isSpeaking) {
+            welcomeTextPrinted = false
+            pendingTextPrinted = false
         }
     }
 
