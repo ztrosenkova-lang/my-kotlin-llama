@@ -102,27 +102,25 @@ class TtsService : Service() {
         serviceScope.launch {
             ttsMutex.withLock {
                 try {
-                    val supertonicModelConfig = OfflineTtsSupertonicModelConfig().apply {
-                        durationPredictor = "tts-model/duration_predictor.int8.onnx"
-                        textEncoder = "tts-model/text_encoder.int8.onnx"
-                        vectorEstimator = "tts-model/vector_estimator.int8.onnx"
-                        vocoder = "tts-model/vocoder.int8.onnx"
-                        ttsJson = "tts-model/tts.json"
-                        unicodeIndexer = "tts-model/unicode_indexer.bin"
-                        voiceStyle = "tts-model/voice.bin"
-                    }
+                    val modelConfig = OfflineTtsSupertonicModelConfig(
+                        durationPredictor = "tts-model/duration_predictor.int8.onnx",
+                        textEncoder = "tts-model/text_encoder.int8.onnx",
+                        vectorEstimator = "tts-model/vector_estimator.int8.onnx",
+                        vocoder = "tts-model/vocoder.int8.onnx",
+                        ttsJson = "tts-model/tts.json",
+                        unicodeIndexer = "tts-model/unicode_indexer.bin",
+                        voiceStyle = "tts-model/voice.bin",
+                    )
 
-                    val modelConfig = OfflineTtsModelConfig().apply {
-                        supertonic = supertonicModelConfig
-                        numThreads = 2
-                        debug = true
-                    }
+                    val ttsConfig = OfflineTtsConfig(
+                        model = OfflineTtsModelConfig(
+                            supertonic = modelConfig,
+                            numThreads = 2,
+                            debug = true,
+                        )
+                    )
 
-                    val ttsConfig = OfflineTtsConfig().apply {
-                        model = modelConfig
-                    }
-
-                    offlineTts = OfflineTts(ttsConfig)
+                    offlineTts = OfflineTts(assets, ttsConfig)
                     isTtsInitialized = true
                     Log.d(TAG, "Supertonic TTS initialized in separate process")
 
@@ -176,12 +174,12 @@ class TtsService : Service() {
                 val lang = detectLanguage(filtered)
                 Log.d(TAG, "Detected language: $lang")
 
-                val genConfig = GenerationConfig().apply {
-                    setSid(0)
-                    setSpeed(1.0f)
-                    setNumSteps(8)
-                    setExtra(mapOf("lang" to lang))
-                }
+                val genConfig = GenerationConfig(
+                    sid = 0,
+                    speed = 1.0f,
+                    numSteps = 8,
+                    extra = mapOf("lang" to lang),
+                )
 
                 try {
                     val audio = tts.generateWithConfigAndCallback(
