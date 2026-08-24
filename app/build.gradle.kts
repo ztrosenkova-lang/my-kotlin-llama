@@ -119,8 +119,8 @@ val sherpaAarFile = file("$libsDir/sherpa-onnx-1.13.6.aar")
 val sherpaAarUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.6/sherpa-onnx-1.13.6.aar"
 
 val ttsModelDir = file("$projectDir/src/main/assets/tts-model")
-val ttsModelArchive = file("${layout.buildDirectory.get().asFile}/tts-model/vits-piper-ru_RU-ruslan-medium.tar.bz2")
-val ttsModelUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-ru_RU-ruslan-medium.tar.bz2"
+val ttsModelArchive = file("${layout.buildDirectory.get().asFile}/tts-model/sherpa-onnx-supertonic-tts-int8-2026-03-06.tar.bz2")
+val ttsModelUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-supertonic-tts-int8-2026-03-06.tar.bz2"
 
 tasks.register("downloadSherpaAar") {
     doLast {
@@ -154,11 +154,17 @@ tasks.register("downloadSherpaAar") {
 
 tasks.register("downloadTtsModel") {
     doLast {
-        val modelFile = File(ttsModelDir, "ru_RU-ruslan-medium.onnx")
-        val tokensFile = File(ttsModelDir, "tokens.txt")
-        val espeakDataDir = File(ttsModelDir, "espeak-ng-data")
+        val modelFile = File(ttsModelDir, "duration_predictor.int8.onnx")
+        val textEncoderFile = File(ttsModelDir, "text_encoder.int8.onnx")
+        val vectorEstimatorFile = File(ttsModelDir, "vector_estimator.int8.onnx")
+        val vocoderFile = File(ttsModelDir, "vocoder.int8.onnx")
+        val ttsJsonFile = File(ttsModelDir, "tts.json")
+        val unicodeIndexerFile = File(ttsModelDir, "unicode_indexer.bin")
+        val voiceStyleFile = File(ttsModelDir, "voice.bin")
 
-        if (modelFile.exists() && tokensFile.exists() && espeakDataDir.exists()) {
+        if (modelFile.exists() && textEncoderFile.exists() && vectorEstimatorFile.exists() &&
+            vocoderFile.exists() && ttsJsonFile.exists() && unicodeIndexerFile.exists() &&
+            voiceStyleFile.exists()) {
             println("TTS model already exists. Skipping download.")
             return@doLast
         }
@@ -199,7 +205,7 @@ tasks.register("downloadTtsModel") {
         }
         println("TTS model extracted to $ttsModelDir")
 
-        val extractedDir = File(ttsModelDir, "vits-piper-ru_RU-ruslan-medium")
+        val extractedDir = File(ttsModelDir, "sherpa-onnx-supertonic-tts-int8-2026-03-06")
         if (extractedDir.exists() && extractedDir.isDirectory) {
             extractedDir.listFiles()?.forEach { file ->
                 val target = File(ttsModelDir, file.name)
@@ -222,10 +228,16 @@ tasks.register("downloadTtsModel") {
 tasks.register("checkTtsModel") {
     dependsOn("downloadTtsModel")
     doLast {
-        val modelFile = File(ttsModelDir, "ru_RU-ruslan-medium.onnx")
-        val tokensFile = File(ttsModelDir, "tokens.txt")
-        val espeakDataDir = File(ttsModelDir, "espeak-ng-data")
-        if (!modelFile.exists() || !tokensFile.exists() || !espeakDataDir.exists()) {
+        val modelFile = File(ttsModelDir, "duration_predictor.int8.onnx")
+        val textEncoderFile = File(ttsModelDir, "text_encoder.int8.onnx")
+        val vectorEstimatorFile = File(ttsModelDir, "vector_estimator.int8.onnx")
+        val vocoderFile = File(ttsModelDir, "vocoder.int8.onnx")
+        val ttsJsonFile = File(ttsModelDir, "tts.json")
+        val unicodeIndexerFile = File(ttsModelDir, "unicode_indexer.bin")
+        val voiceStyleFile = File(ttsModelDir, "voice.bin")
+        if (!modelFile.exists() || !textEncoderFile.exists() || !vectorEstimatorFile.exists() ||
+            !vocoderFile.exists() || !ttsJsonFile.exists() || !unicodeIndexerFile.exists() ||
+            !voiceStyleFile.exists()) {
             throw GradleException("TTS model files are missing. Download failed.")
         }
         println("TTS model files verified.")
