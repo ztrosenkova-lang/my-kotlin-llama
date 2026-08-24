@@ -154,6 +154,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _isSpeaking = MutableStateFlow(false)
     val isSpeaking: StateFlow<Boolean> = _isSpeaking.asStateFlow()
 
+    // Триггер начала озвучивания — MutableStateFlow хранит текущее значение
+    private val _speakStartTrigger = MutableStateFlow(false)
+    val speakStartTrigger: StateFlow<Boolean> = _speakStartTrigger.asStateFlow()
+
+    // Текст для печати (передаётся из ChatScreen после SPEAK_START)
+    private val _pendingTextToPrint = MutableStateFlow("")
+    val pendingTextToPrint: StateFlow<String> = _pendingTextToPrint.asStateFlow()
+
     // Приёмник Broadcast для TTS
     private lateinit var ttsReceiver: BroadcastReceiver
 
@@ -233,10 +241,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     }
                     TtsService.ACTION_SPEAK_START -> {
                         _isSpeaking.value = true
+                        _speakStartTrigger.value = true
                         Log.d(TAG, "SPEAK_START broadcast received")
                     }
                     TtsService.ACTION_SPEAK_END -> {
                         _isSpeaking.value = false
+                        _speakStartTrigger.value = false
                         Log.d(TAG, "SPEAK_END broadcast received")
                     }
                 }
@@ -363,24 +373,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                 saveBrain(fullText)
                                 isCompressionRequest = false
                             } else {
-                                // Обычный ответ — сначала озвучиваем, потом печатаем
+                                // Отправляем текст в TTS, печать начнётся после SPEAK_START
+                                _pendingTextToPrint.value = fullText
                                 speakText(fullText)
-                                scope.launch(Dispatchers.Main) {
-                                    // Ждём генерацию аудио сервисом
-                                    delay(500)
-                                    // Добавляем новое сообщение assistant
-                                    _chatHistory.value = _chatHistory.value + ChatMessage("assistant", "")
-                                    var typedText = ""
-                                    for (char in fullText) {
-                                        typedText += char
-                                        val currentList = _chatHistory.value.toMutableList()
-                                        if (currentList.isNotEmpty() && currentList.last().role == "assistant") {
-                                            currentList[currentList.lastIndex] = ChatMessage("assistant", typedText)
-                                            _chatHistory.value = currentList
-                                        }
-                                        delay(30)
-                                    }
-                                }
                             }
                         }
                         _cloudGeneratedText.value = fullText
@@ -423,24 +418,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                 saveBrain(fullText)
                                 isCompressionRequest = false
                             } else {
-                                // Обычный ответ — сначала озвучиваем, потом печатаем
+                                // Отправляем текст в TTS, печать начнётся после SPEAK_START
+                                _pendingTextToPrint.value = fullText
                                 speakText(fullText)
-                                scope.launch(Dispatchers.Main) {
-                                    // Ждём генерацию аудио сервисом
-                                    delay(500)
-                                    // Добавляем новое сообщение assistant
-                                    _chatHistory.value = _chatHistory.value + ChatMessage("assistant", "")
-                                    var typedText = ""
-                                    for (char in fullText) {
-                                        typedText += char
-                                        val currentList = _chatHistory.value.toMutableList()
-                                        if (currentList.isNotEmpty() && currentList.last().role == "assistant") {
-                                            currentList[currentList.lastIndex] = ChatMessage("assistant", typedText)
-                                            _chatHistory.value = currentList
-                                        }
-                                        delay(30)
-                                    }
-                                }
                             }
                         }
                         _generatedText.value = fullText
