@@ -62,7 +62,7 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
         jniLibs {
-            // useLegacyPackaging = true  // УБРАНО для совместимости с Sherpa-ONNX
+            // useLegacyPackaging = true
         }
         androidResources {
             noCompress.addAll(listOf("bin", "gguf", "txt", "onnx", "json"))
@@ -98,7 +98,7 @@ dependencies {
     // Sherpa-ONNX для офлайн TTS (локальный AAR)
     implementation(files("libs/sherpa-onnx-1.13.6.aar"))
 
-    // Llama.cpp - Local module reference (оставляем для локального ИИ)
+    // Llama.cpp - Local module reference
     implementation(project(":llamaCpp"))
 
     // Testing
@@ -119,8 +119,8 @@ val sherpaAarFile = file("$libsDir/sherpa-onnx-1.13.6.aar")
 val sherpaAarUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.6/sherpa-onnx-1.13.6.aar"
 
 val ttsModelDir = file("$projectDir/src/main/assets/tts-model")
-val ttsModelArchive = file("${layout.buildDirectory.get().asFile}/tts-model/sherpa-onnx-supertonic-tts-int8-2026-03-06.tar.bz2")
-val ttsModelUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-supertonic-tts-int8-2026-03-06.tar.bz2"
+val ttsModelArchive = file("${layout.buildDirectory.get().asFile}/tts-model/sherpa-onnx-supertonic-3-tts-int8-2026-05-11.tar.bz2")
+val ttsModelUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-supertonic-3-tts-int8-2026-05-11.tar.bz2"
 
 tasks.register("downloadSherpaAar") {
     doLast {
@@ -205,7 +205,7 @@ tasks.register("downloadTtsModel") {
         }
         println("TTS model extracted to $ttsModelDir")
 
-        val extractedDir = File(ttsModelDir, "sherpa-onnx-supertonic-tts-int8-2026-03-06")
+        val extractedDir = File(ttsModelDir, "sherpa-onnx-supertonic-3-tts-int8-2026-05-11")
         if (extractedDir.exists() && extractedDir.isDirectory) {
             extractedDir.listFiles()?.forEach { file ->
                 val target = File(ttsModelDir, file.name)
