@@ -744,6 +744,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         context.startService(intent)
     }
 
+    fun clearPendingText() {
+        _pendingTextToPrint.value = ""
+    }
+
     fun setCloudReady(modelId: String) {
         _cloudState.value = CloudAIState.Ready(modelId)
         Log.d(TAG, "Cloud state set to Ready for model: $modelId")
