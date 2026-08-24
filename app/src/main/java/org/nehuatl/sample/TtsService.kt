@@ -13,7 +13,9 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.k2fsa.sherpa.onnx.GenerationConfig
+import com.k2fsa.sherpa.onnx.LibraryUtils
 import com.k2fsa.sherpa.onnx.OfflineTts
+import com.k2fsa.sherpa.onnx.OfflineTtsCallback
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsSupertonicModelConfig
@@ -75,6 +77,7 @@ class TtsService : Service() {
 
     override fun onDestroy() {
         stopSpeaking()
+        offlineTts?.release()
         offlineTts = null
         serviceScope.cancel()
         super.onDestroy()
@@ -101,23 +104,32 @@ class TtsService : Service() {
         serviceScope.launch {
             ttsMutex.withLock {
                 try {
-                    val modelConfig = OfflineTtsSupertonicModelConfig(
-                        durationPredictor = "tts-model/duration_predictor.int8.onnx",
-                        textEncoder = "tts-model/text_encoder.int8.onnx",
-                        vectorEstimator = "tts-model/vector_estimator.int8.onnx",
-                        vocoder = "tts-model/vocoder.int8.onnx",
-                        ttsJson = "tts-model/tts.json",
-                        unicodeIndexer = "tts-model/unicode_indexer.bin",
-                        voiceStyle = "tts-model/voice.bin",
-                    )
-                    val ttsConfig = OfflineTtsConfig(
-                        model = OfflineTtsModelConfig(
-                            supertonic = modelConfig,
-                            numThreads = 2,
-                            debug = true,
-                        ),
-                    )
-                    offlineTts = OfflineTts(config = ttsConfig)
+                    LibraryUtils.enableDebug()
+
+                    val supertonicModelConfig =
+                        OfflineTtsSupertonicModelConfig.builder()
+                            .setDurationPredictor("tts-model/duration_predictor.int8.onnx")
+                            .setTextEncoder("tts-model/text_encoder.int8.onnx")
+                            .setVectorEstimator("tts-model/vector_estimator.int8.onnx")
+                            .setVocoder("tts-model/vocoder.int8.onnx")
+                            .setTtsJson("tts-model/tts.json")
+                            .setUnicodeIndexer("tts-model/unicode_indexer.bin")
+                            .setVoiceStyle("tts-model/voice.bin")
+                            .build()
+
+                    val modelConfig =
+                        OfflineTtsModelConfig.builder()
+                            .setSupertonic(supertonicModelConfig)
+                            .setNumThreads(2)
+                            .setDebug(true)
+                            .build()
+
+                    val ttsConfig =
+                        OfflineTtsConfig.builder()
+                            .setModel(modelConfig)
+                            .build()
+
+                    offlineTts = OfflineTts(ttsConfig)
                     isTtsInitialized = true
                     Log.d(TAG, "Supertonic TTS initialized in separate process")
 
@@ -151,11 +163,11 @@ class TtsService : Service() {
     private fun detectLanguage(text: String): String {
         val hasCyrillic = text.any { it in '\u0400'..'\u04FF' }
         val hasLatin = text.any { it in '\u0041'..'\u005A' || it in '\u0061'..'\u007A' }
-        
+
         return when {
             hasCyrillic -> "ru"
             hasLatin -> "en"
-            else -> "ru"  // по умолчанию русский
+            else -> "ru"
         }
     }
 
@@ -171,21 +183,26 @@ class TtsService : Service() {
                 val lang = detectLanguage(filtered)
                 Log.d(TAG, "Detected language: $lang")
 
-                val genConfig = GenerationConfig(
-                    sid = 0,
-                    speed = 1.0f,
-                    numSteps = 8,
-                    extra = mapOf(
-                        "lang" to lang,
-                    )
-                )
+                val genConfig = GenerationConfig()
+                genConfig.setSid(0)
+                genConfig.setSpeed(1.0f)
+                genConfig.setNumSteps(8)
+
+                val extra = HashMap<String, String>()
+                extra["lang"] = lang
+                genConfig.setExtra(extra)
 
                 try {
                     val audio = tts.generateWithConfigAndCallback(
-                        text = filtered,
-                        config = genConfig,
-                        callback = { _ -> 1 }  // 1 = продолжить
+                        filtered,
+                        genConfig,
+                        object : OfflineTtsCallback {
+                            override fun invoke(samples: FloatArray): Int {
+                                return 1
+                            }
+                        }
                     )
+
                     if (audio.samples.isNotEmpty()) {
                         val sampleRate = audio.sampleRate
                         val bufferSize = AudioTrack.getMinBufferSize(
@@ -208,22 +225,19 @@ class TtsService : Service() {
                             0
                         )
                         audioTrack?.play()
-                        
-                        // Отправляем Broadcast — начало озвучивания
-                        // Только после того, как звук реально начал воспроизводиться
+
                         val startIntent = Intent(ACTION_SPEAK_START).apply {
                             setPackage(packageName)
                         }
                         sendBroadcast(startIntent)
                         Log.d(TAG, "SPEAK_START broadcast sent")
-                        
+
                         audioTrack?.write(audio.samples, 0, audio.samples.size, AudioTrack.WRITE_BLOCKING)
                         audioTrack?.stop()
                         audioTrack?.release()
                         audioTrack = null
                     }
                 } finally {
-                    // Отправляем Broadcast — конец озвучивания
                     val endIntent = Intent(ACTION_SPEAK_END).apply {
                         setPackage(packageName)
                     }
@@ -232,7 +246,6 @@ class TtsService : Service() {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "TTS playback error: ${e.message}", e)
-                // В случае ошибки тоже отправляем конец озвучивания
                 val endIntent = Intent(ACTION_SPEAK_END).apply {
                     setPackage(packageName)
                 }
