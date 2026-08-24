@@ -114,28 +114,22 @@ import kotlin.math.abs
 import kotlin.math.sin
 import kotlin.math.cos
 
-// Цветовая схема приложения
-private val AppBackground = Color(0xFFFFFFFF)       // Белый фон
-private val SurfaceGray = Color(0xFFF1F3F5)        // Серый для поверхностей
-private val BorderGray = Color(0xFFCED4DA)         // Серый для границ
-private val AccentColor = Color(0xFF74C0FC)        // Голубой акцентный
-private val DarkText = Color(0xFF212529)           // Тёмный текст
-private val ChatFontFamily = FontFamily.Monospace   // Моноширинный шрифт для чата
-private val GreenColor = Color(0xFF4CD964)         // Зелёный для статусов
-private val PaleYellowColor = Color(0xFFFFF9DB)    // Бледно-жёлтый для поля ввода
-private val FriendlyRobotColor = Color(0xFF00B4D8) // Цвет дружелюбного робота
+private val AppBackground = Color(0xFFFFFFFF)
+private val SurfaceGray = Color(0xFFF1F3F5)
+private val BorderGray = Color(0xFFCED4DA)
+private val AccentColor = Color(0xFF74C0FC)
+private val DarkText = Color(0xFF212529)
+private val ChatFontFamily = FontFamily.Monospace
+private val GreenColor = Color(0xFF4CD964)
+private val PaleYellowColor = Color(0xFFFFF9DB)
+private val FriendlyRobotColor = Color(0xFF00B4D8)
 
-// Режимы работы ИИ
 enum class AIMode {
-    LOCAL,    // Локальная модель
-    NEUTRAL,  // Нейтральный (ИИ выгружен)
-    CLOUD     // Облачный ИИ
+    LOCAL,
+    NEUTRAL,
+    CLOUD
 }
 
-/**
- * Главный экран чата приложения.
- * Содержит всю логику отображения: сообщения, поле ввода, настройки, диалоги.
- */
 @Composable
 fun ChatScreen(
     modifier: Modifier = Modifier,
@@ -148,7 +142,6 @@ fun ChatScreen(
     onImageUsed: () -> Unit,
     imagePath: String? = null
 ) {
-    // Подписка на состояния из ViewModel
     val state by viewModel.state.collectAsStateWithLifecycle()
     val generatedText by viewModel.generatedText.collectAsStateWithLifecycle()
     val cloudGeneratedText by viewModel.cloudGeneratedText.collectAsStateWithLifecycle()
@@ -168,28 +161,23 @@ fun ChatScreen(
     val isPermanentlyUnlocked by viewModel.isPermanentlyUnlocked.collectAsStateWithLifecycle(initialValue = false)
     val isPermanentlyBlocked by viewModel.isPermanentlyBlocked.collectAsStateWithLifecycle(initialValue = false)
     val isSpeaking by viewModel.isSpeaking.collectAsStateWithLifecycle(initialValue = false)
-    val speakStartTrigger by viewModel.speakStartTrigger.collectAsStateWithLifecycle(initialValue = false)
-    val pendingTextToPrint by viewModel.pendingTextToPrint.collectAsStateWithLifecycle(initialValue = "")
 
-    // Локальные состояния UI
-    var promptInput by remember { mutableStateOf("") }           // Текст в поле ввода
-    var showModelDialog by remember { mutableStateOf(false) }    // Диалог выбора модели
-    var showSettings by remember { mutableStateOf(false) }       // Панель настроек движка
-    var showPromptSettings by remember { mutableStateOf(false) } // Панель настройки промпта
-    var showCloudDialog by remember { mutableStateOf(false) }    // Диалог облачного ИИ
-    var tempPromptText by remember(systemPromptText) { mutableStateOf(systemPromptText) } // Временный текст промпта
-    var tempTemperature by remember(temperature) { mutableStateOf(temperature) }          // Временная температура
-    var showHelpDialog by remember { mutableStateOf(false) }     // Диалог справки
-    var showMemoryEditor by remember { mutableStateOf(false) }   // Редактор базы знаний
-    var memoryEditText by remember { mutableStateOf("") }        // Текст в редакторе памяти
+    var promptInput by remember { mutableStateOf("") }
+    var showModelDialog by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
+    var showPromptSettings by remember { mutableStateOf(false) }
+    var showCloudDialog by remember { mutableStateOf(false) }
+    var tempPromptText by remember(systemPromptText) { mutableStateOf(systemPromptText) }
+    var tempTemperature by remember(temperature) { mutableStateOf(temperature) }
+    var showHelpDialog by remember { mutableStateOf(false) }
+    var showMemoryEditor by remember { mutableStateOf(false) }
+    var memoryEditText by remember { mutableStateOf("") }
     var cloudApiUrl by remember { mutableStateOf("https://gigachat.devices.sberbank.ru/api/v1/chat/completions") }
-    var cloudAuthKey by remember { mutableStateOf("") }          // Ключ авторизации облака
-    var cloudIsGigaChat by remember { mutableStateOf(true) }     // Флаг GigaChat
-    var isGeneratingToken by remember { mutableStateOf(false) }  // Индикатор генерации токена
-    var secretPhraseInput by remember { mutableStateOf("") }     // Ввод секретной фразы
-    var welcomeStarted by remember { mutableStateOf(false) }     // Флаг начала приветствия
-    var welcomeTextPrinted by remember { mutableStateOf(false) } // Флаг, что приветствие напечатано
-    var pendingTextPrinted by remember { mutableStateOf(false) } // Флаг, что текст ответа напечатан
+    var cloudAuthKey by remember { mutableStateOf("") }
+    var cloudIsGigaChat by remember { mutableStateOf(true) }
+    var isGeneratingToken by remember { mutableStateOf(false) }
+    var secretPhraseInput by remember { mutableStateOf("") }
+    var welcomeStarted by remember { mutableStateOf(false) }
 
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -198,7 +186,6 @@ fun ChatScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val coroutineScope = rememberCoroutineScope()
 
-    // Лаунчер для распознавания речи
     val speechRecognizerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -216,7 +203,6 @@ fun ChatScreen(
         }
     }
 
-    // Проверка разрешения на запись аудио при запуске
     LaunchedEffect(Unit) {
         val hasRecordPermission = ContextCompat.checkSelfPermission(
             context,
@@ -227,7 +213,6 @@ fun ChatScreen(
         }
     }
 
-    // Приветственное сообщение
     val fullWelcomeString = "Привет! Я твой персональный ИИ-Друг. 🤖✨ " +
         "Я лучший хранитель паролей, переводчик с разных языков и просто умный собеседник. " +
         "Я создан, чтобы быть твоим надежным и автономным союзником. " +
@@ -236,20 +221,14 @@ fun ChatScreen(
         "А ещё я могу напоминать тебе о важных событиях,заменяя тебе органайзер. ⏰ " +
         "Давай общаться! Включи локальный движок Llama или облачный ИИ в шапке приложения, и погнали! 🚀"
 
-    // Приветствие: ждём готовности TTS, затем отправляем в сервис, ждём SPEAK_START
     LaunchedEffect(isTtsReady) {
         if (isTtsReady && !welcomeStarted) {
             welcomeStarted = true
-            // Отправляем текст в TTS, но НЕ печатаем сразу
+            
             viewModel.speakText(fullWelcomeString)
-        }
-    }
-
-    // Печать текста при получении SPEAK_START
-    LaunchedEffect(speakStartTrigger, pendingTextToPrint) {
-        // Печать приветствия
-        if (speakStartTrigger && welcomeStarted && !welcomeTextPrinted) {
-            welcomeTextPrinted = true
+            
+            delay(500)
+            
             var runningText = ""
             for (i in fullWelcomeString.indices) {
                 runningText += fullWelcomeString[i]
@@ -257,30 +236,8 @@ fun ChatScreen(
                 delay(35)
             }
         }
-
-        // Печать ответа ИИ
-        if (speakStartTrigger && pendingTextToPrint.isNotEmpty() && !pendingTextPrinted) {
-            pendingTextPrinted = true
-            var runningText = ""
-            for (i in pendingTextToPrint.indices) {
-                runningText += pendingTextToPrint[i]
-                viewModel.updateLastSystemMessage(runningText)
-                delay(35)
-            }
-            // Сбрасываем pendingTextToPrint после печати
-            viewModel.clearPendingText()
-        }
     }
 
-    // Сброс флагов при завершении озвучивания
-    LaunchedEffect(isSpeaking) {
-        if (!isSpeaking) {
-            welcomeTextPrinted = false
-            pendingTextPrinted = false
-        }
-    }
-
-    // Загрузка настроек облачного ИИ при открытии диалога
     LaunchedEffect(showCloudDialog) {
         if (showCloudDialog) {
             val config = viewModel.getCloudConfig()
@@ -295,7 +252,6 @@ fun ChatScreen(
         }
     }
 
-    // Автопрокрутка чата вниз при появлении новых сообщений
     val lastMessageText = chatMessages.lastOrNull()?.text ?: ""
     LaunchedEffect(chatMessages.size, generatedText.length, cloudGeneratedText.length, lastMessageText) {
         if (chatMessages.isNotEmpty() || generatedText.isNotEmpty() || cloudGeneratedText.isNotEmpty()) {
@@ -309,14 +265,12 @@ fun ChatScreen(
         }
     }
 
-    // Сброс временной температуры при открытии настроек
     LaunchedEffect(showSettings) {
         if (showSettings) {
             tempTemperature = temperature
         }
     }
 
-    // Если приложение заблокировано — показываем экран блокировки
     if (isAppLocked) {
         LockScreen(
             secretPhrase = secretPhraseInput,
@@ -331,7 +285,6 @@ fun ChatScreen(
         return
     }
 
-    // Диалог выбора локальной модели
     if (showModelDialog) {
         ModelPickerDialog(
             currentModelPath = currentModelPath,
@@ -349,10 +302,8 @@ fun ChatScreen(
         )
     }
 
-    // Проверка готовности облачного ИИ
     val isCloudReady = viewModel.getCloudConfig()?.authKey?.isNotEmpty() == true || cloudState is CloudAIState.Ready
 
-    // Диалог настройки облачного ИИ
     if (showCloudDialog) {
         CloudAIDialog(
             apiUrl = cloudApiUrl,
@@ -407,7 +358,6 @@ fun ChatScreen(
         )
     }
 
-    // Диалог справки
     if (showHelpDialog) {
         HelpDialog(
             onDismiss = { showHelpDialog = false },
@@ -415,7 +365,6 @@ fun ChatScreen(
         )
     }
 
-    // Редактор базы знаний
     if (showMemoryEditor) {
         MemoryEditorDialog(
             initialText = viewModel.readFromLongTermMemory(),
@@ -424,14 +373,12 @@ fun ChatScreen(
         )
     }
 
-    // Основной макет экрана чата
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(AppBackground)
-            .imePadding()  // Отступ для клавиатуры
+            .imePadding()
     ) {
-        // Верхняя панель с переключателем режимов
         TopBarWithSwitch(
             currentMode = currentMode,
             onModeChange = { newMode ->
@@ -463,7 +410,6 @@ fun ChatScreen(
             }
         )
 
-        // Панель управления (кнопки: мозг, движок, характер, справка, озвучка)
         ControlPanel(
             onMemoryClick = {
                 memoryEditText = viewModel.readFromLongTermMemory()
@@ -488,7 +434,6 @@ fun ChatScreen(
             coroutineScope = coroutineScope
         )
 
-        // Панель настроек движка (температура, токены, контекст)
         if (showSettings) {
             SettingsPanel(
                 temperature = tempTemperature,
@@ -509,7 +454,6 @@ fun ChatScreen(
             )
         }
 
-        // Панель настройки системного промпта
         if (showPromptSettings) {
             PromptSettingsPanel(
                 promptText = tempPromptText,
@@ -521,7 +465,6 @@ fun ChatScreen(
             )
         }
 
-        // Строка статуса (токены, время генерации)
         StatusBar(
             state = state,
             cloudState = cloudState,
@@ -530,14 +473,12 @@ fun ChatScreen(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
         )
 
-        // Область сообщений чата с анимированным фоном
         Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
                 .padding(8.dp)
         ) {
-            // Анимированный фон из падающих символов (MatrixChatBackground)
             AndroidView(
                 factory = { context ->
                     MatrixChatBackground(context)
@@ -545,7 +486,6 @@ fun ChatScreen(
                 modifier = Modifier.matchParentSize()
             )
 
-            // Карточка с сообщениями чата
             Card(
                 modifier = Modifier.fillMaxSize(),
                 shape = RoundedCornerShape(16.dp),
@@ -561,7 +501,6 @@ fun ChatScreen(
                             .padding(16.dp)
                             .verticalScroll(scrollState)
                     ) {
-                        // Отображение всех сообщений из истории
                         chatMessages.forEach { message ->
                             val prefix = when (message.role) {
                                 "user" -> "Вы: "
@@ -578,7 +517,6 @@ fun ChatScreen(
                             )
                         }
 
-                        // Отображение генерируемого текста локального ИИ в реальном времени
                         if (generatedText.isNotEmpty() && state is GenerationState.Generating) {
                             Text(
                                 text = "ИИ: $generatedText",
@@ -589,7 +527,6 @@ fun ChatScreen(
                             )
                         }
 
-                        // Отображение генерируемого текста облачного ИИ в реальном времени
                         if (cloudGeneratedText.isNotEmpty() && cloudState is CloudAIState.Generating) {
                             Text(
                                 text = "☁️ ИИ: $cloudGeneratedText",
@@ -604,12 +541,10 @@ fun ChatScreen(
             }
         }
 
-        // Предпросмотр прикреплённого изображения
         if (imagePath != null) {
             ImagePreview(imagePath = imagePath)
         }
 
-        // Поле ввода сообщения с кнопками
         PromptInput(
             prompt = promptInput,
             onPromptChange = { promptInput = it },
@@ -644,12 +579,6 @@ fun ChatScreen(
     }
 }
 
-/**
- * Анимированный график "говорящего рта" — верхняя синусоида колеблется
- * выше центральной линии, нижняя — ниже. Имитация раскрытия губ.
- * Сетка с закруглёнными краями, губы не доходят до краёв на 4 мм.
- * Хаотичное открывание рта через разные промежутки времени.
- */
 @Composable
 private fun VoiceWaveAnimation(
     color: Color,
@@ -657,7 +586,6 @@ private fun VoiceWaveAnimation(
 ) {
     val infiniteTransition = rememberInfiniteTransition()
 
-    // Фаза для бега волны — медленнее
     val phase by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 4f * PI.toFloat(),
@@ -669,7 +597,6 @@ private fun VoiceWaveAnimation(
         )
     )
 
-    // Псевдослучайное открывание рта через разные промежутки времени
     val speechTime by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 2f * PI.toFloat(),
@@ -682,7 +609,6 @@ private fun VoiceWaveAnimation(
         )
     )
 
-    // Вычисляем хаотичное открывание: смешиваем 3 частоты
     val rawMouthOpen = (
         sin(speechTime * 2.3f) * 0.5f +
         sin(speechTime * 5.7f) * 0.3f +
@@ -694,11 +620,9 @@ private fun VoiceWaveAnimation(
         val width = size.width
         val height = size.height
         val midY = height / 2
-        // Увеличенная амплитуда для более широкого открывания рта
         val maxAmplitude = height * 0.48f
         val currentAmplitude = maxAmplitude * mouthOpen
 
-        // Поля по краям: 4 мм ≈ 11.3 px
         val paddingPx = 11.3f
         val gridLeft = paddingPx
         val gridRight = width - paddingPx
@@ -707,7 +631,6 @@ private fun VoiceWaveAnimation(
         val gridWidth = gridRight - gridLeft
         val gridHeight = gridBottom - gridTop
 
-        // Рисуем закруглённую рамку сетки
         val cornerRadius = 16f
         val borderColor = Color(0xFF9E9E9E)
         val borderWidth = 2f
@@ -720,7 +643,6 @@ private fun VoiceWaveAnimation(
             style = Stroke(width = borderWidth)
         )
 
-        // Рисуем клетчатое поле внутри рамки
         val cellSize = 12f
         val gridColor = Color(0xFFBDBDBD)
         val gridLineWidth = 1f
@@ -747,12 +669,10 @@ private fun VoiceWaveAnimation(
             gridY += cellSize
         }
 
-        // Рабочая область для губ: от gridLeft до gridRight, от gridTop до gridBottom
         val step = 2f
         val startX = gridLeft
         val endX = gridRight
 
-        // === ВЕРХНЯЯ ГУБА ===
         val upperPath = Path()
         var firstUpperPoint = true
 
@@ -784,7 +704,6 @@ private fun VoiceWaveAnimation(
             )
         )
 
-        // === НИЖНЯЯ ГУБА ===
         val lowerPath = Path()
         var firstLowerPoint = true
 
@@ -816,7 +735,6 @@ private fun VoiceWaveAnimation(
             )
         )
 
-        // Уголки рта — соединительные линии у краёв сетки
         val connectorLength = 8f
 
         drawLine(
@@ -836,11 +754,6 @@ private fun VoiceWaveAnimation(
     }
 }
 
-/**
- * Экран блокировки приложения.
- * Запрашивает секретную фразу для разблокировки.
- * При неверном вводе запускает самоуничтожение.
- */
 @Composable
 private fun LockScreen(
     secretPhrase: String,
@@ -851,9 +764,7 @@ private fun LockScreen(
 ) {
     val context = LocalContext.current
 
-    // Блокируем кнопку "Назад"
     BackHandler(enabled = true) {
-        // Ничего не делаем — блокируем выход
     }
 
     Box(
@@ -863,7 +774,6 @@ private fun LockScreen(
         contentAlignment = Alignment.Center
     ) {
         if (isPermanentlyBlocked) {
-            // Вечная блокировка без вариантов
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -886,7 +796,6 @@ private fun LockScreen(
                 )
             }
         } else {
-            // Обычный экран ввода секретной фразы
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -902,7 +811,6 @@ private fun LockScreen(
                     modifier = Modifier.padding(bottom = 24.dp)
                 )
 
-                // Поле ввода секретной фразы (текст виден)
                 OutlinedTextField(
                     value = secretPhrase,
                     onValueChange = onSecretPhraseChange,
@@ -925,7 +833,6 @@ private fun LockScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Кнопка подтверждения с вибрацией
                 Button(
                     onClick = {
                         try {
@@ -941,7 +848,6 @@ private fun LockScreen(
                                 vibrator.vibrate(50)
                             }
                         } catch (e: Exception) {
-                            // Игнорируем ошибки вибрации
                         }
                         onVerify()
                     },
@@ -963,9 +869,6 @@ private fun LockScreen(
     }
 }
 
-/**
- * Верхняя панель с логотипом, переключателем режимов и индикаторами состояния.
- */
 @Composable
 private fun TopBarWithSwitch(
     currentMode: AIMode,
@@ -981,7 +884,6 @@ private fun TopBarWithSwitch(
     val localIndicatorColor = if (isLocalReady) GreenColor else PaleYellowColor
     val cloudIndicatorColor = if (isCloudReady) GreenColor else PaleYellowColor
 
-    // Анимация вращения для индикатора "думает"
     val infiniteTransition = rememberInfiniteTransition()
     val rotationAngle by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -1003,7 +905,6 @@ private fun TopBarWithSwitch(
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Логотип приложения
         Image(
             painter = painterResource(id = R.mipmap.ic_launcher),
             contentDescription = "Лого",
@@ -1014,7 +915,6 @@ private fun TopBarWithSwitch(
             contentScale = ContentScale.Crop
         )
 
-        // Название приложения с анимированными плюсами
         Row(
             modifier = Modifier
                 .weight(1f)
@@ -1052,7 +952,6 @@ private fun TopBarWithSwitch(
             )
         }
 
-        // Индикаторы состояния и кнопки режимов
         Column(
             modifier = Modifier
                 .width(132.dp)
@@ -1060,7 +959,6 @@ private fun TopBarWithSwitch(
             verticalArrangement = Arrangement.SpaceEvenly,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Индикаторы: локальный ИИ, облачный ИИ
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1076,7 +974,6 @@ private fun TopBarWithSwitch(
                 )
             }
 
-            // Кнопки переключения режимов: Local, Neutral, Cloud
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -1105,9 +1002,6 @@ private fun TopBarWithSwitch(
     }
 }
 
-/**
- * Индикатор состояния (цветная точка + текст).
- */
 @Composable
 private fun StatusIndicator(
     color: Color,
@@ -1131,9 +1025,6 @@ private fun StatusIndicator(
     }
 }
 
-/**
- * Кнопка выбора режима (Local / Neutral / Cloud).
- */
 @Composable
 private fun ModeButton(
     label: String,
@@ -1164,9 +1055,6 @@ private fun ModeButton(
     }
 }
 
-/**
- * Панель управления: кнопки мозг, движок, характер, справка, озвучка.
- */
 @Composable
 private fun ControlPanel(
     onMemoryClick: () -> Unit,
@@ -1224,9 +1112,6 @@ private fun ControlPanel(
     }
 }
 
-/**
- * Кнопка с иконкой и подписью.
- */
 @Composable
 private fun IconButtonWithLabel(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -1237,9 +1122,6 @@ private fun IconButtonWithLabel(icon: androidx.compose.ui.graphics.vector.ImageV
     }
 }
 
-/**
- * Панель настроек движка ИИ: температура, токены, контекст, смена модели.
- */
 @Composable
 private fun SettingsPanel(
     temperature: Float,
@@ -1316,9 +1198,6 @@ private fun SettingsPanel(
     }
 }
 
-/**
- * Панель настройки системного промпта (роли ИИ).
- */
 @Composable
 private fun PromptSettingsPanel(promptText: String, onPromptChange: (String) -> Unit, onSave: () -> Unit) {
     Card(
@@ -1356,10 +1235,6 @@ private fun PromptSettingsPanel(promptText: String, onPromptChange: (String) -> 
     }
 }
 
-/**
- * Диалог настройки облачного ИИ.
- * Поддерживает GigaChat и других провайдеров.
- */
 @Composable
 private fun CloudAIDialog(
     apiUrl: String,
@@ -1392,7 +1267,6 @@ private fun CloudAIDialog(
                     color = DarkText
                 )
 
-                // Переключатель GigaChat / Другой провайдер
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("🔵 GigaChat", color = DarkText)
                     Switch(
@@ -1408,7 +1282,6 @@ private fun CloudAIDialog(
                     Text("🌐 Другой провайдер", color = DarkText)
                 }
 
-                // Поле API URL
                 OutlinedTextField(
                     value = apiUrl,
                     onValueChange = onApiUrlChange,
@@ -1431,7 +1304,6 @@ private fun CloudAIDialog(
                     )
                 )
 
-                // Поле ключа авторизации
                 OutlinedTextField(
                     value = authKey,
                     onValueChange = onAuthKeyChange,
@@ -1460,7 +1332,6 @@ private fun CloudAIDialog(
                     )
                 )
 
-                // Кнопка получения токена
                 Button(
                     onClick = onGenerateToken,
                     enabled = !isGeneratingToken && authKey.isNotBlank(),
@@ -1499,7 +1370,6 @@ private fun CloudAIDialog(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Индикатор статуса подключения
                 Box(
                     modifier = Modifier
                         .size(12.dp)
@@ -1566,9 +1436,6 @@ private fun CloudAIDialog(
     )
 }
 
-/**
- * Диалог справки с руководством пользователя.
- */
 @Composable
 private fun HelpDialog(
     onDismiss: () -> Unit,
@@ -1611,9 +1478,6 @@ private fun HelpDialog(
     )
 }
 
-/**
- * Диалог редактора базы знаний (memory.txt).
- */
 @Composable
 private fun MemoryEditorDialog(initialText: String, onSave: (String) -> Unit, onDismiss: () -> Unit) {
     var text by remember { mutableStateOf(initialText) }
@@ -1651,9 +1515,6 @@ private fun MemoryEditorDialog(initialText: String, onSave: (String) -> Unit, on
     )
 }
 
-/**
- * Компонент предпросмотра прикреплённого изображения.
- */
 @Composable
 private fun ImagePreview(imagePath: String) {
     Card(
@@ -1666,9 +1527,6 @@ private fun ImagePreview(imagePath: String) {
     }
 }
 
-/**
- * Строка статуса генерации (токены, время).
- */
 @Composable
 private fun StatusBar(
     state: GenerationState,
@@ -1781,9 +1639,6 @@ private fun StatusBar(
     }
 }
 
-/**
- * Диалог выбора локальной модели и мультимодального проектора.
- */
 @Composable
 private fun ModelPickerDialog(
     currentModelPath: String?,
@@ -1798,7 +1653,6 @@ private fun ModelPickerDialog(
             Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("Настройка ИИ", style = MaterialTheme.typography.headlineSmall, color = DarkText)
 
-                // Выбор языковой модели
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Языковая модель", color = DarkText)
                     val displayModelPath = currentModelPath?.substringAfterLast("/")?.replace("primary%3AModels%", "") ?: "Не выбрана"
@@ -1815,7 +1669,6 @@ private fun ModelPickerDialog(
                     }
                 }
 
-                // Выбор мультимодального проектора (опционально)
                 Column(modifier = Modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("(опционально)", style = MaterialTheme.typography.bodySmall, color = DarkText.copy(alpha = 0.6f))
                     Text("Мультимодальный проектор (mmproj)", color = DarkText)
@@ -1833,7 +1686,6 @@ private fun ModelPickerDialog(
                     }
                 }
 
-                // Кнопка запуска нейросети
                 Button(
                     onClick = onLoad,
                     enabled = currentModelPath != null,
@@ -1851,9 +1703,6 @@ private fun ModelPickerDialog(
     }
 }
 
-/**
- * Поле ввода сообщения с кнопками: добавить изображение, очистить чат, микрофон, отправить/стоп.
- */
 @Composable
 private fun PromptInput(
     prompt: String,
@@ -1883,7 +1732,6 @@ private fun PromptInput(
     var offsetX by remember { mutableStateOf(0f) }
     var currentPhraseIndex by remember { mutableStateOf(0) }
 
-    // Список информативных фраз
     val phrases = buildList {
         if (!isBound) {
             add("🔴 Приложение заблокировано")
@@ -1902,7 +1750,6 @@ private fun PromptInput(
         }
     }
 
-    // Эффект бегущей строки: фразы одна за другой через 2 минуты
     LaunchedEffect(isBound, modelName, remainingTimeText, isPermanentlyUnlocked) {
         while (true) {
             if (phrases.isEmpty()) {
@@ -1913,33 +1760,27 @@ private fun PromptInput(
             val currentPhrase = phrases[currentPhraseIndex % phrases.size]
             currentPhraseIndex = (currentPhraseIndex + 1) % phrases.size
 
-            // Печатаем текст
             printedText = ""
             for (i in currentPhrase.indices) {
                 printedText += currentPhrase[i]
                 delay(35)
             }
 
-            // Задержка 2 секунды
             delay(2000)
 
-            // Сдвигаем текст влево, пока он не уйдёт за край
             val textWidth = printedText.length * 8f
             for (step in 0..textWidth.toInt() step 4) {
                 offsetX = -step.toFloat()
                 delay(16)
             }
 
-            // Сброс
             offsetX = 0f
             printedText = ""
 
-            // Пауза 2 минуты
             delay(120000)
         }
     }
 
-    // Цвет синусоиды
     val waveColor = if (currentMode == AIMode.CLOUD) Color(0xFF00B4D8) else GreenColor
 
     val textColor = when {
@@ -1961,7 +1802,6 @@ private fun PromptInput(
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp, vertical = 4.dp)
         ) {
-            // Первая строка: статус (текст или синусоида)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1969,7 +1809,6 @@ private fun PromptInput(
                 contentAlignment = Alignment.Center
             ) {
                 if (isSpeaking) {
-                    // Анимированный график "говорящего рта"
                     VoiceWaveAnimation(
                         color = waveColor,
                         modifier = Modifier
@@ -1977,7 +1816,6 @@ private fun PromptInput(
                             .fillMaxHeight()
                     )
                 } else {
-                    // Текст с печатной машинкой и бегущей строкой
                     Text(
                         text = when {
                             !isBound -> "🔴 Приложение заблокировано"
@@ -2002,12 +1840,10 @@ private fun PromptInput(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Левая группа: кнопка добавления изображения и очистки чата
                 Column(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Кнопка добавления изображения
                     Box(
                         modifier = Modifier
                             .size(41.dp)
@@ -2028,7 +1864,6 @@ private fun PromptInput(
                         }
                     }
 
-                    // Кнопка очистки чата
                     Box(
                         modifier = Modifier
                             .size(41.dp)
@@ -2050,7 +1885,6 @@ private fun PromptInput(
                     }
                 }
 
-                // Центр: поле ввода текста
                 OutlinedTextField(
                     value = prompt,
                     onValueChange = onPromptChange,
@@ -2072,12 +1906,10 @@ private fun PromptInput(
                     )
                 )
 
-                // Правая группа: микрофон и отправить/стоп
                 Column(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Кнопка микрофона для голосового ввода
                     Box(
                         modifier = Modifier
                             .size(41.dp)
@@ -2113,7 +1945,6 @@ private fun PromptInput(
                         }
                     }
 
-                    // Кнопка отправки / остановки генерации
                     Box(
                         modifier = Modifier
                             .size(41.dp)
@@ -2122,7 +1953,6 @@ private fun PromptInput(
                         contentAlignment = Alignment.Center
                     ) {
                         if (isGenerating || isSpeaking) {
-                            // Кнопка остановки генерации
                             IconButton(
                                 onClick = onAbort,
                                 modifier = Modifier.size(41.dp)
@@ -2134,7 +1964,6 @@ private fun PromptInput(
                                 )
                             }
                         } else {
-                            // Кнопка отправки сообщения
                             IconButton(
                                 onClick = onGenerate,
                                 enabled = enabled,
@@ -2153,7 +1982,6 @@ private fun PromptInput(
 
             Spacer(modifier = Modifier.height(2.dp))
 
-            // Отображение информации о доступной оперативной памяти
             Text(
                 text = memoryInfoText,
                 color = DarkText.copy(alpha = 0.6f),
