@@ -12,10 +12,11 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.k2fsa.sherpa.onnx.GenerationConfig
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
-import com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig
+import com.k2fsa.sherpa.onnx.OfflineTtsSupertonicModelConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -24,9 +25,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.io.File
-import java.io.FileOutputStream
-import java.io.IOException
 
 class TtsService : Service() {
     companion object {
@@ -103,23 +101,25 @@ class TtsService : Service() {
         serviceScope.launch {
             ttsMutex.withLock {
                 try {
-                    // Копируем espeak-ng-data из assets в файловую систему
-                    val dataDir = copyDataDir("tts-model/espeak-ng-data")
-                    Log.d(TAG, "espeak-ng-data copied to: $dataDir")
-
-                    val modelConfig = OfflineTtsVitsModelConfig(
-                        model = "tts-model/ru_RU-ruslan-medium.onnx",
-                        tokens = "tts-model/tokens.txt",
-                        dataDir = dataDir
+                    val modelConfig = OfflineTtsSupertonicModelConfig(
+                        durationPredictor = "tts-model/duration_predictor.int8.onnx",
+                        textEncoder = "tts-model/text_encoder.int8.onnx",
+                        vectorEstimator = "tts-model/vector_estimator.int8.onnx",
+                        vocoder = "tts-model/vocoder.int8.onnx",
+                        ttsJson = "tts-model/tts.json",
+                        unicodeIndexer = "tts-model/unicode_indexer.bin",
+                        voiceStyle = "tts-model/voice.bin",
                     )
                     val ttsConfig = OfflineTtsConfig(
-                        model = OfflineTtsModelConfig(vits = modelConfig),
-                        ruleFsts = "",
-                        maxNumSentences = 1
+                        model = OfflineTtsModelConfig(
+                            supertonic = modelConfig,
+                            numThreads = 2,
+                            debug = true,
+                        ),
                     )
-                    offlineTts = OfflineTts(assets, ttsConfig)
+                    offlineTts = OfflineTts(config = ttsConfig)
                     isTtsInitialized = true
-                    Log.d(TAG, "Sherpa-ONNX TTS initialized in separate process")
+                    Log.d(TAG, "Supertonic TTS initialized in separate process")
 
                     val readyIntent = Intent(ACTION_TTS_READY).apply {
                         setPackage(packageName)
@@ -148,6 +148,17 @@ class TtsService : Service() {
         }
     }
 
+    private fun detectLanguage(text: String): String {
+        val hasCyrillic = text.any { it in '\u0400'..'\u04FF' }
+        val hasLatin = text.any { it in '\u0041'..'\u005A' || it in '\u0061'..'\u007A' }
+        
+        return when {
+            hasCyrillic -> "ru"
+            hasLatin -> "en"
+            else -> "ru"  // по умолчанию русский
+        }
+    }
+
     private suspend fun speakText(text: String) {
         ttsMutex.withLock {
             try {
@@ -157,8 +168,24 @@ class TtsService : Service() {
                     .trim()
                 if (filtered.isBlank()) return
 
+                val lang = detectLanguage(filtered)
+                Log.d(TAG, "Detected language: $lang")
+
+                val genConfig = GenerationConfig(
+                    sid = 0,
+                    speed = 1.0f,
+                    numSteps = 8,
+                    extra = mapOf(
+                        "lang" to lang,
+                    )
+                )
+
                 try {
-                    val audio = tts.generate(filtered, sid = 0, speed = 0.85f)
+                    val audio = tts.generateWithConfigAndCallback(
+                        text = filtered,
+                        config = genConfig,
+                        callback = { _ -> 1 }  // 1 = продолжить
+                    )
                     if (audio.samples.isNotEmpty()) {
                         val sampleRate = audio.sampleRate
                         val bufferSize = AudioTrack.getMinBufferSize(
@@ -221,64 +248,6 @@ class TtsService : Service() {
             audioTrack = null
         } catch (e: Exception) {
             Log.e(TAG, "Stop error: ${e.message}", e)
-        }
-    }
-
-    /**
-     * Копирует директорию espeak-ng-data из assets во внешнее хранилище.
-     * Возвращает полный путь к скопированной директории.
-     */
-    private fun copyDataDir(dataDir: String): String {
-        Log.i(TAG, "data dir is $dataDir")
-        copyAssets(dataDir)
-
-        val newDataDir = getExternalFilesDir(null)!!.absolutePath
-        Log.i(TAG, "newDataDir: $newDataDir")
-        return "$newDataDir/$dataDir"
-    }
-
-    /**
-     * Рекурсивно копирует файлы и директории из assets в файловую систему.
-     */
-    private fun copyAssets(path: String) {
-        val assets: Array<String>?
-        try {
-            assets = application.assets.list(path)
-            if (assets!!.isEmpty()) {
-                copyFile(path)
-            } else {
-                val fullPath = "${getExternalFilesDir(null)}/$path"
-                val dir = File(fullPath)
-                dir.mkdirs()
-                for (asset in assets.iterator()) {
-                    val p: String = if (path == "") "" else path + "/"
-                    copyAssets(p + asset)
-                }
-            }
-        } catch (ex: IOException) {
-            Log.e(TAG, "Failed to copy $path. $ex")
-        }
-    }
-
-    /**
-     * Копирует одиночный файл из assets в файловую систему.
-     */
-    private fun copyFile(filename: String) {
-        try {
-            val istream = application.assets.open(filename)
-            val newFilename = getExternalFilesDir(null).toString() + "/" + filename
-            val ostream = FileOutputStream(newFilename)
-            val buffer = ByteArray(1024)
-            var read = 0
-            while (read != -1) {
-                ostream.write(buffer, 0, read)
-                read = istream.read(buffer)
-            }
-            istream.close()
-            ostream.flush()
-            ostream.close()
-        } catch (ex: Exception) {
-            Log.e(TAG, "Failed to copy $filename, $ex")
         }
     }
 }
