@@ -13,7 +13,6 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.k2fsa.sherpa.onnx.GenerationConfig
-import com.k2fsa.sherpa.onnx.LibraryUtils
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
@@ -103,8 +102,6 @@ class TtsService : Service() {
         serviceScope.launch {
             ttsMutex.withLock {
                 try {
-                    LibraryUtils.enableDebug()
-
                     val modelConfig = OfflineTtsSupertonicModelConfig(
                         durationPredictor = "tts-model/duration_predictor.int8.onnx",
                         textEncoder = "tts-model/text_encoder.int8.onnx",
@@ -164,11 +161,11 @@ class TtsService : Service() {
                 if (filtered.isBlank()) return
 
                 val genConfig = GenerationConfig(
-                 sid = 6,
-                 speed = 1.25f,
-                 numSteps = 8,
-                 extra = mapOf("lang" to "en"),
-                    )
+                    sid = 6,
+                    speed = 1.25f,
+                    numSteps = 8,
+                    extra = mapOf("lang" to "en"),
+                )
 
                 try {
                     val audio = tts.generateWithConfigAndCallback(
