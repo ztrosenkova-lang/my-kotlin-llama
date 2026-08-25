@@ -103,7 +103,7 @@ class TtsService : Service() {
         serviceScope.launch {
             ttsMutex.withLock {
                 try {
-                    val dataDir = copyDataDir("tts-model/espeak-ng-data")
+                    val dataDir = copyDataDir("tts-model")
 
                     val modelConfig = OfflineTtsVitsModelConfig(
                         model = "tts-model/ru_RU-ruslan-medium.onnx",
