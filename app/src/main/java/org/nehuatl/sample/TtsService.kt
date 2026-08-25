@@ -164,11 +164,11 @@ class TtsService : Service() {
                 if (filtered.isBlank()) return
 
                 val genConfig = GenerationConfig(
-                    sid = 6,
-                    speed = 1.25f,
-                    numSteps = 8,
-                    extra = mapOf("lang" to "ru"),
-                )
+                 sid = 6,
+                 speed = 1.25f,
+                 numSteps = 8,
+                 extra = mapOf("lang" to "en"),
+                    )
 
                 try {
                     val audio = tts.generateWithConfigAndCallback(
