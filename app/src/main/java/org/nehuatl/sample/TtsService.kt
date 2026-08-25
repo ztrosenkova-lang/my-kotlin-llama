@@ -161,8 +161,8 @@ class TtsService : Service() {
                 if (filtered.isBlank()) return
 
                 val genConfig = GenerationConfig(
-                    sid = 0,
-                    speed = 1.0f,
+                    sid = 6,
+                    speed = 1.25f,
                     numSteps = 8,
                     extra = mapOf("lang" to "ru"),
                 )
