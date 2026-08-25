@@ -161,8 +161,12 @@ class TtsService : Service() {
                 if (filtered.isBlank()) return
 
                 val genConfig = GenerationConfig(
-                    sid = 6,
+                    silenceScale = 0.0f,
                     speed = 1.25f,
+                    sid = 6,
+                    referenceAudio = null,
+                    referenceSampleRate = 0,
+                    referenceText = null,
                     numSteps = 8,
                     extra = mapOf("lang" to "en"),
                 )
@@ -173,6 +177,8 @@ class TtsService : Service() {
                         config = genConfig,
                         callback = { _ -> 1 }
                     )
+
+                    Log.d(TAG, "Generated audio: samples=${audio.samples.size}, sampleRate=${audio.sampleRate}")
 
                     if (audio.samples.isNotEmpty()) {
                         val sampleRate = audio.sampleRate
@@ -209,6 +215,8 @@ class TtsService : Service() {
                         audioTrack?.stop()
                         audioTrack?.release()
                         audioTrack = null
+                    } else {
+                        Log.e(TAG, "Audio samples is empty!")
                     }
                 } finally {
                     val endIntent = Intent(ACTION_SPEAK_END).apply {
