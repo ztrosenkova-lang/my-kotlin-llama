@@ -190,21 +190,20 @@ tasks.register("downloadTtsModel") {
         }
         println("TTS model extracted to $ttsModelDir")
 
-        fun moveFiles(dir: File) {
-            dir.listFiles()?.forEach { file ->
+        val subDirs = ttsModelDir.listFiles()?.filter { it.isDirectory }
+        subDirs?.forEach { subDir ->
+            subDir.listFiles()?.forEach { file ->
+                val target = File(ttsModelDir, file.name)
                 if (file.isDirectory) {
-                    moveFiles(file)
+                    file.copyRecursively(target, overwrite = true)
                     file.deleteRecursively()
                 } else {
-                    val target = File(ttsModelDir, file.name)
-                    if (target.absolutePath != file.absolutePath) {
-                        file.copyTo(target, overwrite = true)
-                        file.delete()
-                    }
+                    file.copyTo(target, overwrite = true)
+                    file.delete()
                 }
             }
+            subDir.deleteRecursively()
         }
-        moveFiles(ttsModelDir)
         println("Files moved to root of ttsModelDir")
 
         ttsModelArchive.delete()
