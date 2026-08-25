@@ -110,8 +110,8 @@ val sherpaAarFile = file("$libsDir/sherpa-onnx-1.13.6.aar")
 val sherpaAarUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.6/sherpa-onnx-1.13.6.aar"
 
 val ttsModelDir = file("$projectDir/src/main/assets/tts-model")
-val ttsModelArchive = file("${layout.buildDirectory.get().asFile}/tts-model/vits-piper-ru_RU-ruslan-medium-int8.tar.bz2")
-val ttsModelUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-ru_RU-ruslan-medium-int8.tar.bz2"
+val ttsModelArchive = file("${layout.buildDirectory.get().asFile}/tts-model/vits-piper-ru_RU-ruslan-medium.tar.bz2")
+val ttsModelUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-ru_RU-ruslan-medium.tar.bz2"
 
 tasks.register("downloadSherpaAar") {
     doLast {
@@ -214,20 +214,9 @@ tasks.register("downloadTtsModel") {
 tasks.register("checkTtsModel") {
     dependsOn("downloadTtsModel")
     doLast {
-        println("=== Files in ${ttsModelDir.absolutePath} ===")
-        ttsModelDir.listFiles()?.forEach { file ->
-            println("${file.name} ${if (file.isDirectory) "(dir)" else "(file)"}")
-        }
-        println("=== End of files ===")
-        
         val modelFile = File(ttsModelDir, "ru_RU-ruslan-medium.onnx")
         val tokensFile = File(ttsModelDir, "tokens.txt")
         val espeakDataDir = File(ttsModelDir, "espeak-ng-data")
-        
-        println("modelFile: ${modelFile.exists()}")
-        println("tokensFile: ${tokensFile.exists()}")
-        println("espeakDataDir: ${espeakDataDir.exists()}")
-        
         if (!modelFile.exists() || !tokensFile.exists() || !espeakDataDir.exists()) {
             throw GradleException("TTS model files are missing. Download failed.")
         }
