@@ -13,6 +13,7 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.k2fsa.sherpa.onnx.GenerationConfig
+import com.k2fsa.sherpa.onnx.LibraryUtils
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
@@ -102,6 +103,8 @@ class TtsService : Service() {
         serviceScope.launch {
             ttsMutex.withLock {
                 try {
+                    LibraryUtils.enableDebug()
+
                     val modelConfig = OfflineTtsSupertonicModelConfig(
                         durationPredictor = "tts-model/duration_predictor.int8.onnx",
                         textEncoder = "tts-model/text_encoder.int8.onnx",
@@ -174,53 +177,48 @@ class TtsService : Service() {
                         callback = { _ -> 1 }
                     )
 
-                    if (audio.samples.isEmpty()) {
-                        val errorIntent = Intent(ACTION_TTS_ERROR).apply {
+                    if (audio.samples.isNotEmpty()) {
+                        val sampleRate = audio.sampleRate
+                        val bufferSize = AudioTrack.getMinBufferSize(
+                            sampleRate,
+                            AudioFormat.CHANNEL_OUT_MONO,
+                            AudioFormat.ENCODING_PCM_FLOAT
+                        )
+
+                        audioTrack = AudioTrack(
+                            android.media.AudioAttributes.Builder()
+                                .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                                .build(),
+                            AudioFormat.Builder()
+                                .setSampleRate(sampleRate)
+                                .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
+                                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                                .build(),
+                            bufferSize,
+                            AudioTrack.MODE_STREAM,
+                            0
+                        )
+
+                        audioTrack?.play()
+
+                        val startIntent = Intent(ACTION_SPEAK_START).apply {
                             setPackage(packageName)
-                            putExtra(EXTRA_MESSAGE, "❌ Пустой звук от TTS")
                         }
-                        sendBroadcast(errorIntent)
-                        return
+                        sendBroadcast(startIntent)
+                        Log.d(TAG, "SPEAK_START broadcast sent")
+
+                        audioTrack?.write(audio.samples, 0, audio.samples.size, AudioTrack.WRITE_BLOCKING)
+                        audioTrack?.stop()
+                        audioTrack?.release()
+                        audioTrack = null
                     }
-
-                    val sampleRate = audio.sampleRate
-                    val bufferSize = AudioTrack.getMinBufferSize(
-                        sampleRate,
-                        AudioFormat.CHANNEL_OUT_MONO,
-                        AudioFormat.ENCODING_PCM_FLOAT
-                    )
-
-                    audioTrack = AudioTrack(
-                        android.media.AudioAttributes.Builder()
-                            .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
-                            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
-                            .build(),
-                        AudioFormat.Builder()
-                            .setSampleRate(sampleRate)
-                            .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
-                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                            .build(),
-                        bufferSize,
-                        AudioTrack.MODE_STREAM,
-                        0
-                    )
-
-                    audioTrack?.play()
-
-                    val startIntent = Intent(ACTION_SPEAK_START).apply {
-                        setPackage(packageName)
-                    }
-                    sendBroadcast(startIntent)
-
-                    audioTrack?.write(audio.samples, 0, audio.samples.size, AudioTrack.WRITE_BLOCKING)
-                    audioTrack?.stop()
-                    audioTrack?.release()
-                    audioTrack = null
                 } finally {
                     val endIntent = Intent(ACTION_SPEAK_END).apply {
                         setPackage(packageName)
                     }
                     sendBroadcast(endIntent)
+                    Log.d(TAG, "SPEAK_END broadcast sent")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "TTS playback error: ${e.message}", e)
