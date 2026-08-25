@@ -12,11 +12,10 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.k2fsa.sherpa.onnx.GenerationConfig
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
-import com.k2fsa.sherpa.onnx.OfflineTtsSupertonicModelConfig
+import com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -25,6 +24,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.io.File
+import java.io.FileOutputStream
 
 class TtsService : Service() {
     companion object {
@@ -102,27 +103,21 @@ class TtsService : Service() {
         serviceScope.launch {
             ttsMutex.withLock {
                 try {
-                    val modelConfig = OfflineTtsSupertonicModelConfig(
-                        durationPredictor = "tts-model/duration_predictor.int8.onnx",
-                        textEncoder = "tts-model/text_encoder.int8.onnx",
-                        vectorEstimator = "tts-model/vector_estimator.int8.onnx",
-                        vocoder = "tts-model/vocoder.int8.onnx",
-                        ttsJson = "tts-model/tts.json",
-                        unicodeIndexer = "tts-model/unicode_indexer.bin",
-                        voiceStyle = "tts-model/voice.bin",
-                    )
+                    val dataDir = copyDataDir("tts-model/espeak-ng-data")
 
+                    val modelConfig = OfflineTtsVitsModelConfig(
+                        model = "tts-model/ru_RU-ruslan-medium-int8.onnx",
+                        tokens = "tts-model/tokens.txt",
+                        dataDir = dataDir
+                    )
                     val ttsConfig = OfflineTtsConfig(
-                        model = OfflineTtsModelConfig(
-                            supertonic = modelConfig,
-                            numThreads = 2,
-                            debug = true,
-                        )
+                        model = OfflineTtsModelConfig(vits = modelConfig),
+                        ruleFsts = "",
+                        maxNumSentences = 1
                     )
-
                     offlineTts = OfflineTts(assets, ttsConfig)
                     isTtsInitialized = true
-                    Log.d(TAG, "Supertonic TTS initialized in separate process")
+                    Log.d(TAG, "VITS TTS initialized in separate process")
 
                     val readyIntent = Intent(ACTION_TTS_READY).apply {
                         setPackage(packageName)
@@ -160,71 +155,48 @@ class TtsService : Service() {
                     .trim()
                 if (filtered.isBlank()) return
 
-                val genConfig = GenerationConfig(
-                    silenceScale = 0.0f,
-                    speed = 1.25f,
-                    sid = 6,
-                    referenceAudio = null,
-                    referenceSampleRate = 0,
-                    referenceText = null,
-                    numSteps = 8,
-                    extra = mapOf("lang" to "en"),
-                )
+                val audio = tts.generate(filtered, sid = 0, speed = 0.85f)
 
-                try {
-                    val audio = tts.generateWithConfigAndCallback(
-                        text = filtered,
-                        config = genConfig,
-                        callback = { _ -> 1 }
+                if (audio.samples.isNotEmpty()) {
+                    val sampleRate = audio.sampleRate
+                    val bufferSize = AudioTrack.getMinBufferSize(
+                        sampleRate,
+                        AudioFormat.CHANNEL_OUT_MONO,
+                        AudioFormat.ENCODING_PCM_FLOAT
                     )
+                    audioTrack = AudioTrack(
+                        android.media.AudioAttributes.Builder()
+                            .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build(),
+                        AudioFormat.Builder()
+                            .setSampleRate(sampleRate)
+                            .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
+                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                            .build(),
+                        bufferSize,
+                        AudioTrack.MODE_STREAM,
+                        0
+                    )
+                    audioTrack?.play()
 
-                    Log.d(TAG, "Generated audio: samples=${audio.samples.size}, sampleRate=${audio.sampleRate}")
-
-                    if (audio.samples.isNotEmpty()) {
-                        val sampleRate = audio.sampleRate
-                        val bufferSize = AudioTrack.getMinBufferSize(
-                            sampleRate,
-                            AudioFormat.CHANNEL_OUT_MONO,
-                            AudioFormat.ENCODING_PCM_FLOAT
-                        )
-
-                        audioTrack = AudioTrack(
-                            android.media.AudioAttributes.Builder()
-                                .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
-                                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
-                                .build(),
-                            AudioFormat.Builder()
-                                .setSampleRate(sampleRate)
-                                .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
-                                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                                .build(),
-                            bufferSize,
-                            AudioTrack.MODE_STREAM,
-                            0
-                        )
-
-                        audioTrack?.play()
-
-                        val startIntent = Intent(ACTION_SPEAK_START).apply {
-                            setPackage(packageName)
-                        }
-                        sendBroadcast(startIntent)
-                        Log.d(TAG, "SPEAK_START broadcast sent")
-
-                        audioTrack?.write(audio.samples, 0, audio.samples.size, AudioTrack.WRITE_BLOCKING)
-                        audioTrack?.stop()
-                        audioTrack?.release()
-                        audioTrack = null
-                    } else {
-                        Log.e(TAG, "Audio samples is empty!")
-                    }
-                } finally {
-                    val endIntent = Intent(ACTION_SPEAK_END).apply {
+                    val startIntent = Intent(ACTION_SPEAK_START).apply {
                         setPackage(packageName)
                     }
-                    sendBroadcast(endIntent)
-                    Log.d(TAG, "SPEAK_END broadcast sent")
+                    sendBroadcast(startIntent)
+                    Log.d(TAG, "SPEAK_START broadcast sent")
+
+                    audioTrack?.write(audio.samples, 0, audio.samples.size, AudioTrack.WRITE_BLOCKING)
+                    audioTrack?.stop()
+                    audioTrack?.release()
+                    audioTrack = null
                 }
+
+                val endIntent = Intent(ACTION_SPEAK_END).apply {
+                    setPackage(packageName)
+                }
+                sendBroadcast(endIntent)
+                Log.d(TAG, "SPEAK_END broadcast sent")
             } catch (e: Exception) {
                 Log.e(TAG, "TTS playback error: ${e.message}", e)
                 val endIntent = Intent(ACTION_SPEAK_END).apply {
@@ -242,6 +214,54 @@ class TtsService : Service() {
             audioTrack = null
         } catch (e: Exception) {
             Log.e(TAG, "Stop error: ${e.message}", e)
+        }
+    }
+
+    private fun copyDataDir(dataDir: String): String {
+        Log.i(TAG, "data dir is $dataDir")
+        copyAssets(dataDir)
+
+        val newDataDir = getExternalFilesDir(null)!!.absolutePath
+        Log.i(TAG, "newDataDir: $newDataDir")
+        return "$newDataDir/$dataDir"
+    }
+
+    private fun copyAssets(path: String) {
+        val assets: Array<String>?
+        try {
+            assets = application.assets.list(path)
+            if (assets!!.isEmpty()) {
+                copyFile(path)
+            } else {
+                val fullPath = "${getExternalFilesDir(null)}/$path"
+                val dir = File(fullPath)
+                dir.mkdirs()
+                for (asset in assets.iterator()) {
+                    val p: String = if (path == "") "" else path + "/"
+                    copyAssets(p + asset)
+                }
+            }
+        } catch (ex: Exception) {
+            Log.e(TAG, "Failed to copy $path. $ex")
+        }
+    }
+
+    private fun copyFile(filename: String) {
+        try {
+            val istream = application.assets.open(filename)
+            val newFilename = getExternalFilesDir(null).toString() + "/" + filename
+            val ostream = FileOutputStream(newFilename)
+            val buffer = ByteArray(1024)
+            var read = 0
+            while (read != -1) {
+                ostream.write(buffer, 0, read)
+                read = istream.read(buffer)
+            }
+            istream.close()
+            ostream.flush()
+            ostream.close()
+        } catch (ex: Exception) {
+            Log.e(TAG, "Failed to copy $filename, $ex")
         }
     }
 }
