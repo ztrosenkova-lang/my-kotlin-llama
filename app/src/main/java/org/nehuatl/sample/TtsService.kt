@@ -106,7 +106,7 @@ class TtsService : Service() {
                     val dataDir = copyDataDir("tts-model/espeak-ng-data")
 
                     val modelConfig = OfflineTtsVitsModelConfig(
-                        model = "tts-model/model.onnx",
+                        model = "tts-model/ru_RU-ruslan-medium.onnx",
                         tokens = "tts-model/tokens.txt",
                         dataDir = dataDir,
                         noiseScale = 0.35f,
