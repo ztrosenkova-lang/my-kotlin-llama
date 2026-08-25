@@ -108,13 +108,22 @@ class TtsService : Service() {
                     val modelConfig = OfflineTtsVitsModelConfig(
                         model = "tts-model/ru_RU-ruslan-medium-int8.onnx",
                         tokens = "tts-model/tokens.txt",
-                        dataDir = dataDir
+                        dataDir = dataDir,
+                        noiseScale = 0.35f,
+                        noiseScaleW = 0.667f,
+                        lengthScale = 1.0f,
                     )
+
                     val ttsConfig = OfflineTtsConfig(
-                        model = OfflineTtsModelConfig(vits = modelConfig),
+                        model = OfflineTtsModelConfig(
+                            vits = modelConfig,
+                            numThreads = 2,
+                            debug = false,
+                        ),
                         ruleFsts = "",
-                        maxNumSentences = 1
+                        maxNumSentences = 5,
                     )
+
                     offlineTts = OfflineTts(assets, ttsConfig)
                     isTtsInitialized = true
                     Log.d(TAG, "VITS TTS initialized in separate process")
