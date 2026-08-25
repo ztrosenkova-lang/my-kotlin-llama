@@ -145,7 +145,7 @@ tasks.register("downloadSherpaAar") {
 
 tasks.register("downloadTtsModel") {
     doLast {
-        val modelFile = File(ttsModelDir, "model.onnx")
+        val modelFile = File(ttsModelDir, "ru_RU-ruslan-medium.onnx")
         val tokensFile = File(ttsModelDir, "tokens.txt")
         val espeakDataDir = File(ttsModelDir, "espeak-ng-data")
 
@@ -190,7 +190,6 @@ tasks.register("downloadTtsModel") {
         }
         println("TTS model extracted to $ttsModelDir")
 
-        // Перемещаем все файлы из вложенных папок в корень
         fun moveFiles(dir: File) {
             dir.listFiles()?.forEach { file ->
                 if (file.isDirectory) {
@@ -216,7 +215,7 @@ tasks.register("downloadTtsModel") {
 tasks.register("checkTtsModel") {
     dependsOn("downloadTtsModel")
     doLast {
-        val modelFile = File(ttsModelDir, "model.onnx")
+        val modelFile = File(ttsModelDir, "ru_RU-ruslan-medium.onnx")
         val tokensFile = File(ttsModelDir, "tokens.txt")
         val espeakDataDir = File(ttsModelDir, "espeak-ng-data")
         if (!modelFile.exists() || !tokensFile.exists() || !espeakDataDir.exists()) {
