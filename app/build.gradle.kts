@@ -213,9 +213,20 @@ tasks.register("downloadTtsModel") {
 tasks.register("checkTtsModel") {
     dependsOn("downloadTtsModel")
     doLast {
+        println("=== Files in ${ttsModelDir.absolutePath} ===")
+        ttsModelDir.walkTopDown().forEach { file ->
+            println("${file.relativeTo(ttsModelDir)} ${if (file.isDirectory) "(dir)" else "(file)"}")
+        }
+        println("=== End of files ===")
+        
         val modelFile = File(ttsModelDir, "ru_RU-ruslan-medium.onnx")
         val tokensFile = File(ttsModelDir, "tokens.txt")
         val espeakDataDir = File(ttsModelDir, "espeak-ng-data")
+        
+        println("modelFile exists: ${modelFile.exists()}")
+        println("tokensFile exists: ${tokensFile.exists()}")
+        println("espeakDataDir exists: ${espeakDataDir.exists()}")
+        
         if (!modelFile.exists() || !tokensFile.exists() || !espeakDataDir.exists()) {
             throw GradleException("TTS model files are missing. Download failed.")
         }
