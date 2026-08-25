@@ -196,7 +196,6 @@ tasks.register("downloadTtsModel") {
                 val target = File(ttsModelDir, file.name)
                 if (file.isDirectory) {
                     file.copyRecursively(target, overwrite = true)
-                    file.deleteRecursively()
                 } else {
                     file.copyTo(target, overwrite = true)
                     file.delete()
