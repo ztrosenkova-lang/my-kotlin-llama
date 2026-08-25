@@ -334,6 +334,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                 isCompressionRequest = false
                             } else {
                                 _cloudGeneratedText.value = fullText
+                                appendSystemMessage(fullText)
                                 speakText(fullText)
                             }
                         }
@@ -376,6 +377,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                 isCompressionRequest = false
                             } else {
                                 _generatedText.value = fullText
+                                appendSystemMessage(fullText)
                                 speakText(fullText)
                             }
                         }
