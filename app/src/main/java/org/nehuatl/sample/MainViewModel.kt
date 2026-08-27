@@ -47,7 +47,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     companion object {
         @Volatile var instance: MainViewModel? = null
         private const val TAG = "MainViewModel"
-        
+
         private const val REMEMBER_COMMAND = "запомни"
         private const val FIND_COMMAND = "найди"
         private const val SEARCH_COMMAND = "поищи"
@@ -55,9 +55,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         private const val ALARM_COMMAND = "будильник"
         private const val REMIND_COMMAND = "напомни"
         private const val CHAT_LOOKUP_COMMAND = "посмотри в чате"
-        
+
         private const val AUTO_BRAIN_COMPRESSION_THRESHOLD = 10
-        
+
         private const val SECRET_PHRASE_HASH = "af5f2b759f2adf6f46fdd7b1441ed77086f833dcb5f74d9a5ea6930aa8634505"
         private const val ONE_DAY_MS = 86400000L
     }
@@ -108,7 +108,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     private var currentModelName: String = ""
-    
+
     private val _loadedModelName = MutableStateFlow("")
     val loadedModelName: StateFlow<String> = _loadedModelName.asStateFlow()
 
@@ -125,7 +125,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val memoryFile: File by lazy {
         File(getApplication<Application>().filesDir, "memory.txt")
     }
-    
+
     private val brainFile: File by lazy {
         File(getApplication<Application>().filesDir, "brain.txt")
     }
@@ -229,7 +229,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             addAction(TtsService.ACTION_SPEAK_START)
             addAction(TtsService.ACTION_SPEAK_END)
         }
-        
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             getApplication<Application>().registerReceiver(
                 ttsReceiver,
@@ -303,7 +303,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _isTtsReady.value = false
         appendSystemMessage("🔄 Инициализация офлайн голосового движка...")
         Log.d(TAG, "TTS auto-enabled, waiting for initialization")
-        
+
         val ttsStartIntent = Intent(getApplication<Application>(), TtsService::class.java)
         getApplication<Application>().startService(ttsStartIntent)
 
@@ -461,7 +461,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         return try {
             val context = getApplication<Application>()
             val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
-            
+
             if (androidId.isNullOrEmpty()) {
                 Log.e(TAG, "Failed to get Android ID. Device binding impossible.")
                 _isDeviceBound.value = false
@@ -653,7 +653,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _isTtsReady.value = false
         appendSystemMessage("🔄 Инициализация офлайн голосового движка...")
         Log.d(TAG, "TTS service starting")
-        
+
         val ttsStartIntent = Intent(getApplication<Application>(), TtsService::class.java)
         getApplication<Application>().startService(ttsStartIntent)
     }
@@ -664,7 +664,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _isTtsReady.value = false
         appendSystemMessage("🔇 Озвучка отключена, TTS выгружен из памяти")
         Log.d(TAG, "TTS disabled")
-        
+
         val ttsStopIntent = Intent(getApplication<Application>(), TtsService::class.java)
         getApplication<Application>().stopService(ttsStopIntent)
     }
@@ -917,33 +917,33 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         }
                         "$prefix: ${message.text}"
                     }
-                    append("ПОЛНАЯ ИСТОРИЯ ЧАТА:\n$fullChatHistory\n\n")
-                    append("Пользователь просит найти информацию в истории чата. Изучи ВСЮ историю выше и ответь на вопрос.")
+                    if (fullChatHistory.isNotEmpty()) {
+                        append("ПОЛНАЯ ИСТОРИЯ ЧАТА:\n$fullChatHistory\n\n")
+                        append("Пользователь просит найти информацию в истории чата. Изучи ВСЮ историю чата выше и найди то, что относится к запросу пользователя. Используй найденные сообщения для ответа.")
+                    } else {
+                        append("ПОЛНАЯ ИСТОРИЯ ЧАТА: пока пусто.\n\n")
+                        append("Пользователь просит найти информацию в истории чата, но история пуста. Честно скажи об этом.")
+                    }
                 }
                 lowerPrompt.contains(RECALL_COMMAND) -> {
                     val brainData = readBrain()
                     if (brainData.isNotEmpty()) {
                         append("СЖАТАЯ ИСТОРИЯ ПРОШЛЫХ РАЗГОВОРОВ (МОЗГ):\n$brainData\n\n")
-                        append("Пользователь просит вспомнить информацию из прошлых разговоров. Изучи СЖАТУЮ ИСТОРИЮ выше и ответь на вопрос.")
+                        append("Пользователь просит вспомнить информацию из прошлых разговоров. Изучи ВЕСЬ сжатый архив выше и найди то, что относится к запросу пользователя. Используй найденные факты для ответа.")
                     } else {
                         append("СЖАТАЯ ИСТОРИЯ ПРОШЛЫХ РАЗГОВОРОВ (МОЗГ): пока пусто.\n\n")
                         append("Пользователь просит вспомнить информацию, но сжатой истории пока нет. Честно скажи об этом.")
                     }
                 }
                 else -> {
-                    val queryCategory = determineCategory(prompt)
-                    var filteredMemory = searchMemory(prompt, queryCategory)
-                    if (filteredMemory.isEmpty()) {
-                        filteredMemory = searchMemory(prompt, null)
-                    }
-
-                    val memorySection = if (filteredMemory.isNotEmpty()) {
-                        "ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ (НАЙДЕННЫЕ ФАКТЫ):\n$filteredMemory\n\n"
+                    val fullMemory = readFromLongTermMemory()
+                    if (fullMemory.isNotEmpty()) {
+                        append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ (memory.txt):\n$fullMemory\n\n")
+                        append("Пользователь просит найти информацию в базе знаний. Изучи ВСЮ базу знаний выше и найди то, что относится к запросу пользователя. Используй найденные факты, цены, контакты, адреса для ответа.")
                     } else {
-                        "ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ: подходящих фактов не найдено.\n\n"
+                        append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ: пусто.\n\n")
+                        append("Пользователь просит найти информацию, но база знаний пуста. Честно скажи об этом.")
                     }
-                    append(memorySection)
-                    append("Пользователь просит тебя НАЙТИ информацию из его личной базы знаний, а также ВЫПОЛНИТЬ МАТЕМАТИЧЕСКИЙ ИЛИ ЛОГИЧЕСКИЙ РАСЧЕТ на основе найденных фактов. Внимательно изучи предоставленные строки ЛОКАЛЬНОЙ БАЗЫ ЗНАНИЙ. Если там указана цена, тариф или условие, используй эти точные цифры для выполнения математического действия. Дай развернутый, понятный и дружелюбный ответ с демонстрацией хода вычислений. Если нужных данных в памяти нет — честно скажи об этом.")
                 }
             }
         }
@@ -1353,14 +1353,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         llamaHelper.abort()
         llamaHelper.release()
         viewModelJob.cancel()
-        
+
         try {
             val ttsStopIntent = Intent(getApplication<Application>(), TtsService::class.java)
             getApplication<Application>().stopService(ttsStopIntent)
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping TTS service: ${e.message}")
         }
-        
+
         try {
             getApplication<Application>().unregisterReceiver(ttsReceiver)
         } catch (e: Exception) {
