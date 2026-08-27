@@ -56,9 +56,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         private const val REMIND_COMMAND = "напомни"
         private const val CHAT_LOOKUP_COMMAND = "посмотри в чате"
         
-        private const val AUTO_BRAIN_COMPRESSION_THRESHOLD = 14
+        private const val AUTO_BRAIN_COMPRESSION_THRESHOLD = 10
         
-        private const val SECRET_PHRASE_HASH = "632f146be48ba42ca3406ef5a8ebca73df15aa2d5d8cb960dfbe22262d0577fb"
+        private const val SECRET_PHRASE_HASH = "af5f2b759f2adf6f46fdd7b1441ed77086f833dcb5f74d9a5ea6930aa8634505"
         private const val ONE_DAY_MS = 86400000L
     }
 
@@ -332,6 +332,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             if (isCompressionRequest) {
                                 saveBrain(fullText)
                                 isCompressionRequest = false
+                                appendSystemMessage("✅ Беседа записана в память")
                             } else {
                                 _cloudGeneratedText.value = fullText
                                 appendSystemMessage(fullText)
@@ -375,6 +376,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             if (isCompressionRequest) {
                                 saveBrain(fullText)
                                 isCompressionRequest = false
+                                appendSystemMessage("✅ Беседа записана в память")
                             } else {
                                 _generatedText.value = fullText
                                 appendSystemMessage(fullText)
@@ -734,6 +736,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
                 isCompressionRequest = true
 
+                appendSystemMessage("🧠 ИИ запоминает нашу беседу...")
+
                 if (_isModelLoaded.value && llamaHelper.getContextId() != null) {
                     llamaHelper.predict(
                         prompt = prompt,
@@ -750,6 +754,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     )
                 } else {
                     isCompressionRequest = false
+                    appendSystemMessage("⚠️ Нет активного ИИ для запоминания")
                 }
             } catch (e: Exception) {
                 isCompressionRequest = false
