@@ -1769,7 +1769,7 @@ private fun ModelPickerDialog(
                     ),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("⬇ Скачать модель ИИ", color = DarkText, fontWeight = FontWeight.Bold)
+                    Text("⬇ Скачать модель ИИ", color = DarkText, fontWeight = FontWeight.ExtraBold)
                 }
 
                 TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
