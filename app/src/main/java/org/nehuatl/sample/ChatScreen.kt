@@ -3,6 +3,7 @@ package org.nehuatl.sample
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -120,7 +121,7 @@ private val BorderGray = Color(0xFFCED4DA)
 private val AccentColor = Color(0xFF74C0FC)
 private val DarkText = Color(0xFF212529)
 private val ChatFontFamily = FontFamily.Monospace
-private val GreenColor = Color(0xFF4CD964)
+private val GreenColor = Color(0xFF2E7D32)
 private val PaleYellowColor = Color(0xFFFFF9DB)
 private val FriendlyRobotColor = Color(0xFF00B4D8)
 
@@ -161,6 +162,8 @@ fun ChatScreen(
     val isPermanentlyUnlocked by viewModel.isPermanentlyUnlocked.collectAsStateWithLifecycle(initialValue = false)
     val isPermanentlyBlocked by viewModel.isPermanentlyBlocked.collectAsStateWithLifecycle(initialValue = false)
     val isSpeaking by viewModel.isSpeaking.collectAsStateWithLifecycle(initialValue = false)
+    val speakStartTrigger by viewModel.speakStartTrigger.collectAsStateWithLifecycle(initialValue = false)
+    val pendingTextToPrint by viewModel.pendingTextToPrint.collectAsStateWithLifecycle(initialValue = "")
 
     var promptInput by remember { mutableStateOf("") }
     var showModelDialog by remember { mutableStateOf(false) }
@@ -178,6 +181,8 @@ fun ChatScreen(
     var isGeneratingToken by remember { mutableStateOf(false) }
     var secretPhraseInput by remember { mutableStateOf("") }
     var welcomeStarted by remember { mutableStateOf(false) }
+    var welcomeTextPrinted by remember { mutableStateOf(false) }
+    var pendingTextPrinted by remember { mutableStateOf(false) }
 
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -217,24 +222,44 @@ fun ChatScreen(
         "Я лучший хранитель паролей, переводчик с разных языков и просто умный собеседник. " +
         "Я создан, чтобы быть твоим надежным и автономным союзником. " +
         "Я умею слышать и говорить. 🎤 Нажимай на микрофон внизу, чтобы общаться голосом. " +
-        "В меня встроено три вида памяти. 🧠 Подробнее об этом ты можешь узнать в справке. " +
+        "Я обладаю уникальной памятью. 🧠 Подробнее об этом ты можешь узнать в справке. " +
         "А ещё я могу напоминать тебе о важных событиях,заменяя тебе органайзер. ⏰ " +
         "Давай общаться! Включи локальный движок Llama или облачный ИИ в шапке приложения, и погнали! 🚀"
 
     LaunchedEffect(isTtsReady) {
         if (isTtsReady && !welcomeStarted) {
             welcomeStarted = true
-            
             viewModel.speakText(fullWelcomeString)
-            
-            delay(500)
-            
+        }
+    }
+
+    LaunchedEffect(speakStartTrigger, pendingTextToPrint) {
+        if (speakStartTrigger && welcomeStarted && !welcomeTextPrinted) {
+            welcomeTextPrinted = true
             var runningText = ""
             for (i in fullWelcomeString.indices) {
                 runningText += fullWelcomeString[i]
                 viewModel.updateLastSystemMessage(runningText)
-                delay(35)
+                delay(50)
             }
+        }
+
+        if (speakStartTrigger && pendingTextToPrint.isNotEmpty() && !pendingTextPrinted) {
+            pendingTextPrinted = true
+            var runningText = ""
+            for (i in pendingTextToPrint.indices) {
+                runningText += pendingTextToPrint[i]
+                viewModel.updateAssistantMessage(runningText)
+                delay(50)
+            }
+            viewModel.clearPendingText()
+        }
+    }
+
+    LaunchedEffect(isSpeaking) {
+        if (!isSpeaking) {
+            welcomeTextPrinted = false
+            pendingTextPrinted = false
         }
     }
 
@@ -425,7 +450,7 @@ fun ChatScreen(
                 viewModel.speakText("Настройка роли ИИ")
             },
             onHelpClick = {
-                viewModel.speakText("Открываю руководство пользователя. Здесь вы можете прочитать инструкции по управлению моими локальными движками, настройке раздельной памяти и командам умного поиска по корням слов.")
+                viewModel.speakText("Открываю руководство пользователя.")
                 showHelpDialog = true
             },
             isTtsReady = isTtsReady,
@@ -920,8 +945,7 @@ private fun TopBarWithSwitch(
                 .weight(1f)
                 .fillMaxHeight(),
             horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+            verticalAlignment = Alignment.CenterVertically        ) {
             Text(
                 text = "+",
                 fontSize = 20.sp,
@@ -1648,40 +1672,72 @@ private fun ModelPickerDialog(
     onLoad: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
+
     Dialog(onDismissRequest = onDismiss) {
-        Card(colors = CardDefaults.cardColors(containerColor = SurfaceGray)) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF9DB)),
+            border = BorderStroke(1.dp, AccentColor),
+            shape = RoundedCornerShape(24.dp)
+        ) {
             Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("Настройка ИИ", style = MaterialTheme.typography.headlineSmall, color = DarkText)
+                Text(
+                    "Настройка ИИ",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = AccentColor,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontFamily = FontFamily.Monospace
+                )
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Языковая модель", color = DarkText)
+                    Text("Языковая модель", color = DarkText, fontWeight = FontWeight.Bold)
                     val displayModelPath = currentModelPath?.substringAfterLast("/")?.replace("primary%3AModels%", "") ?: "Не выбрана"
-                    Text(text = "Текущая модель: $displayModelPath", style = MaterialTheme.typography.bodySmall, color = DarkText.copy(alpha = 0.7f))
+                    Text(
+                        text = "Текущая модель: $displayModelPath",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = DarkText.copy(alpha = 0.7f),
+                        fontFamily = ChatFontFamily
+                    )
                     Button(
                         onClick = onPickModel,
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = BorderGray)
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = AccentColor,
+                            contentColor = DarkText
+                        ),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
                         Text(
                             text = if (currentModelPath != null) "Изменить модель" else "Выбрать модель",
-                            color = if (currentModelPath != null) GreenColor else DarkText
+                            color = DarkText,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
 
                 Column(modifier = Modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("(опционально)", style = MaterialTheme.typography.bodySmall, color = DarkText.copy(alpha = 0.6f))
-                    Text("Мультимодальный проектор (mmproj)", color = DarkText)
+                    Text("Мультимодальный проектор (mmproj)", color = DarkText, fontWeight = FontWeight.Bold)
                     val displayMmprojPath = mmprojPath?.substringAfterLast("/")?.replace("primary%3AModels%", "") ?: "Не выбран"
-                    Text(text = "Текущий проектор: $displayMmprojPath", style = MaterialTheme.typography.bodySmall, color = DarkText.copy(alpha = 0.7f))
+                    Text(
+                        text = "Текущий проектор: $displayMmprojPath",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = DarkText.copy(alpha = 0.7f),
+                        fontFamily = ChatFontFamily
+                    )
                     Button(
                         onClick = onPickMmproj,
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = BorderGray)
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = AccentColor,
+                            contentColor = DarkText
+                        ),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
                         Text(
                             text = if (mmprojPath != null) "Изменить проектор" else "Выбрать проектор",
-                            color = if (mmprojPath != null) GreenColor else DarkText
+                            color = DarkText,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
@@ -1690,13 +1746,34 @@ private fun ModelPickerDialog(
                     onClick = onLoad,
                     enabled = currentModelPath != null,
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentColor)
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AccentColor,
+                        contentColor = DarkText,
+                        disabledContainerColor = BorderGray,
+                        disabledContentColor = DarkText.copy(alpha = 0.5f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Запустить нейросеть", color = DarkText)
+                    Text("Запустить нейросеть", color = DarkText, fontWeight = FontWeight.ExtraBold)
+                }
+
+                Button(
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://huggingface.co/AnkitAI/Parable-Granite-4.1-3B-Claude-Fable-5-GGUF/resolve/main/Parable-Granite-4.1-3B-Claude-Fable-5-GGUF-Q6_K.gguf"))
+                        context.startActivity(intent)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF00B4D8),
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("⬇ Скачать модель с Hugging Face", color = Color.White, fontWeight = FontWeight.Bold)
                 }
 
                 TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-                    Text("Отмена", color = DarkText)
+                    Text("Отмена", color = AccentColor, fontWeight = FontWeight.Bold)
                 }
             }
         }
