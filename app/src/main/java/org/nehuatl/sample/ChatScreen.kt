@@ -1677,15 +1677,15 @@ private fun ModelPickerDialog(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF9DB)),
-            border = BorderStroke(1.dp, AccentColor),
-            shape = RoundedCornerShape(24.dp)
+            colors = CardDefaults.cardColors(containerColor = SurfaceGray),
+            border = BorderStroke(1.dp, BorderGray),
+            shape = RoundedCornerShape(16.dp)
         ) {
             Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text(
                     "Настройка ИИ",
                     style = MaterialTheme.typography.headlineSmall,
-                    color = AccentColor,
+                    color = DarkText,
                     fontWeight = FontWeight.ExtraBold,
                     fontFamily = FontFamily.Monospace
                 )
@@ -1769,7 +1769,7 @@ private fun ModelPickerDialog(
                     ),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("⬇ Скачать модель ИИ", color = DarkText, fontWeight = FontWeight.ExtraBold)
+                    Text("⬇ Скачать модель", color = DarkText, fontWeight = FontWeight.ExtraBold)
                 }
 
                 TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
