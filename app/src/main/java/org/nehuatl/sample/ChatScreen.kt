@@ -233,35 +233,36 @@ fun ChatScreen(
         }
     }
 
-    LaunchedEffect(speakStartTrigger, pendingTextToPrint) {
-        if (speakStartTrigger && welcomeStarted && !welcomeTextPrinted) {
-            welcomeTextPrinted = true
-            var runningText = ""
-            for (i in fullWelcomeString.indices) {
-                runningText += fullWelcomeString[i]
-                viewModel.updateLastSystemMessage(runningText)
-                delay(50)
-            }
-        }
-
-        if (speakStartTrigger && pendingTextToPrint.isNotEmpty() && !pendingTextPrinted) {
-            pendingTextPrinted = true
-            var runningText = ""
-            for (i in pendingTextToPrint.indices) {
-                runningText += pendingTextToPrint[i]
-                viewModel.updateAssistantMessage(runningText)
-                delay(50)
-            }
-            viewModel.clearPendingText()
+    LaunchedEffect(speakStartTrigger) {
+    if (speakStartTrigger && welcomeStarted && !welcomeTextPrinted) {
+        welcomeTextPrinted = true
+        var runningText = ""
+        for (i in fullWelcomeString.indices) {
+            runningText += fullWelcomeString[i]
+            viewModel.updateLastSystemMessage(runningText)
+            delay(50)
         }
     }
+}
 
-    LaunchedEffect(isSpeaking) {
-        if (!isSpeaking) {
-            welcomeTextPrinted = false
-            pendingTextPrinted = false
+LaunchedEffect(speakStartTrigger, pendingTextToPrint) {
+    if (speakStartTrigger && pendingTextToPrint.isNotEmpty() && !pendingTextPrinted) {
+        pendingTextPrinted = true
+        var runningText = ""
+        for (i in pendingTextToPrint.indices) {
+            runningText += pendingTextToPrint[i]
+            viewModel.updateAssistantMessage(runningText)
+            delay(50)
         }
+        viewModel.clearPendingText()
     }
+}
+
+LaunchedEffect(isSpeaking) {
+    if (!isSpeaking) {
+        pendingTextPrinted = false
+    }
+}
 
     LaunchedEffect(showCloudDialog) {
         if (showCloudDialog) {
@@ -529,7 +530,7 @@ fun ChatScreen(
                         chatMessages.forEach { message ->
                             val prefix = when (message.role) {
                                 "user" -> "Вы: "
-                                "assistant" -> "ИИ: "
+                                "assistant" -> "ИИ-Друг: "
                                 "system" -> "📢 "
                                 else -> ""
                             }
@@ -1716,8 +1717,7 @@ private fun ModelPickerDialog(
                 }
 
                 Column(modifier = Modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("(опционально)", style = MaterialTheme.typography.bodySmall, color = DarkText.copy(alpha = 0.6f))
-                    Text("Мультимодальный проектор (mmproj)", color = DarkText, fontWeight = FontWeight.Bold)
+                    Text("Мультимодальный проектор", color = DarkText, fontWeight = FontWeight.Bold)
                     val displayMmprojPath = mmprojPath?.substringAfterLast("/")?.replace("primary%3AModels%", "") ?: "Не выбран"
                     Text(
                         text = "Текущий проектор: $displayMmprojPath",
@@ -1769,7 +1769,7 @@ private fun ModelPickerDialog(
                     ),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("⬇ Скачать модель с Hugging Face", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("⬇ Скачать модель ИИ", color = DarkText, fontWeight = FontWeight.Bold)
                 }
 
                 TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
