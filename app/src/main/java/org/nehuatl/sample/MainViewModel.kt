@@ -60,6 +60,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         private const val SECRET_PHRASE_HASH = "af5f2b759f2adf6f46fdd7b1441ed77086f833dcb5f74d9a5ea6930aa8634505"
         private const val ONE_DAY_MS = 86400000L
+
+        private val CATEGORIES = listOf("[ПАРОЛЬ]", "[КОНТАКТ]", "[ПРАЙС]", "[ИНСТРУКЦИЯ]", "[АДРЕС]", "[ДАТА]", "[ОБЩЕЕ]")
     }
 
     private val viewModelJob = SupervisorJob()
@@ -335,7 +337,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                 appendSystemMessage("✅ Беседа записана в память")
                             } else {
                                 _cloudGeneratedText.value = fullText
-                                appendSystemMessage(fullText)
+                                _pendingTextToPrint.value = fullText
                                 speakText(fullText)
                             }
                         }
@@ -379,7 +381,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                 appendSystemMessage("✅ Беседа записана в память")
                             } else {
                                 _generatedText.value = fullText
-                                appendSystemMessage(fullText)
+                                _pendingTextToPrint.value = fullText
                                 speakText(fullText)
                             }
                         }
@@ -773,12 +775,22 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
+    fun updateAssistantMessage(newText: String) {
+        val currentList = _chatHistory.value.toMutableList()
+        if (currentList.isNotEmpty() && currentList.last().role == "assistant") {
+            currentList[currentList.lastIndex] = ChatMessage("assistant", newText)
+            _chatHistory.value = currentList
+        } else {
+            _chatHistory.value = currentList + ChatMessage("assistant", newText)
+        }
+    }
+
     private fun determineCategory(text: String): String {
         val lowerText = text.lowercase()
         val categories = mapOf(
             "[ПАРОЛЬ]" to listOf("пароль", "логин", "доступ", "код", "пин", "секрет", "ключ"),
             "[КОНТАКТ]" to listOf("телефон", "номер", "контакт", "позвонить", "мобильный", "вотсап", "телеграм"),
-            "[ПРАЙС]" to listOf("руб", "цена", "стоимость", "прайс", "оплата", "расчёт", "скидка", "тариф"),
+            "[ПРАЙС]" to listOf("руб", "цена", "стоимость", "прайс", "оплата", "расчёт", "скидка", "тариф", "металл", "труба", "профиль", "лист"),
             "[ИНСТРУКЦИЯ]" to listOf("как", "инструкция", "алгоритм", "пошагово", "руководство", "порядок", "действия"),
             "[АДРЕС]" to listOf("адрес", "улица", "город", "метро", "район", "дом"),
             "[ДАТА]" to listOf("дата", "время", "встреча", "напоминание", "дедлайн")
@@ -796,40 +808,71 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    fun saveToLongTermMemory(text: String) {
+    private fun appendToCategory(text: String) {
         try {
             if (!memoryFile.exists()) {
                 memoryFile.createNewFile()
             }
+
+            val category = determineCategory(text)
             val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
             val timestamp = dateFormat.format(Date())
-            val category = determineCategory(text)
-            val taggedText = "$category $text"
-            memoryFile.appendText("[$timestamp] $taggedText\n")
-            Log.d(TAG, "Записано в долговременную память: $taggedText")
-            appendSystemMessage("🧠 Запомнено: $text")
+
+            val existing = memoryFile.readText()
+            val lines = existing.split("\n").toMutableList()
+
+            val categoryIndex = lines.indexOfFirst { it.trim() == category }
+
+            if (categoryIndex == -1) {
+                lines.add("")
+                lines.add(category)
+                lines.add("[$timestamp] $text")
+            } else {
+                var insertIndex = categoryIndex + 1
+                while (insertIndex < lines.size && lines[insertIndex].isNotBlank() && !CATEGORIES.any { lines[insertIndex].trim().startsWith(it) }) {
+                    insertIndex++
+                }
+                lines.add(insertIndex, "[$timestamp] $text")
+            }
+
+            memoryFile.writeText(lines.joinToString("\n"))
+            Log.d(TAG, "Записано в категорию $category: $text")
         } catch (e: Exception) {
-            Log.e(TAG, "Ошибка записи памяти: ${e.message}")
+            Log.e(TAG, "Ошибка записи в категорию: ${e.message}")
         }
+    }
+
+    fun saveToLongTermMemory(text: String) {
+        appendToCategory(text)
+        appendSystemMessage("🧠 Запомнено: $text")
     }
 
     private fun searchMemory(query: String, category: String? = null): String {
         val fullMemory = readFromLongTermMemory()
         if (fullMemory.isEmpty()) return ""
 
-        val lines = fullMemory.split("\n").filter { it.isNotEmpty() }
+        val lines = fullMemory.split("\n")
 
         if (category != null) {
-            val filteredLines = lines.filter { it.startsWith(category) }
-            if (filteredLines.isNotEmpty()) {
+            val categoryIndex = lines.indexOfFirst { it.trim() == category }
+            if (categoryIndex != -1) {
+                val sectionLines = mutableListOf<String>()
+                var i = categoryIndex + 1
+                while (i < lines.size && !CATEGORIES.any { lines[i].trim().startsWith(it) }) {
+                    if (lines[i].isNotBlank()) {
+                        sectionLines.add(lines[i])
+                    }
+                    i++
+                }
+
                 val keywords = extractKeywords(query)
                 return if (keywords.isNotEmpty()) {
-                    filteredLines.filter { line ->
+                    sectionLines.filter { line ->
                         val lowerLine = line.lowercase()
                         keywords.any { keyword -> lowerLine.contains(keyword) }
                     }.joinToString("\n")
                 } else {
-                    filteredLines.joinToString("\n")
+                    sectionLines.joinToString("\n")
                 }
             }
         }
@@ -936,13 +979,21 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     }
                 }
                 else -> {
-                    val fullMemory = readFromLongTermMemory()
-                    if (fullMemory.isNotEmpty()) {
-                        append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ (memory.txt):\n$fullMemory\n\n")
-                        append("Пользователь просит найти информацию в базе знаний. Изучи ВСЮ базу знаний выше и найди то, что относится к запросу пользователя. Используй найденные факты, цены, контакты, адреса для ответа.")
+                    val queryCategory = determineCategory(prompt)
+                    val filteredMemory = searchMemory(prompt, queryCategory)
+
+                    if (filteredMemory.isNotEmpty()) {
+                        append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ (категория $queryCategory):\n$filteredMemory\n\n")
+                        append("Пользователь просит найти информацию в базе знаний. Изучи найденные факты выше и используй их для ответа.")
                     } else {
-                        append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ: пусто.\n\n")
-                        append("Пользователь просит найти информацию, но база знаний пуста. Честно скажи об этом.")
+                        val fullMemory = readFromLongTermMemory()
+                        if (fullMemory.isNotEmpty()) {
+                            append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ (memory.txt):\n$fullMemory\n\n")
+                            append("Пользователь просит найти информацию в базе знаний. Изучи ВСЮ базу знаний выше и найди то, что относится к запросу пользователя.")
+                        } else {
+                            append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ: пусто.\n\n")
+                            append("Пользователь просит найти информацию, но база знаний пуста. Честно скажи об этом.")
+                        }
                     }
                 }
             }
@@ -973,9 +1024,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
             lowerText.contains(RECALL_COMMAND) || lowerText.contains(FIND_COMMAND) || lowerText.contains(SEARCH_COMMAND) || lowerText.contains(CHAT_LOOKUP_COMMAND) -> {
                 if (_currentMode.value == AIMode.NEUTRAL) {
-                    val memoryData = searchMemory(text, determineCategory(text))
+                    val queryCategory = determineCategory(text)
+                    val memoryData = searchMemory(text, queryCategory)
                     if (memoryData.isNotEmpty()) {
-                        appendSystemMessage("🔍 Найдено в памяти:\n$memoryData")
+                        appendSystemMessage("🔍 Найдено в категории $queryCategory:\n$memoryData")
                     } else {
                         appendSystemMessage("🔍 Ничего не найдено по запросу '$text'")
                     }
@@ -1281,9 +1333,20 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             if (!memoryFile.exists()) {
                 memoryFile.createNewFile()
             }
-            memoryFile.writeText(newFullText)
-            Log.d(TAG, "База знаний успешно обновлена")
-            appendSystemMessage("🧠 База знаний обновлена")
+
+            val lines = newFullText.split("\n").filter { it.isNotBlank() }
+            val categorizedLines = mutableListOf<String>()
+
+            for (line in lines) {
+                val category = determineCategory(line)
+                categorizedLines.add(category)
+                categorizedLines.add(line)
+                categorizedLines.add("")
+            }
+
+            memoryFile.writeText(categorizedLines.joinToString("\n"))
+            Log.d(TAG, "База знаний успешно обновлена и разделена по категориям")
+            appendSystemMessage("🧠 База знаний обновлена и разделена по категориям")
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка перезаписи базы знаний: ${e.message}")
         }
