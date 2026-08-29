@@ -1537,10 +1537,11 @@ private fun MemoryEditorDialog(initialText: String, onSave: (String) -> Unit, on
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
-                placeholder = { Text("Вставь сюда свой прайс-лист или данные...", color = DarkText.copy(alpha = 0.5f)) },
+                placeholder = { Text("Вставь сюда свой прайс-лист или данные...", color = DarkText.copy(alpha = 0.5f), fontSize = 10.sp) },
                 modifier = Modifier.fillMaxWidth().height(400.dp),
                 maxLines = 100,
                 singleLine = false,
+                textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, color = DarkText),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = DarkText,
                     unfocusedTextColor = DarkText,
@@ -1562,7 +1563,6 @@ private fun MemoryEditorDialog(initialText: String, onSave: (String) -> Unit, on
         }
     )
 }
-
 @Composable
 private fun ImagePreview(imagePath: String) {
     Card(
@@ -1699,27 +1699,47 @@ private fun ModelPickerDialog(
     val context = LocalContext.current
 
     Dialog(onDismissRequest = onDismiss) {
-        Card(
-            colors = CardDefaults.cardColors(containerColor = SurfaceGray),
-            border = BorderStroke(1.dp, BorderGray),
-            shape = RoundedCornerShape(16.dp)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .border(1.dp, BorderGray, RoundedCornerShape(16.dp))
         ) {
-            Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            // Фон — матрица
+            AndroidView(
+                factory = { matrixContext ->
+                    MatrixChatBackground(matrixContext)
+                },
+                modifier = Modifier.matchParentSize()
+            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(SurfaceGray.copy(alpha = 0.3f))
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
                     Text(
                         text = "🤖",
-                        fontSize = 28.sp
+                        fontSize = 24.sp
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         "Настройка ИИ",
-                        style = MaterialTheme.typography.headlineSmall,
+                        style = MaterialTheme.typography.titleMedium,
                         color = AccentColor,
                         fontFamily = FontFamily.Monospace
                     )
                 }
 
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     Text("Языковая модель", color = DarkText, fontSize = 14.sp)
                     val displayModelPath = currentModelPath?.substringAfterLast("/")?.replace("primary%3AModels%", "") ?: "Не выбрана"
                     Text(
@@ -1730,7 +1750,7 @@ private fun ModelPickerDialog(
                     )
                     Button(
                         onClick = onPickModel,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth(0.7f),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = AccentColor,
                             contentColor = DarkText
@@ -1741,12 +1761,16 @@ private fun ModelPickerDialog(
                         Text(
                             text = if (currentModelPath != null) "Изменить модель" else "Выбрать модель",
                             color = DarkText,
-                            fontSize = 14.sp
+                            fontSize = 13.sp
                         )
                     }
                 }
 
-                Column(modifier = Modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     Text("Мультимодальный проектор", color = DarkText, fontSize = 14.sp)
                     val displayMmprojPath = mmprojPath?.substringAfterLast("/")?.replace("primary%3AModels%", "") ?: "Не выбран"
                     Text(
@@ -1757,7 +1781,7 @@ private fun ModelPickerDialog(
                     )
                     Button(
                         onClick = onPickMmproj,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth(0.7f),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = AccentColor,
                             contentColor = DarkText
@@ -1768,7 +1792,7 @@ private fun ModelPickerDialog(
                         Text(
                             text = if (mmprojPath != null) "Изменить проектор" else "Выбрать проектор",
                             color = DarkText,
-                            fontSize = 14.sp
+                            fontSize = 13.sp
                         )
                     }
                 }
@@ -1776,7 +1800,7 @@ private fun ModelPickerDialog(
                 Button(
                     onClick = onLoad,
                     enabled = currentModelPath != null,
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    modifier = Modifier.fillMaxWidth(0.7f),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = AccentColor,
                         contentColor = DarkText,
@@ -1786,7 +1810,7 @@ private fun ModelPickerDialog(
                     shape = RoundedCornerShape(12.dp),
                     border = BorderStroke(1.dp, BorderGray)
                 ) {
-                    Text("Запустить нейросеть", color = DarkText, fontSize = 14.sp)
+                    Text("Запустить нейросеть", color = DarkText, fontSize = 13.sp)
                 }
 
                 Button(
@@ -1794,7 +1818,7 @@ private fun ModelPickerDialog(
                         val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://huggingface.co/AnkitAI/Parable-Granite-4.1-3B-Claude-Fable-5-GGUF/resolve/main/Parable-Granite-4.1-3B-Claude-Fable-5-GGUF-Q6_K.gguf"))
                         context.startActivity(intent)
                     },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth(0.7f),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = AccentColor,
                         contentColor = DarkText
@@ -1802,12 +1826,12 @@ private fun ModelPickerDialog(
                     shape = RoundedCornerShape(12.dp),
                     border = BorderStroke(1.dp, BorderGray)
                 ) {
-                    Text("⬇ Скачать модель", color = DarkText, fontSize = 14.sp)
+                    Text("⬇ Скачать модель", color = DarkText, fontSize = 13.sp)
                 }
 
                 Button(
                     onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                    modifier = Modifier.fillMaxWidth(0.7f),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = AccentColor,
                         contentColor = DarkText
@@ -1815,7 +1839,7 @@ private fun ModelPickerDialog(
                     shape = RoundedCornerShape(12.dp),
                     border = BorderStroke(1.dp, BorderGray)
                 ) {
-                    Text("Отмена", color = DarkText, fontSize = 14.sp)
+                    Text("Отмена", color = DarkText, fontSize = 13.sp)
                 }
             }
         }
