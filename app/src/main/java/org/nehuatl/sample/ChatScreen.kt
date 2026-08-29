@@ -1275,25 +1275,35 @@ private fun CloudAIDialog(
     onGenerateToken: () -> Unit,
     isGeneratingToken: Boolean
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = "☁️ Настройки облачного ИИ",
-                style = MaterialTheme.typography.titleLarge,
-                color = DarkText
-            )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = SurfaceGray),
+            border = BorderStroke(1.dp, BorderGray),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                    Text(
+                        text = "☁️",
+                        fontSize = 24.sp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "Настройки облачного ИИ",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = AccentColor,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+
                 Text(
                     text = "Введите данные для подключения к облачному ИИ",
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = DarkText
                 )
 
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("🔵 GigaChat", color = DarkText)
+                    Text("🔵 GigaChat", color = DarkText, fontSize = 14.sp)
                     Switch(
                         checked = isGigaChat,
                         onCheckedChange = onIsGigaChatChange,
@@ -1304,18 +1314,19 @@ private fun CloudAIDialog(
                             uncheckedTrackColor = BorderGray.copy(alpha = 0.5f)
                         )
                     )
-                    Text("🌐 Другой провайдер", color = DarkText)
+                    Text("🌐 Другой провайдер", color = DarkText, fontSize = 14.sp)
                 }
 
                 OutlinedTextField(
                     value = apiUrl,
                     onValueChange = onApiUrlChange,
-                    label = { Text("API URL", color = DarkText) },
+                    label = { Text("API URL", color = DarkText, fontSize = 14.sp) },
                     placeholder = {
                         Text(
                             if (isGigaChat) "https://gigachat.devices.sberbank.ru/api/v1/chat/completions"
                             else "https://openrouter.ai/api/v1/chat/completions",
-                            color = DarkText.copy(alpha = 0.5f)
+                            color = DarkText.copy(alpha = 0.5f),
+                            fontSize = 12.sp
                         )
                     },
                     modifier = Modifier.fillMaxWidth(),
@@ -1336,14 +1347,16 @@ private fun CloudAIDialog(
                         Text(
                             if (isGigaChat) "Authorization Key (Client Secret)"
                             else "API Key",
-                            color = DarkText
+                            color = DarkText,
+                            fontSize = 14.sp
                         )
                     },
                     placeholder = {
                         Text(
                             if (isGigaChat) "Введите ключ из Сбер Студии"
                             else "Введите ваш API ключ",
-                            color = DarkText.copy(alpha = 0.5f)
+                            color = DarkText.copy(alpha = 0.5f),
+                            fontSize = 12.sp
                         )
                     },
                     modifier = Modifier.fillMaxWidth(),
@@ -1361,19 +1374,24 @@ private fun CloudAIDialog(
                     onClick = onGenerateToken,
                     enabled = !isGeneratingToken && authKey.isNotBlank(),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (authKey.isNotBlank()) AccentColor else BorderGray
+                        containerColor = AccentColor,
+                        contentColor = DarkText,
+                        disabledContainerColor = BorderGray,
+                        disabledContentColor = DarkText.copy(alpha = 0.5f)
                     ),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, BorderGray),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     if (isGeneratingToken) {
                         CircularProgressIndicator(modifier = Modifier.size(20.dp), color = DarkText, strokeWidth = 2.dp)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Получение токена...", color = DarkText)
+                        Text("Получение токена...", color = DarkText, fontSize = 14.sp)
                     } else {
                         Text(
                             text = if (isCloudReady) "✅ Токен подключен" else if (isGigaChat) "🔑 Получить токен" else "🔑 Установить ключ",
-                            color = if (isCloudReady) GreenColor else DarkText,
-                            fontWeight = if (isCloudReady) FontWeight.Bold else FontWeight.Normal
+                            color = DarkText,
+                            fontSize = 14.sp
                         )
                     }
                 }
@@ -1385,80 +1403,85 @@ private fun CloudAIDialog(
                         fontSize = 12.sp
                     )
                 }
-            }
-        },
-        confirmButton = {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
+
+                Row(
                     modifier = Modifier
-                        .size(12.dp)
-                        .background(
-                            color = if (isCloudReady) GreenColor else Color.Red,
-                            shape = CircleShape
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(12.dp)
+                            .background(
+                                color = if (isCloudReady) GreenColor else Color.Red,
+                                shape = CircleShape
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = if (isCloudReady) GreenColor else Color.Red,
+                                shape = CircleShape
+                            )
+                    )
+
+                    Button(
+                        onClick = onSave,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = AccentColor,
+                            contentColor = DarkText
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, BorderGray),
+                        modifier = Modifier.weight(1f).height(36.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                    ) {
+                        Text(
+                            text = "Сохранить",
+                            color = DarkText,
+                            fontSize = 12.sp
                         )
-                        .border(
-                            width = 1.dp,
-                            color = if (isCloudReady) GreenColor else Color.Red,
-                            shape = CircleShape
+                    }
+
+                    Button(
+                        onClick = onClear,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = AccentColor,
+                            contentColor = DarkText
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, BorderGray),
+                        modifier = Modifier.weight(1f).height(36.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                    ) {
+                        Text(
+                            text = "Очистить",
+                            color = DarkText,
+                            fontSize = 12.sp
                         )
-                )
+                    }
 
-                Button(
-                    onClick = onSave,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = AccentColor
-                    ),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                    modifier = Modifier.height(28.dp)
-                ) {
-                    Text(
-                        text = "Сохранить",
-                        color = DarkText,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-
-                Button(
-                    onClick = onClear,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = AccentColor
-                    ),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                    modifier = Modifier.height(28.dp)
-                ) {
-                    Text(
-                        text = "Очистить",
-                        color = DarkText,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-
-                Button(
-                    onClick = onDismiss,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = AccentColor
-                    ),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                    modifier = Modifier.height(28.dp)
-                ) {
-                    Text(
-                        text = "Закрыть",
-                        color = DarkText,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                    Button(
+                        onClick = onDismiss,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = AccentColor,
+                            contentColor = DarkText
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, BorderGray),
+                        modifier = Modifier.weight(1f).height(36.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                    ) {
+                        Text(
+                            text = "Закрыть",
+                            color = DarkText,
+                            fontSize = 12.sp
+                        )
+                    }
                 }
             }
         }
-    )
+    }
 }
 
 @Composable
@@ -1682,16 +1705,22 @@ private fun ModelPickerDialog(
             shape = RoundedCornerShape(16.dp)
         ) {
             Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(
-                    "Настройка ИИ",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = DarkText,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontFamily = FontFamily.Monospace
-                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                    Text(
+                        text = "🤖",
+                        fontSize = 28.sp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "Настройка ИИ",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = AccentColor,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Языковая модель", color = DarkText, fontWeight = FontWeight.Bold)
+                    Text("Языковая модель", color = DarkText, fontSize = 14.sp)
                     val displayModelPath = currentModelPath?.substringAfterLast("/")?.replace("primary%3AModels%", "") ?: "Не выбрана"
                     Text(
                         text = "Текущая модель: $displayModelPath",
@@ -1706,18 +1735,19 @@ private fun ModelPickerDialog(
                             containerColor = AccentColor,
                             contentColor = DarkText
                         ),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, BorderGray)
                     ) {
                         Text(
                             text = if (currentModelPath != null) "Изменить модель" else "Выбрать модель",
                             color = DarkText,
-                            fontWeight = FontWeight.Bold
+                            fontSize = 14.sp
                         )
                     }
                 }
 
                 Column(modifier = Modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Мультимодальный проектор", color = DarkText, fontWeight = FontWeight.Bold)
+                    Text("Мультимодальный проектор", color = DarkText, fontSize = 14.sp)
                     val displayMmprojPath = mmprojPath?.substringAfterLast("/")?.replace("primary%3AModels%", "") ?: "Не выбран"
                     Text(
                         text = "Текущий проектор: $displayMmprojPath",
@@ -1732,12 +1762,13 @@ private fun ModelPickerDialog(
                             containerColor = AccentColor,
                             contentColor = DarkText
                         ),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, BorderGray)
                     ) {
                         Text(
                             text = if (mmprojPath != null) "Изменить проектор" else "Выбрать проектор",
                             color = DarkText,
-                            fontWeight = FontWeight.Bold
+                            fontSize = 14.sp
                         )
                     }
                 }
@@ -1752,9 +1783,10 @@ private fun ModelPickerDialog(
                         disabledContainerColor = BorderGray,
                         disabledContentColor = DarkText.copy(alpha = 0.5f)
                     ),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, BorderGray)
                 ) {
-                    Text("Запустить нейросеть", color = DarkText, fontWeight = FontWeight.ExtraBold)
+                    Text("Запустить нейросеть", color = DarkText, fontSize = 14.sp)
                 }
 
                 Button(
@@ -1764,22 +1796,31 @@ private fun ModelPickerDialog(
                     },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF00B4D8),
-                        contentColor = Color.White
+                        containerColor = AccentColor,
+                        contentColor = DarkText
                     ),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, BorderGray)
                 ) {
-                    Text("⬇ Скачать модель", color = DarkText, fontWeight = FontWeight.ExtraBold)
+                    Text("⬇ Скачать модель", color = DarkText, fontSize = 14.sp)
                 }
 
-                TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-                    Text("Отмена", color = AccentColor, fontWeight = FontWeight.Bold)
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AccentColor,
+                        contentColor = DarkText
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, BorderGray)
+                ) {
+                    Text("Отмена", color = DarkText, fontSize = 14.sp)
                 }
             }
         }
     }
 }
-
 @Composable
 private fun PromptInput(
     prompt: String,
