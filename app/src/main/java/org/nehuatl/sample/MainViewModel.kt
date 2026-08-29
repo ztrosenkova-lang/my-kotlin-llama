@@ -790,7 +790,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         val categories = mapOf(
             "[ПАРОЛЬ]" to listOf("пароль", "логин", "доступ", "код", "пин", "секрет", "ключ"),
             "[КОНТАКТ]" to listOf("телефон", "номер", "контакт", "позвонить", "мобильный", "вотсап", "телеграм"),
-            "[ПРАЙС]" to listOf("руб", "цена", "стоимость", "прайс", "оплата", "расчёт", "скидка", "тариф", "металл", "труба", "профиль", "лист"),
+            "[ПРАЙС]" to listOf("руб", "₽", "цена", "стоимость", "прайс", "оплата", "расчёт", "скидка", "тариф", "кг", "тонна", "метр", "штука", "шт", "лист", "труба", "профиль", "металл", "диск", "уголок", "швеллер", "арматура"),
             "[ИНСТРУКЦИЯ]" to listOf("как", "инструкция", "алгоритм", "пошагово", "руководство", "порядок", "действия"),
             "[АДРЕС]" to listOf("адрес", "улица", "город", "метро", "район", "дом"),
             "[ДАТА]" to listOf("дата", "время", "встреча", "напоминание", "дедлайн")
@@ -847,6 +847,26 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         appendSystemMessage("🧠 Запомнено: $text")
     }
 
+    private fun getCategorySection(category: String): String {
+        val fullMemory = readFromLongTermMemory()
+        if (fullMemory.isEmpty()) return ""
+
+        val lines = fullMemory.split("\n")
+        val categoryIndex = lines.indexOfFirst { it.trim() == category }
+        if (categoryIndex == -1) return ""
+
+        val sectionLines = mutableListOf<String>()
+        var i = categoryIndex + 1
+        while (i < lines.size && !CATEGORIES.any { lines[i].trim().startsWith(it) }) {
+            if (lines[i].isNotBlank()) {
+                sectionLines.add(lines[i])
+            }
+            i++
+        }
+
+        return sectionLines.joinToString("\n")
+    }
+
     private fun searchMemory(query: String, category: String? = null): String {
         val fullMemory = readFromLongTermMemory()
         if (fullMemory.isEmpty()) return ""
@@ -866,14 +886,39 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 }
 
                 val keywords = extractKeywords(query)
-                return if (keywords.isNotEmpty()) {
-                    sectionLines.filter { line ->
-                        val lowerLine = line.lowercase()
-                        keywords.any { keyword -> lowerLine.contains(keyword) }
-                    }.joinToString("\n")
-                } else {
-                    sectionLines.joinToString("\n")
+                if (keywords.isEmpty()) return sectionLines.joinToString("\n")
+
+                // Ищем подкатегорию — строку без цифр и цен, похожую на заголовок
+                val matchedIndices = sectionLines.indices.filter { idx ->
+                    val line = sectionLines[idx].lowercase()
+                    keywords.any { keyword -> line.contains(keyword) }
                 }
+
+                if (matchedIndices.isEmpty()) return ""
+
+                // Берём первое совпадение
+                val startIdx = matchedIndices.first()
+                val resultLines = mutableListOf<String>()
+
+                // Если совпавшая строка — подзаголовок (без цифр), берём её и всё после до следующего подзаголовка
+                resultLines.add(sectionLines[startIdx])
+
+                var j = startIdx + 1
+                while (j < sectionLines.size) {
+                    val line = sectionLines[j]
+                    val hasDigits = line.any { it.isDigit() }
+                    if (!hasDigits && keywords.any { keyword -> line.lowercase().contains(keyword) } && j > startIdx + 1) {
+                        break
+                    }
+                    if (j == startIdx + 1 && !hasDigits && !keywords.any { keyword -> line.lowercase().contains(keyword) }) {
+                        // это может быть следующий подзаголовок — останавливаемся
+                        break
+                    }
+                    resultLines.add(line)
+                    j++
+                }
+
+                return resultLines.joinToString("\n")
             }
         }
 
@@ -986,14 +1031,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ (категория $queryCategory):\n$filteredMemory\n\n")
                         append("Пользователь просит найти информацию в базе знаний. Изучи найденные факты выше и используй их для ответа.")
                     } else {
-                        val fullMemory = readFromLongTermMemory()
-                        if (fullMemory.isNotEmpty()) {
-                            append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ (memory.txt):\n$fullMemory\n\n")
-                            append("Пользователь просит найти информацию в базе знаний. Изучи ВСЮ базу знаний выше и найди то, что относится к запросу пользователя.")
-                        } else {
-                            append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ: пусто.\n\n")
-                            append("Пользователь просит найти информацию, но база знаний пуста. Честно скажи об этом.")
-                        }
+                        append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ: подходящих фактов не найдено.\n\n")
+                        append("Честно скажи, что в базе знаний нет информации по запросу, и попроси пользователя перефразировать запрос.")
                     }
                 }
             }
@@ -1029,7 +1068,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     if (memoryData.isNotEmpty()) {
                         appendSystemMessage("🔍 Найдено в категории $queryCategory:\n$memoryData")
                     } else {
-                        appendSystemMessage("🔍 Ничего не найдено по запросу '$text'")
+                        appendSystemMessage("🔍 Ничего не найдено. Перефразируйте запрос.")
                     }
                     return
                 }
