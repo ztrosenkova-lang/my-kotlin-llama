@@ -816,33 +816,29 @@ fun ThinkingRobotAnimation(
     val transition = rememberInfiniteTransition(label = "thinking_robot")
 
     val phase by transition.animateFloat(
-        initialValue = 0f, targetValue = 6.28318f,
+        initialValue = 0f,
+        targetValue = 6.28318f,
         animationSpec = infiniteRepeatable(
-            animation = tween(2000, LinearEasing),
-            repeatMode = RepeatMode.Restart
+            animation = tween(durationMillis = 2000, easing = LinearEasing)
         ),
         label = "phase"
     )
+
     val gearAngle by transition.animateFloat(
-        initialValue = 0f, targetValue = 360f,
+        initialValue = 0f,
+        targetValue = 360f,
         animationSpec = infiniteRepeatable(
-            animation = tween(4000, LinearEasing),
-            repeatMode = RepeatMode.Restart
+            animation = tween(durationMillis = 4000, easing = LinearEasing)
         ),
         label = "gear"
     )
+
     val blink by transition.animateFloat(
-        initialValue = 1f, targetValue = 1f,
+        initialValue = 1f,
+        targetValue = 0.1f,
         animationSpec = infiniteRepeatable(
-            animation = keyframes {
-                durationMillis = 3600
-                1f at 0
-                1f at 3200
-                0.1f at 3350
-                1f at 3500
-                1f at 3600
-            },
-            repeatMode = RepeatMode.Restart
+            animation = tween(durationMillis = 200, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
         ),
         label = "blink"
     )
@@ -860,8 +856,10 @@ fun ThinkingRobotAnimation(
         val compW = 71f * u
         val ox = (size.width - compW) / 2f
 
-        val headL = ox + 1f * u; val headT = 8.5f * u
-        val headW = 14f * u;  val headH = 11f * u
+        val headL = ox + 1f * u
+        val headT = 8.5f * u
+        val headW = 14f * u
+        val headH = 11f * u
         val cx = headL + headW / 2
 
         drawLine(green, Offset(cx, headT), Offset(cx, 4.5f * u), strokeWidth = 1.2f * u)
@@ -888,6 +886,7 @@ fun ThinkingRobotAnimation(
             size = Size(domeR * 2, domeR * 2),
             style = Stroke(0.8f * u)
         )
+
         val domeC = Offset(cx, headT + 0.5f * u)
         val br = 3f * u * (1f + 0.10f * sin(finalPhase * 1.5f))
         drawCircle(accent.copy(alpha = 0.35f), br, domeC - Offset(0f, 2.2f * u))
@@ -900,6 +899,7 @@ fun ThinkingRobotAnimation(
             size = Size(headW, headH),
             cornerRadius = CornerRadius(3f * u)
         )
+
         val eyeH = (3.2f * finalBlink).coerceAtLeast(0.4f) * u
         for (s in listOf(-1f, 1f)) {
             drawOval(
@@ -934,7 +934,12 @@ fun ThinkingRobotAnimation(
 }
 
 private fun DrawScope.drawGear(
-    center: Offset, radius: Float, color: Color, angle: Float, holeColor: Color, teeth: Int = 8
+    center: Offset,
+    radius: Float,
+    color: Color,
+    angle: Float,
+    holeColor: Color,
+    teeth: Int = 8
 ) {
     rotate(angle, pivot = center) {
         val toothW = radius * 0.38f
