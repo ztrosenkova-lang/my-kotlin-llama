@@ -122,6 +122,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.Brush
 
 private val AppBackground = Color(0xFFFFFFFF)
 private val SurfaceGray = Color(0xFFF1F3F5)
@@ -813,22 +814,35 @@ fun ThinkingRobotAnimation(
     val transition = rememberInfiniteTransition(label = "thinking_robot")
 
     val phase by transition.animateFloat(
-        initialValue = 0f, targetValue = (2.0 * PI).toFloat(),
-        animationSpec = infiniteRepeatable(tween(2400, LinearEasing), RepeatMode.Restart),
+        initialValue = 0f,
+        targetValue = (2.0 * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2400, easing = LinearEasing)
+        ),
         label = "phase"
     )
+
     val pulse by transition.animateFloat(
-        initialValue = 0f, targetValue = (2.0 * PI).toFloat(),
-        animationSpec = infiniteRepeatable(tween(1500, LinearEasing), RepeatMode.Restart),
+        initialValue = 0f,
+        targetValue = (2.0 * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1500, easing = LinearEasing)
+        ),
         label = "pulse"
     )
+
     val bob by transition.animateFloat(
-        initialValue = 0f, targetValue = (2.0 * PI).toFloat(),
-        animationSpec = infiniteRepeatable(tween(3200, LinearEasing), RepeatMode.Restart),
+        initialValue = 0f,
+        targetValue = (2.0 * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 3200, easing = LinearEasing)
+        ),
         label = "bob"
     )
+
     val blink by transition.animateFloat(
-        initialValue = 1f, targetValue = 1f,
+        initialValue = 1f,
+        targetValue = 1f,
         animationSpec = infiniteRepeatable(
             animation = keyframes {
                 durationMillis = 3600
@@ -837,8 +851,7 @@ fun ThinkingRobotAnimation(
                 0.08f at 3350
                 1f at 3500
                 1f at 3600
-            },
-            repeatMode = RepeatMode.Restart
+            }
         ),
         label = "blink"
     )
@@ -873,7 +886,8 @@ fun ThinkingRobotAnimation(
             if (radius <= 0f) return
             drawCircle(
                 Brush.radialGradient(listOf(color, color.copy(alpha = 0f)), center, radius),
-                radius, center
+                radius,
+                center
             )
         }
 
@@ -911,8 +925,12 @@ fun ThinkingRobotAnimation(
         val domeTL = Offset(domeC.x - domeR, domeC.y - domeR)
         val domeSize = Size(domeR * 2f, domeR * 2f)
         drawArc(
-            Color(0xFFBFE9F2).copy(alpha = 0.14f), 180f, 180f, true,
-            topLeft = domeTL, size = domeSize
+            Color(0xFFBFE9F2).copy(alpha = 0.14f),
+            180f,
+            180f,
+            true,
+            topLeft = domeTL,
+            size = domeSize
         )
 
         // ================= Мозг =================
@@ -936,7 +954,10 @@ fun ThinkingRobotAnimation(
             54f to 33f, 41f to 36f, 59f to 36f
         ).forEach { (x, y) ->
             drawArc(
-                brainDark, 200f, 140f, false,
+                brainDark,
+                200f,
+                140f,
+                false,
                 topLeft = bp(x - 3f, y - 3f),
                 size = Size(6f * s * u, 6f * s * u),
                 style = Stroke(1.1f * u)
@@ -947,21 +968,24 @@ fun ThinkingRobotAnimation(
         rotate(-16f, pivot = pt(50f, 38f)) {
             drawOval(
                 cyan.copy(alpha = 0.55f),
-                topLeft = pt(28f, 30.5f), size = Size(44f * u, 15f * u),
+                topLeft = pt(28f, 30.5f),
+                size = Size(44f * u, 15f * u),
                 style = Stroke(0.7f * u)
             )
         }
         rotate(12f, pivot = pt(50f, 38f)) {
             drawOval(
                 cyan.copy(alpha = 0.45f),
-                topLeft = pt(29.5f, 31.5f), size = Size(41f * u, 13f * u),
+                topLeft = pt(29.5f, 31.5f),
+                size = Size(41f * u, 13f * u),
                 style = Stroke(0.7f * u)
             )
         }
 
         fun orbitPos(rx: Float, ry: Float, rotDeg: Float, a: Float): Offset {
             val r = rotDeg * (PI / 180.0).toFloat()
-            val cr = cos(r); val sr = sin(r)
+            val cr = cos(r)
+            val sr = sin(r)
             val x = cos(a) * rx
             val y = sin(a) * ry
             return pt(50f + x * cr - y * sr, 38f + x * sr + y * cr)
@@ -978,11 +1002,19 @@ fun ThinkingRobotAnimation(
 
         // ================= Купол: ободок и блик =================
         drawArc(
-            Color(0xFFDFF7FC).copy(alpha = 0.6f), 180f, 180f, false,
-            topLeft = domeTL, size = domeSize, style = Stroke(1.1f * u)
+            Color(0xFFDFF7FC).copy(alpha = 0.6f),
+            180f,
+            180f,
+            false,
+            topLeft = domeTL,
+            size = domeSize,
+            style = Stroke(1.1f * u)
         )
         drawArc(
-            Color.White.copy(alpha = 0.8f), 195f, 45f, false,
+            Color.White.copy(alpha = 0.8f),
+            195f,
+            45f,
+            false,
             topLeft = Offset(domeC.x - domeR + 2.5f * u, domeC.y - domeR + 2.5f * u),
             size = Size(domeR * 2f - 5f * u, domeR * 2f - 5f * u),
             style = Stroke(1.6f * u)
@@ -1001,26 +1033,27 @@ fun ThinkingRobotAnimation(
             val ec = pt(50f + sx * 9.5f, 61f)
             val ry = 7f * u * finalBlink
             glow(ec, 8f * u, cyan.copy(alpha = 0.30f))
-            drawEllipse(
+            drawOval(
                 eyeDark,
                 topLeft = Offset(ec.x - 5f * u, ec.y - ry),
                 size = Size(10f * u, ry * 2f)
             )
             val iry = 5.8f * u * finalBlink
-            drawEllipse(
+            drawOval(
                 Brush.verticalGradient(listOf(cyanSoft, cyan)),
                 topLeft = Offset(ec.x - 3.8f * u, ec.y - iry),
                 size = Size(7.6f * u, iry * 2f)
             )
             if (finalBlink > 0.3f) {
                 drawCircle(
-                    Color.White.copy(alpha = 0.9f * finalBlink), 1.3f * u,
+                    Color.White.copy(alpha = 0.9f * finalBlink),
+                    1.3f * u,
                     Offset(ec.x - 1.6f * u, ec.y - 2.5f * u * finalBlink)
                 )
             }
         }
 
-        // ================= Рот с точными высотами =================
+        // ================= Рот =================
         val mouthHeights = listOf(0.2f, 0.35f, 0.5f, 0.35f, 0.2f)
         for (i in 0..4) {
             val baseH = mouthHeights[i] * 7f * u
@@ -1209,20 +1242,17 @@ private fun TopBarWithSwitch(
         )
 
         Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight(),
-            contentAlignment = Alignment.Center
-        ) {
-            ThinkingRobotAnimation(
-                accent = AccentColor,
-                green = GreenColor,
-                surface = SurfaceGray,
-                height = 36.dp,
-                isActive = isGenerating,
-                modifier = Modifier.fillMaxWidth(0.9f)
-            )
-        }
+    modifier = Modifier
+        .weight(1f)
+        .fillMaxHeight(),
+    contentAlignment = Alignment.Center
+) {
+    ThinkingRobotAnimation(
+        height = 36.dp,
+        isActive = isGenerating,
+        modifier = Modifier.fillMaxWidth(0.9f)
+    )
+}
 
         Column(
             modifier = Modifier
