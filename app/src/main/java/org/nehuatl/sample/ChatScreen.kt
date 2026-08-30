@@ -441,9 +441,10 @@ LaunchedEffect(isSpeaking) {
                 else -> "☁️ Облако: Готово к работе"
             }
         }
-        else -> "🤖 ИИ выгружен"
+           else -> "🤖 ИИ выгружен"
     },
-    isGenerating = state.isActive() || cloudState.isActive()
+    isGenerating = state.isActive() || cloudState.isActive(),
+    isSpeaking = isSpeaking
 )
 
         ControlPanel(
@@ -808,8 +809,9 @@ private fun VoiceWaveAnimation(
 @Composable
 fun ThinkingRobotAnimation(
     modifier: Modifier = Modifier,
-    height: Dp = 80.dp,
+    height: Dp = 95.dp,
     isActive: Boolean = true,
+    isSpeaking: Boolean = false,
 ) {
     val transition = rememberInfiniteTransition(label = "thinking_robot")
 
@@ -876,7 +878,7 @@ fun ThinkingRobotAnimation(
         val brainDark = Color(0xFFD67E93)
         val orange = Color(0xFFF89B3C)
 
-        val u = size.height / 67f
+        val u = size.height / 50f
         val offX = (size.width - 100f * u) / 2f
         val offY = (size.height - 100f * u) / 2f + 1.2f * u * sin(finalBob)
 
@@ -1054,7 +1056,11 @@ drawArc(
        val mouthHeights = listOf(0.5f, 0.35f, 0.2f, 0.35f, 0.5f)
 for (i in 0..4) {
     val baseH = mouthHeights[i] * 7f * u
-    val h = baseH * (0.7f + 0.3f * sin(finalPhase * 2f + i * 1.1f))
+    val h = if (isSpeaking) {
+        baseH * (0.7f + 0.3f * sin(finalPhase * 2f + i * 1.1f))
+    } else {
+        baseH
+    }
     val x = 50f + (i - 2) * 2.6f
     drawRoundRect(
         cyan,
@@ -1212,7 +1218,8 @@ private fun TopBarWithSwitch(
     onCloudForceDialog: () -> Unit,
     onLocalForceDialog: () -> Unit,
     statusText: String = "",
-    isGenerating: Boolean = false
+    isGenerating: Boolean = false,
+    isSpeaking: Boolean = false
 ) {
     val isLocalReady = isModelLoaded
     val isCloudReady = cloudConfig?.authKey?.isNotEmpty() == true
@@ -1228,15 +1235,30 @@ private fun TopBarWithSwitch(
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Image(
-            painter = painterResource(id = R.mipmap.ic_launcher),
-            contentDescription = "Лого",
-            modifier = Modifier
-                .size(56.dp)
-                .padding(end = 8.dp)
-                .clip(RoundedCornerShape(12.dp)),
-            contentScale = ContentScale.Crop
-        )
+       Column(
+    modifier = Modifier
+        .width(56.dp)
+        .fillMaxHeight(),
+    verticalArrangement = Arrangement.Top,
+    horizontalAlignment = Alignment.CenterHorizontally
+) {
+    Image(
+        painter = painterResource(id = R.mipmap.ic_launcher),
+        contentDescription = "Лого",
+        modifier = Modifier
+            .size(48.dp)
+            .clip(RoundedCornerShape(12.dp)),
+        contentScale = ContentScale.Crop
+    )
+    Spacer(modifier = Modifier.height(2.dp))
+    Text(
+        text = "ИИ-Друг",
+        color = AccentColor,
+        fontSize = 8.sp,
+        fontFamily = FontFamily.Monospace,
+        fontWeight = FontWeight.ExtraBold
+    )
+}
 
         Box(
     modifier = Modifier
@@ -1245,10 +1267,11 @@ private fun TopBarWithSwitch(
     contentAlignment = Alignment.Center
 ) {
     ThinkingRobotAnimation(
-        height = 36.dp,
-        isActive = isGenerating,
-        modifier = Modifier.fillMaxWidth(0.9f)
-    )
+    height = 95.dp,
+    isActive = isGenerating,
+    isSpeaking = isSpeaking,
+    modifier = Modifier.fillMaxWidth()
+)
 }
 
         Column(
