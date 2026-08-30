@@ -808,7 +808,7 @@ private fun VoiceWaveAnimation(
 @Composable
 fun ThinkingRobotAnimation(
     modifier: Modifier = Modifier,
-    height: Dp = 36.dp,
+    height: Dp = 60.dp,
     isActive: Boolean = true,
 ) {
     val transition = rememberInfiniteTransition(label = "thinking_robot")
@@ -907,11 +907,11 @@ fun ThinkingRobotAnimation(
         )
 
         // ================= Антенна =================
-        drawLine(metalDark, pt(69f, 52f), pt(76f, 31f), strokeWidth = 1.6f * u)
-        val orbP = 0.5f + 0.5f * sin(finalPulse * 2f)
-        glow(pt(76.5f, 28f), (6f + 2f * orbP) * u, orange.copy(alpha = 0.55f))
-        drawCircle(orange, (2.6f + 0.4f * orbP) * u, pt(76.5f, 28f))
-        drawCircle(Color(0xFFFFD9A6), 1f * u, pt(75.8f, 27f))
+        drawLine(metalDark, pt(24f, 52f), pt(24f, 28f), strokeWidth = 1.6f * u)
+val orbP = 0.5f + 0.5f * sin(finalPulse * 2f)
+glow(pt(24f, 25f), (6f + 2f * orbP) * u, orange.copy(alpha = 0.55f))
+drawCircle(orange, (2.6f + 0.4f * orbP) * u, pt(24f, 25f))
+drawCircle(Color(0xFFFFD9A6), 1f * u, pt(23.2f, 24f))
 
         // ================= Уши — круглые шайбы =================
         drawOval(metal, topLeft = pt(19f, 55f), size = Size(9f * u, 16f * u))
@@ -920,12 +920,12 @@ fun ThinkingRobotAnimation(
         drawOval(metalDark, topLeft = pt(74f, 58f), size = Size(4.5f * u, 10f * u))
 
         // ================= Купол =================
-        val domeC = pt(50f, 48f)
-        val domeR = 22f * u
+        val domeC = pt(50f, 46f)
+        val domeR = 26f * u
         val domeTL = Offset(domeC.x - domeR, domeC.y - domeR)
         val domeSize = Size(domeR * 2f, domeR * 2f)
         drawArc(
-            Color(0xFFBFE9F2).copy(alpha = 0.14f),
+            Color(0xFFBFE9F2).copy(alpha = 0.25f),
             180f,
             180f,
             true,
@@ -940,11 +940,11 @@ fun ThinkingRobotAnimation(
         glow(bp(50f, 38f), 16f * u, Color(0xFFE36F8C).copy(alpha = 0.35f))
 
         listOf(
-            Triple(43f, 39f, 9.5f), Triple(57f, 39f, 9.5f),
-            Triple(50f, 33f, 9f), Triple(50f, 42f, 8f),
-            Triple(37f, 42f, 6f), Triple(63f, 42f, 6f),
-            Triple(46f, 35f, 5f), Triple(54f, 35f, 5f),
-            Triple(40f, 37f, 5f), Triple(60f, 37f, 5f)
+            Triple(43f, 39f, 6.5f), Triple(57f, 39f, 9.5f),
+            Triple(50f, 33f, 6f), Triple(50f, 42f, 8f),
+            Triple(37f, 42f, 4f), Triple(63f, 42f, 6f),
+            Triple(46f, 35f, 3.5f), Triple(54f, 35f, 5f),
+            Triple(40f, 37f, 3.5f), Triple(60f, 37f, 5f)
         ).forEach { (x, y, r) -> drawCircle(brainPink, r * s * u, bp(x, y)) }
 
         listOf(
