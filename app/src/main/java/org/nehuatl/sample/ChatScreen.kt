@@ -868,9 +868,9 @@ fun ThinkingRobotAnimation(
             .height(height)
             .semantics { contentDescription = "ИИ обдумывает запрос" }
     ) {
-        val metalLight = Color(0xFF8C9EAB)
-        val metal = Color(0xFF5D6E82)
-        val metalDark = Color(0xFF42546A)
+        val metalLight = Color(0xFFD5DBE0)
+        val metal = Color(0xFFB0B8C0)
+        val metalDark = Color(0xFF8C98A5)
         val eyeDark = Color(0xFF0F3D4C)
         val cyan = Color(0xFF3FE3F5)
         val cyanSoft = Color(0xFFB9F6FF)
@@ -902,14 +902,14 @@ fun ThinkingRobotAnimation(
         drawCircle(metal, 8f * u, pt(29f, 87f))
         drawCircle(metal, 8f * u, pt(71f, 87f))
         drawRoundRect(
-            Color(0xFF334457),
+            Color(0xFF6B7A8A),
             topLeft = pt(42f, 73f),
             size = Size(16f * u, 6f * u),
             cornerRadius = CornerRadius(2f * u)
         )
 
         // ================= Антенна =================
-        drawLine(metalDark, pt(24f, 52f), pt(24f, 28f), strokeWidth = 1.6f * u)
+        drawLine(metalDark, pt(24f, 63f), pt(24f, 28f), strokeWidth = 1.6f * u)
 val orbP = 0.5f + 0.5f * sin(finalPulse * 2f)
 glow(pt(24f, 25f), (6f + 2f * orbP) * u, orange.copy(alpha = 0.55f))
 drawCircle(orange, (2.6f + 0.4f * orbP) * u, pt(24f, 25f))
@@ -1053,14 +1053,8 @@ drawArc(
         }
 
         // ================= Рот =================
-       val mouthHeights = listOf(0.5f, 0.35f, 0.2f, 0.35f, 0.5f)
 for (i in 0..4) {
-    val baseH = mouthHeights[i] * 7f * u
-    val h = if (isSpeaking) {
-        baseH * (0.7f + 0.3f * sin(finalPhase * 2f + i * 1.1f))
-    } else {
-        baseH
-    }
+    val h = (3f + 4f * (0.5f + 0.5f * sin(finalPhase * 3f + i * 1.1f))) * u
     val x = 50f + (i - 2) * 2.6f
     drawRoundRect(
         cyan,
@@ -1229,7 +1223,7 @@ private fun TopBarWithSwitch(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(80.dp)
+            .height(100.dp)
             .padding(4.dp)
             .border(1.dp, BorderGray, RoundedCornerShape(8.dp))
             .padding(horizontal = 8.dp),
@@ -1250,13 +1244,13 @@ private fun TopBarWithSwitch(
             .clip(RoundedCornerShape(12.dp)),
         contentScale = ContentScale.Crop
     )
-    Spacer(modifier = Modifier.height(2.dp))
     Text(
         text = "ИИ-Друг",
         color = AccentColor,
         fontSize = 8.sp,
         fontFamily = FontFamily.Monospace,
-        fontWeight = FontWeight.ExtraBold
+        fontWeight = FontWeight.ExtraBold,
+        modifier = Modifier.padding(top = 0.dp)
     )
 }
 
