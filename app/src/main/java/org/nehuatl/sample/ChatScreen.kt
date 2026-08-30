@@ -2418,7 +2418,7 @@ private fun PromptInput(
                             memoryInfoText.contains("Занято") && memoryInfoText.contains("ГБ") -> {
                                 val usedGb = Regex("Занято ([\\d.]+)").find(memoryInfoText)?.groupValues?.get(1)?.toFloatOrNull() ?: 0f
                                 val totalGb = Regex("Всего доступно ([\\d.]+)").find(memoryInfoText)?.groupValues?.get(1)?.toFloatOrNull() ?: 1f
-                                if (totalGb > 0f && (usedGb / totalGb) > 0.95f) Color.Red else GreenColor
+                                if (totalGb > 0f && (usedGb / totalGb) > 0.85f) Color.Red else GreenColor
                             }
                             else -> GreenColor
                         }
