@@ -1054,18 +1054,18 @@ drawArc(
         }
 
         // ================= Рот =================
-        val mouthHeights = listOf(0.2f, 0.35f, 0.5f, 0.35f, 0.2f)
-        for (i in 0..4) {
-            val baseH = mouthHeights[i] * 7f * u
-            val h = baseH * (0.7f + 0.3f * sin(finalPhase * 2f + i * 1.1f))
-            val x = 50f + (i - 2) * 2.6f
-            drawRoundRect(
-                cyan,
-                topLeft = Offset(offX + (x - 0.7f) * u, offY + 72f * u - h),
-                size = Size(1.4f * u, h),
-                cornerRadius = CornerRadius(0.7f * u)
-            )
-        }
+       val mouthHeights = listOf(0.5f, 0.35f, 0.2f, 0.35f, 0.5f)
+for (i in 0..4) {
+    val baseH = mouthHeights[i] * 7f * u
+    val h = baseH * (0.7f + 0.3f * sin(finalPhase * 2f + i * 1.1f))
+    val x = 50f + (i - 2) * 2.6f
+    drawRoundRect(
+        cyan,
+        topLeft = Offset(offX + (x - 0.7f) * u, offY + 73f * u - h),
+        size = Size(1.4f * u, h),
+        cornerRadius = CornerRadius(0.7f * u)
+    )
+}
     }
 }
 private fun DrawScope.drawGear(
