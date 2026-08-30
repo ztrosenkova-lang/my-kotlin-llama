@@ -115,12 +115,13 @@ import kotlin.math.abs
 import kotlin.math.sin
 import kotlin.math.cos
 import androidx.compose.animation.core.keyframes
-import androidx.compose.ui.drawscope.rotate
 import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.rotate
 
 private val AppBackground = Color(0xFFFFFFFF)
 private val SurfaceGray = Color(0xFFF1F3F5)
@@ -816,12 +817,18 @@ fun ThinkingRobotAnimation(
 
     val phase by transition.animateFloat(
         initialValue = 0f, targetValue = 6.28318f,
-        animationSpec = infiniteRepeatable(tween(2000, LinearEasing), RepeatMode.Restart),
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
         label = "phase"
     )
     val gearAngle by transition.animateFloat(
         initialValue = 0f, targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(4000, LinearEasing), RepeatMode.Restart),
+        animationSpec = infiniteRepeatable(
+            animation = tween(4000, LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
         label = "gear"
     )
     val blink by transition.animateFloat(
@@ -829,7 +836,11 @@ fun ThinkingRobotAnimation(
         animationSpec = infiniteRepeatable(
             animation = keyframes {
                 durationMillis = 3600
-                1f at 0; 1f at 3200; 0.1f at 3350; 1f at 3500; 1f at 3600
+                1f at 0
+                1f at 3200
+                0.1f at 3350
+                1f at 3500
+                1f at 3600
             },
             repeatMode = RepeatMode.Restart
         ),
@@ -860,22 +871,41 @@ fun ThinkingRobotAnimation(
 
         val domeR = 5f * u
         val domeTL = Offset(cx - domeR, headT + 0.5f * u - domeR)
-        drawArc(accent.copy(alpha = 0.12f), 180f, 180f, true, domeTL, Size(domeR * 2, domeR * 2))
-        drawArc(accent.copy(alpha = 0.45f), 180f, 180f, false, domeTL, Size(domeR * 2, domeR * 2),
-                style = Stroke(0.8f * u))
+        drawArc(
+            color = accent.copy(alpha = 0.12f),
+            startAngle = 180f,
+            sweepAngle = 180f,
+            useCenter = true,
+            topLeft = domeTL,
+            size = Size(domeR * 2, domeR * 2)
+        )
+        drawArc(
+            color = accent.copy(alpha = 0.45f),
+            startAngle = 180f,
+            sweepAngle = 180f,
+            useCenter = false,
+            topLeft = domeTL,
+            size = Size(domeR * 2, domeR * 2),
+            style = Stroke(0.8f * u)
+        )
         val domeC = Offset(cx, headT + 0.5f * u)
         val br = 3f * u * (1f + 0.10f * sin(finalPhase * 1.5f))
         drawCircle(accent.copy(alpha = 0.35f), br, domeC - Offset(0f, 2.2f * u))
         drawCircle(accent.copy(alpha = 0.5f), br * 0.6f, domeC - Offset(1.4f * u, 2.6f * u))
         drawCircle(accent.copy(alpha = 0.5f), br * 0.6f, domeC - Offset(-1.4f * u, 2.4f * u))
 
-        drawRoundRect(accent, Offset(headL, headT), Size(headW, headH), CornerRadius(3f * u))
+        drawRoundRect(
+            color = accent,
+            topLeft = Offset(headL, headT),
+            size = Size(headW, headH),
+            cornerRadius = CornerRadius(3f * u)
+        )
         val eyeH = (3.2f * finalBlink).coerceAtLeast(0.4f) * u
         for (s in listOf(-1f, 1f)) {
-            drawEllipse(
-                surface,
-                Offset(cx + s * 3.5f * u - 1.5f * u, 13.5f * u - eyeH / 2),
-                Size(3f * u, eyeH)
+            drawOval(
+                color = surface,
+                topLeft = Offset(cx + s * 3.5f * u - 1.5f * u, 13.5f * u - eyeH / 2),
+                size = Size(3f * u, eyeH)
             )
         }
 
@@ -894,9 +924,10 @@ fun ThinkingRobotAnimation(
         for (i in 0..4) {
             val h = (2f + 3f * (0.5f + 0.5f * sin(finalPhase * 3f - i * 0.8f))) * u
             drawRoundRect(
-                green.copy(alpha = 0.8f),
-                Offset(ox + (62f + i * 2f) * u, 17f * u - h),
-                Size(1f * u, h), CornerRadius(0.5f * u)
+                color = green.copy(alpha = 0.8f),
+                topLeft = Offset(ox + (62f + i * 2f) * u, 17f * u - h),
+                size = Size(1f * u, h),
+                cornerRadius = CornerRadius(0.5f * u)
             )
         }
     }
@@ -909,15 +940,17 @@ private fun DrawScope.drawGear(
         val toothW = radius * 0.38f
         for (i in 0 until teeth) {
             rotate(i * 360f / teeth, pivot = center) {
-                drawRect(color, Offset(center.x - toothW / 2, center.y - radius),
-                         Size(toothW, radius * 0.5f))
+                drawRect(
+                    color = color,
+                    topLeft = Offset(center.x - toothW / 2, center.y - radius),
+                    size = Size(toothW, radius * 0.5f)
+                )
             }
         }
         drawCircle(color, radius * 0.72f, center)
         drawCircle(holeColor, radius * 0.30f, center)
     }
 }
-
 @Composable
 private fun LockScreen(
     secretPhrase: String,
