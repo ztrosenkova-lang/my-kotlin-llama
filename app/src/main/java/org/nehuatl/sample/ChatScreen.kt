@@ -528,40 +528,55 @@ LaunchedEffect(isSpeaking) {
                             .verticalScroll(scrollState)
                     ) {
                         chatMessages.forEach { message ->
-                            val prefix = when (message.role) {
-                                "user" -> "Вы: "
-                                "assistant" -> "ИИ-Друг: "
-                                "system" -> "📢 "
-                                else -> ""
-                            }
-                            Text(
-                                text = prefix + message.text,
-                                color = DarkText,
-                                fontFamily = ChatFontFamily,
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.padding(vertical = 2.dp)
-                            )
-                        }
+    val prefix = when (message.role) {
+        "user" -> "Вы: "
+        "assistant" -> "ИИ-Друг: "
+        "system" -> "📢 "
+        else -> ""
+    }
+    val textColor = when (message.role) {
+        "user" -> GreenColor
+        "assistant" -> DarkText
+        else -> DarkText
+    }
+    Text(
+        text = prefix + message.text,
+        color = textColor,
+        fontFamily = ChatFontFamily,
+        fontSize = 10.sp,
+        modifier = Modifier.padding(vertical = 2.dp)
+    )
+}
 
                         if (generatedText.isNotEmpty() && state is GenerationState.Generating) {
-                            Text(
-                                text = "ИИ: $generatedText",
-                                color = DarkText,
-                                fontFamily = ChatFontFamily,
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.padding(vertical = 2.dp)
-                            )
-                        }
+    Text(
+        text = "ИИ: $generatedText",
+        color = DarkText,
+        fontFamily = ChatFontFamily,
+        fontSize = 10.sp,
+        modifier = Modifier.padding(vertical = 2.dp)
+    )
+}
+
+if (cloudGeneratedText.isNotEmpty() && cloudState is CloudAIState.Generating) {
+    Text(
+        text = "☁️ ИИ: $cloudGeneratedText",
+        color = DarkText.copy(alpha = 0.8f),
+        fontFamily = ChatFontFamily,
+        fontSize = 10.sp,
+        modifier = Modifier.padding(vertical = 2.dp)
+    )
+}
 
                         if (cloudGeneratedText.isNotEmpty() && cloudState is CloudAIState.Generating) {
-                            Text(
-                                text = "☁️ ИИ: $cloudGeneratedText",
-                                color = DarkText.copy(alpha = 0.8f),
-                                fontFamily = ChatFontFamily,
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.padding(vertical = 2.dp)
-                            )
-                        }
+    Text(
+        text = "☁️ ИИ: $cloudGeneratedText",
+        color = DarkText.copy(alpha = 0.8f),
+        fontFamily = ChatFontFamily,
+        fontSize = 10.sp,
+        modifier = Modifier.padding(vertical = 2.dp)
+    )
+}
                     }
                 }
             }
