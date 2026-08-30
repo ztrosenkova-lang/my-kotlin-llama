@@ -808,7 +808,7 @@ private fun VoiceWaveAnimation(
 @Composable
 fun ThinkingRobotAnimation(
     modifier: Modifier = Modifier,
-    height: Dp = 60.dp,
+    height: Dp = 90.dp,
     isActive: Boolean = true,
 ) {
     val transition = rememberInfiniteTransition(label = "thinking_robot")
@@ -876,7 +876,7 @@ fun ThinkingRobotAnimation(
         val brainDark = Color(0xFFD67E93)
         val orange = Color(0xFFF89B3C)
 
-        val u = size.minDimension / 100f
+        val u = size.height / 100f
         val offX = (size.width - 100f * u) / 2f
         val offY = (size.height - 100f * u) / 2f + 1.2f * u * sin(finalBob)
 
@@ -920,18 +920,18 @@ drawCircle(Color(0xFFFFD9A6), 1f * u, pt(23.2f, 24f))
         drawOval(metalDark, topLeft = pt(74f, 58f), size = Size(4.5f * u, 10f * u))
 
         // ================= Купол =================
-        val domeC = pt(50f, 46f)
-        val domeR = 26f * u
-        val domeTL = Offset(domeC.x - domeR, domeC.y - domeR)
-        val domeSize = Size(domeR * 2f, domeR * 2f)
-        drawArc(
-            Color(0xFFBFE9F2).copy(alpha = 0.25f),
-            180f,
-            180f,
-            true,
-            topLeft = domeTL,
-            size = domeSize
-        )
+       val domeC = pt(50f, 46f)
+val domeR = 26f * u
+val domeTL = Offset(domeC.x - domeR, domeC.y - domeR)
+val domeSize = Size(domeR * 2f, domeR * 2f)
+drawArc(
+    Color(0xFFBFE9F2).copy(alpha = 0.40f),
+    180f,
+    180f,
+    true,
+    topLeft = domeTL,
+    size = domeSize
+)
 
         // ================= Мозг =================
         val s = 1f + 0.05f * sin(finalPulse * 1.5f)
@@ -940,11 +940,11 @@ drawCircle(Color(0xFFFFD9A6), 1f * u, pt(23.2f, 24f))
         glow(bp(50f, 38f), 16f * u, Color(0xFFE36F8C).copy(alpha = 0.35f))
 
         listOf(
-            Triple(43f, 39f, 6.5f), Triple(57f, 39f, 9.5f),
-            Triple(50f, 33f, 6f), Triple(50f, 42f, 8f),
-            Triple(37f, 42f, 4f), Triple(63f, 42f, 6f),
-            Triple(46f, 35f, 3.5f), Triple(54f, 35f, 5f),
-            Triple(40f, 37f, 3.5f), Triple(60f, 37f, 5f)
+            Triple(43f, 39f, 4.5f), Triple(57f, 39f, 9.5f),
+            Triple(50f, 33f, 4.2f), Triple(50f, 42f, 8f),
+            Triple(37f, 42f, 3f), Triple(63f, 42f, 6f),
+            Triple(46f, 35f, 2.5f), Triple(54f, 35f, 5f),
+            Triple(40f, 37f, 2.5f), Triple(60f, 37f, 5f)
         ).forEach { (x, y, r) -> drawCircle(brainPink, r * s * u, bp(x, y)) }
 
         listOf(
