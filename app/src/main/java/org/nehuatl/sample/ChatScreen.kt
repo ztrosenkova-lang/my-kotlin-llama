@@ -807,44 +807,45 @@ private fun VoiceWaveAnimation(
 @Composable
 fun ThinkingRobotAnimation(
     modifier: Modifier = Modifier,
-    accent: Color = AccentColor,
-    green: Color = GreenColor,
-    surface: Color = SurfaceGray,
-    height: Dp = 20.dp,
+    height: Dp = 36.dp,
     isActive: Boolean = true,
 ) {
     val transition = rememberInfiniteTransition(label = "thinking_robot")
 
     val phase by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 6.28318f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2000, easing = LinearEasing)
-        ),
+        initialValue = 0f, targetValue = (2.0 * PI).toFloat(),
+        animationSpec = infiniteRepeatable(tween(2400, LinearEasing), RepeatMode.Restart),
         label = "phase"
     )
-
-    val gearAngle by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 4000, easing = LinearEasing)
-        ),
-        label = "gear"
+    val pulse by transition.animateFloat(
+        initialValue = 0f, targetValue = (2.0 * PI).toFloat(),
+        animationSpec = infiniteRepeatable(tween(1500, LinearEasing), RepeatMode.Restart),
+        label = "pulse"
     )
-
+    val bob by transition.animateFloat(
+        initialValue = 0f, targetValue = (2.0 * PI).toFloat(),
+        animationSpec = infiniteRepeatable(tween(3200, LinearEasing), RepeatMode.Restart),
+        label = "bob"
+    )
     val blink by transition.animateFloat(
-        initialValue = 1f,
-        targetValue = 0.1f,
+        initialValue = 1f, targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 200, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
+            animation = keyframes {
+                durationMillis = 3600
+                1f at 0
+                1f at 3200
+                0.08f at 3350
+                1f at 3500
+                1f at 3600
+            },
+            repeatMode = RepeatMode.Restart
         ),
         label = "blink"
     )
 
     val finalPhase = if (isActive) phase else 0f
-    val finalGear = if (isActive) gearAngle else 0f
+    val finalPulse = if (isActive) pulse else 0f
+    val finalBob = if (isActive) bob else 0f
     val finalBlink = if (isActive) blink else 1f
 
     Canvas(
@@ -852,82 +853,166 @@ fun ThinkingRobotAnimation(
             .height(height)
             .semantics { contentDescription = "ИИ обдумывает запрос" }
     ) {
-        val u = size.height / 20f
-        val compW = 71f * u
-        val ox = (size.width - compW) / 2f
+        val metalLight = Color(0xFF7A8CA0)
+        val metal = Color(0xFF5D6E82)
+        val metalDark = Color(0xFF42546A)
+        val eyeDark = Color(0xFF0F3D4C)
+        val cyan = Color(0xFF3FE3F5)
+        val cyanSoft = Color(0xFFB9F6FF)
+        val brainPink = Color(0xFFEFA5B3)
+        val brainDark = Color(0xFFD67E93)
+        val orange = Color(0xFFF89B3C)
 
-        val headL = ox + 1f * u
-        val headT = 8.5f * u
-        val headW = 14f * u
-        val headH = 11f * u
-        val cx = headL + headW / 2
+        val u = size.minDimension / 100f
+        val offX = (size.width - 100f * u) / 2f
+        val offY = (size.height - 100f * u) / 2f + 1.2f * u * sin(finalBob)
 
-        drawLine(green, Offset(cx, headT), Offset(cx, 4.5f * u), strokeWidth = 1.2f * u)
-        val orbR = (1.4f + 0.5f * sin(finalPhase * 2f)) * u
-        drawCircle(green.copy(alpha = 0.25f), orbR + 1.2f * u, Offset(cx, 3.4f * u))
-        drawCircle(green, orbR, Offset(cx, 3.4f * u))
+        fun pt(x: Float, y: Float) = Offset(offX + x * u, offY + y * u)
 
-        val domeR = 5f * u
-        val domeTL = Offset(cx - domeR, headT + 0.5f * u - domeR)
-        drawArc(
-            color = accent.copy(alpha = 0.12f),
-            startAngle = 180f,
-            sweepAngle = 180f,
-            useCenter = true,
-            topLeft = domeTL,
-            size = Size(domeR * 2, domeR * 2)
-        )
-        drawArc(
-            color = accent.copy(alpha = 0.45f),
-            startAngle = 180f,
-            sweepAngle = 180f,
-            useCenter = false,
-            topLeft = domeTL,
-            size = Size(domeR * 2, domeR * 2),
-            style = Stroke(0.8f * u)
-        )
-
-        val domeC = Offset(cx, headT + 0.5f * u)
-        val br = 3f * u * (1f + 0.10f * sin(finalPhase * 1.5f))
-        drawCircle(accent.copy(alpha = 0.35f), br, domeC - Offset(0f, 2.2f * u))
-        drawCircle(accent.copy(alpha = 0.5f), br * 0.6f, domeC - Offset(1.4f * u, 2.6f * u))
-        drawCircle(accent.copy(alpha = 0.5f), br * 0.6f, domeC - Offset(-1.4f * u, 2.4f * u))
-
-        drawRoundRect(
-            color = accent,
-            topLeft = Offset(headL, headT),
-            size = Size(headW, headH),
-            cornerRadius = CornerRadius(3f * u)
-        )
-
-        val eyeH = (3.2f * finalBlink).coerceAtLeast(0.4f) * u
-        for (s in listOf(-1f, 1f)) {
-            drawOval(
-                color = surface,
-                topLeft = Offset(cx + s * 3.5f * u - 1.5f * u, 13.5f * u - eyeH / 2),
-                size = Size(3f * u, eyeH)
+        fun glow(center: Offset, radius: Float, color: Color) {
+            if (radius <= 0f) return
+            drawCircle(
+                Brush.radialGradient(listOf(color, color.copy(alpha = 0f)), center, radius),
+                radius, center
             )
         }
 
-        drawGear(Offset(ox + 26f * u, 10f * u), 5.5f * u, green, finalGear, surface)
-        drawGear(Offset(ox + 34.5f * u, 13.5f * u), 4f * u, accent, -finalGear * 1.35f, surface)
+        drawRoundRect(
+            Brush.verticalGradient(listOf(metalLight, metalDark)),
+            topLeft = pt(30f, 80f), size = Size(40f * u, 24f * u),
+            cornerRadius = CornerRadius(9f * u)
+        )
+        drawCircle(metal, 8f * u, pt(29f, 89f))
+        drawCircle(metal, 8f * u, pt(71f, 89f))
+        drawRoundRect(
+            Color(0xFF334457),
+            topLeft = pt(42f, 75f), size = Size(16f * u, 7f * u),
+            cornerRadius = CornerRadius(2f * u)
+        )
 
-        for (i in 0..2) {
-            val w = 0.5f + 0.5f * sin(finalPhase * 2f - i * 0.9f)
-            drawCircle(
-                accent.copy(alpha = 0.25f + 0.75f * w),
-                (1.4f + 0.5f * w) * u,
-                Offset(ox + (46f + i * 6f) * u, 11f * u + sin(finalPhase * 2f - i * 0.9f) * 1.2f * u)
+        drawLine(metalDark, pt(69f, 52f), pt(76f, 31f), strokeWidth = 1.6f * u)
+        val orbP = 0.5f + 0.5f * sin(finalPulse * 2f)
+        glow(pt(76.5f, 28f), (6f + 2f * orbP) * u, orange.copy(alpha = 0.55f))
+        drawCircle(orange, (2.6f + 0.4f * orbP) * u, pt(76.5f, 28f))
+        drawCircle(Color(0xFFFFD9A6), 1f * u, pt(75.8f, 27f))
+
+        drawRoundRect(metal, pt(19f, 56f), Size(8f * u, 14f * u), CornerRadius(3.5f * u))
+        drawRoundRect(metal, pt(73f, 56f), Size(8f * u, 14f * u), CornerRadius(3.5f * u))
+        drawRoundRect(metalDark, pt(21f, 59f), Size(4f * u, 8f * u), CornerRadius(2f * u))
+        drawRoundRect(metalDark, pt(75f, 59f), Size(4f * u, 8f * u), CornerRadius(2f * u))
+
+        val domeC = pt(50f, 48f)
+        val domeR = 22f * u
+        val domeTL = Offset(domeC.x - domeR, domeC.y - domeR)
+        val domeSize = Size(domeR * 2f, domeR * 2f)
+        drawArc(
+            Color(0xFFBFE9F2).copy(alpha = 0.14f), 180f, 180f, true,
+            topLeft = domeTL, size = domeSize
+        )
+
+        val s = 1f + 0.05f * sin(finalPulse * 1.5f)
+        fun bp(x: Float, y: Float) = pt(50f + (x - 50f) * s, 39f + (y - 39f) * s)
+
+        glow(bp(50f, 38f), 16f * u, Color(0xFFE36F8C).copy(alpha = 0.35f))
+
+        listOf(
+            Triple(43f, 39f, 9.5f), Triple(57f, 39f, 9.5f),
+            Triple(50f, 33f, 9f), Triple(50f, 42f, 8f),
+            Triple(37f, 42f, 6f), Triple(63f, 42f, 6f)
+        ).forEach { (x, y, r) -> drawCircle(brainPink, r * s * u, bp(x, y)) }
+
+        listOf(
+            42f to 33f, 50f to 30f, 58f to 34f,
+            44f to 41f, 56f to 41f, 49f to 37f
+        ).forEach { (x, y) ->
+            drawArc(
+                brainDark, 200f, 140f, false,
+                topLeft = bp(x - 3f, y - 3f), size = Size(6f * s * u, 6f * s * u),
+                style = Stroke(1.1f * u)
             )
+        }
+
+        rotate(-16f, pivot = pt(50f, 38f)) {
+            drawOval(
+                cyan.copy(alpha = 0.55f),
+                topLeft = pt(28f, 30.5f), size = Size(44f * u, 15f * u),
+                style = Stroke(0.7f * u)
+            )
+        }
+        rotate(12f, pivot = pt(50f, 38f)) {
+            drawOval(
+                cyan.copy(alpha = 0.45f),
+                topLeft = pt(29.5f, 31.5f), size = Size(41f * u, 13f * u),
+                style = Stroke(0.7f * u)
+            )
+        }
+
+        fun orbitPos(rx: Float, ry: Float, rotDeg: Float, a: Float): Offset {
+            val r = rotDeg * (PI / 180.0).toFloat()
+            val cr = cos(r); val sr = sin(r)
+            val x = cos(a) * rx
+            val y = sin(a) * ry
+            return pt(50f + x * cr - y * sr, 38f + x * sr + y * cr)
+        }
+
+        for (i in 0..5) {
+            val a = finalPhase * (1.2f + 0.17f * i) + i * 1.9f
+            val p = if (i % 2 == 0) orbitPos(22f, 7.5f, -16f, a)
+            else orbitPos(20.5f, 6.5f, 12f, a)
+            val tw = 0.5f + 0.5f * sin(finalPulse * 2f + i * 1.3f)
+            glow(p, (1.8f + 1.2f * tw) * u, cyan.copy(alpha = 0.25f + 0.45f * tw))
+            drawCircle(cyanSoft, 0.9f * u, p)
+        }
+
+        drawArc(
+            Color(0xFFDFF7FC).copy(alpha = 0.6f), 180f, 180f, false,
+            topLeft = domeTL, size = domeSize, style = Stroke(1.1f * u)
+        )
+        drawArc(
+            Color.White.copy(alpha = 0.8f), 195f, 45f, false,
+            topLeft = Offset(domeC.x - domeR + 2.5f * u, domeC.y - domeR + 2.5f * u),
+            size = Size(domeR * 2f - 5f * u, domeR * 2f - 5f * u),
+            style = Stroke(1.6f * u)
+        )
+        drawOval(metalDark, topLeft = pt(27.5f, 46.2f), size = Size(45f * u, 3.4f * u))
+
+        drawRoundRect(
+            Brush.verticalGradient(listOf(metalLight, metal, metalDark)),
+            topLeft = pt(26f, 48f), size = Size(48f * u, 30f * u),
+            cornerRadius = CornerRadius(10f * u)
+        )
+
+        for (sx in listOf(-1f, 1f)) {
+            val ec = pt(50f + sx * 9.5f, 62f)
+            val ry = 7f * u * finalBlink
+            glow(ec, 8f * u, cyan.copy(alpha = 0.30f))
+            drawEllipse(
+                eyeDark,
+                topLeft = Offset(ec.x - 5f * u, ec.y - ry),
+                size = Size(10f * u, ry * 2f)
+            )
+            val iry = 5.8f * u * finalBlink
+            drawEllipse(
+                Brush.verticalGradient(listOf(cyanSoft, cyan)),
+                topLeft = Offset(ec.x - 3.8f * u, ec.y - iry),
+                size = Size(7.6f * u, iry * 2f)
+            )
+            if (finalBlink > 0.3f) {
+                drawCircle(
+                    Color.White.copy(alpha = 0.9f * finalBlink), 1.3f * u,
+                    Offset(ec.x - 1.6f * u, ec.y - 2.5f * u * finalBlink)
+                )
+            }
         }
 
         for (i in 0..4) {
-            val h = (2f + 3f * (0.5f + 0.5f * sin(finalPhase * 3f - i * 0.8f))) * u
+            val h = (2.5f + 3.5f * (0.5f + 0.5f * sin(finalPhase * 2f + i * 1.1f))) * u
+            val x = 50f + (i - 2) * 2.6f
             drawRoundRect(
-                color = green.copy(alpha = 0.8f),
-                topLeft = Offset(ox + (62f + i * 2f) * u, 17f * u - h),
-                size = Size(1f * u, h),
-                cornerRadius = CornerRadius(0.5f * u)
+                cyan,
+                topLeft = Offset(offX + (x - 0.7f) * u, offY + 73f * u - h),
+                size = Size(1.4f * u, h),
+                cornerRadius = CornerRadius(0.7f * u)
             )
         }
     }
