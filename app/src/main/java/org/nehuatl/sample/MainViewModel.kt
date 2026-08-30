@@ -785,12 +785,23 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    private fun determineCategory(text: String): String {
+        private fun determineCategory(text: String): String {
         val lowerText = text.lowercase()
+
+        // Если строка содержит цену — это прайс, независимо от слов
+        val hasPrice = Regex("\\d+[.,]?\\d*\\s*(р|руб|₽)").containsMatchIn(lowerText) ||
+                lowerText.contains("р/м") ||
+                lowerText.contains("р/кг") ||
+                lowerText.contains("р/шт") ||
+                lowerText.contains("р/лист") ||
+                lowerText.contains("р/пм") ||
+                lowerText.contains("р/т")
+
+        if (hasPrice) return "[ПРАЙС]"
+
         val categories = mapOf(
             "[ПАРОЛЬ]" to listOf("пароль", "логин", "доступ", "код", "пин", "секрет", "ключ"),
             "[КОНТАКТ]" to listOf("телефон", "номер", "контакт", "позвонить", "мобильный", "вотсап", "телеграм"),
-            "[ПРАЙС]" to listOf("руб", "₽", "цена", "стоимость", "прайс", "оплата", "расчёт", "скидка", "тариф", "кг", "тонна", "метр", "штука", "шт", "лист", "труба", "профиль", "металл", "диск", "уголок", "швеллер", "арматура"),
             "[ИНСТРУКЦИЯ]" to listOf("как", "инструкция", "алгоритм", "пошагово", "руководство", "порядок", "действия"),
             "[АДРЕС]" to listOf("адрес", "улица", "город", "метро", "район", "дом"),
             "[ДАТА]" to listOf("дата", "время", "встреча", "напоминание", "дедлайн")
@@ -916,45 +927,76 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     return sectionLines.joinToString("\n")
                 }
 
-                data class ScoredLine(val line: String, val score: Int)
+                // Поэтапное сужение
 
-                val scoredLines = sectionLines.map { line ->
+                // Этап 1: строки, содержащие ВСЕ ключевые слова
+                var filtered = sectionLines.filter { line ->
                     val lowerLine = line.lowercase()
-                    var score = 0
-
-                    val keywordMatches = expandedKeywords.count { keyword -> lowerLine.contains(keyword) }
-                    score += keywordMatches * 10
-
-                    val numberMatches = numbers.count { number -> line.contains(number) }
-                    score += numberMatches * 20
-
-                    val unitMatches = units.count { unit -> lowerLine.contains(unit) }
-                    score += unitMatches * 15
-
-                    val hasDigits = line.any { it.isDigit() }
-                    val hasPrice = line.contains("р/") || line.contains("руб")
-                    if (!hasPrice && hasDigits) {
-                        score -= 5
-                    }
-                    if (!hasDigits) {
-                        score -= 10
-                    }
-
-                    ScoredLine(line, score)
+                    expandedKeywords.all { keyword -> lowerLine.contains(keyword) }
                 }
 
-                val sortedLines = scoredLines.sortedByDescending { it.score }
+                // Этап 2: из них — строки с числами
+                if (numbers.isNotEmpty()) {
+                    val withNumbers = filtered.filter { line ->
+                        numbers.all { number -> line.contains(number) }
+                    }
+                    if (withNumbers.isNotEmpty()) {
+                        filtered = withNumbers
+                    }
+                }
 
-                val resultLines = sortedLines.filter { it.score > 0 }
+                // Этап 3: из них — строки с единицами измерения
+                if (units.isNotEmpty()) {
+                    val withUnits = filtered.filter { line ->
+                        units.any { unit -> line.lowercase().contains(unit) }
+                    }
+                    if (withUnits.isNotEmpty()) {
+                        filtered = withUnits
+                    }
+                }
 
-                if (resultLines.isEmpty()) return ""
+                if (filtered.isNotEmpty()) {
+                    // Ищем заголовок подкатегории
+                    val firstMatchIndex = sectionLines.indexOfFirst { line -> filtered.contains(line) }
+                    var headerLine = ""
+                    if (firstMatchIndex > 0) {
+                        for (idx in firstMatchIndex - 1 downTo 0) {
+                            val candidate = sectionLines[idx]
+                            val hasPrice = candidate.contains("р/") || candidate.contains("руб")
+                            if (!hasPrice) {
+                                headerLine = candidate
+                                break
+                            }
+                        }
+                    }
 
-                val maxScore = resultLines.first().score
+                    val resultLines = mutableListOf<String>()
+                    if (headerLine.isNotEmpty()) {
+                        resultLines.add(headerLine)
+                    }
+                    resultLines.addAll(filtered)
+                    return resultLines.joinToString("\n")
+                }
 
-                val threshold = maxScore / 2
-                val finalLines = resultLines.filter { it.score >= threshold }
+                // Этап 4: ослабляем — строки с хотя бы 2 ключевыми словами
+                filtered = sectionLines.filter { line ->
+                    val lowerLine = line.lowercase()
+                    expandedKeywords.count { keyword -> lowerLine.contains(keyword) } >= 2
+                }
 
-                return finalLines.joinToString("\n") { it.line }
+                if (filtered.isNotEmpty()) {
+                    return filtered.take(20).joinToString("\n")
+                }
+
+                // Этап 5: ещё слабее — строки с хотя бы 1 ключевым словом
+                filtered = sectionLines.filter { line ->
+                    val lowerLine = line.lowercase()
+                    expandedKeywords.any { keyword -> lowerLine.contains(keyword) }
+                }
+
+                if (filtered.isNotEmpty()) {
+                    return filtered.take(10).joinToString("\n")
+                }
             }
         }
 
