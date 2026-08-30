@@ -114,6 +114,13 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sin
 import kotlin.math.cos
+import androidx.compose.animation.core.keyframes
+import androidx.compose.ui.drawscope.rotate
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 
 private val AppBackground = Color(0xFFFFFFFF)
 private val SurfaceGray = Color(0xFFF1F3F5)
@@ -405,36 +412,37 @@ LaunchedEffect(isSpeaking) {
             .background(AppBackground)
             .imePadding()
     ) {
-        TopBarWithSwitch(
-            currentMode = currentMode,
-            onModeChange = { newMode ->
-                viewModel.setCurrentMode(newMode)
-                if (newMode == AIMode.NEUTRAL) {
-                    viewModel.releaseModel()
-                    viewModel.clearCloudConfig()
-                    viewModel.appendSystemMessage("📢 ИИ выгружен из памяти")
-                }
-            },
-            isModelLoaded = isModelLoaded,
-            cloudConfig = viewModel.getCloudConfig(),
-            onCloudForceDialog = { showCloudDialog = true },
-            onLocalForceDialog = { showModelDialog = true },
-            statusText = when (currentMode) {
-                AIMode.LOCAL -> {
-                    when (state) {
-                        is GenerationState.Generating -> "🤖 Локальный ИИ думает..."
-                        else -> "🤖 Локальный ИИ: Готов к работе"
-                    }
-                }
-                AIMode.CLOUD -> {
-                    when (cloudState) {
-                        is CloudAIState.Generating -> "☁️ Облако думает..."
-                        else -> "☁️ Облако: Готово к работе"
-                    }
-                }
-                else -> "🤖 ИИ выгружен"
+      TopBarWithSwitch(
+    currentMode = currentMode,
+    onModeChange = { newMode ->
+        viewModel.setCurrentMode(newMode)
+        if (newMode == AIMode.NEUTRAL) {
+            viewModel.releaseModel()
+            viewModel.clearCloudConfig()
+            viewModel.appendSystemMessage("📢 ИИ выгружен из памяти")
+        }
+    },
+    isModelLoaded = isModelLoaded,
+    cloudConfig = viewModel.getCloudConfig(),
+    onCloudForceDialog = { showCloudDialog = true },
+    onLocalForceDialog = { showModelDialog = true },
+    statusText = when (currentMode) {
+        AIMode.LOCAL -> {
+            when (state) {
+                is GenerationState.Generating -> "🤖 Локальный ИИ думает..."
+                else -> "🤖 Локальный ИИ: Готов к работе"
             }
-        )
+        }
+        AIMode.CLOUD -> {
+            when (cloudState) {
+                is CloudAIState.Generating -> "☁️ Облако думает..."
+                else -> "☁️ Облако: Готово к работе"
+            }
+        }
+        else -> "🤖 ИИ выгружен"
+    },
+    isGenerating = state.isActive() || cloudState.isActive()
+)
 
         ControlPanel(
             onMemoryClick = {
@@ -796,6 +804,121 @@ private fun VoiceWaveAnimation(
 }
 
 @Composable
+fun ThinkingRobotAnimation(
+    modifier: Modifier = Modifier,
+    accent: Color = AccentColor,
+    green: Color = GreenColor,
+    surface: Color = SurfaceGray,
+    height: Dp = 20.dp,
+    isActive: Boolean = true,
+) {
+    val transition = rememberInfiniteTransition(label = "thinking_robot")
+
+    val phase by transition.animateFloat(
+        initialValue = 0f, targetValue = 6.28318f,
+        animationSpec = infiniteRepeatable(tween(2000, LinearEasing), RepeatMode.Restart),
+        label = "phase"
+    )
+    val gearAngle by transition.animateFloat(
+        initialValue = 0f, targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(4000, LinearEasing), RepeatMode.Restart),
+        label = "gear"
+    )
+    val blink by transition.animateFloat(
+        initialValue = 1f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = keyframes {
+                durationMillis = 3600
+                1f at 0; 1f at 3200; 0.1f at 3350; 1f at 3500; 1f at 3600
+            },
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "blink"
+    )
+
+    val finalPhase = if (isActive) phase else 0f
+    val finalGear = if (isActive) gearAngle else 0f
+    val finalBlink = if (isActive) blink else 1f
+
+    Canvas(
+        modifier = modifier
+            .height(height)
+            .semantics { contentDescription = "ИИ обдумывает запрос" }
+    ) {
+        val u = size.height / 20f
+        val compW = 71f * u
+        val ox = (size.width - compW) / 2f
+
+        val headL = ox + 1f * u; val headT = 8.5f * u
+        val headW = 14f * u;  val headH = 11f * u
+        val cx = headL + headW / 2
+
+        drawLine(green, Offset(cx, headT), Offset(cx, 4.5f * u), strokeWidth = 1.2f * u)
+        val orbR = (1.4f + 0.5f * sin(finalPhase * 2f)) * u
+        drawCircle(green.copy(alpha = 0.25f), orbR + 1.2f * u, Offset(cx, 3.4f * u))
+        drawCircle(green, orbR, Offset(cx, 3.4f * u))
+
+        val domeR = 5f * u
+        val domeTL = Offset(cx - domeR, headT + 0.5f * u - domeR)
+        drawArc(accent.copy(alpha = 0.12f), 180f, 180f, true, domeTL, Size(domeR * 2, domeR * 2))
+        drawArc(accent.copy(alpha = 0.45f), 180f, 180f, false, domeTL, Size(domeR * 2, domeR * 2),
+                style = Stroke(0.8f * u))
+        val domeC = Offset(cx, headT + 0.5f * u)
+        val br = 3f * u * (1f + 0.10f * sin(finalPhase * 1.5f))
+        drawCircle(accent.copy(alpha = 0.35f), br, domeC - Offset(0f, 2.2f * u))
+        drawCircle(accent.copy(alpha = 0.5f), br * 0.6f, domeC - Offset(1.4f * u, 2.6f * u))
+        drawCircle(accent.copy(alpha = 0.5f), br * 0.6f, domeC - Offset(-1.4f * u, 2.4f * u))
+
+        drawRoundRect(accent, Offset(headL, headT), Size(headW, headH), CornerRadius(3f * u))
+        val eyeH = (3.2f * finalBlink).coerceAtLeast(0.4f) * u
+        for (s in listOf(-1f, 1f)) {
+            drawEllipse(
+                surface,
+                Offset(cx + s * 3.5f * u - 1.5f * u, 13.5f * u - eyeH / 2),
+                Size(3f * u, eyeH)
+            )
+        }
+
+        drawGear(Offset(ox + 26f * u, 10f * u), 5.5f * u, green, finalGear, surface)
+        drawGear(Offset(ox + 34.5f * u, 13.5f * u), 4f * u, accent, -finalGear * 1.35f, surface)
+
+        for (i in 0..2) {
+            val w = 0.5f + 0.5f * sin(finalPhase * 2f - i * 0.9f)
+            drawCircle(
+                accent.copy(alpha = 0.25f + 0.75f * w),
+                (1.4f + 0.5f * w) * u,
+                Offset(ox + (46f + i * 6f) * u, 11f * u + sin(finalPhase * 2f - i * 0.9f) * 1.2f * u)
+            )
+        }
+
+        for (i in 0..4) {
+            val h = (2f + 3f * (0.5f + 0.5f * sin(finalPhase * 3f - i * 0.8f))) * u
+            drawRoundRect(
+                green.copy(alpha = 0.8f),
+                Offset(ox + (62f + i * 2f) * u, 17f * u - h),
+                Size(1f * u, h), CornerRadius(0.5f * u)
+            )
+        }
+    }
+}
+
+private fun DrawScope.drawGear(
+    center: Offset, radius: Float, color: Color, angle: Float, holeColor: Color, teeth: Int = 8
+) {
+    rotate(angle, pivot = center) {
+        val toothW = radius * 0.38f
+        for (i in 0 until teeth) {
+            rotate(i * 360f / teeth, pivot = center) {
+                drawRect(color, Offset(center.x - toothW / 2, center.y - radius),
+                         Size(toothW, radius * 0.5f))
+            }
+        }
+        drawCircle(color, radius * 0.72f, center)
+        drawCircle(holeColor, radius * 0.30f, center)
+    }
+}
+
+@Composable
 private fun LockScreen(
     secretPhrase: String,
     onSecretPhraseChange: (String) -> Unit,
@@ -918,24 +1041,13 @@ private fun TopBarWithSwitch(
     cloudConfig: CloudAIConfig?,
     onCloudForceDialog: () -> Unit,
     onLocalForceDialog: () -> Unit,
-    statusText: String = ""
+    statusText: String = "",
+    isGenerating: Boolean = false
 ) {
     val isLocalReady = isModelLoaded
     val isCloudReady = cloudConfig?.authKey?.isNotEmpty() == true
     val localIndicatorColor = if (isLocalReady) GreenColor else PaleYellowColor
     val cloudIndicatorColor = if (isCloudReady) GreenColor else PaleYellowColor
-
-    val infiniteTransition = rememberInfiniteTransition()
-    val rotationAngle by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = 1200,
-                easing = LinearEasing
-            )
-        )
-    )
 
     Row(
         modifier = Modifier
@@ -956,39 +1068,19 @@ private fun TopBarWithSwitch(
             contentScale = ContentScale.Crop
         )
 
-        Row(
+        Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically        ) {
-            Text(
-                text = "+",
-                fontSize = 20.sp,
-                color = AccentColor,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.rotate(
-                    if (statusText.contains("думает")) rotationAngle else 0f
-                )
-            )
-
-            Text(
-                text = "ИИ-Друг",
-                style = MaterialTheme.typography.titleMedium,
-                color = AccentColor,
-                fontWeight = FontWeight.ExtraBold,
-                fontFamily = FontFamily.Monospace,
-                modifier = Modifier.padding(horizontal = 8.dp)
-            )
-
-            Text(
-                text = "+",
-                fontSize = 20.sp,
-                color = AccentColor,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.rotate(
-                    if (statusText.contains("думает")) rotationAngle else 0f
-                )
+            contentAlignment = Alignment.Center
+        ) {
+            ThinkingRobotAnimation(
+                accent = AccentColor,
+                green = GreenColor,
+                surface = SurfaceGray,
+                height = 36.dp,
+                isActive = isGenerating,
+                modifier = Modifier.fillMaxWidth(0.9f)
             )
         }
 
@@ -1041,7 +1133,6 @@ private fun TopBarWithSwitch(
         }
     }
 }
-
 @Composable
 private fun StatusIndicator(
     color: Color,
