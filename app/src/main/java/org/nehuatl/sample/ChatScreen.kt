@@ -2398,18 +2398,27 @@ private fun PromptInput(
                 }
             }
 
-            Spacer(modifier = Modifier.height(2.dp))
+                                  Spacer(modifier = Modifier.height(2.dp))
 
-            Text(
-                text = memoryInfoText,
-                color = DarkText.copy(alpha = 0.6f),
-                fontSize = 8.sp,
-                fontFamily = ChatFontFamily,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 4.dp, end = 4.dp, bottom = 2.dp),
-                textAlign = TextAlign.Center
-            )
+                        val memoryColor = when {
+                            memoryInfoText.contains("Занято") && memoryInfoText.contains("ГБ") -> {
+                                val usedGb = Regex("Занято ([\\d.]+)").find(memoryInfoText)?.groupValues?.get(1)?.toFloatOrNull() ?: 0f
+                                val totalGb = Regex("Всего доступно ([\\d.]+)").find(memoryInfoText)?.groupValues?.get(1)?.toFloatOrNull() ?: 1f
+                                if (totalGb > 0f && (usedGb / totalGb) > 0.95f) Color.Red else GreenColor
+                            }
+                            else -> GreenColor
+                        }
+
+                        Text(
+                            text = memoryInfoText,
+                            color = memoryColor,
+                            fontSize = 8.sp,
+                            fontFamily = ChatFontFamily,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 4.dp, end = 4.dp, bottom = 2.dp),
+                            textAlign = TextAlign.Center
+                        )
         }
     }
 }
