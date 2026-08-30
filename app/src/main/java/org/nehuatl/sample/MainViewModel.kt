@@ -1450,28 +1450,48 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     fun overwriteLongTermMemory(newFullText: String) {
-        try {
-            if (!memoryFile.exists()) {
-                memoryFile.createNewFile()
-            }
-
-            val lines = newFullText.split("\n").filter { it.isNotBlank() }
-            val categorizedLines = mutableListOf<String>()
-
-            for (line in lines) {
-                val category = determineCategory(line)
-                categorizedLines.add(category)
-                categorizedLines.add(line)
-                categorizedLines.add("")
-            }
-
-            memoryFile.writeText(categorizedLines.joinToString("\n"))
-            Log.d(TAG, "База знаний успешно обновлена и разделена по категориям")
-            appendSystemMessage("🧠 База знаний обновлена и разделена по категориям")
-        } catch (e: Exception) {
-            Log.e(TAG, "Ошибка перезаписи базы знаний: ${e.message}")
+    try {
+        if (!memoryFile.exists()) {
+            memoryFile.createNewFile()
         }
+
+        val lines = newFullText
+            .split("\n")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+
+        // Группируем по категориям
+        val grouped = mutableMapOf<String, MutableList<String>>()
+
+        for (line in lines) {
+            val category = determineCategory(line)
+            if (!grouped.containsKey(category)) {
+                grouped[category] = mutableListOf()
+            }
+            grouped[category]!!.add(line)
+        }
+
+        // Формируем красивый вывод
+        val output = StringBuilder()
+
+        for (category in CATEGORIES) {
+            val entries = grouped[category]
+            if (entries != null && entries.isNotEmpty()) {
+                output.append(category).append("\n")
+                for (entry in entries) {
+                    output.append(entry).append("\n")
+                }
+                output.append("\n")
+            }
+        }
+
+        memoryFile.writeText(output.toString().trim() + "\n")
+        Log.d(TAG, "База знаний успешно обновлена и упорядочена")
+        appendSystemMessage("🧠 База знаний обновлена и упорядочена")
+    } catch (e: Exception) {
+        Log.e(TAG, "Ошибка перезаписи базы знаний: ${e.message}")
     }
+}
 
     private fun saveBrain(text: String) {
         try {
