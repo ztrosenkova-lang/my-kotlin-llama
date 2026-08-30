@@ -226,7 +226,7 @@ fun ChatScreen(
         }
     }
 
-    val fullWelcomeString = "Привет! Я твой персональный ИИ-Друг. 🤖✨ " +
+    val fullWelcomeString = "Привет! Я твой персональный ИИ Друг. 🤖✨ " +
         "Я лучший хранитель паролей, переводчик с разных языков и просто умный собеседник. " +
         "Я создан, чтобы быть твоим надежным и автономным союзником. " +
         "Я умею слышать и говорить. 🎤 Нажимай на микрофон внизу, чтобы общаться голосом. " +
@@ -853,7 +853,7 @@ fun ThinkingRobotAnimation(
             .height(height)
             .semantics { contentDescription = "ИИ обдумывает запрос" }
     ) {
-        val metalLight = Color(0xFF7A8CA0)
+        val metalLight = Color(0xFF8C9EAB)
         val metal = Color(0xFF5D6E82)
         val metalDark = Color(0xFF42546A)
         val eyeDark = Color(0xFF0F3D4C)
@@ -877,30 +877,35 @@ fun ThinkingRobotAnimation(
             )
         }
 
-        drawRoundRect(
+        // ================= Плечи и корпус =================
+        drawOval(
             Brush.verticalGradient(listOf(metalLight, metalDark)),
-            topLeft = pt(30f, 80f), size = Size(40f * u, 24f * u),
-            cornerRadius = CornerRadius(9f * u)
+            topLeft = pt(28f, 76f),
+            size = Size(44f * u, 24f * u)
         )
-        drawCircle(metal, 8f * u, pt(29f, 89f))
-        drawCircle(metal, 8f * u, pt(71f, 89f))
+        drawCircle(metal, 8f * u, pt(29f, 87f))
+        drawCircle(metal, 8f * u, pt(71f, 87f))
         drawRoundRect(
             Color(0xFF334457),
-            topLeft = pt(42f, 75f), size = Size(16f * u, 7f * u),
+            topLeft = pt(42f, 73f),
+            size = Size(16f * u, 6f * u),
             cornerRadius = CornerRadius(2f * u)
         )
 
+        // ================= Антенна =================
         drawLine(metalDark, pt(69f, 52f), pt(76f, 31f), strokeWidth = 1.6f * u)
         val orbP = 0.5f + 0.5f * sin(finalPulse * 2f)
         glow(pt(76.5f, 28f), (6f + 2f * orbP) * u, orange.copy(alpha = 0.55f))
         drawCircle(orange, (2.6f + 0.4f * orbP) * u, pt(76.5f, 28f))
         drawCircle(Color(0xFFFFD9A6), 1f * u, pt(75.8f, 27f))
 
-        drawRoundRect(metal, pt(19f, 56f), Size(8f * u, 14f * u), CornerRadius(3.5f * u))
-        drawRoundRect(metal, pt(73f, 56f), Size(8f * u, 14f * u), CornerRadius(3.5f * u))
-        drawRoundRect(metalDark, pt(21f, 59f), Size(4f * u, 8f * u), CornerRadius(2f * u))
-        drawRoundRect(metalDark, pt(75f, 59f), Size(4f * u, 8f * u), CornerRadius(2f * u))
+        // ================= Уши — круглые шайбы =================
+        drawOval(metal, topLeft = pt(19f, 55f), size = Size(9f * u, 16f * u))
+        drawOval(metal, topLeft = pt(72f, 55f), size = Size(9f * u, 16f * u))
+        drawOval(metalDark, topLeft = pt(21.5f, 58f), size = Size(4.5f * u, 10f * u))
+        drawOval(metalDark, topLeft = pt(74f, 58f), size = Size(4.5f * u, 10f * u))
 
+        // ================= Купол =================
         val domeC = pt(50f, 48f)
         val domeR = 22f * u
         val domeTL = Offset(domeC.x - domeR, domeC.y - domeR)
@@ -910,6 +915,7 @@ fun ThinkingRobotAnimation(
             topLeft = domeTL, size = domeSize
         )
 
+        // ================= Мозг =================
         val s = 1f + 0.05f * sin(finalPulse * 1.5f)
         fun bp(x: Float, y: Float) = pt(50f + (x - 50f) * s, 39f + (y - 39f) * s)
 
@@ -918,20 +924,26 @@ fun ThinkingRobotAnimation(
         listOf(
             Triple(43f, 39f, 9.5f), Triple(57f, 39f, 9.5f),
             Triple(50f, 33f, 9f), Triple(50f, 42f, 8f),
-            Triple(37f, 42f, 6f), Triple(63f, 42f, 6f)
+            Triple(37f, 42f, 6f), Triple(63f, 42f, 6f),
+            Triple(46f, 35f, 5f), Triple(54f, 35f, 5f),
+            Triple(40f, 37f, 5f), Triple(60f, 37f, 5f)
         ).forEach { (x, y, r) -> drawCircle(brainPink, r * s * u, bp(x, y)) }
 
         listOf(
             42f to 33f, 50f to 30f, 58f to 34f,
-            44f to 41f, 56f to 41f, 49f to 37f
+            44f to 41f, 56f to 41f, 49f to 37f,
+            38f to 39f, 62f to 39f, 46f to 33f,
+            54f to 33f, 41f to 36f, 59f to 36f
         ).forEach { (x, y) ->
             drawArc(
                 brainDark, 200f, 140f, false,
-                topLeft = bp(x - 3f, y - 3f), size = Size(6f * s * u, 6f * s * u),
+                topLeft = bp(x - 3f, y - 3f),
+                size = Size(6f * s * u, 6f * s * u),
                 style = Stroke(1.1f * u)
             )
         }
 
+        // ================= Орбиты и искры =================
         rotate(-16f, pivot = pt(50f, 38f)) {
             drawOval(
                 cyan.copy(alpha = 0.55f),
@@ -964,6 +976,7 @@ fun ThinkingRobotAnimation(
             drawCircle(cyanSoft, 0.9f * u, p)
         }
 
+        // ================= Купол: ободок и блик =================
         drawArc(
             Color(0xFFDFF7FC).copy(alpha = 0.6f), 180f, 180f, false,
             topLeft = domeTL, size = domeSize, style = Stroke(1.1f * u)
@@ -976,14 +989,16 @@ fun ThinkingRobotAnimation(
         )
         drawOval(metalDark, topLeft = pt(27.5f, 46.2f), size = Size(45f * u, 3.4f * u))
 
-        drawRoundRect(
+        // ================= Голова — овальная =================
+        drawOval(
             Brush.verticalGradient(listOf(metalLight, metal, metalDark)),
-            topLeft = pt(26f, 48f), size = Size(48f * u, 30f * u),
-            cornerRadius = CornerRadius(10f * u)
+            topLeft = pt(26f, 47f),
+            size = Size(48f * u, 32f * u)
         )
 
+        // ================= Глаза =================
         for (sx in listOf(-1f, 1f)) {
-            val ec = pt(50f + sx * 9.5f, 62f)
+            val ec = pt(50f + sx * 9.5f, 61f)
             val ry = 7f * u * finalBlink
             glow(ec, 8f * u, cyan.copy(alpha = 0.30f))
             drawEllipse(
@@ -1005,19 +1020,21 @@ fun ThinkingRobotAnimation(
             }
         }
 
+        // ================= Рот с точными высотами =================
+        val mouthHeights = listOf(0.2f, 0.35f, 0.5f, 0.35f, 0.2f)
         for (i in 0..4) {
-            val h = (2.5f + 3.5f * (0.5f + 0.5f * sin(finalPhase * 2f + i * 1.1f))) * u
+            val baseH = mouthHeights[i] * 7f * u
+            val h = baseH * (0.7f + 0.3f * sin(finalPhase * 2f + i * 1.1f))
             val x = 50f + (i - 2) * 2.6f
             drawRoundRect(
                 cyan,
-                topLeft = Offset(offX + (x - 0.7f) * u, offY + 73f * u - h),
+                topLeft = Offset(offX + (x - 0.7f) * u, offY + 72f * u - h),
                 size = Size(1.4f * u, h),
                 cornerRadius = CornerRadius(0.7f * u)
             )
         }
     }
 }
-
 private fun DrawScope.drawGear(
     center: Offset,
     radius: Float,
