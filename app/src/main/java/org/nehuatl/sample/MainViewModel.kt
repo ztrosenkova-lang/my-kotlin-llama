@@ -867,6 +867,27 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         return sectionLines.joinToString("\n")
     }
 
+    private fun extractNumbers(query: String): List<String> {
+        return Regex("\\d+[.,]?\\d*").findAll(query).map { it.value }.toList()
+    }
+
+    private fun extractUnits(query: String): List<String> {
+        val units = listOf("р/м²", "р/пм", "р/кг", "р/шт", "р/лист", "р/тонна", "р/т", "р/м", "руб")
+        return units.filter { query.contains(it, ignoreCase = true) }
+    }
+
+    private fun getSynonyms(word: String): List<String> {
+        return when (word) {
+            "плитк" -> listOf("плитк", "кафел", "керамогранит", "мозаик")
+            "покраск" -> listOf("покраск", "окраск", "малярн")
+            "труб" -> listOf("труб", "вгп", "э/с", "профильн")
+            "лист" -> listOf("лист", "листов")
+            "металл" -> listOf("металл", "стальн")
+            "укладк" -> listOf("укладк", "монтаж", "установк")
+            else -> listOf(word)
+        }
+    }
+
     private fun searchMemory(query: String, category: String? = null): String {
         val fullMemory = readFromLongTermMemory()
         if (fullMemory.isEmpty()) return ""
@@ -886,51 +907,58 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 }
 
                 val keywords = extractKeywords(query)
-                if (keywords.isEmpty()) return sectionLines.joinToString("\n")
+                val numbers = extractNumbers(query)
+                val units = extractUnits(query)
 
-                // Ищем подкатегорию — строку без цифр и цен, похожую на заголовок
-                val matchedIndices = sectionLines.indices.filter { idx ->
-                    val line = sectionLines[idx].lowercase()
-                    keywords.any { keyword -> line.contains(keyword) }
+                val expandedKeywords = keywords.flatMap { getSynonyms(it) }.distinct()
+
+                if (expandedKeywords.isEmpty() && numbers.isEmpty() && units.isEmpty()) {
+                    return sectionLines.joinToString("\n")
                 }
 
-                if (matchedIndices.isEmpty()) return ""
+                data class ScoredLine(val line: String, val score: Int)
 
-                // Берём первое совпадение
-                val startIdx = matchedIndices.first()
-                val resultLines = mutableListOf<String>()
+                val scoredLines = sectionLines.map { line ->
+                    val lowerLine = line.lowercase()
+                    var score = 0
 
-                // Если совпавшая строка — подзаголовок (без цифр), берём её и всё после до следующего подзаголовка
-                resultLines.add(sectionLines[startIdx])
+                    val keywordMatches = expandedKeywords.count { keyword -> lowerLine.contains(keyword) }
+                    score += keywordMatches * 10
 
-                var j = startIdx + 1
-                while (j < sectionLines.size) {
-                    val line = sectionLines[j]
+                    val numberMatches = numbers.count { number -> line.contains(number) }
+                    score += numberMatches * 20
+
+                    val unitMatches = units.count { unit -> lowerLine.contains(unit) }
+                    score += unitMatches * 15
+
                     val hasDigits = line.any { it.isDigit() }
-                    if (!hasDigits && keywords.any { keyword -> line.lowercase().contains(keyword) } && j > startIdx + 1) {
-                        break
+                    val hasPrice = line.contains("р/") || line.contains("руб")
+                    if (!hasPrice && hasDigits) {
+                        score -= 5
                     }
-                    if (j == startIdx + 1 && !hasDigits && !keywords.any { keyword -> line.lowercase().contains(keyword) }) {
-                        // это может быть следующий подзаголовок — останавливаемся
-                        break
+                    if (!hasDigits) {
+                        score -= 10
                     }
-                    resultLines.add(line)
-                    j++
+
+                    ScoredLine(line, score)
                 }
 
-                return resultLines.joinToString("\n")
+                val sortedLines = scoredLines.sortedByDescending { it.score }
+
+                val resultLines = sortedLines.filter { it.score > 0 }
+
+                if (resultLines.isEmpty()) return ""
+
+                val maxScore = resultLines.first().score
+
+                val threshold = maxScore / 2
+                val finalLines = resultLines.filter { it.score >= threshold }
+
+                return finalLines.joinToString("\n") { it.line }
             }
         }
 
-        val keywords = extractKeywords(query)
-        return if (keywords.isNotEmpty()) {
-            lines.filter { line ->
-                val lowerLine = line.lowercase()
-                keywords.any { keyword -> lowerLine.contains(keyword) }
-            }.joinToString("\n")
-        } else {
-            ""
-        }
+        return ""
     }
 
     private fun searchBrain(query: String): String {
