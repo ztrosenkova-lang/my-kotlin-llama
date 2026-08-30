@@ -878,7 +878,7 @@ fun ThinkingRobotAnimation(
         val brainDark = Color(0xFFD67E93)
         val orange = Color(0xFFF89B3C)
 
-        val u = size.height / 50f
+        val u = size.height / 67f
         val offX = (size.width - 100f * u) / 2f
         val offY = (size.height - 100f * u) / 2f + 1.2f * u * sin(finalBob)
 
@@ -1054,7 +1054,11 @@ drawArc(
 
         // ================= Рот =================
 for (i in 0..4) {
-    val h = (3f + 4f * (0.5f + 0.5f * sin(finalPhase * 3f + i * 1.1f))) * u
+    val h = if (isSpeaking) {
+        (3f + 4f * (0.5f + 0.5f * sin(finalPhase * 3f + i * 1.1f))) * u
+    } else {
+        (3f + 1.5f * sin(i * 1.1f)) * u
+    }
     val x = 50f + (i - 2) * 2.6f
     drawRoundRect(
         cyan,
