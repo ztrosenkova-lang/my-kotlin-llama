@@ -672,9 +672,21 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     private fun filterTextForSpeech(text: String): String {
-        val cleanText = text.replace(Regex("[^\\p{L}\\p{N}\\s.,!?]"), "")
-        return cleanText.replace(Regex("\\s+"), " ").trim()
+    var cleanText = text
+        .replace("+", " плюс ")
+        .replace("=", " равно ")
+        .replace("*", " умножить на ")
+        .replace("/", " разделить на ")
+        .replace("-", " минус ")
+
+    // Заменяем запятую в числах на слово "запятая"
+    cleanText = Regex("(\\d),(\\d)").replace(cleanText) { match ->
+        "${match.groupValues[1]} запятая ${match.groupValues[2]}"
     }
+
+    cleanText = cleanText.replace(Regex("[^\\p{L}\\p{N}\\s.!?]"), "")
+    return cleanText.replace(Regex("\\s+"), " ").trim()
+}
 
     fun speakText(text: String) {
         if (!isTtsEnabled || text.isBlank()) {
