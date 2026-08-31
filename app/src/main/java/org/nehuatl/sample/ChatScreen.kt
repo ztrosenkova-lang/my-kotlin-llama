@@ -1048,7 +1048,7 @@ drawArc(
         // ================= Рот =================
 for (i in 0..4) {
     val h = if (isSpeaking) {
-        (3f + 4f * (0.5f + 0.5f * sin(finalPhase * 3f + i * 1.1f))) * u
+        (3f + 4f * (0.5f + 0.5f * sin(phase * 3f + i * 1.1f))) * u
     } else {
         (3f + 1.5f * sin(i * 1.1f)) * u
     }
@@ -1218,14 +1218,15 @@ private fun TopBarWithSwitch(
     val cloudIndicatorColor = if (isCloudReady) GreenColor else PaleYellowColor
 
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(100.dp)
-            .padding(4.dp)
-            .border(1.dp, BorderGray, RoundedCornerShape(8.dp))
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    modifier = Modifier
+        .fillMaxWidth()
+        .height(120.dp)
+        .padding(4.dp)
+        .background(Color(0xFFFFF9DB), RoundedCornerShape(8.dp))
+        .border(1.dp, BorderGray, RoundedCornerShape(8.dp))
+        .padding(horizontal = 8.dp),
+    verticalAlignment = Alignment.CenterVertically
+) {
       Column(
     modifier = Modifier
         .width(56.dp)
@@ -1242,12 +1243,13 @@ private fun TopBarWithSwitch(
         contentScale = ContentScale.Crop
     )
     Text(
-        text = "ИИ-Друг",
+        text = "И\nИ\n-\nД\nр\nу\nг",
         color = AccentColor,
-        fontSize = 8.sp,
+        fontSize = 10.sp,
         fontFamily = FontFamily.Monospace,
         fontWeight = FontWeight.ExtraBold,
-        modifier = Modifier
+        textAlign = TextAlign.Center,
+        lineHeight = 10.sp
     )
 }
 
