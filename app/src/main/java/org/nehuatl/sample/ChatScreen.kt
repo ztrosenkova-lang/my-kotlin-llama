@@ -857,12 +857,10 @@ fun ThinkingRobotAnimation(
         ),
         label = "blink"
     )
-
-    val finalPhase = if (isActive) phase else 0f
-    val finalPulse = if (isActive) pulse else 0f
-    val finalBob = if (isActive) bob else 0f
-    val finalBlink = if (isActive) blink else 1f
-
+    val finalPhase = phase
+    val finalPulse = pulse
+    val finalBob = bob
+    val finalBlink = if (isActive || isSpeaking) blink else 1f
     Canvas(
         modifier = modifier
             .height(height)
