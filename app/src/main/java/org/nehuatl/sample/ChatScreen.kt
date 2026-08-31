@@ -878,7 +878,7 @@ fun ThinkingRobotAnimation(
         val brainDark = Color(0xFFD67E93)
         val orange = Color(0xFFF89B3C)
 
-        val u = size.height / 67f
+        val u = size.height / 74f
         val offX = (size.width - 100f * u) / 2f
         val offY = (size.height - 100f * u) / 2f + 1.2f * u * sin(finalBob)
 
@@ -896,17 +896,12 @@ fun ThinkingRobotAnimation(
         // ================= Плечи и корпус =================
         drawOval(
             Brush.verticalGradient(listOf(metalLight, metalDark)),
-            topLeft = pt(28f, 76f),
-            size = Size(44f * u, 24f * u)
+            topLeft = pt(28f, 77f),
+            size = Size(44f * u, 18f * u)
         )
-        drawCircle(metal, 8f * u, pt(29f, 87f))
-        drawCircle(metal, 8f * u, pt(71f, 87f))
-        drawRoundRect(
-            Color(0xFF6B7A8A),
-            topLeft = pt(42f, 73f),
-            size = Size(16f * u, 6f * u),
-            cornerRadius = CornerRadius(2f * u)
-        )
+        drawCircle(metal, 6f * u, pt(29f, 85f))
+        drawCircle(metal, 6f * u, pt(71f, 85f))
+    
 
         // ================= Антенна =================
         drawLine(metalDark, pt(24f, 63f), pt(24f, 28f), strokeWidth = 1.6f * u)
@@ -1233,7 +1228,7 @@ private fun TopBarWithSwitch(
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-       Column(
+      Column(
     modifier = Modifier
         .width(56.dp)
         .fillMaxHeight(),
@@ -1254,7 +1249,7 @@ private fun TopBarWithSwitch(
         fontSize = 8.sp,
         fontFamily = FontFamily.Monospace,
         fontWeight = FontWeight.ExtraBold,
-        modifier = Modifier.padding(top = 0.dp)
+        modifier = Modifier
     )
 }
 
