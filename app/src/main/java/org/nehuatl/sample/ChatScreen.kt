@@ -124,15 +124,38 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.Brush
 
-private val AppBackground = Color(0xFFFFFFFF)
-private val SurfaceGray = Color(0xFFF1F3F5)
-private val BorderGray = Color(0xFFCED4DA)
-private val AccentColor = Color(0xFF74C0FC)
-private val DarkText = Color(0xFF212529)
-private val ChatFontFamily = FontFamily.Monospace
-private val GreenColor = Color(0xFF2E7D32)
-private val PaleYellowColor = Color(0xFFFFF9DB)
-private val FriendlyRobotColor = Color(0xFF00B4D8)
+private data class AppColors(
+    val background: Color,
+    val surfaceGray: Color,
+    val borderGray: Color,
+    val accent: Color,
+    val text: Color,
+    val chatFont: FontFamily,
+    val green: Color,
+    val paleYellow: Color
+)
+
+private val LightColors = AppColors(
+    background = Color(0xFFFFFFFF),
+    surfaceGray = Color(0xFFF1F3F5),
+    borderGray = Color(0xFFCED4DA),
+    accent = Color(0xFF74C0FC),
+    text = Color(0xFF212529),
+    chatFont = FontFamily.Monospace,
+    green = Color(0xFF2E7D32),
+    paleYellow = Color(0xFFFFF9DB)
+)
+
+private val DarkColors = AppColors(
+    background = Color(0xFF121212),
+    surfaceGray = Color(0xFF1E1E1E),
+    borderGray = Color(0xFF3A3A3A),
+    accent = Color(0xFF90CAF9),
+    text = Color(0xFFE0E0E0),
+    chatFont = FontFamily.Monospace,
+    green = Color(0xFF81C784),
+    paleYellow = Color(0xFF2A2A1E)
+)
 
 enum class AIMode {
     LOCAL,
@@ -173,6 +196,9 @@ fun ChatScreen(
     val isSpeaking by viewModel.isSpeaking.collectAsStateWithLifecycle(initialValue = false)
     val speakStartTrigger by viewModel.speakStartTrigger.collectAsStateWithLifecycle(initialValue = false)
     val pendingTextToPrint by viewModel.pendingTextToPrint.collectAsStateWithLifecycle(initialValue = "")
+    val isDarkTheme by viewModel.isDarkTheme.collectAsStateWithLifecycle(initialValue = false)
+
+    val colors = if (isDarkTheme) DarkColors else LightColors
 
     var promptInput by remember { mutableStateOf("") }
     var showModelDialog by remember { mutableStateOf(false) }
@@ -243,35 +269,35 @@ fun ChatScreen(
     }
 
     LaunchedEffect(speakStartTrigger) {
-    if (speakStartTrigger && welcomeStarted && !welcomeTextPrinted) {
-        welcomeTextPrinted = true
-        var runningText = ""
-        for (i in fullWelcomeString.indices) {
-            runningText += fullWelcomeString[i]
-            viewModel.updateLastSystemMessage(runningText)
-            delay(50)
+        if (speakStartTrigger && welcomeStarted && !welcomeTextPrinted) {
+            welcomeTextPrinted = true
+            var runningText = ""
+            for (i in fullWelcomeString.indices) {
+                runningText += fullWelcomeString[i]
+                viewModel.updateLastSystemMessage(runningText)
+                delay(50)
+            }
         }
     }
-}
 
-LaunchedEffect(speakStartTrigger, pendingTextToPrint) {
-    if (speakStartTrigger && pendingTextToPrint.isNotEmpty() && !pendingTextPrinted) {
-        pendingTextPrinted = true
-        var runningText = ""
-        for (i in pendingTextToPrint.indices) {
-            runningText += pendingTextToPrint[i]
-            viewModel.updateAssistantMessage(runningText)
-            delay(50)
+    LaunchedEffect(speakStartTrigger, pendingTextToPrint) {
+        if (speakStartTrigger && pendingTextToPrint.isNotEmpty() && !pendingTextPrinted) {
+            pendingTextPrinted = true
+            var runningText = ""
+            for (i in pendingTextToPrint.indices) {
+                runningText += pendingTextToPrint[i]
+                viewModel.updateAssistantMessage(runningText)
+                delay(50)
+            }
+            viewModel.clearPendingText()
         }
-        viewModel.clearPendingText()
     }
-}
 
-LaunchedEffect(isSpeaking) {
-    if (!isSpeaking) {
-        pendingTextPrinted = false
+    LaunchedEffect(isSpeaking) {
+        if (!isSpeaking) {
+            pendingTextPrinted = false
+        }
     }
-}
 
     LaunchedEffect(showCloudDialog) {
         if (showCloudDialog) {
@@ -315,7 +341,8 @@ LaunchedEffect(isSpeaking) {
                 secretPhraseInput = ""
             },
             viewModel = viewModel,
-            isPermanentlyBlocked = isPermanentlyBlocked
+            isPermanentlyBlocked = isPermanentlyBlocked,
+            colors = colors
         )
         return
     }
@@ -333,7 +360,8 @@ LaunchedEffect(isSpeaking) {
                     viewModel.setCurrentMode(AIMode.LOCAL)
                 }
             },
-            onDismiss = { showModelDialog = false }
+            onDismiss = { showModelDialog = false },
+            colors = colors
         )
     }
 
@@ -389,14 +417,16 @@ LaunchedEffect(isSpeaking) {
                     }
                 }
             },
-            isGeneratingToken = isGeneratingToken
+            isGeneratingToken = isGeneratingToken,
+            colors = colors
         )
     }
 
     if (showHelpDialog) {
         HelpDialog(
             onDismiss = { showHelpDialog = false },
-            viewModel = viewModel
+            viewModel = viewModel,
+            colors = colors
         )
     }
 
@@ -404,48 +434,52 @@ LaunchedEffect(isSpeaking) {
         MemoryEditorDialog(
             initialText = viewModel.readFromLongTermMemory(),
             onSave = { viewModel.overwriteLongTermMemory(it) },
-            onDismiss = { showMemoryEditor = false }
+            onDismiss = { showMemoryEditor = false },
+            colors = colors
         )
     }
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(AppBackground)
+            .background(colors.background)
             .imePadding()
     ) {
-      TopBarWithSwitch(
-    currentMode = currentMode,
-    onModeChange = { newMode ->
-        viewModel.setCurrentMode(newMode)
-        if (newMode == AIMode.NEUTRAL) {
-            viewModel.releaseModel()
-            viewModel.clearCloudConfig()
-            viewModel.appendSystemMessage("📢 ИИ выгружен из памяти")
-        }
-    },
-    isModelLoaded = isModelLoaded,
-    cloudConfig = viewModel.getCloudConfig(),
-    onCloudForceDialog = { showCloudDialog = true },
-    onLocalForceDialog = { showModelDialog = true },
-    statusText = when (currentMode) {
-        AIMode.LOCAL -> {
-            when (state) {
-                is GenerationState.Generating -> "🤖 Локальный ИИ думает..."
-                else -> "🤖 Локальный ИИ: Готов к работе"
-            }
-        }
-        AIMode.CLOUD -> {
-            when (cloudState) {
-                is CloudAIState.Generating -> "☁️ Облако думает..."
-                else -> "☁️ Облако: Готово к работе"
-            }
-        }
-           else -> "🤖 ИИ выгружен"
-    },
-    isGenerating = state.isActive() || cloudState.isActive(),
-    isSpeaking = isSpeaking
-)
+        TopBarWithSwitch(
+            currentMode = currentMode,
+            onModeChange = { newMode ->
+                viewModel.setCurrentMode(newMode)
+                if (newMode == AIMode.NEUTRAL) {
+                    viewModel.releaseModel()
+                    viewModel.clearCloudConfig()
+                    viewModel.appendSystemMessage("📢 ИИ выгружен из памяти")
+                }
+            },
+            isModelLoaded = isModelLoaded,
+            cloudConfig = viewModel.getCloudConfig(),
+            onCloudForceDialog = { showCloudDialog = true },
+            onLocalForceDialog = { showModelDialog = true },
+            statusText = when (currentMode) {
+                AIMode.LOCAL -> {
+                    when (state) {
+                        is GenerationState.Generating -> "🤖 Локальный ИИ думает..."
+                        else -> "🤖 Локальный ИИ: Готов к работе"
+                    }
+                }
+                AIMode.CLOUD -> {
+                    when (cloudState) {
+                        is CloudAIState.Generating -> "☁️ Облако думает..."
+                        else -> "☁️ Облако: Готово к работе"
+                    }
+                }
+                else -> "🤖 ИИ выгружен"
+            },
+            isGenerating = state.isActive() || cloudState.isActive(),
+            isSpeaking = isSpeaking,
+            isDarkTheme = isDarkTheme,
+            onToggleTheme = { viewModel.toggleTheme() },
+            colors = colors
+        )
 
         ControlPanel(
             onMemoryClick = {
@@ -468,7 +502,8 @@ LaunchedEffect(isSpeaking) {
             isTtsReady = isTtsReady,
             viewModel = viewModel,
             context = context,
-            coroutineScope = coroutineScope
+            coroutineScope = coroutineScope,
+            colors = colors
         )
 
         if (showSettings) {
@@ -487,7 +522,8 @@ LaunchedEffect(isSpeaking) {
                 onClose = {
                     tempTemperature = temperature
                     showSettings = false
-                }
+                },
+                colors = colors
             )
         }
 
@@ -498,7 +534,8 @@ LaunchedEffect(isSpeaking) {
                 onSave = {
                     viewModel.updateSystemPrompt(tempPromptText)
                     showPromptSettings = false
-                }
+                },
+                colors = colors
             )
         }
 
@@ -507,7 +544,8 @@ LaunchedEffect(isSpeaking) {
             cloudState = cloudState,
             currentMode = currentMode,
             currentModel = if (isModelLoaded) currentModelPath else null,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            colors = colors
         )
 
         Box(
@@ -526,7 +564,7 @@ LaunchedEffect(isSpeaking) {
             Card(
                 modifier = Modifier.fillMaxSize(),
                 shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.dp, BorderGray),
+                border = BorderStroke(1.dp, colors.borderGray),
                 colors = CardDefaults.cardColors(
                     containerColor = Color.Transparent
                 )
@@ -539,62 +577,62 @@ LaunchedEffect(isSpeaking) {
                             .verticalScroll(scrollState)
                     ) {
                         chatMessages.forEach { message ->
-    val prefix = when (message.role) {
-        "user" -> "Вы: "
-        "assistant" -> "ИИ-Друг: "
-        "system" -> "📢 "
-        else -> ""
-    }
-    val textColor = when (message.role) {
-        "user" -> GreenColor
-        "assistant" -> DarkText
-        else -> DarkText
-    }
-    Text(
-        text = prefix + message.text,
-        color = textColor,
-        fontFamily = ChatFontFamily,
-        fontSize = 10.sp,
-        modifier = Modifier.padding(vertical = 2.dp)
-    )
-}
+                            val prefix = when (message.role) {
+                                "user" -> "Вы: "
+                                "assistant" -> "ИИ-Друг: "
+                                "system" -> "📢 "
+                                else -> ""
+                            }
+                            val textColor = when (message.role) {
+                                "user" -> colors.green
+                                "assistant" -> colors.text
+                                else -> colors.text
+                            }
+                            Text(
+                                text = prefix + message.text,
+                                color = textColor,
+                                fontFamily = colors.chatFont,
+                                fontSize = 10.sp,
+                                modifier = Modifier.padding(vertical = 2.dp)
+                            )
+                        }
 
                         if (generatedText.isNotEmpty() && state is GenerationState.Generating) {
-    Text(
-        text = "ИИ: $generatedText",
-        color = DarkText,
-        fontFamily = ChatFontFamily,
-        fontSize = 10.sp,
-        modifier = Modifier.padding(vertical = 2.dp)
-    )
-}
-
-if (cloudGeneratedText.isNotEmpty() && cloudState is CloudAIState.Generating) {
-    Text(
-        text = "☁️ ИИ: $cloudGeneratedText",
-        color = DarkText.copy(alpha = 0.8f),
-        fontFamily = ChatFontFamily,
-        fontSize = 10.sp,
-        modifier = Modifier.padding(vertical = 2.dp)
-    )
-}
+                            Text(
+                                text = "ИИ: $generatedText",
+                                color = colors.text,
+                                fontFamily = colors.chatFont,
+                                fontSize = 10.sp,
+                                modifier = Modifier.padding(vertical = 2.dp)
+                            )
+                        }
 
                         if (cloudGeneratedText.isNotEmpty() && cloudState is CloudAIState.Generating) {
-    Text(
-        text = "☁️ ИИ: $cloudGeneratedText",
-        color = DarkText.copy(alpha = 0.8f),
-        fontFamily = ChatFontFamily,
-        fontSize = 10.sp,
-        modifier = Modifier.padding(vertical = 2.dp)
-    )
-}
+                            Text(
+                                text = "☁️ ИИ: $cloudGeneratedText",
+                                color = colors.text.copy(alpha = 0.8f),
+                                fontFamily = colors.chatFont,
+                                fontSize = 10.sp,
+                                modifier = Modifier.padding(vertical = 2.dp)
+                            )
+                        }
+
+                        if (cloudGeneratedText.isNotEmpty() && cloudState is CloudAIState.Generating) {
+                            Text(
+                                text = "☁️ ИИ: $cloudGeneratedText",
+                                color = colors.text.copy(alpha = 0.8f),
+                                fontFamily = colors.chatFont,
+                                fontSize = 10.sp,
+                                modifier = Modifier.padding(vertical = 2.dp)
+                            )
+                        }
                     }
                 }
             }
         }
 
         if (imagePath != null) {
-            ImagePreview(imagePath = imagePath)
+            ImagePreview(imagePath = imagePath, colors = colors)
         }
 
         PromptInput(
@@ -626,7 +664,8 @@ if (cloudGeneratedText.isNotEmpty() && cloudState is CloudAIState.Generating) {
             remainingTimeText = remainingTimeText,
             isPermanentlyUnlocked = isPermanentlyUnlocked,
             currentMode = currentMode,
-            modifier = Modifier.padding(8.dp)
+            modifier = Modifier.padding(8.dp),
+            colors = colors
         )
     }
 }
@@ -1257,13 +1296,15 @@ fun ThinkingRobotAnimation(
         }
     }
 }
+
 @Composable
 private fun LockScreen(
     secretPhrase: String,
     onSecretPhraseChange: (String) -> Unit,
     onVerify: () -> Unit,
     viewModel: MainViewModel,
-    isPermanentlyBlocked: Boolean
+    isPermanentlyBlocked: Boolean,
+    colors: AppColors
 ) {
     val context = LocalContext.current
 
@@ -1273,7 +1314,7 @@ private fun LockScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(SurfaceGray),
+            .background(colors.surfaceGray),
         contentAlignment = Alignment.Center
     ) {
         if (isPermanentlyBlocked) {
@@ -1294,7 +1335,7 @@ private fun LockScreen(
                 Text(
                     text = "Удалите приложение.",
                     style = MaterialTheme.typography.bodyLarge,
-                    color = DarkText,
+                    color = colors.text,
                     textAlign = TextAlign.Center
                 )
             }
@@ -1309,7 +1350,7 @@ private fun LockScreen(
                 Text(
                     text = "🤖 Введите секретную фразу",
                     style = MaterialTheme.typography.headlineSmall,
-                    color = DarkText,
+                    color = colors.text,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(bottom = 24.dp)
                 )
@@ -1320,17 +1361,17 @@ private fun LockScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
-                    placeholder = { Text("Введите фразу...", color = DarkText.copy(alpha = 0.5f)) },
+                    placeholder = { Text("Введите фразу...", color = colors.text.copy(alpha = 0.5f)) },
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = DarkText,
-                        unfocusedTextColor = DarkText,
-                        focusedContainerColor = Color.White,
-                        unfocusedContainerColor = Color.White,
-                        focusedBorderColor = AccentColor,
-                        unfocusedBorderColor = BorderGray,
-                        cursorColor = AccentColor
+                        focusedTextColor = colors.text,
+                        unfocusedTextColor = colors.text,
+                        focusedContainerColor = colors.background,
+                        unfocusedContainerColor = colors.background,
+                        focusedBorderColor = colors.accent,
+                        unfocusedBorderColor = colors.borderGray,
+                        cursorColor = colors.accent
                     )
                 )
 
@@ -1354,7 +1395,7 @@ private fun LockScreen(
                         }
                         onVerify()
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.accent),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp)
@@ -1362,7 +1403,7 @@ private fun LockScreen(
                 ) {
                     Text(
                         text = "Подтвердить",
-                        color = DarkText,
+                        color = colors.text,
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp
                     )
@@ -1382,65 +1423,75 @@ private fun TopBarWithSwitch(
     onLocalForceDialog: () -> Unit,
     statusText: String = "",
     isGenerating: Boolean = false,
-    isSpeaking: Boolean = false
+    isSpeaking: Boolean = false,
+    isDarkTheme: Boolean,
+    onToggleTheme: () -> Unit,
+    colors: AppColors
 ) {
     val isLocalReady = isModelLoaded
     val isCloudReady = cloudConfig?.authKey?.isNotEmpty() == true
-    val localIndicatorColor = if (isLocalReady) GreenColor else PaleYellowColor
-    val cloudIndicatorColor = if (isCloudReady) GreenColor else PaleYellowColor
+    val localIndicatorColor = if (isLocalReady) colors.green else colors.paleYellow
+    val cloudIndicatorColor = if (isCloudReady) colors.green else colors.paleYellow
 
     Row(
-    modifier = Modifier
-        .fillMaxWidth()
-        .height(84.dp)
-        .padding(4.dp)
-        .background(Color(0xFFFFF9DB), RoundedCornerShape(8.dp))
-        .border(1.dp, BorderGray, RoundedCornerShape(8.dp))
-        .padding(horizontal = 8.dp),
-    verticalAlignment = Alignment.CenterVertically
-) {
-      Column(
-    modifier = Modifier
-        .width(56.dp)
-        .fillMaxHeight(),
-    verticalArrangement = Arrangement.Center,
-    horizontalAlignment = Alignment.CenterHorizontally
-) {
-    Image(
-        painter = painterResource(id = R.mipmap.ic_launcher),
-        contentDescription = "Лого",
         modifier = Modifier
-            .size(36.dp)
-            .clip(RoundedCornerShape(8.dp)),
-        contentScale = ContentScale.Crop
-    )
-    Spacer(modifier = Modifier.height(1.dp))
-    Text(
-        text = "ИИ-Друг",
-        color = AccentColor,
-        fontSize = 8.sp,
-        fontFamily = FontFamily.Monospace,
-        fontWeight = FontWeight.ExtraBold,
-        textAlign = TextAlign.Center,
-        maxLines = 1
-    )
-}
+            .fillMaxWidth()
+            .height(84.dp)
+            .padding(4.dp)
+            .background(colors.paleYellow, RoundedCornerShape(8.dp))
+            .border(1.dp, colors.borderGray, RoundedCornerShape(8.dp))
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Кнопка-логотип
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(colors.surfaceGray, RoundedCornerShape(8.dp))
+                .border(1.dp, colors.borderGray, RoundedCornerShape(8.dp))
+                .clickable { onToggleTheme() }
+                .padding(4.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Image(
+                    painter = painterResource(id = R.mipmap.ic_launcher),
+                    contentDescription = "Логотип",
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(RoundedCornerShape(6.dp)),
+                    contentScale = ContentScale.Crop
+                )
+                Text(
+                    text = "ИИ-Друг",
+                    color = colors.accent,
+                    fontSize = 8.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.ExtraBold,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1
+                )
+            }
+        }
 
         Box(
-    modifier = Modifier
-        .weight(1f)
-        .fillMaxHeight(),
-    contentAlignment = Alignment.Center
-) {
-    ThinkingRobotAnimation(
-    height = 70.dp,
-    isActive = isGenerating,
-    isSpeaking = isSpeaking,
-    isThinking = isGenerating,
-    isIdle = isLocalReady || isCloudReady,
-    modifier = Modifier.fillMaxWidth()
-)
-}
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+            contentAlignment = Alignment.Center
+        ) {
+            ThinkingRobotAnimation(
+                height = 70.dp,
+                isActive = isGenerating,
+                isSpeaking = isSpeaking,
+                isThinking = isGenerating,
+                isIdle = isLocalReady || isCloudReady,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
 
         Column(
             modifier = Modifier
@@ -1456,11 +1507,13 @@ private fun TopBarWithSwitch(
             ) {
                 StatusIndicator(
                     color = localIndicatorColor,
-                    text = "локальный ИИ"
+                    text = "локальный ИИ",
+                    colors = colors
                 )
                 StatusIndicator(
                     color = cloudIndicatorColor,
-                    text = "Облачный ИИ"
+                    text = "Облачный ИИ",
+                    colors = colors
                 )
             }
 
@@ -1473,28 +1526,33 @@ private fun TopBarWithSwitch(
                     label = "Local",
                     isSelected = currentMode == AIMode.LOCAL,
                     onClick = { onLocalForceDialog() },
-                    modifier = Modifier.width(42.dp).height(22.dp)
+                    modifier = Modifier.width(42.dp).height(22.dp),
+                    colors = colors
                 )
                 ModeButton(
                     label = "Neutral",
                     isSelected = currentMode == AIMode.NEUTRAL,
                     onClick = { onModeChange(AIMode.NEUTRAL) },
-                    modifier = Modifier.width(42.dp).height(22.dp)
+                    modifier = Modifier.width(42.dp).height(22.dp),
+                    colors = colors
                 )
                 ModeButton(
                     label = "Cloud",
                     isSelected = currentMode == AIMode.CLOUD,
                     onClick = { onCloudForceDialog() },
-                    modifier = Modifier.width(42.dp).height(22.dp)
+                    modifier = Modifier.width(42.dp).height(22.dp),
+                    colors = colors
                 )
             }
         }
     }
 }
+
 @Composable
 private fun StatusIndicator(
     color: Color,
-    text: String
+    text: String,
+    colors: AppColors
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -1504,12 +1562,12 @@ private fun StatusIndicator(
             modifier = Modifier
                 .size(10.dp)
                 .background(color, shape = CircleShape)
-                .border(0.5.dp, BorderGray, CircleShape)
+                .border(0.5.dp, colors.borderGray, CircleShape)
         )
         Text(
             text = text,
             fontSize = 6.sp,
-            color = DarkText
+            color = colors.text
         )
     }
 }
@@ -1519,25 +1577,26 @@ private fun ModeButton(
     label: String,
     isSelected: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    colors: AppColors
 ) {
     Box(
         modifier = modifier
             .clickable { onClick() }
             .background(
-                color = if (isSelected) AccentColor else SurfaceGray,
+                color = if (isSelected) colors.accent else colors.surfaceGray,
                 shape = RoundedCornerShape(4.dp)
             )
             .border(
                 width = if (isSelected) 1.dp else 0.5.dp,
-                color = if (isSelected) AccentColor else BorderGray,
+                color = if (isSelected) colors.accent else colors.borderGray,
                 shape = RoundedCornerShape(4.dp)
             ),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = label,
-            color = if (isSelected) Color.White else DarkText,
+            color = if (isSelected) colors.background else colors.text,
             fontSize = 7.sp,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
         )
@@ -1553,13 +1612,14 @@ private fun ControlPanel(
     isTtsReady: Boolean,
     viewModel: MainViewModel,
     context: android.content.Context,
-    coroutineScope: kotlinx.coroutines.CoroutineScope
+    coroutineScope: kotlinx.coroutines.CoroutineScope,
+    colors: AppColors
 ) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
         shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, BorderGray),
-        colors = CardDefaults.cardColors(containerColor = SurfaceGray)
+        border = BorderStroke(1.dp, colors.borderGray),
+        colors = CardDefaults.cardColors(containerColor = colors.surfaceGray)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(4.dp),
@@ -1569,22 +1629,26 @@ private fun ControlPanel(
             IconButtonWithLabel(
                 icon = Icons.Default.Memory,
                 label = "мозг",
-                onClick = onMemoryClick
+                onClick = onMemoryClick,
+                colors = colors
             )
             IconButtonWithLabel(
                 icon = Icons.Default.Settings,
                 label = "движок",
-                onClick = onSettingsClick
+                onClick = onSettingsClick,
+                colors = colors
             )
             IconButtonWithLabel(
                 icon = Icons.Default.Psychology,
                 label = "характер",
-                onClick = onPromptSettingsClick
+                onClick = onPromptSettingsClick,
+                colors = colors
             )
             IconButtonWithLabel(
                 icon = Icons.Default.Info,
                 label = "справка",
-                onClick = onHelpClick
+                onClick = onHelpClick,
+                colors = colors
             )
             IconButtonWithLabel(
                 icon = if (isTtsReady) Icons.Default.VolumeUp else Icons.Default.VolumeMute,
@@ -1595,19 +1659,25 @@ private fun ControlPanel(
                     } else {
                         viewModel.enableTts()
                     }
-                }
+                },
+                colors = colors
             )
         }
     }
 }
 
 @Composable
-private fun IconButtonWithLabel(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
+private fun IconButtonWithLabel(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    colors: AppColors
+) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         IconButton(onClick = onClick) {
-            Icon(imageVector = icon, contentDescription = label, tint = AccentColor)
+            Icon(imageVector = icon, contentDescription = label, tint = colors.accent)
         }
-        Text(text = label, color = DarkText, fontSize = 8.sp)
+        Text(text = label, color = colors.text, fontSize = 8.sp)
     }
 }
 
@@ -1621,52 +1691,53 @@ private fun SettingsPanel(
     onContextSizeChange: (Int) -> Unit,
     onModelChangeClick: () -> Unit,
     onSave: () -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    colors: AppColors
 ) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = SurfaceGray),
+        colors = CardDefaults.cardColors(containerColor = colors.surfaceGray),
         modifier = Modifier.fillMaxWidth().padding(8.dp),
-        border = BorderStroke(1.dp, BorderGray)
+        border = BorderStroke(1.dp, colors.borderGray)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("🌡️ Настройки движка ИИ", color = DarkText, style = MaterialTheme.typography.titleMedium)
+            Text("🌡️ Настройки движка ИИ", color = colors.text, style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
-            Text(text = "Креативность (Температура): ${String.format("%.1f", temperature)}", color = DarkText)
+            Text(text = "Креативность (Температура): ${String.format("%.1f", temperature)}", color = colors.text)
             Slider(
                 value = temperature,
                 onValueChange = onTemperatureChange,
                 valueRange = 0.1f..1.0f,
                 steps = 9,
                 modifier = Modifier.fillMaxWidth(),
-                colors = SliderDefaults.colors(thumbColor = AccentColor, activeTrackColor = AccentColor, inactiveTrackColor = BorderGray)
+                colors = SliderDefaults.colors(thumbColor = colors.accent, activeTrackColor = colors.accent, inactiveTrackColor = colors.borderGray)
             )
             Spacer(modifier = Modifier.height(12.dp))
-            Text(text = "Максимум токенов: $maxTokens", color = DarkText)
+            Text(text = "Максимум токенов: $maxTokens", color = colors.text)
             Slider(
                 value = maxTokens.toFloat(),
                 onValueChange = { onMaxTokensChange(it.toInt()) },
                 valueRange = 1f..4096f,
                 steps = 50,
                 modifier = Modifier.fillMaxWidth(),
-                colors = SliderDefaults.colors(thumbColor = AccentColor, activeTrackColor = AccentColor, inactiveTrackColor = BorderGray)
+                colors = SliderDefaults.colors(thumbColor = colors.accent, activeTrackColor = colors.accent, inactiveTrackColor = colors.borderGray)
             )
             Spacer(modifier = Modifier.height(12.dp))
-            Text(text = "Размер контекстного окна: $contextSize", color = DarkText)
+            Text(text = "Размер контекстного окна: $contextSize", color = colors.text)
             Slider(
                 value = contextSize.toFloat(),
                 onValueChange = { onContextSizeChange(it.toInt()) },
                 valueRange = 512f..8192f,
                 steps = 15,
                 modifier = Modifier.fillMaxWidth(),
-                colors = SliderDefaults.colors(thumbColor = AccentColor, activeTrackColor = AccentColor, inactiveTrackColor = BorderGray)
+                colors = SliderDefaults.colors(thumbColor = colors.accent, activeTrackColor = colors.accent, inactiveTrackColor = colors.borderGray)
             )
             Spacer(modifier = Modifier.height(12.dp))
             Button(
                 onClick = onModelChangeClick,
-                colors = ButtonDefaults.buttonColors(containerColor = BorderGray),
+                colors = ButtonDefaults.buttonColors(containerColor = colors.borderGray),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Сменить или перезагрузить модель", color = DarkText)
+                Text("Сменить или перезагрузить модель", color = colors.text)
             }
             Spacer(modifier = Modifier.height(8.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1674,52 +1745,57 @@ private fun SettingsPanel(
                     onClick = {
                         onSave()
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.accent),
                     modifier = Modifier.weight(1f)
-                ) { Text("Сохранить", color = DarkText) }
+                ) { Text("Сохранить", color = colors.background) }
                 Button(
                     onClick = onClose,
-                    colors = ButtonDefaults.buttonColors(containerColor = BorderGray),
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.borderGray),
                     modifier = Modifier.weight(1f)
-                ) { Text("Закрыть", color = DarkText) }
+                ) { Text("Закрыть", color = colors.text) }
             }
         }
     }
 }
 
 @Composable
-private fun PromptSettingsPanel(promptText: String, onPromptChange: (String) -> Unit, onSave: () -> Unit) {
+private fun PromptSettingsPanel(
+    promptText: String,
+    onPromptChange: (String) -> Unit,
+    onSave: () -> Unit,
+    colors: AppColors
+) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = SurfaceGray),
+        colors = CardDefaults.cardColors(containerColor = colors.surfaceGray),
         modifier = Modifier.fillMaxWidth().padding(8.dp),
-        border = BorderStroke(1.dp, BorderGray)
+        border = BorderStroke(1.dp, colors.borderGray)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("🧠 Роль ИИ (Системный промпт)", color = DarkText, style = MaterialTheme.typography.titleMedium)
+            Text("🧠 Роль ИИ (Системный промпт)", color = colors.text, style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedTextField(
                 value = promptText,
                 onValueChange = onPromptChange,
-                label = { Text("Инструкция для ИИ", color = DarkText) },
+                label = { Text("Инструкция для ИИ", color = colors.text) },
                 modifier = Modifier.fillMaxWidth(),
                 maxLines = 3,
                 singleLine = false,
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = DarkText,
-                    unfocusedTextColor = DarkText,
-                    focusedContainerColor = AppBackground,
-                    unfocusedContainerColor = AppBackground,
-                    focusedBorderColor = AccentColor,
-                    unfocusedBorderColor = BorderGray,
-                    cursorColor = AccentColor
+                    focusedTextColor = colors.text,
+                    unfocusedTextColor = colors.text,
+                    focusedContainerColor = colors.background,
+                    unfocusedContainerColor = colors.background,
+                    focusedBorderColor = colors.accent,
+                    unfocusedBorderColor = colors.borderGray,
+                    cursorColor = colors.accent
                 )
             )
             Spacer(modifier = Modifier.height(12.dp))
             Button(
                 onClick = onSave,
-                colors = ButtonDefaults.buttonColors(containerColor = AccentColor),
+                colors = ButtonDefaults.buttonColors(containerColor = colors.accent),
                 modifier = Modifier.align(Alignment.End)
-            ) { Text("Сохранить", color = DarkText) }
+            ) { Text("Сохранить", color = colors.background) }
         }
     }
 }
@@ -1737,12 +1813,13 @@ private fun CloudAIDialog(
     onClear: () -> Unit,
     onDismiss: () -> Unit,
     onGenerateToken: () -> Unit,
-    isGeneratingToken: Boolean
+    isGeneratingToken: Boolean,
+    colors: AppColors
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            colors = CardDefaults.cardColors(containerColor = SurfaceGray),
-            border = BorderStroke(1.dp, BorderGray),
+            colors = CardDefaults.cardColors(containerColor = colors.surfaceGray),
+            border = BorderStroke(1.dp, colors.borderGray),
             shape = RoundedCornerShape(16.dp)
         ) {
             Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1755,7 +1832,7 @@ private fun CloudAIDialog(
                     Text(
                         "Настройки облачного ИИ",
                         style = MaterialTheme.typography.titleMedium,
-                        color = AccentColor,
+                        color = colors.accent,
                         fontFamily = FontFamily.Monospace
                     )
                 }
@@ -1763,44 +1840,44 @@ private fun CloudAIDialog(
                 Text(
                     text = "Введите данные для подключения к облачному ИИ",
                     style = MaterialTheme.typography.bodySmall,
-                    color = DarkText
+                    color = colors.text
                 )
 
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("🔵 GigaChat", color = DarkText, fontSize = 14.sp)
+                    Text("🔵 GigaChat", color = colors.text, fontSize = 14.sp)
                     Switch(
                         checked = isGigaChat,
                         onCheckedChange = onIsGigaChatChange,
                         colors = SwitchDefaults.colors(
-                            checkedThumbColor = AccentColor,
-                            checkedTrackColor = AccentColor.copy(alpha = 0.5f),
-                            uncheckedThumbColor = BorderGray,
-                            uncheckedTrackColor = BorderGray.copy(alpha = 0.5f)
+                            checkedThumbColor = colors.accent,
+                            checkedTrackColor = colors.accent.copy(alpha = 0.5f),
+                            uncheckedThumbColor = colors.borderGray,
+                            uncheckedTrackColor = colors.borderGray.copy(alpha = 0.5f)
                         )
                     )
-                    Text("🌐 Другой провайдер", color = DarkText, fontSize = 14.sp)
+                    Text("🌐 Другой провайдер", color = colors.text, fontSize = 14.sp)
                 }
 
                 OutlinedTextField(
                     value = apiUrl,
                     onValueChange = onApiUrlChange,
-                    label = { Text("API URL", color = DarkText, fontSize = 14.sp) },
+                    label = { Text("API URL", color = colors.text, fontSize = 14.sp) },
                     placeholder = {
                         Text(
                             if (isGigaChat) "https://gigachat.devices.sberbank.ru/api/v1/chat/completions"
                             else "https://openrouter.ai/api/v1/chat/completions",
-                            color = DarkText.copy(alpha = 0.5f),
+                            color = colors.text.copy(alpha = 0.5f),
                             fontSize = 12.sp
                         )
                     },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = DarkText,
-                        unfocusedTextColor = DarkText,
-                        focusedBorderColor = AccentColor,
-                        unfocusedBorderColor = BorderGray,
-                        cursorColor = AccentColor
+                        focusedTextColor = colors.text,
+                        unfocusedTextColor = colors.text,
+                        focusedBorderColor = colors.accent,
+                        unfocusedBorderColor = colors.borderGray,
+                        cursorColor = colors.accent
                     )
                 )
 
@@ -1811,7 +1888,7 @@ private fun CloudAIDialog(
                         Text(
                             if (isGigaChat) "Authorization Key (Client Secret)"
                             else "API Key",
-                            color = DarkText,
+                            color = colors.text,
                             fontSize = 14.sp
                         )
                     },
@@ -1819,18 +1896,18 @@ private fun CloudAIDialog(
                         Text(
                             if (isGigaChat) "Введите ключ из Сбер Студии"
                             else "Введите ваш API ключ",
-                            color = DarkText.copy(alpha = 0.5f),
+                            color = colors.text.copy(alpha = 0.5f),
                             fontSize = 12.sp
                         )
                     },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = DarkText,
-                        unfocusedTextColor = DarkText,
-                        focusedBorderColor = AccentColor,
-                        unfocusedBorderColor = BorderGray,
-                        cursorColor = AccentColor
+                        focusedTextColor = colors.text,
+                        unfocusedTextColor = colors.text,
+                        focusedBorderColor = colors.accent,
+                        unfocusedBorderColor = colors.borderGray,
+                        cursorColor = colors.accent
                     )
                 )
 
@@ -1838,23 +1915,23 @@ private fun CloudAIDialog(
                     onClick = onGenerateToken,
                     enabled = !isGeneratingToken && authKey.isNotBlank(),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = AccentColor,
-                        contentColor = DarkText,
-                        disabledContainerColor = BorderGray,
-                        disabledContentColor = DarkText.copy(alpha = 0.5f)
+                        containerColor = colors.accent,
+                        contentColor = colors.background,
+                        disabledContainerColor = colors.borderGray,
+                        disabledContentColor = colors.text.copy(alpha = 0.5f)
                     ),
                     shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, BorderGray),
+                    border = BorderStroke(1.dp, colors.borderGray),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     if (isGeneratingToken) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = DarkText, strokeWidth = 2.dp)
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = colors.text, strokeWidth = 2.dp)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Получение токена...", color = DarkText, fontSize = 14.sp)
+                        Text("Получение токена...", color = colors.text, fontSize = 14.sp)
                     } else {
                         Text(
                             text = if (isCloudReady) "✅ Токен подключен" else if (isGigaChat) "🔑 Получить токен" else "🔑 Установить ключ",
-                            color = DarkText,
+                            color = colors.background,
                             fontSize = 14.sp
                         )
                     }
@@ -1863,7 +1940,7 @@ private fun CloudAIDialog(
                 if (!isGigaChat) {
                     Text(
                         text = "ℹ️ Для обычных провайдеров ключ используется как токен",
-                        color = DarkText.copy(alpha = 0.6f),
+                        color = colors.text.copy(alpha = 0.6f),
                         fontSize = 12.sp
                     )
                 }
@@ -1879,12 +1956,12 @@ private fun CloudAIDialog(
                         modifier = Modifier
                             .size(12.dp)
                             .background(
-                                color = if (isCloudReady) GreenColor else Color.Red,
+                                color = if (isCloudReady) colors.green else Color.Red,
                                 shape = CircleShape
                             )
                             .border(
                                 width = 1.dp,
-                                color = if (isCloudReady) GreenColor else Color.Red,
+                                color = if (isCloudReady) colors.green else Color.Red,
                                 shape = CircleShape
                             )
                     )
@@ -1892,17 +1969,17 @@ private fun CloudAIDialog(
                     Button(
                         onClick = onSave,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = AccentColor,
-                            contentColor = DarkText
+                            containerColor = colors.accent,
+                            contentColor = colors.background
                         ),
                         shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, BorderGray),
+                        border = BorderStroke(1.dp, colors.borderGray),
                         modifier = Modifier.weight(1f).height(36.dp),
                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
                     ) {
                         Text(
                             text = "Сохранить",
-                            color = DarkText,
+                            color = colors.background,
                             fontSize = 12.sp
                         )
                     }
@@ -1910,17 +1987,17 @@ private fun CloudAIDialog(
                     Button(
                         onClick = onClear,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = AccentColor,
-                            contentColor = DarkText
+                            containerColor = colors.accent,
+                            contentColor = colors.background
                         ),
                         shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, BorderGray),
+                        border = BorderStroke(1.dp, colors.borderGray),
                         modifier = Modifier.weight(1f).height(36.dp),
                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
                     ) {
                         Text(
                             text = "Очистить",
-                            color = DarkText,
+                            color = colors.background,
                             fontSize = 12.sp
                         )
                     }
@@ -1928,17 +2005,17 @@ private fun CloudAIDialog(
                     Button(
                         onClick = onDismiss,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = AccentColor,
-                            contentColor = DarkText
+                            containerColor = colors.accent,
+                            contentColor = colors.background
                         ),
                         shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, BorderGray),
+                        border = BorderStroke(1.dp, colors.borderGray),
                         modifier = Modifier.weight(1f).height(36.dp),
                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
                     ) {
                         Text(
                             text = "Закрыть",
-                            color = DarkText,
+                            color = colors.background,
                             fontSize = 12.sp
                         )
                     }
@@ -1951,14 +2028,15 @@ private fun CloudAIDialog(
 @Composable
 private fun HelpDialog(
     onDismiss: () -> Unit,
-    viewModel: MainViewModel
+    viewModel: MainViewModel,
+    colors: AppColors
 ) {
     AlertDialog(
         onDismissRequest = {
             viewModel.abortLocal()
             onDismiss()
         },
-        title = { Text("🛡️ Руководство пользователя", style = MaterialTheme.typography.titleLarge, color = DarkText) },
+        title = { Text("🛡️ Руководство пользователя", style = MaterialTheme.typography.titleLarge, color = colors.text) },
         text = {
             Column(
                 modifier = Modifier
@@ -1969,7 +2047,7 @@ private fun HelpDialog(
             ) {
                 Text(
                     text = HelpText.fullHelp,
-                    color = DarkText,
+                    color = colors.text,
                     fontSize = 12.sp,
                     fontFamily = FontFamily.Monospace,
                     lineHeight = 16.sp
@@ -1982,59 +2060,65 @@ private fun HelpDialog(
                     viewModel.abortLocal()
                     onDismiss()
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = AccentColor)
+                colors = ButtonDefaults.buttonColors(containerColor = colors.accent)
             ) {
-                Text("Понятно", color = DarkText)
+                Text("Понятно", color = colors.background)
             }
         }
     )
 }
 
 @Composable
-private fun MemoryEditorDialog(initialText: String, onSave: (String) -> Unit, onDismiss: () -> Unit) {
+private fun MemoryEditorDialog(
+    initialText: String,
+    onSave: (String) -> Unit,
+    onDismiss: () -> Unit,
+    colors: AppColors
+) {
     var text by remember { mutableStateOf(initialText) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("🧠 База Знаний ИИ", style = MaterialTheme.typography.titleLarge, color = DarkText) },
+        title = { Text("🧠 База Знаний ИИ", style = MaterialTheme.typography.titleLarge, color = colors.text) },
         text = {
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
-                placeholder = { Text("Вставь сюда свой прайс-лист или данные...", color = DarkText.copy(alpha = 0.5f), fontSize = 10.sp) },
+                placeholder = { Text("Вставь сюда свой прайс-лист или данные...", color = colors.text.copy(alpha = 0.5f), fontSize = 10.sp) },
                 modifier = Modifier.fillMaxWidth().height(400.dp),
                 maxLines = 100,
                 singleLine = false,
-                textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, color = DarkText),
+                textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, color = colors.text),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = DarkText,
-                    unfocusedTextColor = DarkText,
-                    focusedContainerColor = SurfaceGray,
-                    unfocusedContainerColor = SurfaceGray,
-                    focusedBorderColor = AccentColor,
-                    unfocusedBorderColor = BorderGray,
-                    cursorColor = AccentColor
+                    focusedTextColor = colors.text,
+                    unfocusedTextColor = colors.text,
+                    focusedContainerColor = colors.surfaceGray,
+                    unfocusedContainerColor = colors.surfaceGray,
+                    focusedBorderColor = colors.accent,
+                    unfocusedBorderColor = colors.borderGray,
+                    cursorColor = colors.accent
                 )
             )
         },
         confirmButton = {
-            Button(onClick = { onSave(text); onDismiss() }, colors = ButtonDefaults.buttonColors(containerColor = AccentColor)) {
-                Text("Сохранить", color = DarkText)
+            Button(onClick = { onSave(text); onDismiss() }, colors = ButtonDefaults.buttonColors(containerColor = colors.accent)) {
+                Text("Сохранить", color = colors.background)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Закрыть", color = DarkText) }
+            TextButton(onClick = onDismiss) { Text("Закрыть", color = colors.text) }
         }
     )
 }
+
 @Composable
-private fun ImagePreview(imagePath: String) {
+private fun ImagePreview(imagePath: String, colors: AppColors) {
     Card(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceGray)
+        colors = CardDefaults.cardColors(containerColor = colors.surfaceGray)
     ) {
         Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("[Изображение]", style = MaterialTheme.typography.bodySmall, color = DarkText)
+            Text("[Изображение]", style = MaterialTheme.typography.bodySmall, color = colors.text)
         }
     }
 }
@@ -2045,33 +2129,34 @@ private fun StatusBar(
     cloudState: CloudAIState,
     currentMode: AIMode,
     currentModel: String?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    colors: AppColors
 ) {
     val (containerColor, statusText, showProgress) = when (currentMode) {
         AIMode.CLOUD -> {
             when (cloudState) {
                 is CloudAIState.Idle -> Triple(
-                    SurfaceGray,
+                    colors.surfaceGray,
                     "☁️ Облако: Готово к работе",
                     false
                 )
                 is CloudAIState.Ready -> Triple(
-                    SurfaceGray,
+                    colors.surfaceGray,
                     "☁️ Облако: Готов (${cloudState.modelId})",
                     false
                 )
                 is CloudAIState.Generating -> Triple(
-                    AccentColor.copy(alpha = 0.15f),
+                    colors.accent.copy(alpha = 0.15f),
                     if (cloudState.tokensGenerated == 0) "☁️ Облако: Думает..." else "☁️ Облако: ${cloudState.tokensGenerated} т.",
                     true
                 )
                 is CloudAIState.Completed -> Triple(
-                    AccentColor.copy(alpha = 0.15f),
+                    colors.accent.copy(alpha = 0.15f),
                     "☁️ Облако: ${cloudState.tokenCount} т. ${cloudState.durationMs}мс",
                     false
                 )
                 is CloudAIState.Error -> Triple(
-                    AccentColor.copy(alpha = 0.15f),
+                    colors.accent.copy(alpha = 0.15f),
                     "⚠️ Облако: ${cloudState.message}",
                     false
                 )
@@ -2080,17 +2165,17 @@ private fun StatusBar(
         else -> {
             when (state) {
                 is GenerationState.Idle -> Triple(
-                    SurfaceGray,
+                    colors.surfaceGray,
                     if (currentModel == null) "🤖 Локальный ИИ: выгружен из памяти" else "🤖 Локальный ИИ: Готов к работе",
                     false
                 )
                 is GenerationState.LoadingModel -> Triple(
-                    BorderGray.copy(alpha = 0.3f),
+                    colors.borderGray.copy(alpha = 0.3f),
                     "⏳ Загрузка модели...",
                     true
                 )
                 is GenerationState.ModelLoaded -> Triple(
-                    SurfaceGray,
+                    colors.surfaceGray,
                     run {
                         val modelName = (currentModel?.substringAfterLast("/") ?: "нейросеть")
                             .replace("primary%3AModels%", "")
@@ -2099,22 +2184,22 @@ private fun StatusBar(
                     false
                 )
                 is GenerationState.AnalyzingImage -> Triple(
-                    AccentColor.copy(alpha = 0.15f),
+                    colors.accent.copy(alpha = 0.15f),
                     "🧐 Анализ...",
                     true
                 )
                 is GenerationState.Generating -> Triple(
-                    AccentColor.copy(alpha = 0.15f),
+                    colors.accent.copy(alpha = 0.15f),
                     if (state.tokensGenerated == 0) "🤖 Локальный ИИ: Думает..." else "🤖 Локальный ИИ: ${state.tokensGenerated} т.",
                     true
                 )
                 is GenerationState.Completed -> Triple(
-                    AccentColor.copy(alpha = 0.15f),
+                    colors.accent.copy(alpha = 0.15f),
                     "✅ ${state.tokenCount} т. ${state.durationMs}мс",
                     false
                 )
                 is GenerationState.Error -> Triple(
-                    AccentColor.copy(alpha = 0.15f),
+                    colors.accent.copy(alpha = 0.15f),
                     "⚠️ Ошибка: ${state.message}",
                     false
                 )
@@ -2125,7 +2210,7 @@ private fun StatusBar(
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = containerColor),
-        border = BorderStroke(1.dp, BorderGray)
+        border = BorderStroke(1.dp, colors.borderGray)
     ) {
         Row(
             modifier = Modifier
@@ -2137,14 +2222,14 @@ private fun StatusBar(
             if (showProgress) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(12.dp),
-                    color = AccentColor,
+                    color = colors.accent,
                     strokeWidth = 2.dp
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
             Text(
                 text = statusText,
-                color = DarkText,
+                color = colors.text,
                 fontSize = 8.sp
             )
         }
@@ -2158,7 +2243,8 @@ private fun ModelPickerDialog(
     onPickModel: () -> Unit,
     onPickMmproj: () -> Unit,
     onLoad: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    colors: AppColors
 ) {
     val context = LocalContext.current
 
@@ -2167,9 +2253,8 @@ private fun ModelPickerDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(16.dp))
-                .border(1.dp, BorderGray, RoundedCornerShape(16.dp))
+                .border(1.dp, colors.borderGray, RoundedCornerShape(16.dp))
         ) {
-            // Фон — матрица
             AndroidView(
                 factory = { matrixContext ->
                     MatrixChatBackground(matrixContext)
@@ -2180,7 +2265,7 @@ private fun ModelPickerDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(SurfaceGray.copy(alpha = 0.3f))
+                    .background(colors.surfaceGray.copy(alpha = 0.3f))
                     .padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -2194,7 +2279,7 @@ private fun ModelPickerDialog(
                     Text(
                         "Настройка ИИ",
                         style = MaterialTheme.typography.titleMedium,
-                        color = AccentColor,
+                        color = colors.accent,
                         fontFamily = FontFamily.Monospace
                     )
                 }
@@ -2204,27 +2289,27 @@ private fun ModelPickerDialog(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("Языковая модель", color = DarkText, fontSize = 14.sp)
+                    Text("Языковая модель", color = colors.text, fontSize = 14.sp)
                     val displayModelPath = currentModelPath?.substringAfterLast("/")?.replace("primary%3AModels%", "") ?: "Не выбрана"
                     Text(
                         text = "Текущая модель: $displayModelPath",
                         style = MaterialTheme.typography.bodySmall,
-                        color = DarkText.copy(alpha = 0.7f),
-                        fontFamily = ChatFontFamily
+                        color = colors.text.copy(alpha = 0.7f),
+                        fontFamily = colors.chatFont
                     )
                     Button(
                         onClick = onPickModel,
                         modifier = Modifier.fillMaxWidth(0.7f),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = AccentColor,
-                            contentColor = DarkText
+                            containerColor = colors.accent,
+                            contentColor = colors.background
                         ),
                         shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, BorderGray)
+                        border = BorderStroke(1.dp, colors.borderGray)
                     ) {
                         Text(
                             text = if (currentModelPath != null) "Изменить модель" else "Выбрать модель",
-                            color = DarkText,
+                            color = colors.background,
                             fontSize = 13.sp
                         )
                     }
@@ -2235,27 +2320,27 @@ private fun ModelPickerDialog(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("Мультимодальный проектор", color = DarkText, fontSize = 14.sp)
+                    Text("Мультимодальный проектор", color = colors.text, fontSize = 14.sp)
                     val displayMmprojPath = mmprojPath?.substringAfterLast("/")?.replace("primary%3AModels%", "") ?: "Не выбран"
                     Text(
                         text = "Текущий проектор: $displayMmprojPath",
                         style = MaterialTheme.typography.bodySmall,
-                        color = DarkText.copy(alpha = 0.7f),
-                        fontFamily = ChatFontFamily
+                        color = colors.text.copy(alpha = 0.7f),
+                        fontFamily = colors.chatFont
                     )
                     Button(
                         onClick = onPickMmproj,
                         modifier = Modifier.fillMaxWidth(0.7f),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = AccentColor,
-                            contentColor = DarkText
+                            containerColor = colors.accent,
+                            contentColor = colors.background
                         ),
                         shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, BorderGray)
+                        border = BorderStroke(1.dp, colors.borderGray)
                     ) {
                         Text(
                             text = if (mmprojPath != null) "Изменить проектор" else "Выбрать проектор",
-                            color = DarkText,
+                            color = colors.background,
                             fontSize = 13.sp
                         )
                     }
@@ -2266,15 +2351,15 @@ private fun ModelPickerDialog(
                     enabled = currentModelPath != null,
                     modifier = Modifier.fillMaxWidth(0.7f),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = AccentColor,
-                        contentColor = DarkText,
-                        disabledContainerColor = BorderGray,
-                        disabledContentColor = DarkText.copy(alpha = 0.5f)
+                        containerColor = if (currentModelPath != null) Color(0xFF4CAF50) else colors.borderGray,
+                        contentColor = if (currentModelPath != null) Color.White else colors.text.copy(alpha = 0.5f),
+                        disabledContainerColor = colors.borderGray,
+                        disabledContentColor = colors.text.copy(alpha = 0.5f)
                     ),
                     shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, BorderGray)
+                    border = BorderStroke(1.dp, colors.borderGray)
                 ) {
-                    Text("Запустить нейросеть", color = DarkText, fontSize = 13.sp)
+                    Text("Запустить нейросеть", color = if (currentModelPath != null) Color.White else colors.text.copy(alpha = 0.5f), fontSize = 13.sp)
                 }
 
                 Button(
@@ -2284,31 +2369,32 @@ private fun ModelPickerDialog(
                     },
                     modifier = Modifier.fillMaxWidth(0.7f),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = AccentColor,
-                        contentColor = DarkText
+                        containerColor = colors.accent,
+                        contentColor = colors.background
                     ),
                     shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, BorderGray)
+                    border = BorderStroke(1.dp, colors.borderGray)
                 ) {
-                    Text("⬇ Скачать модель", color = DarkText, fontSize = 13.sp)
+                    Text("⬇ Скачать модель", color = colors.background, fontSize = 13.sp)
                 }
 
                 Button(
                     onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth(0.7f),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = AccentColor,
-                        contentColor = DarkText
+                        containerColor = colors.accent,
+                        contentColor = colors.background
                     ),
                     shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, BorderGray)
+                    border = BorderStroke(1.dp, colors.borderGray)
                 ) {
-                    Text("Отмена", color = DarkText, fontSize = 13.sp)
+                    Text("Отмена", color = colors.background, fontSize = 13.sp)
                 }
             }
         }
     }
 }
+
 @Composable
 private fun PromptInput(
     prompt: String,
@@ -2330,7 +2416,8 @@ private fun PromptInput(
     remainingTimeText: String,
     isPermanentlyUnlocked: Boolean,
     currentMode: AIMode,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    colors: AppColors
 ) {
     val memoryInfoText by viewModel.memoryInfoText.collectAsStateWithLifecycle(initialValue = "Загрузка памяти...")
 
@@ -2387,21 +2474,21 @@ private fun PromptInput(
         }
     }
 
-    val waveColor = if (currentMode == AIMode.CLOUD) Color(0xFF00B4D8) else GreenColor
+    val waveColor = if (currentMode == AIMode.CLOUD) Color(0xFF00B4D8) else colors.green
 
     val textColor = when {
         !isBound -> Color.Red
         remainingTimeText.contains("🔴") -> Color.Red
         remainingTimeText.contains("⏳") -> Color(0xFFFFA500)
-        else -> GreenColor
+        else -> colors.green
     }
 
     Card(
         modifier = modifier
             .fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
-        border = BorderStroke(1.dp, BorderGray),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF9DB))
+        border = BorderStroke(1.dp, colors.borderGray),
+        colors = CardDefaults.cardColors(containerColor = colors.paleYellow)
     ) {
         Column(
             modifier = Modifier
@@ -2431,7 +2518,7 @@ private fun PromptInput(
                         },
                         color = textColor,
                         fontSize = 8.sp,
-                        fontFamily = ChatFontFamily,
+                        fontFamily = colors.chatFont,
                         modifier = Modifier
                             .padding(horizontal = 4.dp)
                             .offset(x = offsetX.dp),
@@ -2453,8 +2540,8 @@ private fun PromptInput(
                     Box(
                         modifier = Modifier
                             .size(41.dp)
-                            .background(Color(0xFFF1F3F5), shape = CircleShape)
-                            .border(1.dp, BorderGray, CircleShape),
+                            .background(colors.surfaceGray, shape = CircleShape)
+                            .border(1.dp, colors.borderGray, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         IconButton(
@@ -2465,7 +2552,7 @@ private fun PromptInput(
                             Icon(
                                 imageVector = Icons.Default.Add,
                                 contentDescription = "Добавить изображение",
-                                tint = if (enabled && !isGenerating && !isSpeaking) AccentColor else DarkText.copy(alpha = 0.4f)
+                                tint = if (enabled && !isGenerating && !isSpeaking) colors.accent else colors.text.copy(alpha = 0.4f)
                             )
                         }
                     }
@@ -2473,8 +2560,8 @@ private fun PromptInput(
                     Box(
                         modifier = Modifier
                             .size(41.dp)
-                            .background(Color(0xFFF1F3F5), shape = CircleShape)
-                            .border(1.dp, BorderGray, CircleShape),
+                            .background(colors.surfaceGray, shape = CircleShape)
+                            .border(1.dp, colors.borderGray, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         IconButton(
@@ -2485,7 +2572,7 @@ private fun PromptInput(
                             Icon(
                                 imageVector = Icons.Default.Delete,
                                 contentDescription = "Очистить чат",
-                                tint = AccentColor
+                                tint = colors.accent
                             )
                         }
                     }
@@ -2498,17 +2585,17 @@ private fun PromptInput(
                         .weight(1f)
                         .focusRequester(focusRequester),
                     enabled = enabled && !isGenerating && !isSpeaking,
-                    placeholder = { Text("Введите запрос...", color = DarkText.copy(alpha = 0.5f)) },
+                    placeholder = { Text("Введите запрос...", color = colors.text.copy(alpha = 0.5f)) },
                     maxLines = 3,
                     singleLine = false,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = DarkText,
-                        unfocusedTextColor = DarkText,
-                        focusedContainerColor = Color.White,
-                        unfocusedContainerColor = Color.White,
+                        focusedTextColor = colors.text,
+                        unfocusedTextColor = colors.text,
+                        focusedContainerColor = colors.background,
+                        unfocusedContainerColor = colors.background,
                         focusedBorderColor = Color.Transparent,
                         unfocusedBorderColor = Color.Transparent,
-                        cursorColor = AccentColor
+                        cursorColor = colors.accent
                     )
                 )
 
@@ -2519,8 +2606,8 @@ private fun PromptInput(
                     Box(
                         modifier = Modifier
                             .size(41.dp)
-                            .background(Color(0xFFF1F3F5), shape = CircleShape)
-                            .border(1.dp, BorderGray, CircleShape),
+                            .background(colors.surfaceGray, shape = CircleShape)
+                            .border(1.dp, colors.borderGray, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         IconButton(
@@ -2546,7 +2633,7 @@ private fun PromptInput(
                             Icon(
                                 imageVector = Icons.Default.Mic,
                                 contentDescription = "Распознать речь",
-                                tint = if (isTtsReady) AccentColor else DarkText.copy(alpha = 0.4f)
+                                tint = if (isTtsReady) colors.accent else colors.text.copy(alpha = 0.4f)
                             )
                         }
                     }
@@ -2554,8 +2641,8 @@ private fun PromptInput(
                     Box(
                         modifier = Modifier
                             .size(41.dp)
-                            .background(Color(0xFFF1F3F5), shape = CircleShape)
-                            .border(1.dp, BorderGray, CircleShape),
+                            .background(colors.surfaceGray, shape = CircleShape)
+                            .border(1.dp, colors.borderGray, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         if (isGenerating || isSpeaking) {
@@ -2566,7 +2653,7 @@ private fun PromptInput(
                                 Icon(
                                     imageVector = Icons.Default.Close,
                                     contentDescription = "Стоп",
-                                    tint = AccentColor
+                                    tint = colors.accent
                                 )
                             }
                         } else {
@@ -2578,7 +2665,7 @@ private fun PromptInput(
                                 Icon(
                                     imageVector = Icons.Default.ArrowUpward,
                                     contentDescription = "Отправить",
-                                    tint = if (enabled) AccentColor else DarkText.copy(alpha = 0.4f)
+                                    tint = if (enabled) colors.accent else colors.text.copy(alpha = 0.4f)
                                 )
                             }
                         }
@@ -2586,27 +2673,27 @@ private fun PromptInput(
                 }
             }
 
-                                  Spacer(modifier = Modifier.height(2.dp))
+            Spacer(modifier = Modifier.height(2.dp))
 
-                        val memoryColor = when {
-                            memoryInfoText.contains("Занято") && memoryInfoText.contains("ГБ") -> {
-                                val usedGb = Regex("Занято ([\\d.]+)").find(memoryInfoText)?.groupValues?.get(1)?.toFloatOrNull() ?: 0f
-                                val totalGb = Regex("Всего доступно ([\\d.]+)").find(memoryInfoText)?.groupValues?.get(1)?.toFloatOrNull() ?: 1f
-                                if (totalGb > 0f && (usedGb / totalGb) > 0.85f) Color.Red else GreenColor
-                            }
-                            else -> GreenColor
-                        }
+            val memoryColor = when {
+                memoryInfoText.contains("Занято") && memoryInfoText.contains("ГБ") -> {
+                    val usedGb = Regex("Занято ([\\d.]+)").find(memoryInfoText)?.groupValues?.get(1)?.toFloatOrNull() ?: 0f
+                    val totalGb = Regex("Всего доступно ([\\d.]+)").find(memoryInfoText)?.groupValues?.get(1)?.toFloatOrNull() ?: 1f
+                    if (totalGb > 0f && (usedGb / totalGb) > 0.85f) Color.Red else colors.green
+                }
+                else -> colors.green
+            }
 
-                        Text(
-                            text = memoryInfoText,
-                            color = memoryColor,
-                            fontSize = 8.sp,
-                            fontFamily = ChatFontFamily,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 4.dp, end = 4.dp, bottom = 2.dp),
-                            textAlign = TextAlign.Center
-                        )
+            Text(
+                text = memoryInfoText,
+                color = memoryColor,
+                fontSize = 8.sp,
+                fontFamily = colors.chatFont,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 4.dp, end = 4.dp, bottom = 2.dp),
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
