@@ -881,7 +881,7 @@ fun ThinkingRobotAnimation(
 
         val u = size.height / 74f
         val offX = (size.width - 100f * u) / 2f
-        val robotTop = 24f
+        val robotTop = 34f
         val robotBottom = 85f
         val robotVisualHeight = (robotBottom - robotTop) * u
         val baseOffY = (size.height - robotVisualHeight) / 2f - robotTop * u
@@ -908,12 +908,13 @@ fun ThinkingRobotAnimation(
         drawCircle(metal, 6f * u, pt(71f, 85f))
     
 
-        // ================= Антенна =================
-        drawLine(metalDark, pt(24f, 63f), pt(24f, 28f), strokeWidth = 1.6f * u)
-val orbP = if (finalPulse != 0f) 0.5f + 0.5f * sin(finalPulse * 2f) else 0f
-glow(pt(24f, 25f), (6f + 2f * orbP) * u, orange.copy(alpha = if (finalPulse != 0f) 0.55f else 0f))
-drawCircle(orange, (2.6f + 0.4f * orbP) * u, pt(24f, 25f))
-drawCircle(Color(0xFFFFD9A6), 1f * u, pt(23.2f, 24f))
+        // ================= Антенна (укороченная) =================
+        drawLine(metalDark, pt(24f, 63f), pt(24f, 34f), strokeWidth = 1.6f * u)
+        val orbP = if (finalPulse != 0f) 0.5f + 0.5f * sin(finalPulse * 2f) else 0f
+        glow(pt(24f, 35f), (6f + 2f * orbP) * u, orange.copy(alpha = if (finalPulse != 0f) 0.55f else 0f))
+        drawCircle(orange, (2.6f + 0.4f * orbP) * u, pt(24f, 35f))
+        drawCircle(Color(0xFFFFD9A6), 1f * u, pt(23.2f, 34f))
+
         // ================= Уши — круглые шайбы =================
         drawOval(metal, topLeft = pt(19f, 55f), size = Size(9f * u, 16f * u))
         drawOval(metal, topLeft = pt(72f, 55f), size = Size(9f * u, 16f * u))
@@ -921,18 +922,19 @@ drawCircle(Color(0xFFFFD9A6), 1f * u, pt(23.2f, 24f))
         drawOval(metalDark, topLeft = pt(74f, 58f), size = Size(4.5f * u, 10f * u))
 
         // ================= Купол =================
-       val domeC = pt(50f, 46f)
-val domeR = 26f * u
-val domeTL = Offset(domeC.x - domeR, domeC.y - domeR)
-val domeSize = Size(domeR * 2f, domeR * 2f)
-drawArc(
-    Color(0xFFBFE9F2).copy(alpha = 0.40f),
-    180f,
-    180f,
-    true,
-    topLeft = domeTL,
-    size = domeSize
-)
+        val domeC = pt(50f, 46f)
+        val domeR = 26f * u
+        val domeTL = Offset(domeC.x - domeR, domeC.y - domeR)
+        val domeSize = Size(domeR * 2f, domeR * 2f)
+        drawArc(
+            Color(0xFFBFE9F2).copy(alpha = 0.40f),
+            180f,
+            180f,
+            true,
+            topLeft = domeTL,
+            size = domeSize
+        )
+
         // ================= Мозг =================
         val s = 1f + 0.05f * sin(finalPulse * 1.5f)
         fun bp(x: Float, y: Float) = pt(50f + (x - 50f) * s, 39f + (y - 39f) * s)
@@ -1055,43 +1057,20 @@ drawArc(
         }
 
         // ================= Рот =================
-for (i in 0..4) {
-    val h = if (isSpeaking) {
-        (3f + 4f * (0.5f + 0.5f * sin(finalPhase * 3f + i * 1.1f))) * u
-    } else {
-        (3f + 1.5f * sin(i * 1.1f)) * u
-    }
-    val x = 50f + (i - 2) * 2.6f
-    drawRoundRect(
-        cyan,
-        topLeft = Offset(offX + (x - 0.7f) * u, offY + 73f * u - h),
-        size = Size(1.4f * u, h),
-        cornerRadius = CornerRadius(0.7f * u)
-    )
-}
-    }
-}
-private fun DrawScope.drawGear(
-    center: Offset,
-    radius: Float,
-    color: Color,
-    angle: Float,
-    holeColor: Color,
-    teeth: Int = 8
-) {
-    rotate(angle, pivot = center) {
-        val toothW = radius * 0.38f
-        for (i in 0 until teeth) {
-            rotate(i * 360f / teeth, pivot = center) {
-                drawRect(
-                    color = color,
-                    topLeft = Offset(center.x - toothW / 2, center.y - radius),
-                    size = Size(toothW, radius * 0.5f)
-                )
+        for (i in 0..4) {
+            val h = if (isSpeaking) {
+                (3f + 4f * (0.5f + 0.5f * sin(finalPhase * 3f + i * 1.1f))) * u
+            } else {
+                (3f + 1.5f * sin(i * 1.1f)) * u
             }
+            val x = 50f + (i - 2) * 2.6f
+            drawRoundRect(
+                cyan,
+                topLeft = Offset(offX + (x - 0.7f) * u, offY + 73f * u - h),
+                size = Size(1.4f * u, h),
+                cornerRadius = CornerRadius(0.7f * u)
+            )
         }
-        drawCircle(color, radius * 0.72f, center)
-        drawCircle(holeColor, radius * 0.30f, center)
     }
 }
 @Composable
