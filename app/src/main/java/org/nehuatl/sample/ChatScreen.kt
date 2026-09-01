@@ -95,6 +95,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -116,23 +118,11 @@ import kotlin.math.sin
 import kotlin.math.cos
 import androidx.compose.animation.core.keyframes
 import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.foundation.semantics.contentDescription
-import androidx.compose.foundation.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.Brush
-
-private val AppBackground = Color(0xFFFFFFFF)
-private val SurfaceGray = Color(0xFFF1F3F5)
-private val BorderGray = Color(0xFFCED4DA)
-private val AccentColor = Color(0xFF74C0FC)
-private val DarkText = Color(0xFF212529)
-private val ChatFontFamily = FontFamily.Monospace
-private val GreenColor = Color(0xFF2E7D32)
-private val PaleYellowColor = Color(0xFFFFF9DB)
-private val FriendlyRobotColor = Color(0xFF00B4D8)
 
 enum class AIMode {
     LOCAL,
