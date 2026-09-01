@@ -881,7 +881,11 @@ fun ThinkingRobotAnimation(
 
         val u = size.height / 74f
         val offX = (size.width - 100f * u) / 2f
-        val offY = (size.height - 100f * u) / 2f
+        val robotTop = 24f
+        val robotBottom = 85f
+        val robotVisualHeight = (robotBottom - robotTop) * u
+        val baseOffY = (size.height - robotVisualHeight) / 2f - robotTop * u
+        val offY = baseOffY + 1.2f * u * sin(finalBob)
 
         fun pt(x: Float, y: Float) = Offset(offX + x * u, offY + y * u)
 
@@ -1225,7 +1229,7 @@ private fun TopBarWithSwitch(
     Row(
     modifier = Modifier
         .fillMaxWidth()
-        .height(80.dp)
+        .height(84.dp)
         .padding(4.dp)
         .background(Color(0xFFFFF9DB), RoundedCornerShape(8.dp))
         .border(1.dp, BorderGray, RoundedCornerShape(8.dp))
@@ -1247,6 +1251,7 @@ private fun TopBarWithSwitch(
             .clip(RoundedCornerShape(8.dp)),
         contentScale = ContentScale.Crop
     )
+    Spacer(modifier = Modifier.height(1.dp))
     Text(
         text = "ИИ-Друг",
         color = AccentColor,
