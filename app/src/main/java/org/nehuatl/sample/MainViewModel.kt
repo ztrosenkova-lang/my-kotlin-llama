@@ -40,6 +40,7 @@ import java.util.*
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import java.security.KeyPairGenerator
+import kotlin.math.log10
 
 data class ChatMessage(val role: String, val text: String)
 
@@ -135,6 +136,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     private val brainFile: File by lazy {
         File(getApplication<Application>().filesDir, "brain.txt")
+    }
+
+    private val memorySearchEngine by lazy {
+        MemorySearchEngine(memoryFile)
     }
 
     private var isCompressionRequest = false
@@ -869,6 +874,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
 
             memoryFile.writeText(lines.joinToString("\n"))
+            memorySearchEngine.clearCache()
             Log.d(TAG, "Записано в категорию $category: $text")
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка записи в категорию: ${e.message}")
@@ -900,121 +906,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         return sectionLines.joinToString("\n")
     }
 
-    private fun extractNumbers(query: String): List<String> {
-        return Regex("\\d+[.,]?\\d*").findAll(query).map { it.value }.toList()
-    }
-
-    private fun extractUnits(query: String): List<String> {
-        val units = listOf("р/м²", "р/пм", "р/кг", "р/шт", "р/лист", "р/тонна", "р/т", "р/м", "руб")
-        return units.filter { query.contains(it, ignoreCase = true) }
-    }
-
-    private fun getSynonyms(word: String): List<String> {
-        return when (word) {
-            "плитк" -> listOf("плитк", "кафел", "керамогранит", "мозаик")
-            "покраск" -> listOf("покраск", "окраск", "малярн")
-            "труб" -> listOf("труб", "вгп", "э/с", "профильн")
-            "лист" -> listOf("лист", "листов")
-            "металл" -> listOf("металл", "стальн")
-            "укладк" -> listOf("укладк", "монтаж", "установк")
-            else -> listOf(word)
-        }
-    }
-
     private fun searchMemory(query: String, category: String? = null): String {
-        val fullMemory = readFromLongTermMemory()
-        if (fullMemory.isEmpty()) return ""
-
-        val lines = fullMemory.split("\n")
-        val keywords = extractKeywords(query)
-        val numbers = extractNumbers(query)
-        val units = extractUnits(query)
-
-        // Поиск по всем категориям
-        val categoriesToSearch = if (category != null && category.isNotEmpty()) {
-            listOf(category)
-        } else {
-            CATEGORIES
-        }
-
-        val allResults = mutableListOf<String>()
-
-        for (cat in categoriesToSearch) {
-            val sectionLines = getCategorySection(cat).split("\n").filter { it.isNotBlank() }
-            if (sectionLines.isEmpty()) continue
-
-            val expandedKeywords = keywords.flatMap { getSynonyms(it) }.distinct()
-
-            var filtered = sectionLines
-
-            // Если есть ключевые слова — фильтруем по ним
-            if (expandedKeywords.isNotEmpty()) {
-                val withKeywords = filtered.filter { line ->
-                    val lowerLine = line.lowercase()
-                    expandedKeywords.all { keyword -> lowerLine.contains(keyword) }
-                }
-                if (withKeywords.isNotEmpty()) {
-                    filtered = withKeywords
-                } else {
-                    // Ослабляем: хотя бы 1 ключевое слово
-                    val withAnyKeyword = filtered.filter { line ->
-                        val lowerLine = line.lowercase()
-                        expandedKeywords.any { keyword -> lowerLine.contains(keyword) }
-                    }
-                    if (withAnyKeyword.isNotEmpty()) {
-                        filtered = withAnyKeyword
-                    }
-                }
-            }
-
-            // Фильтруем по числам
-            if (numbers.isNotEmpty()) {
-                val withNumbers = filtered.filter { line ->
-                    numbers.all { number -> line.contains(number) }
-                }
-                if (withNumbers.isNotEmpty()) {
-                    filtered = withNumbers
-                }
-            }
-
-            // Фильтруем по единицам
-            if (units.isNotEmpty()) {
-                val withUnits = filtered.filter { line ->
-                    units.any { unit -> line.lowercase().contains(unit) }
-                }
-                if (withUnits.isNotEmpty()) {
-                    filtered = withUnits
-                }
-            }
-
-            if (filtered.isNotEmpty()) {
-                // Ищем заголовок подкатегории
-                val firstMatchIndex = sectionLines.indexOfFirst { line -> filtered.contains(line) }
-                var headerLine = ""
-                if (firstMatchIndex > 0) {
-                    for (idx in firstMatchIndex - 1 downTo 0) {
-                        val candidate = sectionLines[idx]
-                        val hasPrice = candidate.contains("р/") || candidate.contains("руб")
-                        if (!hasPrice) {
-                            headerLine = candidate
-                            break
-                        }
-                    }
-                }
-
-                val resultLines = mutableListOf<String>()
-                if (headerLine.isNotEmpty()) {
-                    resultLines.add(headerLine)
-                }
-                resultLines.addAll(filtered.take(20))
-                resultLines.add(0, cat) // Добавляем название категории
-                allResults.add(resultLines.joinToString("\n"))
-            }
-        }
-
-        return if (allResults.isNotEmpty()) {
-            allResults.joinToString("\n\n")
-        } else {
+        return try {
+            val result = memorySearchEngine.search(query, category)
+            Log.d(TAG, "Search result for '$query': ${if (result.isEmpty()) "empty" else "found ${result.split("\n").size} lines"}")
+            result
+        } catch (e: Exception) {
+            Log.e(TAG, "Memory search error: ${e.message}", e)
             ""
         }
     }
@@ -1114,7 +1012,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     val filteredMemory = searchMemory(prompt, queryCategory)
 
                     if (filteredMemory.isEmpty()) {
-                        // Ищем по всем категориям
                         val allMemory = searchMemory(prompt, null)
                         if (allMemory.isNotEmpty()) {
                             append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ (все категории):\n$allMemory\n\n")
@@ -1494,6 +1391,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
 
             memoryFile.writeText(output.toString().trim() + "\n")
+            memorySearchEngine.clearCache()
             Log.d(TAG, "База знаний успешно обновлена и упорядочена")
             appendSystemMessage("🧠 База знаний обновлена и упорядочена")
         } catch (e: Exception) {
@@ -1599,4 +1497,327 @@ private fun getFileNameFromUri(contentResolver: ContentResolver, uri: Uri): Stri
     }
     val cleanName = name.replace(Regex("^primary%3AModels%"), "").replace(Regex("^primary:Models:"), "")
     return cleanName
+}
+
+class MemorySearchEngine(private val memoryFile: File) {
+    companion object {
+        private const val TAG = "MemorySearchEngine"
+        private const val K1 = 1.5
+        private const val B = 0.75
+
+        private val STOP_WORDS = setOf(
+            "и", "в", "во", "не", "что", "он", "на", "я", "с", "со", "как", "а", "то", "все",
+            "она", "так", "его", "но", "да", "ты", "к", "у", "же", "вы", "за", "бы", "по",
+            "только", "ее", "мне", "было", "вот", "от", "меня", "еще", "нет", "о", "из",
+            "ему", "теперь", "когда", "даже", "ну", "вдруг", "ли", "если", "уже", "или",
+            "ни", "быть", "был", "него", "до", "вас", "нибудь", "опять", "уж", "вам",
+            "сказал", "ведь", "потом", "себя", "ничего", "ей", "может", "они", "тут",
+            "где", "есть", "надо", "ней", "для", "мы", "тебя", "их", "чем", "была",
+            "сам", "чтоб", "без", "будто", "чего", "раз", "тоже", "себе", "под",
+            "будет", "ж", "тогда", "кто", "этот", "того", "потому", "этого", "какой",
+            "совсем", "ним", "здесь", "этом", "один", "почти", "мой", "тем", "чтобы",
+            "нее", "сейчас", "были", "куда", "зачем", "всех", "никогда", "можно",
+            "при", "наконец", "два", "об", "другой", "хоть", "после", "над", "больше",
+            "тот", "через", "эти", "нас", "про", "всего", "них", "какая", "много",
+            "разве", "три", "эту", "моя", "впрочем", "хорошо", "свою", "этой", "перед",
+            "иногда", "лучше", "чуть", "том", "нельзя", "такой", "им", "более", "всегда",
+            "конечно", "всю", "между"
+        )
+
+        private val SYNONYMS = mapOf(
+            "телефон" to listOf("номер", "мобильный", "тел", "звонить", "вызов", "сотовый"),
+            "пароль" to listOf("код", "пин", "логин", "доступ", "секрет", "ключ", "auth"),
+            "адрес" to listOf("улица", "дом", "квартира", "место", "локация", "где"),
+            "цена" to listOf("стоимость", "прайс", "руб", "деньги", "оплата", "тариф"),
+            "время" to listOf("дата", "час", "когда", "срок", "дедлайн", "встреча"),
+            "работа" to listOf("задача", "дело", "проект", "обязанность"),
+            "человек" to listOf("личность", "персона", "клиент", "партнер"),
+            "компания" to listOf("фирма", "организация", "бизнес", "предприятие"),
+            "машина" to listOf("авто", "автомобиль", "транспорт", "тачка"),
+            "дом" to listOf("квартира", "жилье", "недвижимость"),
+            "еда" to listOf("питание", "продукты", "обед", "ужин", "завтрак"),
+            "плитк" to listOf("плитк", "кафел", "керамогранит", "мозаик", "керамик"),
+            "покраск" to listOf("покраск", "окраск", "малярн", "краск"),
+            "труб" to listOf("труб", "вгп", "э/с", "профильн", "трубопровод"),
+            "лист" to listOf("лист", "листов", "пластин"),
+            "металл" to listOf("металл", "стальн", "желез", "сплав"),
+            "укладк" to listOf("укладк", "монтаж", "установк", "инсталляц"),
+            "ремонт" to listOf("ремонт", "починк", "восстановлен", "исправлен"),
+            "строительств" to listOf("строительств", "стройк", "возведен"),
+            "материал" to listOf("материал", "сырье", "ресурс", "товар")
+        )
+    }
+
+    data class SearchResult(
+        val category: String,
+        val text: String,
+        val score: Double,
+        val timestamp: String
+    )
+
+    data class IndexedDocument(
+        val category: String,
+        val text: String,
+        val timestamp: String,
+        val tokens: List<String>,
+        val tokenFreqs: Map<String, Int>
+    )
+
+    private var cachedIndex: List<IndexedDocument>? = null
+    private var lastModified: Long = 0
+
+    fun search(query: String, category: String? = null): String {
+        if (query.isBlank()) return ""
+
+        val index = getIndex()
+        if (index.isEmpty()) return ""
+
+        val queryTokens = tokenize(query)
+        if (queryTokens.isEmpty()) return ""
+
+        val avgDocLength = index.map { it.tokens.size }.average()
+
+        val idfMap = queryTokens.associateWith { token ->
+            computeIDF(token, index)
+        }
+
+        val documents = if (category != null) {
+            index.filter { it.category == category }
+        } else {
+            index
+        }
+
+        val scoredResults = documents.map { doc ->
+            val score = computeBM25(doc, queryTokens, idfMap, avgDocLength)
+            SearchResult(doc.category, doc.text, score, doc.timestamp)
+        }
+        .filter { it.score > 0.0 }
+        .sortedByDescending { it.score }
+        .take(20)
+
+        if (scoredResults.isEmpty()) return ""
+
+        val grouped = scoredResults.groupBy { it.category }
+
+        return buildString {
+            grouped.forEach { (cat, results) ->
+                appendLine(cat)
+                results.take(10).forEach { result ->
+                    appendLine(result.text)
+                }
+                appendLine()
+            }
+        }.trim()
+    }
+
+    private fun computeBM25(
+        doc: IndexedDocument,
+        queryTokens: List<String>,
+        idfMap: Map<String, Double>,
+        avgDocLength: Double
+    ): Double {
+        var score = 0.0
+        val docLength = doc.tokens.size
+
+        for (queryToken in queryTokens) {
+            val exactFreq = doc.tokenFreqs[queryToken] ?: 0
+            if (exactFreq > 0) {
+                val tf = exactFreq.toDouble()
+                val idf = idfMap[queryToken] ?: 0.0
+                val numerator = tf * (K1 + 1)
+                val denominator = tf + K1 * (1 - B + B * docLength / avgDocLength)
+                score += idf * numerator / denominator * 2.0
+            }
+
+            val stemMatches = doc.tokens.count {
+                extractRussianRoot(it) == extractRussianRoot(queryToken)
+            }
+            if (stemMatches > 0) {
+                score += stemMatches * 1.5
+            }
+
+            val fuzzyMatches = doc.tokens.count { token ->
+                levenshteinDistance(token, queryToken) <= 2
+            }
+            if (fuzzyMatches > 0) {
+                score += fuzzyMatches * 0.8
+            }
+
+            val synonyms = SYNONYMS[extractRussianRoot(queryToken)] ?: emptyList()
+            for (synonym in synonyms) {
+                val synFreq = doc.tokenFreqs[synonym] ?: 0
+                if (synFreq > 0) {
+                    score += synFreq * 1.2
+                }
+            }
+        }
+
+        val phraseBonus = computePhraseBonus(doc, queryTokens)
+        score += phraseBonus
+
+        return score
+    }
+
+    private fun computePhraseBonus(doc: IndexedDocument, queryTokens: List<String>): Double {
+        if (queryTokens.size < 2) return 0.0
+
+        var bonus = 0.0
+        for (i in 0 until doc.tokens.size - queryTokens.size + 1) {
+            var matchCount = 0
+            for (j in queryTokens.indices) {
+                if (i + j < doc.tokens.size &&
+                    extractRussianRoot(doc.tokens[i + j]) == extractRussianRoot(queryTokens[j])) {
+                    matchCount++
+                }
+            }
+            if (matchCount == queryTokens.size) {
+                bonus += 3.0
+                break
+            }
+        }
+        return bonus
+    }
+
+    private fun computeIDF(token: String, documents: List<IndexedDocument>): Double {
+        val docCount = documents.size
+        val stemToken = extractRussianRoot(token)
+
+        val matchingDocs = documents.count { doc ->
+            doc.tokens.any {
+                extractRussianRoot(it) == stemToken ||
+                levenshteinDistance(it, token) <= 2
+            }
+        }
+
+        if (matchingDocs == 0) return 0.0
+
+        return log10(docCount.toDouble() / matchingDocs) + 1.0
+    }
+
+    private fun tokenize(text: String): List<String> {
+        return text.lowercase()
+            .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
+            .split(Regex("\\s+"))
+            .map { it.trim() }
+            .filter { it.length > 2 }
+            .filter { it !in STOP_WORDS }
+            .map { extractRussianRoot(it) }
+            .distinct()
+    }
+
+    private fun extractRussianRoot(word: String): String {
+        val lowerWord = word.lowercase()
+
+        val suffixes = listOf(
+            "ами", "ями", "ого", "его", "ому", "ему", "ими", "ыми",
+            "ая", "яя", "ое", "ее", "ие", "ые", "ий", "ый", "ой", "ей",
+            "ам", "ям", "ом", "ем", "ах", "ях", "ов", "ев", "ин", "ын",
+            "а", "я", "о", "е", "и", "ы", "у", "ю", "ь"
+        )
+
+        var stem = lowerWord
+        for (suffix in suffixes) {
+            if (stem.endsWith(suffix) && stem.length > suffix.length + 2) {
+                stem = stem.substring(0, stem.length - suffix.length)
+                break
+            }
+        }
+
+        return if (stem.length < 2) lowerWord else stem
+    }
+
+    private fun levenshteinDistance(s1: String, s2: String): Int {
+        if (s1 == s2) return 0
+        if (s1.isEmpty()) return s2.length
+        if (s2.isEmpty()) return s1.length
+
+        val distances = Array(s1.length + 1) { IntArray(s2.length + 1) }
+
+        for (i in 0..s1.length) distances[i][0] = i
+        for (j in 0..s2.length) distances[0][j] = j
+
+        for (i in 1..s1.length) {
+            for (j in 1..s2.length) {
+                val cost = if (s1[i - 1] == s2[j - 1]) 0 else 1
+                distances[i][j] = minOf(
+                    distances[i - 1][j] + 1,
+                    distances[i][j - 1] + 1,
+                    distances[i - 1][j - 1] + cost
+                )
+            }
+        }
+
+        return distances[s1.length][s2.length]
+    }
+
+    private fun getIndex(): List<IndexedDocument> {
+        val currentModified = if (memoryFile.exists()) memoryFile.lastModified() else 0
+
+        if (cachedIndex != null && currentModified == lastModified) {
+            return cachedIndex!!
+        }
+
+        val index = buildIndex()
+        cachedIndex = index
+        lastModified = currentModified
+
+        return index
+    }
+
+    private fun buildIndex(): List<IndexedDocument> {
+        if (!memoryFile.exists()) return emptyList()
+
+        val documents = mutableListOf<IndexedDocument>()
+        val lines = memoryFile.readText().split("\n")
+
+        var currentCategory = ""
+        val categoryLines = mutableListOf<String>()
+
+        for (line in lines) {
+            val trimmed = line.trim()
+            if (trimmed.isEmpty()) continue
+
+            if (trimmed.startsWith("[") && trimmed.endsWith("]") && !trimmed.contains("20")) {
+                if (currentCategory.isNotEmpty() && categoryLines.isNotEmpty()) {
+                    documents.addAll(createDocumentsFromCategory(currentCategory, categoryLines))
+                }
+                currentCategory = trimmed
+                categoryLines.clear()
+            } else {
+                categoryLines.add(trimmed)
+            }
+        }
+
+        if (currentCategory.isNotEmpty() && categoryLines.isNotEmpty()) {
+            documents.addAll(createDocumentsFromCategory(currentCategory, categoryLines))
+        }
+
+        Log.d(TAG, "Built index with ${documents.size} documents")
+        return documents
+    }
+
+    private fun createDocumentsFromCategory(
+        category: String,
+        lines: List<String>
+    ): List<IndexedDocument> {
+        return lines.mapNotNull { line ->
+            val timestampMatch = Regex("\\[([^]]+)\\]").find(line)
+            val timestamp = timestampMatch?.groupValues?.get(1) ?: ""
+            val text = line.replace(Regex("\\[[^]]+\\]"), "").trim()
+
+            if (text.isEmpty()) return@mapNotNull null
+
+            val tokens = tokenize(text)
+            if (tokens.isEmpty()) return@mapNotNull null
+
+            val tokenFreqs = tokens.groupingBy { it }.eachCount()
+
+            IndexedDocument(category, text, timestamp, tokens, tokenFreqs)
+        }
+    }
+
+    fun clearCache() {
+        cachedIndex = null
+        lastModified = 0
+    }
 }
