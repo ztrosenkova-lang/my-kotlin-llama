@@ -809,9 +809,11 @@ private fun VoiceWaveAnimation(
 @Composable
 fun ThinkingRobotAnimation(
     modifier: Modifier = Modifier,
-    height: Dp = 95.dp,
+    height: Dp = 70.dp,
     isActive: Boolean = true,
     isSpeaking: Boolean = false,
+    isThinking: Boolean = false,
+    isIdle: Boolean = false
 ) {
     val transition = rememberInfiniteTransition(label = "thinking_robot")
 
@@ -857,10 +859,11 @@ fun ThinkingRobotAnimation(
         ),
         label = "blink"
     )
-    val finalPhase = phase
-    val finalPulse = pulse
-    val finalBob = bob
+    val finalPhase = if (isThinking || isSpeaking) phase else 0f
+    val finalPulse = if (isThinking || isSpeaking) pulse else 0f
+    val finalBob = if (isIdle) bob else 0f
     val finalBlink = if (isActive || isSpeaking) blink else 1f
+
     Canvas(
         modifier = modifier
             .height(height)
@@ -878,7 +881,7 @@ fun ThinkingRobotAnimation(
 
         val u = size.height / 74f
         val offX = (size.width - 100f * u) / 2f
-        val offY = (size.height - 100f * u) / 2f + 1.2f * u * sin(finalBob)
+        val offY = (size.height - 100f * u) / 2f
 
         fun pt(x: Float, y: Float) = Offset(offX + x * u, offY + y * u)
 
@@ -903,8 +906,8 @@ fun ThinkingRobotAnimation(
 
         // ================= Антенна =================
         drawLine(metalDark, pt(24f, 63f), pt(24f, 28f), strokeWidth = 1.6f * u)
-val orbP = 0.5f + 0.5f * sin(finalPulse * 2f)
-glow(pt(24f, 25f), (6f + 2f * orbP) * u, orange.copy(alpha = 0.55f))
+val orbP = if (finalPulse != 0f) 0.5f + 0.5f * sin(finalPulse * 2f) else 0f
+glow(pt(24f, 25f), (6f + 2f * orbP) * u, orange.copy(alpha = if (finalPulse != 0f) 0.55f else 0f))
 drawCircle(orange, (2.6f + 0.4f * orbP) * u, pt(24f, 25f))
 drawCircle(Color(0xFFFFD9A6), 1f * u, pt(23.2f, 24f))
         // ================= Уши — круглые шайбы =================
@@ -930,7 +933,7 @@ drawArc(
         val s = 1f + 0.05f * sin(finalPulse * 1.5f)
         fun bp(x: Float, y: Float) = pt(50f + (x - 50f) * s, 39f + (y - 39f) * s)
 
-        glow(bp(50f, 38f), 10f * u, Color(0xFFE36F8C).copy(alpha = 0.30f))
+        glow(bp(50f, 38f), 10f * u, Color(0xFFE36F8C).copy(alpha = if (finalPulse != 0f) 0.30f else 0f))
         listOf(
             Triple(43f, 39f, 4.5f), Triple(57f, 39f, 4.5f),
             Triple(50f, 33f, 4.2f), Triple(50f, 42f, 4.2f),
@@ -983,13 +986,15 @@ drawArc(
             return pt(50f + x * cr - y * sr, 38f + x * sr + y * cr)
         }
 
-        for (i in 0..5) {
-            val a = finalPhase * (1.2f + 0.17f * i) + i * 1.9f
-            val p = if (i % 2 == 0) orbitPos(22f, 7.5f, -16f, a)
-            else orbitPos(20.5f, 6.5f, 12f, a)
-            val tw = 0.5f + 0.5f * sin(finalPulse * 2f + i * 1.3f)
-            glow(p, (1.8f + 1.2f * tw) * u, cyan.copy(alpha = 0.25f + 0.45f * tw))
-            drawCircle(cyanSoft, 0.9f * u, p)
+        if (finalPhase != 0f) {
+            for (i in 0..5) {
+                val a = finalPhase * (1.2f + 0.17f * i) + i * 1.9f
+                val p = if (i % 2 == 0) orbitPos(22f, 7.5f, -16f, a)
+                else orbitPos(20.5f, 6.5f, 12f, a)
+                val tw = 0.5f + 0.5f * sin(finalPulse * 2f + i * 1.3f)
+                glow(p, (1.8f + 1.2f * tw) * u, cyan.copy(alpha = 0.25f + 0.45f * tw))
+                drawCircle(cyanSoft, 0.9f * u, p)
+            }
         }
 
         // ================= Купол: ободок и блик =================
@@ -1048,7 +1053,7 @@ drawArc(
         // ================= Рот =================
 for (i in 0..4) {
     val h = if (isSpeaking) {
-        (3f + 4f * (0.5f + 0.5f * sin(phase * 3f + i * 1.1f))) * u
+        (3f + 4f * (0.5f + 0.5f * sin(finalPhase * 3f + i * 1.1f))) * u
     } else {
         (3f + 1.5f * sin(i * 1.1f)) * u
     }
@@ -1220,7 +1225,7 @@ private fun TopBarWithSwitch(
     Row(
     modifier = Modifier
         .fillMaxWidth()
-        .height(120.dp)
+        .height(80.dp)
         .padding(4.dp)
         .background(Color(0xFFFFF9DB), RoundedCornerShape(8.dp))
         .border(1.dp, BorderGray, RoundedCornerShape(8.dp))
@@ -1231,25 +1236,25 @@ private fun TopBarWithSwitch(
     modifier = Modifier
         .width(56.dp)
         .fillMaxHeight(),
-    verticalArrangement = Arrangement.Top,
+    verticalArrangement = Arrangement.Center,
     horizontalAlignment = Alignment.CenterHorizontally
 ) {
     Image(
         painter = painterResource(id = R.mipmap.ic_launcher),
         contentDescription = "Лого",
         modifier = Modifier
-            .size(48.dp)
-            .clip(RoundedCornerShape(12.dp)),
+            .size(36.dp)
+            .clip(RoundedCornerShape(8.dp)),
         contentScale = ContentScale.Crop
     )
     Text(
-        text = "И\nИ\n-\nД\nр\nу\nг",
+        text = "ИИ-Друг",
         color = AccentColor,
-        fontSize = 10.sp,
+        fontSize = 8.sp,
         fontFamily = FontFamily.Monospace,
         fontWeight = FontWeight.ExtraBold,
         textAlign = TextAlign.Center,
-        lineHeight = 10.sp
+        maxLines = 1
     )
 }
 
@@ -1260,9 +1265,11 @@ private fun TopBarWithSwitch(
     contentAlignment = Alignment.Center
 ) {
     ThinkingRobotAnimation(
-    height = 95.dp,
+    height = 70.dp,
     isActive = isGenerating,
     isSpeaking = isSpeaking,
+    isThinking = isGenerating,
+    isIdle = isLocalReady || isCloudReady,
     modifier = Modifier.fillMaxWidth()
 )
 }
