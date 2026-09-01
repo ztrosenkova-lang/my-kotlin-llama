@@ -124,6 +124,16 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.Brush
 
+private val AppBackground = Color(0xFFFFFFFF)
+private val SurfaceGray = Color(0xFFF1F3F5)
+private val BorderGray = Color(0xFFCED4DA)
+private val AccentColor = Color(0xFF74C0FC)
+private val DarkText = Color(0xFF212529)
+private val ChatFontFamily = FontFamily.Monospace
+private val GreenColor = Color(0xFF2E7D32)
+private val PaleYellowColor = Color(0xFFFFF9DB)
+private val FriendlyRobotColor = Color(0xFF00B4D8)
+
 enum class AIMode {
     LOCAL,
     NEUTRAL,
