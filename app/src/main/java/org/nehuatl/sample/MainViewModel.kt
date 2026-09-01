@@ -61,6 +61,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         private const val SECRET_PHRASE_HASH = "af5f2b759f2adf6f46fdd7b1441ed77086f833dcb5f74d9a5ea6930aa8634505"
         private const val ONE_DAY_MS = 86400000L
 
+        private const val KEY_DARK_THEME = "dark_theme"
+
         private val CATEGORIES = listOf("[ПАРОЛЬ]", "[КОНТАКТ]", "[ПРАЙС]", "[ИНСТРУКЦИЯ]", "[АДРЕС]", "[ДАТА]", "[ОБЩЕЕ]")
     }
 
@@ -123,6 +125,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     val temperature = MutableStateFlow(0.3f)
     val contextSize = MutableStateFlow(2048)
     val maxTokens = MutableStateFlow(512)
+
+    private val _isDarkTheme = MutableStateFlow(false)
+    val isDarkTheme: StateFlow<Boolean> = _isDarkTheme.asStateFlow()
 
     private val memoryFile: File by lazy {
         File(getApplication<Application>().filesDir, "memory.txt")
@@ -193,6 +198,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     init {
         instance = this
+
+        _isDarkTheme.value = prefs.getBoolean(KEY_DARK_THEME, false)
 
         ttsReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
@@ -422,6 +429,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 delay(1000)
             }
         }
+    }
+
+    fun toggleTheme() {
+        _isDarkTheme.value = !_isDarkTheme.value
+        prefs.edit().putBoolean(KEY_DARK_THEME, _isDarkTheme.value).apply()
     }
 
     private fun updateRemainingTime() {
@@ -672,21 +684,20 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     private fun filterTextForSpeech(text: String): String {
-    var cleanText = text
-        .replace("+", " плюс ")
-        .replace("=", " равно ")
-        .replace("*", " умножить на ")
-        .replace("/", " разделить на ")
-        .replace("-", " минус ")
+        var cleanText = text
+            .replace("+", " плюс ")
+            .replace("=", " равно ")
+            .replace("*", " умножить на ")
+            .replace("/", " разделить на ")
+            .replace("-", " минус ")
 
-    // Заменяем запятую в числах на слово "запятая"
-    cleanText = Regex("(\\d),(\\d)").replace(cleanText) { match ->
-        "${match.groupValues[1]} запятая ${match.groupValues[2]}"
+        cleanText = Regex("(\\d),(\\d)").replace(cleanText) { match ->
+            "${match.groupValues[1]} запятая ${match.groupValues[2]}"
+        }
+
+        cleanText = cleanText.replace(Regex("[^\\p{L}\\p{N}\\s.!?]"), "")
+        return cleanText.replace(Regex("\\s+"), " ").trim()
     }
-
-    cleanText = cleanText.replace(Regex("[^\\p{L}\\p{N}\\s.!?]"), "")
-    return cleanText.replace(Regex("\\s+"), " ").trim()
-}
 
     fun speakText(text: String) {
         if (!isTtsEnabled || text.isBlank()) {
@@ -797,10 +808,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-        private fun determineCategory(text: String): String {
+    private fun determineCategory(text: String): String {
         val lowerText = text.lowercase()
 
-        // Если строка содержит цену — это прайс, независимо от слов
         val hasPrice = Regex("\\d+[.,]?\\d*\\s*(р|руб|₽)").containsMatchIn(lowerText) ||
                 lowerText.contains("р/м") ||
                 lowerText.contains("р/кг") ||
@@ -916,103 +926,97 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         if (fullMemory.isEmpty()) return ""
 
         val lines = fullMemory.split("\n")
+        val keywords = extractKeywords(query)
+        val numbers = extractNumbers(query)
+        val units = extractUnits(query)
 
-        if (category != null) {
-            val categoryIndex = lines.indexOfFirst { it.trim() == category }
-            if (categoryIndex != -1) {
-                val sectionLines = mutableListOf<String>()
-                var i = categoryIndex + 1
-                while (i < lines.size && !CATEGORIES.any { lines[i].trim().startsWith(it) }) {
-                    if (lines[i].isNotBlank()) {
-                        sectionLines.add(lines[i])
-                    }
-                    i++
-                }
+        // Поиск по всем категориям
+        val categoriesToSearch = if (category != null && category.isNotEmpty()) {
+            listOf(category)
+        } else {
+            CATEGORIES
+        }
 
-                val keywords = extractKeywords(query)
-                val numbers = extractNumbers(query)
-                val units = extractUnits(query)
+        val allResults = mutableListOf<String>()
 
-                val expandedKeywords = keywords.flatMap { getSynonyms(it) }.distinct()
+        for (cat in categoriesToSearch) {
+            val sectionLines = getCategorySection(cat).split("\n").filter { it.isNotBlank() }
+            if (sectionLines.isEmpty()) continue
 
-                if (expandedKeywords.isEmpty() && numbers.isEmpty() && units.isEmpty()) {
-                    return sectionLines.joinToString("\n")
-                }
+            val expandedKeywords = keywords.flatMap { getSynonyms(it) }.distinct()
 
-                // Поэтапное сужение
+            var filtered = sectionLines
 
-                // Этап 1: строки, содержащие ВСЕ ключевые слова
-                var filtered = sectionLines.filter { line ->
+            // Если есть ключевые слова — фильтруем по ним
+            if (expandedKeywords.isNotEmpty()) {
+                val withKeywords = filtered.filter { line ->
                     val lowerLine = line.lowercase()
                     expandedKeywords.all { keyword -> lowerLine.contains(keyword) }
                 }
-
-                // Этап 2: из них — строки с числами
-                if (numbers.isNotEmpty()) {
-                    val withNumbers = filtered.filter { line ->
-                        numbers.all { number -> line.contains(number) }
+                if (withKeywords.isNotEmpty()) {
+                    filtered = withKeywords
+                } else {
+                    // Ослабляем: хотя бы 1 ключевое слово
+                    val withAnyKeyword = filtered.filter { line ->
+                        val lowerLine = line.lowercase()
+                        expandedKeywords.any { keyword -> lowerLine.contains(keyword) }
                     }
-                    if (withNumbers.isNotEmpty()) {
-                        filtered = withNumbers
-                    }
-                }
-
-                // Этап 3: из них — строки с единицами измерения
-                if (units.isNotEmpty()) {
-                    val withUnits = filtered.filter { line ->
-                        units.any { unit -> line.lowercase().contains(unit) }
-                    }
-                    if (withUnits.isNotEmpty()) {
-                        filtered = withUnits
+                    if (withAnyKeyword.isNotEmpty()) {
+                        filtered = withAnyKeyword
                     }
                 }
+            }
 
-                if (filtered.isNotEmpty()) {
-                    // Ищем заголовок подкатегории
-                    val firstMatchIndex = sectionLines.indexOfFirst { line -> filtered.contains(line) }
-                    var headerLine = ""
-                    if (firstMatchIndex > 0) {
-                        for (idx in firstMatchIndex - 1 downTo 0) {
-                            val candidate = sectionLines[idx]
-                            val hasPrice = candidate.contains("р/") || candidate.contains("руб")
-                            if (!hasPrice) {
-                                headerLine = candidate
-                                break
-                            }
+            // Фильтруем по числам
+            if (numbers.isNotEmpty()) {
+                val withNumbers = filtered.filter { line ->
+                    numbers.all { number -> line.contains(number) }
+                }
+                if (withNumbers.isNotEmpty()) {
+                    filtered = withNumbers
+                }
+            }
+
+            // Фильтруем по единицам
+            if (units.isNotEmpty()) {
+                val withUnits = filtered.filter { line ->
+                    units.any { unit -> line.lowercase().contains(unit) }
+                }
+                if (withUnits.isNotEmpty()) {
+                    filtered = withUnits
+                }
+            }
+
+            if (filtered.isNotEmpty()) {
+                // Ищем заголовок подкатегории
+                val firstMatchIndex = sectionLines.indexOfFirst { line -> filtered.contains(line) }
+                var headerLine = ""
+                if (firstMatchIndex > 0) {
+                    for (idx in firstMatchIndex - 1 downTo 0) {
+                        val candidate = sectionLines[idx]
+                        val hasPrice = candidate.contains("р/") || candidate.contains("руб")
+                        if (!hasPrice) {
+                            headerLine = candidate
+                            break
                         }
                     }
-
-                    val resultLines = mutableListOf<String>()
-                    if (headerLine.isNotEmpty()) {
-                        resultLines.add(headerLine)
-                    }
-                    resultLines.addAll(filtered)
-                    return resultLines.joinToString("\n")
                 }
 
-                // Этап 4: ослабляем — строки с хотя бы 2 ключевыми словами
-                filtered = sectionLines.filter { line ->
-                    val lowerLine = line.lowercase()
-                    expandedKeywords.count { keyword -> lowerLine.contains(keyword) } >= 2
+                val resultLines = mutableListOf<String>()
+                if (headerLine.isNotEmpty()) {
+                    resultLines.add(headerLine)
                 }
-
-                if (filtered.isNotEmpty()) {
-                    return filtered.take(20).joinToString("\n")
-                }
-
-                // Этап 5: ещё слабее — строки с хотя бы 1 ключевым словом
-                filtered = sectionLines.filter { line ->
-                    val lowerLine = line.lowercase()
-                    expandedKeywords.any { keyword -> lowerLine.contains(keyword) }
-                }
-
-                if (filtered.isNotEmpty()) {
-                    return filtered.take(10).joinToString("\n")
-                }
+                resultLines.addAll(filtered.take(20))
+                resultLines.add(0, cat) // Добавляем название категории
+                allResults.add(resultLines.joinToString("\n"))
             }
         }
 
-        return ""
+        return if (allResults.isNotEmpty()) {
+            allResults.joinToString("\n\n")
+        } else {
+            ""
+        }
     }
 
     private fun searchBrain(query: String): String {
@@ -1062,7 +1066,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             .replace(SEARCH_COMMAND, "")
             .replace(CHAT_LOOKUP_COMMAND, "")
             .trim()
-            .split(" ")
+            .split(Regex("[\\s,.;:!?]+"))
             .map { it.trim() }
             .filter { it.length > 2 }
             .map { extractRussianRoot(it) }
@@ -1109,12 +1113,19 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     val queryCategory = determineCategory(prompt)
                     val filteredMemory = searchMemory(prompt, queryCategory)
 
-                    if (filteredMemory.isNotEmpty()) {
+                    if (filteredMemory.isEmpty()) {
+                        // Ищем по всем категориям
+                        val allMemory = searchMemory(prompt, null)
+                        if (allMemory.isNotEmpty()) {
+                            append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ (все категории):\n$allMemory\n\n")
+                            append("Пользователь просит найти информацию в базе знаний. Изучи найденные факты выше и используй их для ответа.")
+                        } else {
+                            append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ: подходящих фактов не найдено.\n\n")
+                            append("Честно скажи, что в базе знаний нет информации по запросу, и попроси пользователя перефразировать запрос.")
+                        }
+                    } else {
                         append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ (категория $queryCategory):\n$filteredMemory\n\n")
                         append("Пользователь просит найти информацию в базе знаний. Изучи найденные факты выше и используй их для ответа.")
-                    } else {
-                        append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ: подходящих фактов не найдено.\n\n")
-                        append("Честно скажи, что в базе знаний нет информации по запросу, и попроси пользователя перефразировать запрос.")
                     }
                 }
             }
@@ -1145,10 +1156,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
             lowerText.contains(RECALL_COMMAND) || lowerText.contains(FIND_COMMAND) || lowerText.contains(SEARCH_COMMAND) || lowerText.contains(CHAT_LOOKUP_COMMAND) -> {
                 if (_currentMode.value == AIMode.NEUTRAL) {
-                    val queryCategory = determineCategory(text)
-                    val memoryData = searchMemory(text, queryCategory)
+                    val memoryData = searchMemory(text, null)
                     if (memoryData.isNotEmpty()) {
-                        appendSystemMessage("🔍 Найдено в категории $queryCategory:\n$memoryData")
+                        appendSystemMessage("🔍 Найдено в базе знаний:\n$memoryData")
                     } else {
                         appendSystemMessage("🔍 Ничего не найдено. Перефразируйте запрос.")
                     }
@@ -1450,48 +1460,46 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     fun overwriteLongTermMemory(newFullText: String) {
-    try {
-        if (!memoryFile.exists()) {
-            memoryFile.createNewFile()
-        }
-
-        val lines = newFullText
-            .split("\n")
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-
-        // Группируем по категориям
-        val grouped = mutableMapOf<String, MutableList<String>>()
-
-        for (line in lines) {
-            val category = determineCategory(line)
-            if (!grouped.containsKey(category)) {
-                grouped[category] = mutableListOf()
+        try {
+            if (!memoryFile.exists()) {
+                memoryFile.createNewFile()
             }
-            grouped[category]!!.add(line)
-        }
 
-        // Формируем красивый вывод
-        val output = StringBuilder()
+            val lines = newFullText
+                .split("\n")
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
 
-        for (category in CATEGORIES) {
-            val entries = grouped[category]
-            if (entries != null && entries.isNotEmpty()) {
-                output.append(category).append("\n")
-                for (entry in entries) {
-                    output.append(entry).append("\n")
+            val grouped = mutableMapOf<String, MutableList<String>>()
+
+            for (line in lines) {
+                val category = determineCategory(line)
+                if (!grouped.containsKey(category)) {
+                    grouped[category] = mutableListOf()
                 }
-                output.append("\n")
+                grouped[category]!!.add(line)
             }
-        }
 
-        memoryFile.writeText(output.toString().trim() + "\n")
-        Log.d(TAG, "База знаний успешно обновлена и упорядочена")
-        appendSystemMessage("🧠 База знаний обновлена и упорядочена")
-    } catch (e: Exception) {
-        Log.e(TAG, "Ошибка перезаписи базы знаний: ${e.message}")
+            val output = StringBuilder()
+
+            for (category in CATEGORIES) {
+                val entries = grouped[category]
+                if (entries != null && entries.isNotEmpty()) {
+                    output.append(category).append("\n")
+                    for (entry in entries) {
+                        output.append(entry).append("\n")
+                    }
+                    output.append("\n")
+                }
+            }
+
+            memoryFile.writeText(output.toString().trim() + "\n")
+            Log.d(TAG, "База знаний успешно обновлена и упорядочена")
+            appendSystemMessage("🧠 База знаний обновлена и упорядочена")
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка перезаписи базы знаний: ${e.message}")
+        }
     }
-}
 
     private fun saveBrain(text: String) {
         try {
