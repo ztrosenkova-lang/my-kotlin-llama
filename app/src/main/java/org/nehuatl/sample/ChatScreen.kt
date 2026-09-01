@@ -361,7 +361,8 @@ fun ChatScreen(
                 }
             },
             onDismiss = { showModelDialog = false },
-            colors = colors
+            colors = colors,
+            isDarkTheme = isDarkTheme
         )
     }
 
@@ -558,7 +559,9 @@ fun ChatScreen(
                 factory = { context ->
                     MatrixChatBackground(context)
                 },
-                modifier = Modifier.matchParentSize()
+                modifier = Modifier
+                    .matchParentSize()
+                    .clip(RoundedCornerShape(16.dp))
             )
 
             Card(
@@ -566,7 +569,7 @@ fun ChatScreen(
                 shape = RoundedCornerShape(16.dp),
                 border = BorderStroke(1.dp, colors.borderGray),
                 colors = CardDefaults.cardColors(
-                    containerColor = Color.Transparent
+                    containerColor = if (isDarkTheme) Color(0xFF1E1E1E).copy(alpha = 0.85f) else Color.Transparent
                 )
             ) {
                 SelectionContainer {
@@ -1443,7 +1446,6 @@ private fun TopBarWithSwitch(
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Кнопка-логотип
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(8.dp))
@@ -2244,7 +2246,8 @@ private fun ModelPickerDialog(
     onPickMmproj: () -> Unit,
     onLoad: () -> Unit,
     onDismiss: () -> Unit,
-    colors: AppColors
+    colors: AppColors,
+    isDarkTheme: Boolean
 ) {
     val context = LocalContext.current
 
@@ -2259,13 +2262,15 @@ private fun ModelPickerDialog(
                 factory = { matrixContext ->
                     MatrixChatBackground(matrixContext)
                 },
-                modifier = Modifier.matchParentSize()
+                modifier = Modifier
+                    .matchParentSize()
+                    .clip(RoundedCornerShape(16.dp))
             )
 
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(colors.surfaceGray.copy(alpha = 0.3f))
+                    .background(if (isDarkTheme) Color(0xFF1E1E1E).copy(alpha = 0.95f) else colors.surfaceGray.copy(alpha = 0.3f))
                     .padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
