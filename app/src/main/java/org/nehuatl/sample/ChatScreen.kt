@@ -116,8 +116,8 @@ import kotlin.math.sin
 import kotlin.math.cos
 import androidx.compose.animation.core.keyframes
 import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.semantics.contentDescription
+import androidx.compose.foundation.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -809,7 +809,7 @@ private fun VoiceWaveAnimation(
 @Composable
 fun ThinkingRobotAnimation(
     modifier: Modifier = Modifier,
-    height: Dp = 70.dp,
+    height: Dp = 85.dp,
     isActive: Boolean = true,
     isSpeaking: Boolean = false,
     isThinking: Boolean = false,
@@ -859,10 +859,59 @@ fun ThinkingRobotAnimation(
         ),
         label = "blink"
     )
+
+    val lookX by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = keyframes {
+                durationMillis = 7000
+                0f at 0
+                0f at 1000
+                1f at 1400
+                1f at 2600
+                -1f at 3000
+                -1f at 4200
+                0f at 4600
+                0f at 5200
+                0.6f at 5600
+                0.6f at 6200
+                0f at 6600
+                0f at 7000
+            }
+        ),
+        label = "lookX"
+    )
+
+    val lookY by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = keyframes {
+                durationMillis = 7000
+                0f at 0
+                0f at 1800
+                -0.7f at 2200
+                -0.7f at 3000
+                0.5f at 3400
+                0.5f at 4200
+                0f at 4600
+                0f at 7000
+            }
+        ),
+        label = "lookY"
+    )
+
     val finalPhase = if (isThinking || isSpeaking) phase else 0f
     val finalPulse = if (isThinking || isSpeaking) pulse else 0f
     val finalBob = if (isIdle) bob else 0f
     val finalBlink = if (isActive || isSpeaking) blink else 1f
+    val finalLookX = if (isIdle) lookX else 0f
+    val finalLookY = when {
+        isIdle -> lookY
+        isThinking -> -0.6f
+        else -> 0f
+    }
 
     Canvas(
         modifier = modifier
@@ -879,10 +928,10 @@ fun ThinkingRobotAnimation(
         val brainDark = Color(0xFFD67E93)
         val orange = Color(0xFFF89B3C)
 
-        val u = size.height / 74f
+        val u = size.height / 84f
         val offX = (size.width - 100f * u) / 2f
-        val robotTop = 34f
-        val robotBottom = 85f
+        val robotTop = 27f
+        val robotBottom = 100f
         val robotVisualHeight = (robotBottom - robotTop) * u
         val baseOffY = (size.height - robotVisualHeight) / 2f - robotTop * u
         val offY = baseOffY + 1.2f * u * sin(finalBob)
@@ -906,7 +955,76 @@ fun ThinkingRobotAnimation(
         )
         drawCircle(metal, 6f * u, pt(29f, 85f))
         drawCircle(metal, 6f * u, pt(71f, 85f))
-    
+
+        drawCircle(Color.White.copy(alpha = 0.35f), 1.6f * u, pt(27f, 83f))
+        drawCircle(Color.White.copy(alpha = 0.35f), 1.6f * u, pt(69f, 83f))
+        drawOval(Color.White.copy(alpha = 0.15f), topLeft = pt(33f, 78.5f), size = Size(14f * u, 3.5f * u))
+
+        // ================= Сопла + ракетное пламя =================
+        for ((idx, sx) in listOf(29f, 71f).withIndex()) {
+            drawRoundRect(
+                metalDark,
+                topLeft = pt(sx - 2.5f, 88.5f),
+                size = Size(5f * u, 3f * u),
+                cornerRadius = CornerRadius(1f * u)
+            )
+            drawRoundRect(
+                Color(0xFF334457),
+                topLeft = pt(sx - 1.6f, 90.6f),
+                size = Size(3.2f * u, 1.4f * u),
+                cornerRadius = CornerRadius(0.7f * u)
+            )
+            if (finalBob != 0f) {
+                val flick = 0.5f + 0.5f * sin(phase * 4f + idx * 2.1f)
+                val len = (5f + 4.5f * flick) * u
+                val fw = 4.4f * u
+                val top = pt(sx - 2.2f, 91.2f)
+                glow(
+                    Offset(top.x + fw / 2f, top.y + len * 0.4f),
+                    (5f + 2f * flick) * u,
+                    Color(0xFF2F80ED).copy(alpha = 0.35f)
+                )
+                drawOval(
+                    Brush.verticalGradient(
+                        listOf(
+                            cyanSoft,
+                            cyan,
+                            Color(0xFF2F80ED),
+                            Color(0xFF2F80ED).copy(alpha = 0f)
+                        )
+                    ),
+                    topLeft = top,
+                    size = Size(fw, len)
+                )
+                drawOval(
+                    Brush.verticalGradient(
+                        listOf(Color.White, cyanSoft.copy(alpha = 0f))
+                    ),
+                    topLeft = Offset(top.x + fw * 0.28f, top.y),
+                    size = Size(fw * 0.44f, len * 0.55f)
+                )
+            }
+        }
+
+        // ================= Панель груди =================
+        drawRoundRect(
+            Color(0xFF334457),
+            topLeft = pt(39f, 80f),
+            size = Size(22f * u, 11f * u),
+            cornerRadius = CornerRadius(3f * u)
+        )
+        drawRoundRect(
+            Color(0xFF22303F),
+            topLeft = pt(41f, 82f),
+            size = Size(12f * u, 7f * u),
+            cornerRadius = CornerRadius(2f * u)
+        )
+        val coreP = 0.5f + 0.5f * sin(pulse * 1.5f)
+        glow(pt(47f, 85.5f), (4f + 1.5f * coreP) * u, cyan.copy(alpha = 0.4f))
+        drawCircle(cyan, (1.8f + 0.5f * coreP) * u, pt(47f, 85.5f))
+        drawCircle(Color.White.copy(alpha = 0.9f), 0.7f * u, pt(46.4f, 84.9f))
+        drawCircle(orange, 1.3f * u, pt(56.5f, 83.5f))
+        drawCircle(Color(0xFF69D2A7), 1.3f * u, pt(56.5f, 87.5f))
 
         // ================= Антенна (укороченная) =================
         drawLine(metalDark, pt(24f, 63f), pt(24f, 34f), strokeWidth = 1.6f * u)
@@ -915,7 +1033,7 @@ fun ThinkingRobotAnimation(
         drawCircle(orange, (2.6f + 0.4f * orbP) * u, pt(24f, 35f))
         drawCircle(Color(0xFFFFD9A6), 1f * u, pt(23.2f, 34f))
 
-        // ================= Уши — круглые шайбы =================
+        // ================= Уши =================
         drawOval(metal, topLeft = pt(19f, 55f), size = Size(9f * u, 16f * u))
         drawOval(metal, topLeft = pt(72f, 55f), size = Size(9f * u, 16f * u))
         drawOval(metalDark, topLeft = pt(21.5f, 58f), size = Size(4.5f * u, 10f * u))
@@ -1024,14 +1142,24 @@ fun ThinkingRobotAnimation(
         )
         drawOval(metalDark, topLeft = pt(27.5f, 46.2f), size = Size(45f * u, 3.4f * u))
 
-        // ================= Голова — овальная =================
+        // ================= Голова =================
         drawOval(
             Brush.verticalGradient(listOf(metalLight, metal, metalDark)),
             topLeft = pt(26f, 47f),
             size = Size(48f * u, 32f * u)
         )
 
-        // ================= Глаза =================
+        rotate(-16f, pivot = pt(35f, 53f)) {
+            drawOval(
+                Color.White.copy(alpha = 0.22f),
+                topLeft = pt(29f, 51f),
+                size = Size(13f * u, 3.6f * u)
+            )
+        }
+        glow(pt(37f, 67f), 4.5f * u, Color(0xFFE36F8C).copy(alpha = 0.20f))
+        glow(pt(63f, 67f), 4.5f * u, Color(0xFFE36F8C).copy(alpha = 0.20f))
+
+        // ================= Глаза + зрачки =================
         for (sx in listOf(-1f, 1f)) {
             val ec = pt(50f + sx * 9.5f, 61f)
             val ry = 7f * u * finalBlink
@@ -1047,6 +1175,23 @@ fun ThinkingRobotAnimation(
                 topLeft = Offset(ec.x - 3.8f * u, ec.y - iry),
                 size = Size(7.6f * u, iry * 2f)
             )
+            if (finalBlink > 0.25f) {
+                val pr = 2.3f * u
+                val pc = Offset(
+                    ec.x + finalLookX * 1.6f * u,
+                    ec.y + finalLookY * 1.4f * u * finalBlink
+                )
+                drawOval(
+                    eyeDark,
+                    topLeft = Offset(pc.x - pr, pc.y - pr * finalBlink),
+                    size = Size(pr * 2f, pr * 2f * finalBlink)
+                )
+                drawCircle(
+                    Color.White,
+                    0.7f * u,
+                    Offset(pc.x - 0.6f * u, pc.y - 0.8f * u * finalBlink)
+                )
+            }
             if (finalBlink > 0.3f) {
                 drawCircle(
                     Color.White.copy(alpha = 0.9f * finalBlink),
@@ -1056,19 +1201,58 @@ fun ThinkingRobotAnimation(
             }
         }
 
+        // ================= Нос =================
+        drawRoundRect(
+            metalDark,
+            topLeft = pt(48.4f, 64.2f),
+            size = Size(3.2f * u, 2.2f * u),
+            cornerRadius = CornerRadius(1.1f * u)
+        )
+        drawCircle(Color.White.copy(alpha = 0.35f), 0.6f * u, pt(49.3f, 64.9f))
+
         // ================= Рот =================
-        for (i in 0..4) {
-            val h = if (isSpeaking) {
-                (3f + 4f * (0.5f + 0.5f * sin(finalPhase * 3f + i * 1.1f))) * u
-            } else {
-                (3f + 1.5f * sin(i * 1.1f)) * u
+        if (isSpeaking) {
+            for (i in 0..4) {
+                val h = (3f + 4f * (0.5f + 0.5f * sin(finalPhase * 3f + i * 1.1f))) * u
+                val x = 50f + (i - 2) * 2.6f
+                drawRoundRect(
+                    cyan,
+                    topLeft = Offset(offX + (x - 0.7f) * u, offY + 73f * u - h),
+                    size = Size(1.4f * u, h),
+                    cornerRadius = CornerRadius(0.7f * u)
+                )
             }
-            val x = 50f + (i - 2) * 2.6f
-            drawRoundRect(
+        } else if (isThinking) {
+            for (i in 0..4) {
+                val h = (2.5f + 2f * (0.5f + 0.5f * sin(finalPhase * 2f + i * 1.1f))) * u
+                val x = 50f + (i - 2) * 2.6f
+                drawRoundRect(
+                    cyan,
+                    topLeft = Offset(offX + (x - 0.7f) * u, offY + 73f * u - h),
+                    size = Size(1.4f * u, h),
+                    cornerRadius = CornerRadius(0.7f * u)
+                )
+            }
+        } else {
+            val smileTL = pt(44.5f, 62.5f)
+            val smileSize = Size(11f * u, 11f * u)
+            drawArc(
+                cyan.copy(alpha = 0.35f),
+                startAngle = 20f,
+                sweepAngle = 140f,
+                useCenter = false,
+                topLeft = smileTL,
+                size = smileSize,
+                style = Stroke(2.6f * u, cap = StrokeCap.Round)
+            )
+            drawArc(
                 cyan,
-                topLeft = Offset(offX + (x - 0.7f) * u, offY + 73f * u - h),
-                size = Size(1.4f * u, h),
-                cornerRadius = CornerRadius(0.7f * u)
+                startAngle = 20f,
+                sweepAngle = 140f,
+                useCenter = false,
+                topLeft = smileTL,
+                size = smileSize,
+                style = Stroke(1.5f * u, cap = StrokeCap.Round)
             )
         }
     }
