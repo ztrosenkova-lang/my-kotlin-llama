@@ -1701,7 +1701,7 @@ private fun ControlPanel(
     colors: AppColors,
     isDarkTheme: Boolean
 ) {
-        Card(
+    Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
         shape = RoundedCornerShape(12.dp),
         border = BorderStroke(1.dp, colors.borderGray),
@@ -1731,11 +1731,6 @@ private fun ControlPanel(
                     shape = RoundedCornerShape(12.dp)
                 )
                 .padding(4.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(4.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1778,7 +1773,6 @@ private fun ControlPanel(
         }
     }
 }
-
 @Composable
 private fun IconButtonWithLabel(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
