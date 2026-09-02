@@ -67,11 +67,8 @@ class MatrixChatBackground @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        // Ограничиваем область рисования размерами View
-        canvas.save()
-        canvas.clipRect(0, 0, width, height)
-
-        canvas.drawColor(Color.WHITE)
+        // Прозрачный фон — позволяет просвечивать фон родителя
+        canvas.drawColor(Color.TRANSPARENT)
         frame++
 
         for (i in 0 until maxLines) {
@@ -104,15 +101,11 @@ class MatrixChatBackground @JvmOverloads constructor(
             val limit = printed[i].coerceAtMost(line.length)
             for (c in 0 until limit) {
                 val x = c * fontSize
-                // Дополнительная проверка, чтобы символы не выходили за правую границу
                 if (x < width) {
                     canvas.drawText(line[c].toString(), x, y, paint)
                 }
             }
         }
-
-        // Восстанавливаем область рисования
-        canvas.restore()
 
         postInvalidateDelayed(100)
     }
