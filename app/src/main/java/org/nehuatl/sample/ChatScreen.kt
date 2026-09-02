@@ -1599,7 +1599,7 @@ private fun TopBarWithSwitch(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(2.dp)
-                .align(Alignment.Top)
+                .align(Alignment.TopCenter)
                 .background(
                     brush = Brush.horizontalGradient(
                         colors = listOf(
