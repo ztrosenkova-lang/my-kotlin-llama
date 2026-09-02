@@ -590,7 +590,7 @@ fun ChatScreen(
                 shape = RoundedCornerShape(16.dp),
                 border = BorderStroke(1.dp, colors.borderGray),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isDarkTheme) Color(0xFF1E1E1E).copy(alpha = 0.85f) else Color.Transparent
+                    containerColor = if (isDarkTheme) Color(0xFF1E1E1E).copy(alpha = 0.2f) else Color.Transparent
                 )
             ) {
                 SelectionContainer {
