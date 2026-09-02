@@ -525,7 +525,8 @@ fun ChatScreen(
             viewModel = viewModel,
             context = context,
             coroutineScope = coroutineScope,
-            colors = colors
+            colors = colors,
+            isDarkTheme = isDarkTheme
         )
 
         if (showSettings) {
@@ -1476,11 +1477,12 @@ private fun TopBarWithSwitch(
                                 Color(0xFFF0E0B8)
                             )
                         )
-                    } else {
+                                        } else {
                         Brush.verticalGradient(
                             colors = listOf(
-                                colors.paleYellow,
-                                colors.paleYellow
+                                Color(0xFF3A3A2E),
+                                Color(0xFF2A2A1E),
+                                Color(0xFF1A1A10)
                             )
                         )
                     },
@@ -1490,11 +1492,30 @@ private fun TopBarWithSwitch(
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Кнопка-логотип
+                        // Кнопка-логотип
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
-                    .background(colors.surfaceGray, RoundedCornerShape(8.dp))
+                    .background(
+                        brush = if (!isDarkTheme) {
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color(0xFFFFFFFF),
+                                    Color(0xFFF5F7FA),
+                                    Color(0xFFE8ECF1)
+                                )
+                            )
+                        } else {
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color(0xFF3A3A2E),
+                                    Color(0xFF2A2A1E),
+                                    Color(0xFF1A1A10)
+                                )
+                            )
+                        },
+                        shape = RoundedCornerShape(8.dp)
+                    )
                     .border(1.dp, colors.borderGray, RoundedCornerShape(8.dp))
                     .clickable { onToggleTheme() }
                     .padding(4.dp),
@@ -1677,14 +1698,42 @@ private fun ControlPanel(
     viewModel: MainViewModel,
     context: android.content.Context,
     coroutineScope: kotlinx.coroutines.CoroutineScope,
-    colors: AppColors
+    colors: AppColors,
+    isDarkTheme: Boolean
 ) {
-    Card(
+        Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
         shape = RoundedCornerShape(12.dp),
         border = BorderStroke(1.dp, colors.borderGray),
-        colors = CardDefaults.cardColors(containerColor = colors.surfaceGray)
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = if (!isDarkTheme) {
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFFFFFFFF),
+                                Color(0xFFF5F7FA),
+                                Color(0xFFE8ECF1)
+                            )
+                        )
+                    } else {
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFF3A3A2E),
+                                Color(0xFF2A2A1E),
+                                Color(0xFF1A1A10)
+                            )
+                        )
+                    },
+                    shape = RoundedCornerShape(12.dp)
+                )
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(4.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
@@ -2380,7 +2429,7 @@ private fun ModelPickerDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(if (isDarkTheme) Color(0xFF1E1E1E).copy(alpha = 0.95f) else colors.surfaceGray.copy(alpha = 0.3f))
+                    .background(if (isDarkTheme) Color(0xFF1E1E1E).copy(alpha = 0.95f) else colors.surfaceGray)
                     .padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -2618,11 +2667,12 @@ private fun PromptInput(
                                 Color(0xFFF0E0B8)
                             )
                         )
-                    } else {
+                                        } else {
                         Brush.verticalGradient(
                             colors = listOf(
-                                colors.paleYellow,
-                                colors.paleYellow
+                                Color(0xFF3A3A2E),
+                                Color(0xFF2A2A1E),
+                                Color(0xFF1A1A10)
                             )
                         )
                     },
