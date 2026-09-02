@@ -689,7 +689,8 @@ fun ChatScreen(
             isPermanentlyUnlocked = isPermanentlyUnlocked,
             currentMode = currentMode,
             modifier = Modifier.padding(8.dp),
-            colors = colors
+            colors = colors,
+            isDarkTheme = isDarkTheme
         )
     }
 }
@@ -1457,120 +1458,160 @@ private fun TopBarWithSwitch(
     val localIndicatorColor = if (isLocalReady) colors.green else colors.paleYellow
     val cloudIndicatorColor = if (isCloudReady) colors.green else colors.paleYellow
 
-    Row(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(84.dp)
             .padding(4.dp)
-            .background(colors.paleYellow, RoundedCornerShape(8.dp))
-            .border(1.dp, colors.borderGray, RoundedCornerShape(8.dp))
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
+        Row(
             modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(colors.surfaceGray, RoundedCornerShape(8.dp))
+                .fillMaxSize()
+                .background(
+                    brush = if (!isDarkTheme) {
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFFFFFDF5),
+                                Color(0xFFFFF8DC),
+                                Color(0xFFF0E0B8)
+                            )
+                        )
+                    } else {
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                colors.paleYellow,
+                                colors.paleYellow
+                            )
+                        )
+                    },
+                    shape = RoundedCornerShape(8.dp)
+                )
                 .border(1.dp, colors.borderGray, RoundedCornerShape(8.dp))
-                .clickable { onToggleTheme() }
-                .padding(4.dp),
-            contentAlignment = Alignment.Center
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+            // Кнопка-логотип
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(colors.surfaceGray, RoundedCornerShape(8.dp))
+                    .border(1.dp, colors.borderGray, RoundedCornerShape(8.dp))
+                    .clickable { onToggleTheme() }
+                    .padding(4.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Image(
-                    painter = painterResource(id = R.mipmap.ic_launcher),
-                    contentDescription = "Логотип",
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(6.dp)),
-                    contentScale = ContentScale.Crop
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Image(
+                        painter = painterResource(id = R.mipmap.ic_launcher),
+                        contentDescription = "Логотип",
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(RoundedCornerShape(6.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                    Text(
+                        text = "ИИ-Друг",
+                        color = colors.accent,
+                        fontSize = 8.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.ExtraBold,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+                contentAlignment = Alignment.Center
+            ) {
+                ThinkingRobotAnimation(
+                    height = 70.dp,
+                    isActive = isGenerating,
+                    isSpeaking = isSpeaking,
+                    isThinking = isGenerating,
+                    isIdle = isLocalReady || isCloudReady,
+                    modifier = Modifier.fillMaxWidth()
                 )
-                Text(
-                    text = "ИИ-Друг",
-                    color = colors.accent,
-                    fontSize = 8.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.ExtraBold,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1
-                )
+            }
+
+            Column(
+                modifier = Modifier
+                    .width(132.dp)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.SpaceEvenly,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    StatusIndicator(
+                        color = localIndicatorColor,
+                        text = "локальный ИИ",
+                        colors = colors
+                    )
+                    StatusIndicator(
+                        color = cloudIndicatorColor,
+                        text = "Облачный ИИ",
+                        colors = colors
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    ModeButton(
+                        label = "Local",
+                        isSelected = currentMode == AIMode.LOCAL,
+                        onClick = { onLocalForceDialog() },
+                        modifier = Modifier.width(42.dp).height(22.dp),
+                        colors = colors
+                    )
+                    ModeButton(
+                        label = "Neutral",
+                        isSelected = currentMode == AIMode.NEUTRAL,
+                        onClick = { onModeChange(AIMode.NEUTRAL) },
+                        modifier = Modifier.width(42.dp).height(22.dp),
+                        colors = colors
+                    )
+                    ModeButton(
+                        label = "Cloud",
+                        isSelected = currentMode == AIMode.CLOUD,
+                        onClick = { onCloudForceDialog() },
+                        modifier = Modifier.width(42.dp).height(22.dp),
+                        colors = colors
+                    )
+                }
             }
         }
 
+        // Сияние сверху
         Box(
             modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight(),
-            contentAlignment = Alignment.Center
-        ) {
-            ThinkingRobotAnimation(
-                height = 70.dp,
-                isActive = isGenerating,
-                isSpeaking = isSpeaking,
-                isThinking = isGenerating,
-                isIdle = isLocalReady || isCloudReady,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        Column(
-            modifier = Modifier
-                .width(132.dp)
-                .fillMaxHeight(),
-            verticalArrangement = Arrangement.SpaceEvenly,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                StatusIndicator(
-                    color = localIndicatorColor,
-                    text = "локальный ИИ",
-                    colors = colors
+                .fillMaxWidth()
+                .height(2.dp)
+                .align(Alignment.Top)
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.White.copy(alpha = 0.4f),
+                            Color.Transparent
+                        )
+                    )
                 )
-                StatusIndicator(
-                    color = cloudIndicatorColor,
-                    text = "Облачный ИИ",
-                    colors = colors
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                ModeButton(
-                    label = "Local",
-                    isSelected = currentMode == AIMode.LOCAL,
-                    onClick = { onLocalForceDialog() },
-                    modifier = Modifier.width(42.dp).height(22.dp),
-                    colors = colors
-                )
-                ModeButton(
-                    label = "Neutral",
-                    isSelected = currentMode == AIMode.NEUTRAL,
-                    onClick = { onModeChange(AIMode.NEUTRAL) },
-                    modifier = Modifier.width(42.dp).height(22.dp),
-                    colors = colors
-                )
-                ModeButton(
-                    label = "Cloud",
-                    isSelected = currentMode == AIMode.CLOUD,
-                    onClick = { onCloudForceDialog() },
-                    modifier = Modifier.width(42.dp).height(22.dp),
-                    colors = colors
-                )
-            }
-        }
+        )
     }
 }
-
 @Composable
 private fun StatusIndicator(
     color: Color,
@@ -2491,7 +2532,8 @@ private fun PromptInput(
     isPermanentlyUnlocked: Boolean,
     currentMode: AIMode,
     modifier: Modifier = Modifier,
-    colors: AppColors
+    colors: AppColors,
+    isDarkTheme: Boolean
 ) {
     val memoryInfoText by viewModel.memoryInfoText.collectAsStateWithLifecycle(initialValue = "Загрузка памяти...")
 
@@ -2562,11 +2604,30 @@ private fun PromptInput(
             .fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         border = BorderStroke(1.dp, colors.borderGray),
-        colors = CardDefaults.cardColors(containerColor = colors.paleYellow)
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .background(
+                    brush = if (!isDarkTheme) {
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFFFFFDF5),
+                                Color(0xFFFFF8DC),
+                                Color(0xFFF0E0B8)
+                            )
+                        )
+                    } else {
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                colors.paleYellow,
+                                colors.paleYellow
+                            )
+                        )
+                    },
+                    shape = RoundedCornerShape(24.dp)
+                )
                 .padding(horizontal = 8.dp, vertical = 4.dp)
         ) {
             Box(
