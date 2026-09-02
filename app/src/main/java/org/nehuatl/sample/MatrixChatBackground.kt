@@ -22,12 +22,12 @@ class MatrixChatBackground @JvmOverloads constructor(
     private val maxPoolSize = 60
     private val words = arrayOf("Нео", "Батя", "Меч Правды", "Ковчег", "Иди за белым кроликом")
 
-    private val paint = Paint().apply {
+        private val paint = Paint().apply {
         color = Color.parseColor("#21A038")
         textSize = fontSize
         typeface = Typeface.MONOSPACE
         isAntiAlias = true
-        alpha = 45
+        alpha = 120
     }
 
     private var columns = 0
