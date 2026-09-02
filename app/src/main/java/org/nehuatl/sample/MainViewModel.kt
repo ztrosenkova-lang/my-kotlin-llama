@@ -56,6 +56,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         private const val ALARM_COMMAND = "будильник"
         private const val REMIND_COMMAND = "напомни"
         private const val CHAT_LOOKUP_COMMAND = "посмотри в чате"
+        private const val BRAIN_EDIT_COMMAND = "редактировать мозг"
 
         private const val AUTO_BRAIN_COMPRESSION_THRESHOLD = 10
 
@@ -130,6 +131,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _isDarkTheme = MutableStateFlow(false)
     val isDarkTheme: StateFlow<Boolean> = _isDarkTheme.asStateFlow()
 
+    private val _showBrainEditor = MutableStateFlow(false)
+    val showBrainEditor: StateFlow<Boolean> = _showBrainEditor.asStateFlow()
+
     private val memoryFile: File by lazy {
         File(getApplication<Application>().filesDir, "memory.txt")
     }
@@ -143,6 +147,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     private var isCompressionRequest = false
+    private var userMessageCount = 0
 
     private var isTtsEnabled = false
     private val _isTtsReady = MutableStateFlow(false)
@@ -346,7 +351,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             if (isCompressionRequest) {
                                 saveBrain(fullText)
                                 isCompressionRequest = false
-                                appendSystemMessage("✅ Беседа записана в память")
+                                appendSystemMessage("✅ Brain.txt обновлен: беседа записана в долговременную память")
                             } else {
                                 _cloudGeneratedText.value = fullText
                                 _pendingTextToPrint.value = fullText
@@ -390,7 +395,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             if (isCompressionRequest) {
                                 saveBrain(fullText)
                                 isCompressionRequest = false
-                                appendSystemMessage("✅ Беседа записана в память")
+                                appendSystemMessage("✅ Brain.txt обновлен: беседа записана в долговременную память")
                             } else {
                                 _generatedText.value = fullText
                                 _pendingTextToPrint.value = fullText
@@ -439,6 +444,41 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     fun toggleTheme() {
         _isDarkTheme.value = !_isDarkTheme.value
         prefs.edit().putBoolean(KEY_DARK_THEME, _isDarkTheme.value).apply()
+    }
+
+    fun showBrainEditor() {
+        _showBrainEditor.value = true
+    }
+
+    fun hideBrainEditor() {
+        _showBrainEditor.value = false
+    }
+
+    fun readBrain(): String {
+        return try {
+            if (brainFile.exists()) {
+                brainFile.readText().trim()
+            } else {
+                ""
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка чтения мозга: ${e.message}")
+            ""
+        }
+    }
+
+    fun overwriteBrain(newFullText: String) {
+        try {
+            if (!brainFile.exists()) {
+                brainFile.createNewFile()
+            }
+            brainFile.writeText(newFullText.trim() + "\n")
+            appendSystemMessage("🧠 Brain.txt обновлен")
+            Log.d(TAG, "Brain.txt updated")
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка перезаписи мозга: ${e.message}")
+            appendSystemMessage("❌ Ошибка обновления Brain.txt")
+        }
     }
 
     private fun updateRemainingTime() {
@@ -766,7 +806,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
                 isCompressionRequest = true
 
-                appendSystemMessage("🧠 ИИ запоминает нашу беседу...")
+                appendSystemMessage("🧠 ИИ сжимает нашу беседу для долговременной памяти...")
 
                 if (_isModelLoaded.value && llamaHelper.getContextId() != null) {
                     llamaHelper.predict(
@@ -784,7 +824,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     )
                 } else {
                     isCompressionRequest = false
-                    appendSystemMessage("⚠️ Нет активного ИИ для запоминания")
+                    appendSystemMessage("⚠️ Нет активного ИИ для сжатия беседы")
                 }
             } catch (e: Exception) {
                 isCompressionRequest = false
@@ -922,6 +962,18 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         if (brainData.isEmpty()) return ""
 
         val lines = brainData.split("\n").filter { it.isNotEmpty() }
+        
+        // Поиск по дате
+        val dateMatches = Regex("\\d{4}-\\d{2}-\\d{2}").findAll(query).map { it.value }.toList()
+        if (dateMatches.isNotEmpty()) {
+            val dateFiltered = lines.filter { line ->
+                dateMatches.any { date -> line.contains(date) }
+            }
+            if (dateFiltered.isNotEmpty()) {
+                return dateFiltered.joinToString("\n")
+            }
+        }
+
         val keywords = extractKeywords(query)
 
         return if (keywords.isNotEmpty()) {
@@ -963,6 +1015,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             .replace(FIND_COMMAND, "")
             .replace(SEARCH_COMMAND, "")
             .replace(CHAT_LOOKUP_COMMAND, "")
+            .replace(BRAIN_EDIT_COMMAND, "")
             .trim()
             .split(Regex("[\\s,.;:!?]+"))
             .map { it.trim() }
@@ -1033,11 +1086,21 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         if (text.isBlank()) return
 
         _chatHistory.value = _chatHistory.value + ChatMessage("user", text)
-        triggerBackgroundDialogueCompression(_chatHistory.value)
+        userMessageCount++
+
+        if (userMessageCount >= AUTO_BRAIN_COMPRESSION_THRESHOLD) {
+            userMessageCount = 0
+            triggerBackgroundDialogueCompression(_chatHistory.value)
+        }
 
         val lowerText = text.lowercase()
 
         when {
+            lowerText.contains(BRAIN_EDIT_COMMAND) -> {
+                showBrainEditor()
+                appendSystemMessage("🧠 Открыт редактор Brain.txt")
+                return
+            }
             lowerText.contains(REMEMBER_COMMAND) -> {
                 val cleanText = text.substringAfter(REMEMBER_COMMAND).trim()
                 if (cleanText.isNotEmpty()) {
@@ -1053,11 +1116,21 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
             lowerText.contains(RECALL_COMMAND) || lowerText.contains(FIND_COMMAND) || lowerText.contains(SEARCH_COMMAND) || lowerText.contains(CHAT_LOOKUP_COMMAND) -> {
                 if (_currentMode.value == AIMode.NEUTRAL) {
-                    val memoryData = searchMemory(text, null)
-                    if (memoryData.isNotEmpty()) {
-                        appendSystemMessage("🔍 Найдено в базе знаний:\n$memoryData")
+                    // Поиск в Brain.txt если запрос содержит "вспомни"
+                    if (lowerText.contains(RECALL_COMMAND)) {
+                        val brainData = searchBrain(text)
+                        if (brainData.isNotEmpty()) {
+                            appendSystemMessage("🧠 Найдено в Brain.txt:\n$brainData")
+                        } else {
+                            appendSystemMessage("🧠 В Brain.txt ничего не найдено")
+                        }
                     } else {
-                        appendSystemMessage("🔍 Ничего не найдено. Перефразируйте запрос.")
+                        val memoryData = searchMemory(text, null)
+                        if (memoryData.isNotEmpty()) {
+                            appendSystemMessage("🔍 Найдено в базе знаний:\n$memoryData")
+                        } else {
+                            appendSystemMessage("🔍 Ничего не найдено. Перефразируйте запрос.")
+                        }
                     }
                     return
                 }
@@ -1406,23 +1479,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
             val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
             val timestamp = dateFormat.format(Date())
-            brainFile.appendText("[$timestamp] $text\n")
+            brainFile.appendText("[$timestamp]\n$text\n\n")
             Log.d(TAG, "Записано в мозг: $text")
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка записи мозга: ${e.message}")
-        }
-    }
-
-    private fun readBrain(): String {
-        return try {
-            if (brainFile.exists()) {
-                brainFile.readText().trim()
-            } else {
-                ""
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Ошибка чтения мозга: ${e.message}")
-            ""
         }
     }
 
@@ -1575,6 +1635,8 @@ class MemorySearchEngine(private val memoryFile: File) {
         val queryTokens = tokenize(query)
         if (queryTokens.isEmpty()) return ""
 
+        val queryNumbers = Regex("\\d+").findAll(query).map { it.value }.toList()
+
         val avgDocLength = index.map { it.tokens.size }.average()
 
         val idfMap = queryTokens.associateWith { token ->
@@ -1588,12 +1650,12 @@ class MemorySearchEngine(private val memoryFile: File) {
         }
 
         val scoredResults = documents.map { doc ->
-            val score = computeBM25(doc, queryTokens, idfMap, avgDocLength)
+            val score = computeBM25(doc, queryTokens, queryNumbers, idfMap, avgDocLength)
             SearchResult(doc.category, doc.text, score, doc.timestamp)
         }
         .filter { it.score > 0.0 }
         .sortedByDescending { it.score }
-        .take(20)
+        .take(50)
 
         if (scoredResults.isEmpty()) return ""
 
@@ -1602,7 +1664,7 @@ class MemorySearchEngine(private val memoryFile: File) {
         return buildString {
             grouped.forEach { (cat, results) ->
                 appendLine(cat)
-                results.take(10).forEach { result ->
+                results.take(50).forEach { result ->
                     appendLine(result.text)
                 }
                 appendLine()
@@ -1613,6 +1675,7 @@ class MemorySearchEngine(private val memoryFile: File) {
     private fun computeBM25(
         doc: IndexedDocument,
         queryTokens: List<String>,
+        queryNumbers: List<String>,
         idfMap: Map<String, Double>,
         avgDocLength: Double
     ): Double {
@@ -1649,6 +1712,14 @@ class MemorySearchEngine(private val memoryFile: File) {
                 if (synFreq > 0) {
                     score += synFreq * 1.2
                 }
+            }
+        }
+
+        if (queryNumbers.isNotEmpty()) {
+            val docNumbers = Regex("\\d+").findAll(doc.text).map { it.value }.toList()
+            val numberMatches = queryNumbers.count { num -> docNumbers.contains(num) }
+            if (numberMatches > 0) {
+                score += numberMatches * 10.0
             }
         }
 
