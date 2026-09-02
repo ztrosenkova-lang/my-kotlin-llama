@@ -59,8 +59,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -73,6 +71,8 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -199,6 +199,7 @@ fun ChatScreen(
     val speakStartTrigger by viewModel.speakStartTrigger.collectAsStateWithLifecycle(initialValue = false)
     val pendingTextToPrint by viewModel.pendingTextToPrint.collectAsStateWithLifecycle(initialValue = "")
     val isDarkTheme by viewModel.isDarkTheme.collectAsStateWithLifecycle(initialValue = false)
+    val showBrainEditorState by viewModel.showBrainEditor.collectAsStateWithLifecycle(initialValue = false)
 
     val colors = if (isDarkTheme) DarkColors else LightColors
 
@@ -425,7 +426,7 @@ fun ChatScreen(
         )
     }
 
-        if (showHelpDialog) {
+    if (showHelpDialog) {
         MaterialTheme(
             colorScheme = if (isDarkTheme) darkColorScheme() else lightColorScheme()
         ) {
@@ -437,7 +438,7 @@ fun ChatScreen(
         }
     }
 
-        if (showMemoryEditor) {
+    if (showMemoryEditor) {
         MaterialTheme(
             colorScheme = if (isDarkTheme) darkColorScheme() else lightColorScheme()
         ) {
@@ -448,6 +449,16 @@ fun ChatScreen(
                 colors = colors
             )
         }
+    }
+
+    if (showBrainEditorState) {
+        BrainEditorDialog(
+            initialText = viewModel.readBrain(),
+            onSave = { viewModel.overwriteBrain(it) },
+            onDismiss = { viewModel.hideBrainEditor() },
+            colors = colors,
+            isDarkTheme = isDarkTheme
+        )
     }
 
     Column(
@@ -2121,6 +2132,54 @@ private fun MemoryEditorDialog(
             TextButton(onClick = onDismiss) { Text("Закрыть", color = colors.text) }
         }
     )
+}
+
+@Composable
+private fun BrainEditorDialog(
+    initialText: String,
+    onSave: (String) -> Unit,
+    onDismiss: () -> Unit,
+    colors: AppColors,
+    isDarkTheme: Boolean
+) {
+    var text by remember { mutableStateOf(initialText) }
+
+    MaterialTheme(
+        colorScheme = if (isDarkTheme) darkColorScheme() else lightColorScheme()
+    ) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("🧠 Brain.txt — Долговременная память", style = MaterialTheme.typography.titleLarge, color = colors.text) },
+            text = {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    placeholder = { Text("Здесь хранится сжатая история разговоров...", color = colors.text.copy(alpha = 0.5f), fontSize = 10.sp) },
+                    modifier = Modifier.fillMaxWidth().height(400.dp),
+                    maxLines = 100,
+                    singleLine = false,
+                    textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, color = colors.text),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = colors.text,
+                        unfocusedTextColor = colors.text,
+                        focusedContainerColor = colors.surfaceGray,
+                        unfocusedContainerColor = colors.surfaceGray,
+                        focusedBorderColor = colors.accent,
+                        unfocusedBorderColor = colors.borderGray,
+                        cursorColor = colors.accent
+                    )
+                )
+            },
+            confirmButton = {
+                Button(onClick = { onSave(text); onDismiss() }, colors = ButtonDefaults.buttonColors(containerColor = colors.accent)) {
+                    Text("Сохранить", color = colors.background)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) { Text("Закрыть", color = colors.text) }
+            }
+        )
+    }
 }
 
 @Composable
