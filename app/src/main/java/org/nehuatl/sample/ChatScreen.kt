@@ -59,6 +59,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -423,21 +425,29 @@ fun ChatScreen(
         )
     }
 
-    if (showHelpDialog) {
-        HelpDialog(
-            onDismiss = { showHelpDialog = false },
-            viewModel = viewModel,
-            colors = colors
-        )
+        if (showHelpDialog) {
+        MaterialTheme(
+            colorScheme = if (isDarkTheme) darkColorScheme() else lightColorScheme()
+        ) {
+            HelpDialog(
+                onDismiss = { showHelpDialog = false },
+                viewModel = viewModel,
+                colors = colors
+            )
+        }
     }
 
-    if (showMemoryEditor) {
-        MemoryEditorDialog(
-            initialText = viewModel.readFromLongTermMemory(),
-            onSave = { viewModel.overwriteLongTermMemory(it) },
-            onDismiss = { showMemoryEditor = false },
-            colors = colors
-        )
+        if (showMemoryEditor) {
+        MaterialTheme(
+            colorScheme = if (isDarkTheme) darkColorScheme() else lightColorScheme()
+        ) {
+            MemoryEditorDialog(
+                initialText = viewModel.readFromLongTermMemory(),
+                onSave = { viewModel.overwriteLongTermMemory(it) },
+                onDismiss = { showMemoryEditor = false },
+                colors = colors
+            )
+        }
     }
 
     Column(
