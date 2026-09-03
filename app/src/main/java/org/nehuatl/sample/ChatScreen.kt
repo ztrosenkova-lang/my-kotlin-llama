@@ -1298,9 +1298,9 @@ fun ThinkingRobotAnimation(
                     cornerRadius = CornerRadius(0.7f * u)
                 )
             }
-        } else {
+                } else {
             val smileTL = pt(44.5f, 62.5f)
-            val smileSize = Size(11f * u, 11f * u)
+            val smileSize = Size(13f * u, 11f * u)
             drawArc(
                 cyan.copy(alpha = 0.35f),
                 startAngle = 20f,
@@ -1322,7 +1322,6 @@ fun ThinkingRobotAnimation(
         }
     }
 }
-
 @Composable
 private fun LockScreen(
     secretPhrase: String,
