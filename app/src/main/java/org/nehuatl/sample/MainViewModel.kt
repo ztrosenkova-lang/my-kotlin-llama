@@ -735,13 +735,32 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         getApplication<Application>().stopService(ttsStopIntent)
     }
 
-    private fun filterTextForSpeech(text: String): String {
+       private fun filterTextForSpeech(text: String): String {
         var cleanText = text
-            .replace("+", " плюс ")
-            .replace("=", " равно ")
-            .replace("*", " умножить на ")
-            .replace("/", " разделить на ")
-            .replace("-", " минус ")
+
+        // Проверяем, является ли текст математическим выражением/уравнением
+        val isMathExpression = Regex("[0-9\\s+\\-*/=xх×]").matches(text) &&
+                Regex("\\d").containsMatchIn(text) &&
+                (text.contains("=") || text.contains("+") || text.contains("-") || text.contains("*") || text.contains("/") || text.contains("x") || text.contains("х") || text.contains("×"))
+
+        if (isMathExpression) {
+            // Озвучиваем математические символы
+            cleanText = cleanText
+                .replace("+", " плюс ")
+                .replace("=", " равно ")
+                .replace("*", " умножить на ")
+                .replace("×", " умножить на ")
+                .replace("x", " умножить на ")
+                .replace("х", " умножить на ")
+                .replace("/", " разделить на ")
+                .replace("-", " минус ")
+        } else {
+            // Обычный текст — не озвучиваем * и -
+            cleanText = cleanText
+                .replace("+", " плюс ")
+                .replace("=", " равно ")
+                .replace("/", " разделить на ")
+        }
 
         cleanText = Regex("(\\d),(\\d)").replace(cleanText) { match ->
             "${match.groupValues[1]} запятая ${match.groupValues[2]}"
