@@ -1439,7 +1439,6 @@ private fun LockScreen(
 }
 
 @Composable
-@Composable
 private fun TopBarWithSwitch(
     currentMode: AIMode,
     onModeChange: (AIMode) -> Unit,
