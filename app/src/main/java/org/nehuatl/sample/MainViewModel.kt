@@ -131,6 +131,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _isDarkTheme = MutableStateFlow(false)
     val isDarkTheme: StateFlow<Boolean> = _isDarkTheme.asStateFlow()
 
+    private val _isCompressing = MutableStateFlow(false)
+    val isCompressing: StateFlow<Boolean> = _isCompressing.asStateFlow()
+
     private val _showBrainEditor = MutableStateFlow(false)
     val showBrainEditor: StateFlow<Boolean> = _showBrainEditor.asStateFlow()
 
@@ -351,6 +354,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             if (isCompressionRequest) {
                                 saveBrain(fullText)
                                 isCompressionRequest = false
+                                _isCompressing.value = false
                                 appendSystemMessage("✅ Brain.txt обновлен: беседа записана в долговременную память")
                             } else {
                                 _cloudGeneratedText.value = fullText
@@ -363,6 +367,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     is CloudAIEvent.Error -> {
                         _cloudState.value = CloudAIState.Error(event.message)
                         isCompressionRequest = false
+                        _isCompressing.value = false
                         Log.e(TAG, "Ошибка облачного ИИ: ${event.message}")
                     }
                     is CloudAIEvent.TokenReceived -> {
@@ -395,6 +400,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             if (isCompressionRequest) {
                                 saveBrain(fullText)
                                 isCompressionRequest = false
+                                _isCompressing.value = false
                                 appendSystemMessage("✅ Brain.txt обновлен: беседа записана в долговременную память")
                             } else {
                                 _generatedText.value = fullText
@@ -407,6 +413,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     is LlamaHelper.LLMEvent.Error -> {
                         _state.value = GenerationState.Error(event.message)
                         isCompressionRequest = false
+                        _isCompressing.value = false
                         Log.e(TAG, "Ошибка локального ИИ: ${event.message}")
                         _isModelLoaded.value = false
                     }
@@ -790,6 +797,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     private fun triggerBackgroundDialogueCompression(history: List<ChatMessage>) {
         if (history.size < AUTO_BRAIN_COMPRESSION_THRESHOLD) return
+        if (_isCompressing.value) return
+
+        _isCompressing.value = true
 
         scope.launch(Dispatchers.IO) {
             try {
@@ -824,10 +834,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     )
                 } else {
                     isCompressionRequest = false
+                    _isCompressing.value = false
                     appendSystemMessage("⚠️ Нет активного ИИ для сжатия беседы")
                 }
             } catch (e: Exception) {
                 isCompressionRequest = false
+                _isCompressing.value = false
                 Log.e(TAG, "Background compression failed: ${e.message}")
             }
         }
@@ -963,7 +975,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         val lines = brainData.split("\n").filter { it.isNotEmpty() }
         
-        // Поиск по дате
         val dateMatches = Regex("\\d{4}-\\d{2}-\\d{2}").findAll(query).map { it.value }.toList()
         if (dateMatches.isNotEmpty()) {
             val dateFiltered = lines.filter { line ->
@@ -1083,6 +1094,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     fun sendUserMessage(text: String) {
+        if (_isCompressing.value) {
+            appendSystemMessage("⏳ ИИ сжимает беседу, подождите...")
+            return
+        }
+
         if (text.isBlank()) return
 
         _chatHistory.value = _chatHistory.value + ChatMessage("user", text)
@@ -1116,7 +1132,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
             lowerText.contains(RECALL_COMMAND) || lowerText.contains(FIND_COMMAND) || lowerText.contains(SEARCH_COMMAND) || lowerText.contains(CHAT_LOOKUP_COMMAND) -> {
                 if (_currentMode.value == AIMode.NEUTRAL) {
-                    // Поиск в Brain.txt если запрос содержит "вспомни"
                     if (lowerText.contains(RECALL_COMMAND)) {
                         val brainData = searchBrain(text)
                         if (brainData.isNotEmpty()) {
