@@ -1592,7 +1592,8 @@ private fun TopBarWithSwitch(
                                flightProgress * flightProgress * endY
                 
                 val startSize = h * SpaceConstants.ROBOT_SIZE_RATIO
-                val endSizePx = 70.dp.toPx()
+                val density = LocalDensity.current
+                val endSizePx = with(density) { 70.dp.toPx() }
                 val currentSize = startSize + (endSizePx - startSize) * flightProgress
                 
                 val dx = 2f * oneMinusT * (ctrlX - startX) + 
