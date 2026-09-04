@@ -130,6 +130,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import kotlin.math.atan2
 import kotlin.math.min
 import java.util.Random
+import androidx.compose.ui.unit.toPx
 
 private data class AppColors(
     val background: Color,
@@ -1778,7 +1779,7 @@ private fun SpaceBackground(
         
         val starColor = if (isDarkTheme) Color.White else Color(0xFF222222)
         stars.forEach { (sx, sy, sz) ->
-            val twinkle = (sin(t * 2 * PI + sx * 100f) * 0.5f + 0.5f) * 0.5f + 0.5f
+            val twinkle = (sin(t * 2f * PI.toFloat() + sx * 100f) * 0.5f + 0.5f) * 0.5f + 0.5f
             drawCircle(
                 color = starColor.copy(alpha = 0.3f * twinkle),
                 radius = 1.dp.toPx() * sz,
