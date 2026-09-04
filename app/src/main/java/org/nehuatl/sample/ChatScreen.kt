@@ -164,6 +164,16 @@ enum class AIMode {
     NEUTRAL,
     CLOUD
 }
+private object SpaceConstants {
+    const val ORBIT_CENTER_X_RATIO = 0.20f
+    const val ORBIT_CENTER_Y_RATIO = 0.50f
+    const val ORBIT_1_RADIUS_RATIO = 0.18f
+    const val ORBIT_2_RADIUS_RATIO = 0.32f
+    const val ORBIT_3_RADIUS_RATIO = 0.48f
+    const val ORBIT_4_RADIUS_RATIO = 0.65f
+    const val ROBOT_SIZE_RATIO = 0.055f
+    const val PLANET_SIZE_RATIO = 0.055f
+}
 
 @Composable
 fun ChatScreen(
@@ -500,7 +510,8 @@ fun ChatScreen(
             isSpeaking = isSpeaking,
             isDarkTheme = isDarkTheme,
             onToggleTheme = { viewModel.toggleTheme() },
-            colors = colors
+            colors = colors,
+            isTtsReady = isTtsReady
         )
 
         ControlPanel(
@@ -1451,12 +1462,59 @@ private fun TopBarWithSwitch(
     isSpeaking: Boolean = false,
     isDarkTheme: Boolean,
     onToggleTheme: () -> Unit,
-    colors: AppColors
+    colors: AppColors,
+    isTtsReady: Boolean
 ) {
     val isLocalReady = isModelLoaded
     val isCloudReady = cloudConfig?.authKey?.isNotEmpty() == true
     val localIndicatorColor = if (isLocalReady) colors.green else colors.paleYellow
     val cloudIndicatorColor = if (isCloudReady) colors.green else colors.paleYellow
+
+    val transition = rememberInfiniteTransition(label = "top_bar_transition")
+    
+    val planetPulse by transition.animateFloat(
+        initialValue = 0.85f,
+        targetValue = 1.2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "planet_pulse"
+    )
+    
+    val robotOrbitAngle by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 2f * PI.toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 10000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "robot_orbit"
+    )
+    
+    var flightStarted by remember { mutableStateOf(false) }
+    var startAngle by remember { mutableStateOf(0f) }
+    
+    val flightProgress by animateFloatAsState(
+        targetValue = if (isTtsReady && flightStarted) 1f else 0f,
+        animationSpec = tween(durationMillis = 1800, easing = FastOutSlowInEasing),
+        label = "flight_progress"
+    )
+    
+    LaunchedEffect(isTtsReady) {
+        if (isTtsReady && !flightStarted) {
+            startAngle = robotOrbitAngle
+            flightStarted = true
+        }
+    }
+    
+    val robotOnOrbitAlpha = if (flightProgress < 0.15f) 1f - (flightProgress / 0.15f) else 0f
+    
+    val robotAlpha by animateFloatAsState(
+        targetValue = if (flightProgress >= 0.99f) 1f else 0f,
+        animationSpec = tween(durationMillis = 400),
+        label = "robot_alpha"
+    )
 
     Box(
         modifier = Modifier
@@ -1464,7 +1522,6 @@ private fun TopBarWithSwitch(
             .height(84.dp)
             .padding(4.dp)
     ) {
-        // ========== СЛОЙ 1: золотистый градиент (НЕ изменён) ==========
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -1491,22 +1548,70 @@ private fun TopBarWithSwitch(
                 .border(1.dp, colors.borderGray, RoundedCornerShape(8.dp))
         )
 
-        // ========== СЛОЙ 2: анимированный космос (поверх градиента, под контентом) ==========
         SpaceBackground(
             isDarkTheme = isDarkTheme,
             modifier = Modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(8.dp)),
+            planetPulse = planetPulse,
+            robotOrbitAngle = robotOrbitAngle,
+            robotOnOrbitAlpha = robotOnOrbitAlpha
         )
+        
+        if (flightProgress > 0f && flightProgress < 1f) {
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val w = constraints.maxWidth.toFloat()
+                val h = constraints.maxHeight.toFloat()
+                val minDim = min(w, h)
+                
+                val orbitCenterX = w * SpaceConstants.ORBIT_CENTER_X_RATIO
+                val orbitCenterY = h * SpaceConstants.ORBIT_CENTER_Y_RATIO
+                val orbit1Radius = minDim * SpaceConstants.ORBIT_1_RADIUS_RATIO
+                
+                val startX = orbitCenterX + cos(startAngle) * orbit1Radius
+                val startY = orbitCenterY + sin(startAngle) * orbit1Radius
+                
+                val endX = w / 2f
+                val endY = h / 2f
+                
+                val ctrlX = (startX + endX) / 2f
+                val ctrlY = startY - h * 0.4f
+                
+                val oneMinusT = 1f - flightProgress
+                val currentX = oneMinusT * oneMinusT * startX + 
+                               2f * oneMinusT * flightProgress * ctrlX + 
+                               flightProgress * flightProgress * endX
+                val currentY = oneMinusT * oneMinusT * startY + 
+                               2f * oneMinusT * flightProgress * ctrlY + 
+                               flightProgress * flightProgress * endY
+                
+                val startSize = h * SpaceConstants.ROBOT_SIZE_RATIO
+                val endSizePx = 70.dp.toPx()
+                val currentSize = startSize + (endSizePx - startSize) * flightProgress
+                
+                val dx = 2f * oneMinusT * (ctrlX - startX) + 
+                         2f * flightProgress * (endX - ctrlX)
+                val dy = 2f * oneMinusT * (ctrlY - startY) + 
+                         2f * flightProgress * (endY - ctrlY)
+                val angleRad = atan2(dy, dx)
+                val angleDeg = angleRad * 180f / PI.toFloat()
+                
+                FlyingRobotAnimation(
+                    x = currentX,
+                    y = currentY,
+                    size = currentSize,
+                    rotation = angleDeg,
+                    flightProgress = flightProgress
+                )
+            }
+        }
 
-        // ========== СЛОЙ 3: контент (старый Row, структура НЕ изменена) ==========
         Row(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Кнопка-логотип
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
@@ -1565,14 +1670,18 @@ private fun TopBarWithSwitch(
                     .fillMaxHeight(),
                 contentAlignment = Alignment.Center
             ) {
-                ThinkingRobotAnimation(
-                    height = 70.dp,
-                    isActive = isGenerating,
-                    isSpeaking = isSpeaking,
-                    isThinking = isGenerating,
-                    isIdle = isLocalReady || isCloudReady,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                if (robotAlpha > 0.01f) {
+                    Box(modifier = Modifier.graphicsLayer(alpha = robotAlpha)) {
+                        ThinkingRobotAnimation(
+                            height = 70.dp,
+                            isActive = isGenerating,
+                            isSpeaking = isSpeaking,
+                            isThinking = isGenerating,
+                            isIdle = isLocalReady || isCloudReady,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
             }
 
             Column(
@@ -1628,28 +1737,17 @@ private fun TopBarWithSwitch(
                 }
             }
         }
-
-        // Сияние сверху (НЕ изменено)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(2.dp)
-                .align(Alignment.TopCenter)
-                .background(
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            Color.White.copy(alpha = 0.4f),
-                            Color.Transparent
-                        )
-                    )
-                )
-        )
     }
 }
 
 @Composable
-private fun SpaceBackground(isDarkTheme: Boolean, modifier: Modifier = Modifier) {
+private fun SpaceBackground(
+    isDarkTheme: Boolean, 
+    modifier: Modifier = Modifier,
+    planetPulse: Float = 1f,
+    robotOrbitAngle: Float = 0f,
+    robotOnOrbitAlpha: Float = 1f
+) {
     val transition = rememberInfiniteTransition(label = "space_bg")
     val t by transition.animateFloat(
         initialValue = 0f,
@@ -1660,151 +1758,370 @@ private fun SpaceBackground(isDarkTheme: Boolean, modifier: Modifier = Modifier)
         ),
         label = "space_t"
     )
-
+    
+    val stars = remember {
+        val random = Random(12345L)
+        List(40) {
+            Triple(random.nextFloat(), random.nextFloat(), random.nextFloat() * 0.5f + 0.5f)
+        }
+    }
+    
     Canvas(modifier = modifier) {
         val w = size.width
         val h = size.height
-        val cx = w / 2f
-        val cy = h / 2f
-        val T = t * 2f * PI.toFloat()
-        val vis = if (isDarkTheme) 1f else 0.55f
-
-        fun rnd(i: Int, s: Int): Float {
-            val x = sin(i * 12.9898f + s * 78.233f) * 43758.5453f
-            return (x % 1f + 1f) % 1f
+        val minDim = min(w, h)
+        
+        val starColor = if (isDarkTheme) Color.White else Color(0xFF222222)
+        stars.forEach { (sx, sy, sz) ->
+            val twinkle = (sin(t * 2 * PI + sx * 100f) * 0.5f + 0.5f) * 0.5f + 0.5f
+            drawCircle(
+                color = starColor.copy(alpha = 0.3f * twinkle),
+                radius = 1.dp.toPx() * sz,
+                center = Offset(sx * w, sy * h)
+            )
         }
-
+        
+        val orbitCenterX = w * SpaceConstants.ORBIT_CENTER_X_RATIO
+        val orbitCenterY = h * SpaceConstants.ORBIT_CENTER_Y_RATIO
+        
+        val orbit1Radius = minDim * SpaceConstants.ORBIT_1_RADIUS_RATIO
+        val orbit2Radius = minDim * SpaceConstants.ORBIT_2_RADIUS_RATIO
+        val orbit3Radius = minDim * SpaceConstants.ORBIT_3_RADIUS_RATIO
+        val orbit4Radius = minDim * SpaceConstants.ORBIT_4_RADIUS_RATIO
+        
+        val orbitColor = if (isDarkTheme) Color.White.copy(alpha = 0.20f) 
+                         else Color.Black.copy(alpha = 0.15f)
+        
+        listOf(orbit1Radius, orbit2Radius, orbit3Radius, orbit4Radius).forEach { radius ->
+            drawCircle(
+                color = orbitColor,
+                radius = radius,
+                center = Offset(orbitCenterX, orbitCenterY),
+                style = Stroke(width = 0.5.dp.toPx())
+            )
+        }
+        
+        val planetRadius = minDim * SpaceConstants.PLANET_SIZE_RATIO * planetPulse
+        
         drawCircle(
-            Brush.radialGradient(
-                listOf(Color(0xFF7FB4FF).copy(alpha = 0.10f * vis), Color.Transparent),
-                center = Offset(w * 0.22f, h * 0.35f), radius = h * 0.9f
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color(0x00FFFFFF),
+                    Color(0x40CCEEFF),
+                    Color(0x8088CCFF),
+                    Color(0x004499FF)
+                ),
+                center = Offset(orbitCenterX, orbitCenterY),
+                radius = planetRadius * 2.8f
             ),
-            radius = h * 0.9f, center = Offset(w * 0.22f, h * 0.35f)
+            radius = planetRadius * 2.8f,
+            center = Offset(orbitCenterX, orbitCenterY)
         )
+        
         drawCircle(
-            Brush.radialGradient(
-                listOf(Color(0xFFB48FE3).copy(alpha = 0.08f * vis), Color.Transparent),
-                center = Offset(w * 0.80f, h * 0.60f), radius = h * 0.8f
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color.White,
+                    Color(0xFFAADDFF),
+                    Color(0xFF4499FF),
+                    Color(0x000066CC)
+                ),
+                center = Offset(orbitCenterX, orbitCenterY),
+                radius = planetRadius * 1.6f
             ),
-            radius = h * 0.8f, center = Offset(w * 0.80f, h * 0.60f)
+            radius = planetRadius * 1.6f,
+            center = Offset(orbitCenterX, orbitCenterY)
         )
-
-        val starCore = if (isDarkTheme) Color(0xFFEAF6FF) else Color(0xFF8FB6E8)
-        val starGlow = Color(0xFF7FB4FF)
-        for (i in 0 until 46) {
-            val sx = rnd(i, 1) * w
-            val sy = rnd(i, 2) * h
-            val seed = rnd(i, 3)
-            val speed = 2f + (i % 3).toFloat()
-            val tw = 0.5f + 0.5f * sin(T * speed + seed * 6.283f)
-            val r = (0.5f + 1.1f * seed) * (h / 90f)
-            val a = (0.10f + 0.80f * tw * tw) * vis
-
-            drawCircle(
-                Brush.radialGradient(
-                    listOf(starGlow.copy(alpha = a * 0.5f), Color.Transparent),
-                    center = Offset(sx, sy), radius = r * 4f
+        
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color.White,
+                    Color(0xFFE0F0FF),
+                    Color(0xFF88CCFF),
+                    Color(0xFF4499FF)
                 ),
-                radius = r * 4f, center = Offset(sx, sy)
-            )
-            drawCircle(starCore.copy(alpha = a), r, Offset(sx, sy))
-
-            if (tw > 0.8f) {
-                val la = (tw - 0.8f) * 5f * 0.6f * vis
-                drawLine(starCore.copy(alpha = la),
-                    Offset(sx - r * 3.5f, sy), Offset(sx + r * 3.5f, sy), strokeWidth = 1f)
-                drawLine(starCore.copy(alpha = la),
-                    Offset(sx, sy - r * 3.5f), Offset(sx, sy + r * 3.5f), strokeWidth = 1f)
-            }
-        }
-
-        val orbitColor = Color(0xFF7FB4FF)
-        val mRx = w * 0.27f; val mRy = h * 0.22f
-        val eRx = w * 0.37f; val eRy = h * 0.33f
-        val sRx = w * 0.46f; val sRy = h * 0.42f
-        for (orb in listOf(mRx to mRy, eRx to eRy, sRx to sRy)) {
-            drawOval(
-                orbitColor.copy(alpha = 0.14f * vis),
-                topLeft = Offset(cx - orb.first, cy - orb.second),
-                size = Size(orb.first * 2f, orb.second * 2f),
-                style = Stroke(width = h / 70f)
-            )
-        }
-
-        run {
-            val a = T * 2f + 2.1f
-            val p = Offset(cx + mRx * cos(a), cy + mRy * sin(a))
-            val r = h * 0.055f
-            val tw = 0.5f + 0.5f * sin(T * 3f + 1f)
-            val col = Color(0xFFD9DEE8)
-            drawCircle(
-                Brush.radialGradient(
-                    listOf(col.copy(alpha = (0.15f + 0.25f * tw) * vis), Color.Transparent),
-                    center = p, radius = r * 3f
-                ),
-                radius = r * 3f, center = p
-            )
-            drawCircle(col.copy(alpha = 0.55f + 0.45f * vis), r, p)
-            drawCircle(Color(0xFFAAB2C0).copy(alpha = 0.7f * vis), r * 0.35f,
-                Offset(p.x - r * 0.25f, p.y + r * 0.10f))
-        }
-
-        run {
-            val a = T * 1f + 0.6f
-            val p = Offset(cx + eRx * cos(a), cy + eRy * sin(a))
-            val r = h * 0.095f
-            val tw = 0.5f + 0.5f * sin(T * 2f + 2f)
-            val col = Color(0xFF3F8FD6)
-            drawCircle(
-                Brush.radialGradient(
-                    listOf(col.copy(alpha = (0.20f + 0.30f * tw) * vis), Color.Transparent),
-                    center = p, radius = r * 3f
-                ),
-                radius = r * 3f, center = p
-            )
-            drawCircle(
-                Brush.radialGradient(
-                    listOf(Color(0xFF9CD2FF), col, Color(0xFF1F5FA0)),
-                    center = p, radius = r * 1.4f
-                ),
-                radius = r, center = p
-            )
-            drawCircle(Color(0xFF57B368).copy(alpha = 0.85f), r * 0.42f,
-                Offset(p.x - r * 0.25f, p.y - r * 0.15f))
-            drawCircle(Color(0xFF57B368).copy(alpha = 0.75f), r * 0.30f,
-                Offset(p.x + r * 0.30f, p.y + r * 0.25f))
-            drawCircle(Color.White.copy(alpha = 0.5f * vis), r * 0.22f,
-                Offset(p.x - r * 0.35f, p.y - r * 0.40f))
-        }
-
-        run {
-            val a = T * 1f + 3.6f
-            val p = Offset(cx + sRx * cos(a), cy + sRy * sin(a))
-            val r = h * 0.08f
-            val tw = 0.5f + 0.5f * sin(T * 2f + 4f)
-            val col = Color(0xFFE0B97E)
-            drawCircle(
-                Brush.radialGradient(
-                    listOf(col.copy(alpha = (0.18f + 0.28f * tw) * vis), Color.Transparent),
-                    center = p, radius = r * 3f
-                ),
-                radius = r * 3f, center = p
-            )
-            drawCircle(
-                Brush.radialGradient(
-                    listOf(Color(0xFFF4DCA8), col, Color(0xFF9C7A45)),
-                    center = p, radius = r * 1.4f
-                ),
-                radius = r, center = p
-            )
-            rotate(-18f, pivot = p) {
-                drawOval(
-                    Color(0xFFD9C08F).copy(alpha = 0.8f * vis),
-                    topLeft = Offset(p.x - r * 1.9f, p.y - r * 0.55f),
-                    size = Size(r * 3.8f, r * 1.1f),
-                    style = Stroke(width = r * 0.28f)
+                center = Offset(orbitCenterX, orbitCenterY),
+                radius = planetRadius
+            ),
+            radius = planetRadius,
+            center = Offset(orbitCenterX, orbitCenterY)
+        )
+        
+        drawCircle(
+            color = Color.White.copy(alpha = 0.8f),
+            radius = planetRadius * 0.3f,
+            center = Offset(orbitCenterX - planetRadius * 0.3f, orbitCenterY - planetRadius * 0.3f)
+        )
+        
+        if (robotOnOrbitAlpha > 0.01f) {
+            val robotSize = h * SpaceConstants.ROBOT_SIZE_RATIO
+            val robotX = orbitCenterX + cos(robotOrbitAngle) * orbit1Radius
+            val robotY = orbitCenterY + sin(robotOrbitAngle) * orbit1Radius
+            
+            rotate(
+                degrees = (robotOrbitAngle * 180f / PI.toFloat()) + 90f,
+                pivot = Offset(robotX, robotY)
+            ) {
+                drawRoundRect(
+                    color = Color(0xFFCCCCCC).copy(alpha = robotOnOrbitAlpha),
+                    topLeft = Offset(robotX - robotSize * 0.4f, robotY - robotSize * 0.5f),
+                    size = Size(robotSize * 0.8f, robotSize),
+                    cornerRadius = CornerRadius(robotSize * 0.15f)
+                )
+                drawRoundRect(
+                    color = Color(0xFFDDDDDD).copy(alpha = robotOnOrbitAlpha),
+                    topLeft = Offset(robotX - robotSize * 0.35f, robotY - robotSize * 0.95f),
+                    size = Size(robotSize * 0.7f, robotSize * 0.5f),
+                    cornerRadius = CornerRadius(robotSize * 0.1f)
+                )
+                drawLine(
+                    color = Color(0xFF888888).copy(alpha = robotOnOrbitAlpha),
+                    start = Offset(robotX, robotY - robotSize * 0.95f),
+                    end = Offset(robotX, robotY - robotSize * 1.2f),
+                    strokeWidth = 1.dp.toPx()
+                )
+                drawCircle(
+                    color = Color(0xFFFF0000).copy(alpha = robotOnOrbitAlpha),
+                    radius = robotSize * 0.08f,
+                    center = Offset(robotX, robotY - robotSize * 1.2f)
+                )
+                drawCircle(
+                    color = Color(0xFF4499FF).copy(alpha = robotOnOrbitAlpha),
+                    radius = robotSize * 0.10f,
+                    center = Offset(robotX - robotSize * 0.18f, robotY - robotSize * 0.70f)
+                )
+                drawCircle(
+                    color = Color(0xFF4499FF).copy(alpha = robotOnOrbitAlpha),
+                    radius = robotSize * 0.10f,
+                    center = Offset(robotX + robotSize * 0.18f, robotY - robotSize * 0.70f)
                 )
             }
+        }
+        
+        val moonAngle = t * 2f * PI.toFloat()
+        val moonX = orbitCenterX + cos(moonAngle) * orbit2Radius
+        val moonY = orbitCenterY + sin(moonAngle) * orbit2Radius
+        val moonRadius = h * 0.03f
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(Color(0xFFEEEEEE), Color(0xFFAAAAAA)),
+                center = Offset(moonX - moonRadius * 0.3f, moonY - moonRadius * 0.3f),
+                radius = moonRadius
+            ),
+            radius = moonRadius,
+            center = Offset(moonX, moonY)
+        )
+        
+        val earthAngle = t * 2f * PI.toFloat() * 0.6f
+        val earthX = orbitCenterX + cos(earthAngle) * orbit3Radius
+        val earthY = orbitCenterY + sin(earthAngle) * orbit3Radius
+        val earthRadius = h * 0.06f
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(Color(0xFF4499FF), Color(0xFF2266AA)),
+                center = Offset(earthX - earthRadius * 0.3f, earthY - earthRadius * 0.3f),
+                radius = earthRadius
+            ),
+            radius = earthRadius,
+            center = Offset(earthX, earthY)
+        )
+        
+        val saturnAngle = t * 2f * PI.toFloat() * 0.3f
+        val saturnX = orbitCenterX + cos(saturnAngle) * orbit4Radius
+        val saturnY = orbitCenterY + sin(saturnAngle) * orbit4Radius
+        val saturnRadius = h * 0.04f
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(Color(0xFFDDCC88), Color(0xFF997744)),
+                center = Offset(saturnX - saturnRadius * 0.3f, saturnY - saturnRadius * 0.3f),
+                radius = saturnRadius
+            ),
+            radius = saturnRadius,
+            center = Offset(saturnX, saturnY)
+        )
+        drawOval(
+            color = Color(0xFFAA9966).copy(alpha = 0.5f),
+            topLeft = Offset(saturnX - saturnRadius * 2f, saturnY - saturnRadius * 0.4f),
+            size = Size(saturnRadius * 4f, saturnRadius * 0.8f),
+            style = Stroke(width = 1.dp.toPx())
+        )
+    }
+}
+@Composable
+private fun FlyingRobotAnimation(
+    x: Float,
+    y: Float,
+    size: Float,
+    rotation: Float,
+    flightProgress: Float
+) {
+    val fireTransition = rememberInfiniteTransition(label = "fire")
+    val fireFlicker by fireTransition.animateFloat(
+        initialValue = 0.7f,
+        targetValue = 1.3f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(100, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "fire_flicker"
+    )
+    
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val halfSize = size / 2f
+        
+        rotate(
+            degrees = rotation + 90f,
+            pivot = Offset(x, y)
+        ) {
+            val flameLength = size * 0.8f * fireFlicker
+            val flameWidth = size * 0.35f
+            
+            drawOval(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFFFF6600).copy(alpha = 0.9f),
+                        Color(0xFFFF0000).copy(alpha = 0.5f),
+                        Color(0xFFFF0000).copy(alpha = 0f)
+                    ),
+                    center = Offset(x, y + halfSize + flameLength / 2),
+                    radius = flameLength / 2
+                ),
+                topLeft = Offset(x - flameWidth / 2, y + halfSize),
+                size = Size(flameWidth, flameLength)
+            )
+            
+            drawOval(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFFFFCC00).copy(alpha = 0.9f),
+                        Color(0xFFFF6600).copy(alpha = 0.5f),
+                        Color(0xFFFF6600).copy(alpha = 0f)
+                    ),
+                    center = Offset(x, y + halfSize + flameLength * 0.4f),
+                    radius = flameLength * 0.4f
+                ),
+                topLeft = Offset(x - flameWidth * 0.4f, y + halfSize),
+                size = Size(flameWidth * 0.8f, flameLength * 0.7f)
+            )
+            
+            drawOval(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = 0.9f),
+                        Color(0xFFFFCC00).copy(alpha = 0.5f),
+                        Color(0xFFFF6600).copy(alpha = 0f)
+                    ),
+                    center = Offset(x, y + halfSize + flameLength * 0.2f),
+                    radius = flameLength * 0.2f
+                ),
+                topLeft = Offset(x - flameWidth * 0.25f, y + halfSize),
+                size = Size(flameWidth * 0.5f, flameLength * 0.4f)
+            )
+            
+            drawRoundRect(
+                color = Color(0xFFCCCCCC),
+                topLeft = Offset(x - halfSize * 0.6f, y - halfSize * 0.8f),
+                size = Size(halfSize * 1.2f, halfSize * 1.4f),
+                cornerRadius = CornerRadius(halfSize * 0.2f)
+            )
+            
+            drawRoundRect(
+                color = Color(0xFFAAAAAA),
+                topLeft = Offset(x - halfSize * 0.45f, y - halfSize * 0.6f),
+                size = Size(halfSize * 0.9f, halfSize * 0.5f),
+                cornerRadius = CornerRadius(halfSize * 0.1f)
+            )
+            
+            drawCircle(
+                color = Color(0xFF44FF44),
+                radius = halfSize * 0.08f,
+                center = Offset(x - halfSize * 0.25f, y - halfSize * 0.35f)
+            )
+            drawCircle(
+                color = Color(0xFFFF4444),
+                radius = halfSize * 0.08f,
+                center = Offset(x, y - halfSize * 0.35f)
+            )
+            drawCircle(
+                color = Color(0xFF4499FF),
+                radius = halfSize * 0.08f,
+                center = Offset(x + halfSize * 0.25f, y - halfSize * 0.35f)
+            )
+            
+            drawRoundRect(
+                color = Color(0xFFBBBBBB),
+                topLeft = Offset(x - halfSize * 0.95f, y - halfSize * 0.7f),
+                size = Size(halfSize * 0.25f, halfSize * 1.0f),
+                cornerRadius = CornerRadius(halfSize * 0.1f)
+            )
+            drawRoundRect(
+                color = Color(0xFFBBBBBB),
+                topLeft = Offset(x + halfSize * 0.7f, y - halfSize * 0.7f),
+                size = Size(halfSize * 0.25f, halfSize * 1.0f),
+                cornerRadius = CornerRadius(halfSize * 0.1f)
+            )
+            
+            drawRoundRect(
+                color = Color(0xFFDDDDDD),
+                topLeft = Offset(x - halfSize * 0.55f, y - halfSize * 1.5f),
+                size = Size(halfSize * 1.1f, halfSize * 0.75f),
+                cornerRadius = CornerRadius(halfSize * 0.15f)
+            )
+            
+            drawRoundRect(
+                color = Color(0xFF222222),
+                topLeft = Offset(x - halfSize * 0.45f, y - halfSize * 1.4f),
+                size = Size(halfSize * 0.9f, halfSize * 0.5f),
+                cornerRadius = CornerRadius(halfSize * 0.08f)
+            )
+            
+            drawCircle(
+                color = Color(0xFF4499FF),
+                radius = halfSize * 0.13f,
+                center = Offset(x - halfSize * 0.25f, y - halfSize * 1.15f)
+            )
+            drawCircle(
+                color = Color(0xFF4499FF),
+                radius = halfSize * 0.13f,
+                center = Offset(x + halfSize * 0.25f, y - halfSize * 1.15f)
+            )
+            
+            drawCircle(
+                color = Color.White.copy(alpha = 0.6f),
+                radius = halfSize * 0.05f,
+                center = Offset(x - halfSize * 0.25f + halfSize * 0.05f, y - halfSize * 1.15f - halfSize * 0.05f)
+            )
+            drawCircle(
+                color = Color.White.copy(alpha = 0.6f),
+                radius = halfSize * 0.05f,
+                center = Offset(x + halfSize * 0.25f + halfSize * 0.05f, y - halfSize * 1.15f - halfSize * 0.05f)
+            )
+            
+            drawLine(
+                color = Color(0xFF888888),
+                start = Offset(x, y - halfSize * 1.5f),
+                end = Offset(x, y - halfSize * 1.9f),
+                strokeWidth = 1.5.dp.toPx()
+            )
+            drawCircle(
+                color = Color(0xFFFF0000),
+                radius = halfSize * 0.1f,
+                center = Offset(x, y - halfSize * 1.9f)
+            )
+            
+            drawRoundRect(
+                color = Color(0xFF999999),
+                topLeft = Offset(x - halfSize * 0.4f, y + halfSize * 0.6f),
+                size = Size(halfSize * 0.3f, halfSize * 0.4f),
+                cornerRadius = CornerRadius(halfSize * 0.1f)
+            )
+            drawRoundRect(
+                color = Color(0xFF999999),
+                topLeft = Offset(x + halfSize * 0.1f, y + halfSize * 0.6f),
+                size = Size(halfSize * 0.3f, halfSize * 0.4f),
+                cornerRadius = CornerRadius(halfSize * 0.1f)
+            )
         }
     }
 }
