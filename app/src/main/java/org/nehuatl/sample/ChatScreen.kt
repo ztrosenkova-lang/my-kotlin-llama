@@ -314,7 +314,7 @@ fun ChatScreen(
             val greeting = if (isFirstLaunch) {
                 fullWelcomeString
             } else {
-                "Привет друг. Чем займемся?"
+                "Привет друг. Чем сегодня займемся ?"
             }
             var runningText = ""
             for (i in greeting.indices) {
@@ -745,15 +745,8 @@ fun ChatScreen(
             )
         }
 
-        // ===== РОБОТ ПОВЕРХ ВСЕГО (после приземления) =====
+                       // ===== РОБОТ ПОВЕРХ ВСЕГО (после приземления) =====
         if (robotIsLanded) {
-            var initialTouchX by remember { mutableStateOf(0f) }
-            var initialTouchY by remember { mutableStateOf(0f) }
-            var initialOffsetX by remember { mutableStateOf(0f) }
-            var initialOffsetY by remember { mutableStateOf(0f) }
-            var initialDistance by remember { mutableStateOf(0f) }
-            var initialScale by remember { mutableStateOf(1f) }
-
             Box(
                 modifier = Modifier
                     .offset(x = robotOffsetX.dp, y = robotOffsetY.dp)
@@ -762,17 +755,17 @@ fun ChatScreen(
                         scaleX = robotScale,
                         scaleY = robotScale
                     )
-                    .pointerInput(Unit) {
+                    .pointerInput(robotIsLanded) {
                         awaitEachGesture {
                             val down = awaitFirstDown()
-                            initialTouchX = down.position.x
-                            initialTouchY = down.position.y
-                            initialOffsetX = robotOffsetX
-                            initialOffsetY = robotOffsetY
-                            initialScale = robotScale
+                            val initialTouchX = down.position.x
+                            val initialTouchY = down.position.y
+                            val initialOffsetX = robotOffsetX
+                            val initialOffsetY = robotOffsetY
+                            val initialScale = robotScale
 
-                            var isDragging = false
                             var isPinching = false
+                            var initialDistance = 0f
 
                             while (true) {
                                 val event = awaitPointerEvent()
@@ -794,7 +787,6 @@ fun ChatScreen(
                                     robotScale = (initialScale * scaleFactor).coerceIn(0.5f, 3f)
                                 } else if (pointers.size == 1 && !isPinching) {
                                     // Drag
-                                    isDragging = true
                                     val current = pointers[0].position
                                     val deltaX = current.x - initialTouchX
                                     val deltaY = current.y - initialTouchY
@@ -802,7 +794,8 @@ fun ChatScreen(
                                     robotOffsetY = initialOffsetY + deltaY
                                 }
 
-                                if (event.changes.all { it.changedToUp() }) {
+                                val allUp = pointers.all { !it.pressed }
+                                if (allUp) {
                                     break
                                 }
                             }
@@ -819,9 +812,6 @@ fun ChatScreen(
                 )
             }
         }
-    }
-}
-
 @Composable
 private fun VoiceWaveAnimation(
     color: Color,
