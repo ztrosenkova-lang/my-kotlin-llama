@@ -173,11 +173,15 @@ enum class AIMode {
 private object SpaceConstants {
     const val ORBIT_CENTER_X_RATIO = 0.20f
     const val ORBIT_CENTER_Y_RATIO = 0.50f
-    const val ORBIT_1_RADIUS_RATIO = 0.18f
-    const val ORBIT_2_RADIUS_RATIO = 0.32f
-    const val ORBIT_3_RADIUS_RATIO = 0.48f
-    const val ORBIT_4_RADIUS_RATIO = 0.65f
-    const val ROBOT_SIZE_RATIO = 0.055f
+    const val ROBOT_ORBIT_RX = 0.20f
+    const val ROBOT_ORBIT_RY = 0.16f
+    const val MOON_ORBIT_RX = 0.30f
+    const val MOON_ORBIT_RY = 0.24f
+    const val EARTH_ORBIT_RX = 0.38f
+    const val EARTH_ORBIT_RY = 0.30f
+    const val SATURN_ORBIT_RX = 0.48f
+    const val SATURN_ORBIT_RY = 0.38f
+    const val ROBOT_SIZE_RATIO = 0.050f
     const val PLANET_SIZE_RATIO = 0.055f
 }
 
@@ -1584,10 +1588,11 @@ private fun TopBarWithSwitch(
                 
                 val orbitCenterX = w * SpaceConstants.ORBIT_CENTER_X_RATIO
                 val orbitCenterY = h * SpaceConstants.ORBIT_CENTER_Y_RATIO
-                val orbit1Radius = minDim * SpaceConstants.ORBIT_1_RADIUS_RATIO
+                val robotOrbitRx = minDim * SpaceConstants.ROBOT_ORBIT_RX
+                val robotOrbitRy = minDim * SpaceConstants.ROBOT_ORBIT_RY
                 
-                val startX = orbitCenterX + cos(startAngle) * orbit1Radius
-                val startY = orbitCenterY + sin(startAngle) * orbit1Radius
+                val startX = orbitCenterX + cos(startAngle) * robotOrbitRx
+                val startY = orbitCenterY + sin(startAngle) * robotOrbitRy
                 
                 val endX = w / 2f
                 val endY = h / 2f
@@ -1615,13 +1620,29 @@ private fun TopBarWithSwitch(
                 val angleRad = atan2(dy, dx)
                 val angleDeg = angleRad * 180f / PI.toFloat()
                 
-                FlyingRobotAnimation(
-                    x = currentX,
-                    y = currentY,
-                    size = currentSize,
-                    rotation = angleDeg,
-                    flightProgress = flightProgress
-                )
+                val scale = currentSize / endSizePx
+                val offsetXDp = with(density) { (currentX - endSizePx / 2f).toDp() }
+                val offsetYDp = with(density) { (currentY - endSizePx / 2f).toDp() }
+                
+                Box(
+                    modifier = Modifier
+                        .offset(x = offsetXDp, y = offsetYDp)
+                        .size(70.dp)
+                        .graphicsLayer(
+                            scaleX = scale,
+                            scaleY = scale,
+                            rotationZ = angleDeg + 90f
+                        )
+                ) {
+                    ThinkingRobotAnimation(
+                        height = 70.dp,
+                        isActive = false,
+                        isSpeaking = false,
+                        isThinking = false,
+                        isIdle = true,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
             }
         }
 
@@ -1758,10 +1779,9 @@ private fun TopBarWithSwitch(
         }
     }
 }
-
 @Composable
 private fun SpaceBackground(
-    isDarkTheme: Boolean, 
+    isDarkTheme: Boolean,
     modifier: Modifier = Modifier,
     planetPulse: Float = 1f,
     robotOrbitAngle: Float = 0f,
@@ -1777,107 +1797,153 @@ private fun SpaceBackground(
         ),
         label = "space_t"
     )
-    
-    val stars = remember {
-        val random = Random(12345L)
-        List(40) {
-            Triple(random.nextFloat(), random.nextFloat(), random.nextFloat() * 0.5f + 0.5f)
-        }
-    }
-    
+
     Canvas(modifier = modifier) {
         val w = size.width
         val h = size.height
-        val minDim = min(w, h)
-        
-        val starColor = if (isDarkTheme) Color.White else Color(0xFF222222)
-        stars.forEach { (sx, sy, sz) ->
-            val twinkle = (sin(t * 2f * PI.toFloat() + sx * 100f) * 0.5f + 0.5f) * 0.5f + 0.5f
-            drawCircle(
-                color = starColor.copy(alpha = 0.3f * twinkle),
-                radius = 1.dp.toPx() * sz,
-                center = Offset(sx * w, sy * h)
-            )
+        val cx = w * SpaceConstants.ORBIT_CENTER_X_RATIO
+        val cy = h * SpaceConstants.ORBIT_CENTER_Y_RATIO
+        val T = t * 2f * PI.toFloat()
+        val vis = if (isDarkTheme) 1f else 0.55f
+
+        // ===== ЗВЁЗДЫ (как в старой сборке) =====
+        fun rnd(i: Int, s: Int): Float {
+            val x = sin(i * 12.9898f + s * 78.233f) * 43758.5453f
+            return (x % 1f + 1f) % 1f
         }
-        
-        val orbitCenterX = w * SpaceConstants.ORBIT_CENTER_X_RATIO
-        val orbitCenterY = h * SpaceConstants.ORBIT_CENTER_Y_RATIO
-        
-        val orbit1Radius = minDim * SpaceConstants.ORBIT_1_RADIUS_RATIO
-        val orbit2Radius = minDim * SpaceConstants.ORBIT_2_RADIUS_RATIO
-        val orbit3Radius = minDim * SpaceConstants.ORBIT_3_RADIUS_RATIO
-        val orbit4Radius = minDim * SpaceConstants.ORBIT_4_RADIUS_RATIO
-        
-        val orbitColor = if (isDarkTheme) Color.White.copy(alpha = 0.20f) 
-                         else Color.Black.copy(alpha = 0.15f)
-        
-        listOf(orbit1Radius, orbit2Radius, orbit3Radius, orbit4Radius).forEach { radius ->
+        val starCore = if (isDarkTheme) Color(0xFFEAF6FF) else Color(0xFF8FB6E8)
+        val starGlow = Color(0xFF7FB4FF)
+        for (i in 0 until 46) {
+            val sx = rnd(i, 1) * w
+            val sy = rnd(i, 2) * h
+            val seed = rnd(i, 3)
+            val speed = 2f + (i % 3).toFloat()
+            val tw = 0.5f + 0.5f * sin(T * speed + seed * 6.283f)
+            val r = (0.5f + 1.1f * seed) * (h / 90f)
+            val a = (0.10f + 0.80f * tw * tw) * vis
             drawCircle(
-                color = orbitColor,
-                radius = radius,
-                center = Offset(orbitCenterX, orbitCenterY),
-                style = Stroke(width = 0.5.dp.toPx())
+                Brush.radialGradient(
+                    listOf(starGlow.copy(alpha = a * 0.5f), Color.Transparent),
+                    center = Offset(sx, sy), radius = r * 4f
+                ),
+                radius = r * 4f, center = Offset(sx, sy)
             )
+            drawCircle(starCore.copy(alpha = a), r, Offset(sx, sy))
+            if (tw > 0.8f) {
+                val la = (tw - 0.8f) * 5f * 0.6f * vis
+                drawLine(starCore.copy(alpha = la),
+                    Offset(sx - r * 3.5f, sy), Offset(sx + r * 3.5f, sy), strokeWidth = 1f)
+                drawLine(starCore.copy(alpha = la),
+                    Offset(sx, sy - r * 3.5f), Offset(sx, sy + r * 3.5f), strokeWidth = 1f)
+            }
         }
-        
-        val planetRadius = minDim * SpaceConstants.PLANET_SIZE_RATIO * planetPulse
-        
+
+        // ===== ТУМАННОСТИ =====
         drawCircle(
-            brush = Brush.radialGradient(
+            Brush.radialGradient(
+                listOf(Color(0xFF7FB4FF).copy(alpha = 0.10f * vis), Color.Transparent),
+                center = Offset(w * 0.22f, h * 0.35f), radius = h * 0.9f
+            ),
+            radius = h * 0.9f, center = Offset(w * 0.22f, h * 0.35f)
+        )
+        drawCircle(
+            Brush.radialGradient(
+                listOf(Color(0xFFB48FE3).copy(alpha = 0.08f * vis), Color.Transparent),
+                center = Offset(w * 0.80f, h * 0.60f), radius = h * 0.8f
+            ),
+            radius = h * 0.8f, center = Offset(w * 0.80f, h * 0.60f)
+        )
+
+        // ===== ОРБИТЫ (эллиптические) =====
+        val orbitColor = Color(0xFF7FB4FF)
+        val mRx = w * SpaceConstants.MOON_ORBIT_RX
+        val mRy = h * SpaceConstants.MOON_ORBIT_RY
+        val eRx = w * SpaceConstants.EARTH_ORBIT_RX
+        val eRy = h * SpaceConstants.EARTH_ORBIT_RY
+        val sRx = w * SpaceConstants.SATURN_ORBIT_RX
+        val sRy = h * SpaceConstants.SATURN_ORBIT_RY
+        val rRx = w * SpaceConstants.ROBOT_ORBIT_RX
+        val rRy = h * SpaceConstants.ROBOT_ORBIT_RY
+
+        for ((rx, ry, rot) in listOf(
+            rRx to rRy to -10f,
+            mRx to mRy to -8f,
+            eRx to eRy to 6f,
+            sRx to sRy to 12f
+        )) {
+            rotate(rot, pivot = Offset(cx, cy)) {
+                drawOval(
+                    orbitColor.copy(alpha = 0.14f * vis),
+                    topLeft = Offset(cx - rx, cy - ry),
+                    size = Size(rx * 2f, ry * 2f),
+                    style = Stroke(width = h / 70f)
+                )
+            }
+        }
+
+        // ===== СОЛНЦЕ (в центре, с электрическими искрами) =====
+        val sunRadius = h * SpaceConstants.PLANET_SIZE_RATIO * planetPulse
+        // Внешнее свечение
+        drawCircle(
+            Brush.radialGradient(
                 colors = listOf(
                     Color(0x00FFFFFF),
                     Color(0x40CCEEFF),
                     Color(0x8088CCFF),
                     Color(0x004499FF)
                 ),
-                center = Offset(orbitCenterX, orbitCenterY),
-                radius = planetRadius * 2.8f
+                center = Offset(cx, cy),
+                radius = sunRadius * 3f
             ),
-            radius = planetRadius * 2.8f,
-            center = Offset(orbitCenterX, orbitCenterY)
+            radius = sunRadius * 3f,
+            center = Offset(cx, cy)
         )
-        
+        // Ядро
         drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    Color.White,
-                    Color(0xFFAADDFF),
-                    Color(0xFF4499FF),
-                    Color(0x000066CC)
-                ),
-                center = Offset(orbitCenterX, orbitCenterY),
-                radius = planetRadius * 1.6f
-            ),
-            radius = planetRadius * 1.6f,
-            center = Offset(orbitCenterX, orbitCenterY)
-        )
-        
-        drawCircle(
-            brush = Brush.radialGradient(
+            Brush.radialGradient(
                 colors = listOf(
                     Color.White,
                     Color(0xFFE0F0FF),
                     Color(0xFF88CCFF),
                     Color(0xFF4499FF)
                 ),
-                center = Offset(orbitCenterX, orbitCenterY),
-                radius = planetRadius
+                center = Offset(cx, cy),
+                radius = sunRadius
             ),
-            radius = planetRadius,
-            center = Offset(orbitCenterX, orbitCenterY)
+            radius = sunRadius,
+            center = Offset(cx, cy)
         )
-        
-        drawCircle(
-            color = Color.White.copy(alpha = 0.8f),
-            radius = planetRadius * 0.3f,
-            center = Offset(orbitCenterX - planetRadius * 0.3f, orbitCenterY - planetRadius * 0.3f)
-        )
-        
+        // Электрические искры на внутренних орбитах
+        for (i in 0..5) {
+            val sparkAngle = T * 2f + i * 1.1f
+            val sparkRadius = sunRadius * (1.2f + 0.2f * sin(T * 3f + i))
+            val sx = cx + cos(sparkAngle) * sparkRadius
+            val sy = cy + sin(sparkAngle) * sparkRadius
+            val sparkLen = sunRadius * 0.35f
+            val sparkColor = Color(0xFFAADDFF).copy(alpha = 0.8f * vis)
+            val dx = cos(sparkAngle + PI.toFloat() / 2f) * sparkLen
+            val dy = sin(sparkAngle + PI.toFloat() / 2f) * sparkLen
+            drawLine(
+                sparkColor,
+                Offset(sx - dx, sy - dy),
+                Offset(sx + dx, sy + dy),
+                strokeWidth = 1.5f
+            )
+            drawCircle(
+                Color.White.copy(alpha = 0.9f * vis),
+                1.5f,
+                Offset(sx, sy)
+            )
+        }
+
+        // ===== РОБОТ НА ОРБИТЕ =====
         if (robotOnOrbitAlpha > 0.01f) {
+            val robotRx = w * SpaceConstants.ROBOT_ORBIT_RX
+            val robotRy = h * SpaceConstants.ROBOT_ORBIT_RY
+            val robotX = cx + cos(robotOrbitAngle) * robotRx
+            val robotY = cy + sin(robotOrbitAngle) * robotRy
             val robotSize = h * SpaceConstants.ROBOT_SIZE_RATIO
-            val robotX = orbitCenterX + cos(robotOrbitAngle) * orbit1Radius
-            val robotY = orbitCenterY + sin(robotOrbitAngle) * orbit1Radius
-            
+
             rotate(
                 degrees = (robotOrbitAngle * 180f / PI.toFloat()) + 90f,
                 pivot = Offset(robotX, robotY)
@@ -1917,42 +1983,60 @@ private fun SpaceBackground(
                 )
             }
         }
-        
-        val moonAngle = t * 2f * PI.toFloat()
-        val moonX = orbitCenterX + cos(moonAngle) * orbit2Radius
-        val moonY = orbitCenterY + sin(moonAngle) * orbit2Radius
+
+        // ===== ЛУНА (жёлтая, ближе к Земле) =====
+        val moonAngle = T * 2f
+        val moonX = cx + cos(moonAngle) * mRx
+        val moonY = cy + sin(moonAngle) * mRy
         val moonRadius = h * 0.03f
         drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(Color(0xFFEEEEEE), Color(0xFFAAAAAA)),
+            Brush.radialGradient(
+                listOf(Color(0xFFFFEE88), Color(0xFFCCAA44)),
                 center = Offset(moonX - moonRadius * 0.3f, moonY - moonRadius * 0.3f),
                 radius = moonRadius
             ),
             radius = moonRadius,
             center = Offset(moonX, moonY)
         )
-        
-        val earthAngle = t * 2f * PI.toFloat() * 0.6f
-        val earthX = orbitCenterX + cos(earthAngle) * orbit3Radius
-        val earthY = orbitCenterY + sin(earthAngle) * orbit3Radius
+
+        // ===== ЗЕМЛЯ (сине-голубая) =====
+        val earthAngle = T * 2f * 0.6f
+        val earthX = cx + cos(earthAngle) * eRx
+        val earthY = cy + sin(earthAngle) * eRy
         val earthRadius = h * 0.06f
         drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(Color(0xFF4499FF), Color(0xFF2266AA)),
+            Brush.radialGradient(
+                listOf(Color(0xFF4499FF), Color(0xFF2266AA)),
                 center = Offset(earthX - earthRadius * 0.3f, earthY - earthRadius * 0.3f),
                 radius = earthRadius
             ),
             radius = earthRadius,
             center = Offset(earthX, earthY)
         )
-        
-        val saturnAngle = t * 2f * PI.toFloat() * 0.3f
-        val saturnX = orbitCenterX + cos(saturnAngle) * orbit4Radius
-        val saturnY = orbitCenterY + sin(saturnAngle) * orbit4Radius
+                // ===== МАЛЕНЬКАЯ ЛУНА ВОКРУГ ЗЕМЛИ =====
+        val moonOrbitRadius = earthRadius * 2.2f
+        val moonAroundEarthAngle = T * 4f
+        val miniMoonX = earthX + cos(moonAroundEarthAngle) * moonOrbitRadius
+        val miniMoonY = earthY + sin(moonAroundEarthAngle) * moonOrbitRadius * 0.7f
+        val miniMoonRadius = earthRadius * 0.3f
+        drawCircle(
+            Brush.radialGradient(
+                listOf(Color(0xFFEEEEEE), Color(0xFFAAAAAA)),
+                center = Offset(miniMoonX - miniMoonRadius * 0.3f, miniMoonY - miniMoonRadius * 0.3f),
+                radius = miniMoonRadius
+            ),
+            radius = miniMoonRadius,
+            center = Offset(miniMoonX, miniMoonY)
+        )
+
+        // ===== САТУРН (золотистый с кольцом) =====
+        val saturnAngle = T * 2f * 0.3f
+        val saturnX = cx + cos(saturnAngle) * sRx
+        val saturnY = cy + sin(saturnAngle) * sRy
         val saturnRadius = h * 0.04f
         drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(Color(0xFFDDCC88), Color(0xFF997744)),
+            Brush.radialGradient(
+                listOf(Color(0xFFDDCC88), Color(0xFF997744)),
                 center = Offset(saturnX - saturnRadius * 0.3f, saturnY - saturnRadius * 0.3f),
                 radius = saturnRadius
             ),
@@ -1967,183 +2051,7 @@ private fun SpaceBackground(
         )
     }
 }
-@Composable
-private fun FlyingRobotAnimation(
-    x: Float,
-    y: Float,
-    size: Float,
-    rotation: Float,
-    flightProgress: Float
-) {
-    val fireTransition = rememberInfiniteTransition(label = "fire")
-    val fireFlicker by fireTransition.animateFloat(
-        initialValue = 0.7f,
-        targetValue = 1.3f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(100, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "fire_flicker"
-    )
-    
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        val halfSize = size / 2f
-        
-        rotate(
-            degrees = rotation + 90f,
-            pivot = Offset(x, y)
-        ) {
-            val flameLength = size * 0.8f * fireFlicker
-            val flameWidth = size * 0.35f
-            
-            drawOval(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        Color(0xFFFF6600).copy(alpha = 0.9f),
-                        Color(0xFFFF0000).copy(alpha = 0.5f),
-                        Color(0xFFFF0000).copy(alpha = 0f)
-                    ),
-                    center = Offset(x, y + halfSize + flameLength / 2),
-                    radius = flameLength / 2
-                ),
-                topLeft = Offset(x - flameWidth / 2, y + halfSize),
-                size = Size(flameWidth, flameLength)
-            )
-            
-            drawOval(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        Color(0xFFFFCC00).copy(alpha = 0.9f),
-                        Color(0xFFFF6600).copy(alpha = 0.5f),
-                        Color(0xFFFF6600).copy(alpha = 0f)
-                    ),
-                    center = Offset(x, y + halfSize + flameLength * 0.4f),
-                    radius = flameLength * 0.4f
-                ),
-                topLeft = Offset(x - flameWidth * 0.4f, y + halfSize),
-                size = Size(flameWidth * 0.8f, flameLength * 0.7f)
-            )
-            
-            drawOval(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        Color.White.copy(alpha = 0.9f),
-                        Color(0xFFFFCC00).copy(alpha = 0.5f),
-                        Color(0xFFFF6600).copy(alpha = 0f)
-                    ),
-                    center = Offset(x, y + halfSize + flameLength * 0.2f),
-                    radius = flameLength * 0.2f
-                ),
-                topLeft = Offset(x - flameWidth * 0.25f, y + halfSize),
-                size = Size(flameWidth * 0.5f, flameLength * 0.4f)
-            )
-            
-            drawRoundRect(
-                color = Color(0xFFCCCCCC),
-                topLeft = Offset(x - halfSize * 0.6f, y - halfSize * 0.8f),
-                size = Size(halfSize * 1.2f, halfSize * 1.4f),
-                cornerRadius = CornerRadius(halfSize * 0.2f)
-            )
-            
-            drawRoundRect(
-                color = Color(0xFFAAAAAA),
-                topLeft = Offset(x - halfSize * 0.45f, y - halfSize * 0.6f),
-                size = Size(halfSize * 0.9f, halfSize * 0.5f),
-                cornerRadius = CornerRadius(halfSize * 0.1f)
-            )
-            
-            drawCircle(
-                color = Color(0xFF44FF44),
-                radius = halfSize * 0.08f,
-                center = Offset(x - halfSize * 0.25f, y - halfSize * 0.35f)
-            )
-            drawCircle(
-                color = Color(0xFFFF4444),
-                radius = halfSize * 0.08f,
-                center = Offset(x, y - halfSize * 0.35f)
-            )
-            drawCircle(
-                color = Color(0xFF4499FF),
-                radius = halfSize * 0.08f,
-                center = Offset(x + halfSize * 0.25f, y - halfSize * 0.35f)
-            )
-            
-            drawRoundRect(
-                color = Color(0xFFBBBBBB),
-                topLeft = Offset(x - halfSize * 0.95f, y - halfSize * 0.7f),
-                size = Size(halfSize * 0.25f, halfSize * 1.0f),
-                cornerRadius = CornerRadius(halfSize * 0.1f)
-            )
-            drawRoundRect(
-                color = Color(0xFFBBBBBB),
-                topLeft = Offset(x + halfSize * 0.7f, y - halfSize * 0.7f),
-                size = Size(halfSize * 0.25f, halfSize * 1.0f),
-                cornerRadius = CornerRadius(halfSize * 0.1f)
-            )
-            
-            drawRoundRect(
-                color = Color(0xFFDDDDDD),
-                topLeft = Offset(x - halfSize * 0.55f, y - halfSize * 1.5f),
-                size = Size(halfSize * 1.1f, halfSize * 0.75f),
-                cornerRadius = CornerRadius(halfSize * 0.15f)
-            )
-            
-            drawRoundRect(
-                color = Color(0xFF222222),
-                topLeft = Offset(x - halfSize * 0.45f, y - halfSize * 1.4f),
-                size = Size(halfSize * 0.9f, halfSize * 0.5f),
-                cornerRadius = CornerRadius(halfSize * 0.08f)
-            )
-            
-            drawCircle(
-                color = Color(0xFF4499FF),
-                radius = halfSize * 0.13f,
-                center = Offset(x - halfSize * 0.25f, y - halfSize * 1.15f)
-            )
-            drawCircle(
-                color = Color(0xFF4499FF),
-                radius = halfSize * 0.13f,
-                center = Offset(x + halfSize * 0.25f, y - halfSize * 1.15f)
-            )
-            
-            drawCircle(
-                color = Color.White.copy(alpha = 0.6f),
-                radius = halfSize * 0.05f,
-                center = Offset(x - halfSize * 0.25f + halfSize * 0.05f, y - halfSize * 1.15f - halfSize * 0.05f)
-            )
-            drawCircle(
-                color = Color.White.copy(alpha = 0.6f),
-                radius = halfSize * 0.05f,
-                center = Offset(x + halfSize * 0.25f + halfSize * 0.05f, y - halfSize * 1.15f - halfSize * 0.05f)
-            )
-            
-            drawLine(
-                color = Color(0xFF888888),
-                start = Offset(x, y - halfSize * 1.5f),
-                end = Offset(x, y - halfSize * 1.9f),
-                strokeWidth = 1.5.dp.toPx()
-            )
-            drawCircle(
-                color = Color(0xFFFF0000),
-                radius = halfSize * 0.1f,
-                center = Offset(x, y - halfSize * 1.9f)
-            )
-            
-            drawRoundRect(
-                color = Color(0xFF999999),
-                topLeft = Offset(x - halfSize * 0.4f, y + halfSize * 0.6f),
-                size = Size(halfSize * 0.3f, halfSize * 0.4f),
-                cornerRadius = CornerRadius(halfSize * 0.1f)
-            )
-            drawRoundRect(
-                color = Color(0xFF999999),
-                topLeft = Offset(x + halfSize * 0.1f, y + halfSize * 0.6f),
-                size = Size(halfSize * 0.3f, halfSize * 0.4f),
-                cornerRadius = CornerRadius(halfSize * 0.1f)
-            )
-        }
-    }
-}
+
 @Composable
 private fun StatusIndicator(
     color: Color,
