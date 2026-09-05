@@ -242,6 +242,12 @@ fun ChatScreen(
     var welcomeTextPrinted by remember { mutableStateOf(false) }
     var pendingTextPrinted by remember { mutableStateOf(false) }
 
+    // Состояния для робота после приземления
+    var robotIsLanded by remember { mutableStateOf(false) }
+    var robotOffsetX by remember { mutableStateOf(0f) }
+    var robotOffsetY by remember { mutableStateOf(0f) }
+    var robotScale by remember { mutableStateOf(1f) }
+
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     val scrollState = rememberScrollState()
@@ -493,239 +499,322 @@ fun ChatScreen(
         )
     }
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
             .background(colors.background)
-            .imePadding()
     ) {
-        TopBarWithSwitch(
-            currentMode = currentMode,
-            onModeChange = { newMode ->
-                viewModel.setCurrentMode(newMode)
-                if (newMode == AIMode.NEUTRAL) {
-                    viewModel.releaseModel()
-                    viewModel.clearCloudConfig()
-                    viewModel.appendSystemMessage("📢 ИИ выгружен из памяти")
-                }
-            },
-            isModelLoaded = isModelLoaded,
-            cloudConfig = viewModel.getCloudConfig(),
-            onCloudForceDialog = { showCloudDialog = true },
-            onLocalForceDialog = { showModelDialog = true },
-            statusText = when (currentMode) {
-                AIMode.LOCAL -> {
-                    when (state) {
-                        is GenerationState.Generating -> "🤖 Локальный ИИ думает..."
-                        else -> "🤖 Локальный ИИ: Готов к работе"
-                    }
-                }
-                AIMode.CLOUD -> {
-                    when (cloudState) {
-                        is CloudAIState.Generating -> "☁️ Облако думает..."
-                        else -> "☁️ Облако: Готово к работе"
-                    }
-                }
-                else -> "🤖 ИИ выгружен"
-            },
-            isGenerating = state.isActive() || cloudState.isActive(),
-            isSpeaking = isSpeaking,
-            isDarkTheme = isDarkTheme,
-            onToggleTheme = { viewModel.toggleTheme() },
-            colors = colors,
-            isTtsReady = isTtsReady
-        )
-
-        ControlPanel(
-            onMemoryClick = {
-                memoryEditText = viewModel.readFromLongTermMemory()
-                showMemoryEditor = true
-                viewModel.speakText("Редактор базы знаний")
-            },
-            onSettingsClick = {
-                showSettings = !showSettings
-                viewModel.speakText("Настройки движка ИИ")
-            },
-            onPromptSettingsClick = {
-                showPromptSettings = !showPromptSettings
-                viewModel.speakText("Настройка роли ИИ")
-            },
-            onHelpClick = {
-                viewModel.speakText("Открываю руководство пользователя.")
-                showHelpDialog = true
-            },
-            isTtsReady = isTtsReady,
-            viewModel = viewModel,
-            context = context,
-            coroutineScope = coroutineScope,
-            colors = colors,
-            isDarkTheme = isDarkTheme
-        )
-
-        if (showSettings) {
-            SettingsPanel(
-                temperature = tempTemperature,
-                onTemperatureChange = { tempTemperature = it },
-                maxTokens = maxTokens,
-                onMaxTokensChange = { viewModel.updateMaxTokens(it) },
-                contextSize = contextSize,
-                onContextSizeChange = { viewModel.updateContextSize(it) },
-                onModelChangeClick = { showModelDialog = true },
-                onSave = {
-                    viewModel.updateTemperature(tempTemperature)
-                    showSettings = false
-                },
-                onClose = {
-                    tempTemperature = temperature
-                    showSettings = false
-                },
-                colors = colors
-            )
-        }
-
-        if (showPromptSettings) {
-            PromptSettingsPanel(
-                promptText = tempPromptText,
-                onPromptChange = { tempPromptText = it },
-                onSave = {
-                    viewModel.updateSystemPrompt(tempPromptText)
-                    showPromptSettings = false
-                },
-                colors = colors
-            )
-        }
-
-        StatusBar(
-            state = state,
-            cloudState = cloudState,
-            currentMode = currentMode,
-            currentModel = if (isModelLoaded) currentModelPath else null,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-            colors = colors
-        )
-
-        Box(
+        Column(
             modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(8.dp)
+                .fillMaxSize()
+                .imePadding()
         ) {
-            AndroidView(
-                factory = { context ->
-                    MatrixChatBackground(context)
+            TopBarWithSwitch(
+                currentMode = currentMode,
+                onModeChange = { newMode ->
+                    viewModel.setCurrentMode(newMode)
+                    if (newMode == AIMode.NEUTRAL) {
+                        viewModel.releaseModel()
+                        viewModel.clearCloudConfig()
+                        viewModel.appendSystemMessage("📢 ИИ выгружен из памяти")
+                    }
                 },
-                modifier = Modifier
-                    .matchParentSize()
-                    .clip(RoundedCornerShape(16.dp))
+                isModelLoaded = isModelLoaded,
+                cloudConfig = viewModel.getCloudConfig(),
+                onCloudForceDialog = { showCloudDialog = true },
+                onLocalForceDialog = { showModelDialog = true },
+                statusText = when (currentMode) {
+                    AIMode.LOCAL -> {
+                        when (state) {
+                            is GenerationState.Generating -> "🤖 Локальный ИИ думает..."
+                            else -> "🤖 Локальный ИИ: Готов к работе"
+                        }
+                    }
+                    AIMode.CLOUD -> {
+                        when (cloudState) {
+                            is CloudAIState.Generating -> "☁️ Облако думает..."
+                            else -> "☁️ Облако: Готово к работе"
+                        }
+                    }
+                    else -> "🤖 ИИ выгружен"
+                },
+                isGenerating = state.isActive() || cloudState.isActive(),
+                isSpeaking = isSpeaking,
+                isDarkTheme = isDarkTheme,
+                onToggleTheme = { viewModel.toggleTheme() },
+                colors = colors,
+                isTtsReady = isTtsReady,
+                onRobotLanded = {
+                    robotIsLanded = true
+                }
             )
 
-            Card(
-                modifier = Modifier.fillMaxSize(),
-                shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.dp, colors.borderGray),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (isDarkTheme) Color(0xFF1E1E1E).copy(alpha = 0.2f) else Color.Transparent
+            ControlPanel(
+                onMemoryClick = {
+                    memoryEditText = viewModel.readFromLongTermMemory()
+                    showMemoryEditor = true
+                    viewModel.speakText("Редактор базы знаний")
+                },
+                onSettingsClick = {
+                    showSettings = !showSettings
+                    viewModel.speakText("Настройки движка ИИ")
+                },
+                onPromptSettingsClick = {
+                    showPromptSettings = !showPromptSettings
+                    viewModel.speakText("Настройка роли ИИ")
+                },
+                onHelpClick = {
+                    viewModel.speakText("Открываю руководство пользователя.")
+                    showHelpDialog = true
+                },
+                isTtsReady = isTtsReady,
+                viewModel = viewModel,
+                context = context,
+                coroutineScope = coroutineScope,
+                colors = colors,
+                isDarkTheme = isDarkTheme
+            )
+
+            if (showSettings) {
+                SettingsPanel(
+                    temperature = tempTemperature,
+                    onTemperatureChange = { tempTemperature = it },
+                    maxTokens = maxTokens,
+                    onMaxTokensChange = { viewModel.updateMaxTokens(it) },
+                    contextSize = contextSize,
+                    onContextSizeChange = { viewModel.updateContextSize(it) },
+                    onModelChangeClick = { showModelDialog = true },
+                    onSave = {
+                        viewModel.updateTemperature(tempTemperature)
+                        showSettings = false
+                    },
+                    onClose = {
+                        tempTemperature = temperature
+                        showSettings = false
+                    },
+                    colors = colors
                 )
+            }
+
+            if (showPromptSettings) {
+                PromptSettingsPanel(
+                    promptText = tempPromptText,
+                    onPromptChange = { tempPromptText = it },
+                    onSave = {
+                        viewModel.updateSystemPrompt(tempPromptText)
+                        showPromptSettings = false
+                    },
+                    colors = colors
+                )
+            }
+
+            StatusBar(
+                state = state,
+                cloudState = cloudState,
+                currentMode = currentMode,
+                currentModel = if (isModelLoaded) currentModelPath else null,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                colors = colors
+            )
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(8.dp)
             ) {
-                SelectionContainer {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp)
-                            .verticalScroll(scrollState)
-                    ) {
-                        chatMessages.forEach { message ->
-                            val prefix = when (message.role) {
-                                "user" -> "Вы: "
-                                "assistant" -> "ИИ-Друг: "
-                                "system" -> "📢 "
-                                else -> ""
+                AndroidView(
+                    factory = { context ->
+                        MatrixChatBackground(context)
+                    },
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clip(RoundedCornerShape(16.dp))
+                )
+
+                Card(
+                    modifier = Modifier.fillMaxSize(),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, colors.borderGray),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isDarkTheme) Color(0xFF1E1E1E).copy(alpha = 0.2f) else Color.Transparent
+                    )
+                ) {
+                    SelectionContainer {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(16.dp)
+                                .verticalScroll(scrollState)
+                        ) {
+                            chatMessages.forEach { message ->
+                                val prefix = when (message.role) {
+                                    "user" -> "Вы: "
+                                    "assistant" -> "ИИ-Друг: "
+                                    "system" -> "📢 "
+                                    else -> ""
+                                }
+                                val textColor = when (message.role) {
+                                    "user" -> colors.green
+                                    "assistant" -> colors.text
+                                    else -> colors.text
+                                }
+                                Text(
+                                    text = prefix + message.text,
+                                    color = textColor,
+                                    fontFamily = colors.chatFont,
+                                    fontSize = 10.sp,
+                                    modifier = Modifier.padding(vertical = 2.dp)
+                                )
                             }
-                            val textColor = when (message.role) {
-                                "user" -> colors.green
-                                "assistant" -> colors.text
-                                else -> colors.text
+
+                            if (generatedText.isNotEmpty() && state is GenerationState.Generating) {
+                                Text(
+                                    text = "ИИ: $generatedText",
+                                    color = colors.text,
+                                    fontFamily = colors.chatFont,
+                                    fontSize = 10.sp,
+                                    modifier = Modifier.padding(vertical = 2.dp)
+                                )
                             }
-                            Text(
-                                text = prefix + message.text,
-                                color = textColor,
-                                fontFamily = colors.chatFont,
-                                fontSize = 10.sp,
-                                modifier = Modifier.padding(vertical = 2.dp)
-                            )
-                        }
 
-                        if (generatedText.isNotEmpty() && state is GenerationState.Generating) {
-                            Text(
-                                text = "ИИ: $generatedText",
-                                color = colors.text,
-                                fontFamily = colors.chatFont,
-                                fontSize = 10.sp,
-                                modifier = Modifier.padding(vertical = 2.dp)
-                            )
-                        }
+                            if (cloudGeneratedText.isNotEmpty() && cloudState is CloudAIState.Generating) {
+                                Text(
+                                    text = "☁️ ИИ: $cloudGeneratedText",
+                                    color = colors.text.copy(alpha = 0.8f),
+                                    fontFamily = colors.chatFont,
+                                    fontSize = 10.sp,
+                                    modifier = Modifier.padding(vertical = 2.dp)
+                                )
+                            }
 
-                        if (cloudGeneratedText.isNotEmpty() && cloudState is CloudAIState.Generating) {
-                            Text(
-                                text = "☁️ ИИ: $cloudGeneratedText",
-                                color = colors.text.copy(alpha = 0.8f),
-                                fontFamily = colors.chatFont,
-                                fontSize = 10.sp,
-                                modifier = Modifier.padding(vertical = 2.dp)
-                            )
-                        }
-
-                        if (cloudGeneratedText.isNotEmpty() && cloudState is CloudAIState.Generating) {
-                            Text(
-                                text = "☁️ ИИ: $cloudGeneratedText",
-                                color = colors.text.copy(alpha = 0.8f),
-                                fontFamily = colors.chatFont,
-                                fontSize = 10.sp,
-                                modifier = Modifier.padding(vertical = 2.dp)
-                            )
+                            if (cloudGeneratedText.isNotEmpty() && cloudState is CloudAIState.Generating) {
+                                Text(
+                                    text = "☁️ ИИ: $cloudGeneratedText",
+                                    color = colors.text.copy(alpha = 0.8f),
+                                    fontFamily = colors.chatFont,
+                                    fontSize = 10.sp,
+                                    modifier = Modifier.padding(vertical = 2.dp)
+                                )
+                            }
                         }
                     }
                 }
             }
+
+            if (imagePath != null) {
+                ImagePreview(imagePath = imagePath, colors = colors)
+            }
+
+            PromptInput(
+                prompt = promptInput,
+                onPromptChange = { promptInput = it },
+                onGenerate = {
+                    keyboardController?.hide()
+                    viewModel.sendUserMessage(promptInput)
+                    promptInput = ""
+                    onImageUsed()
+                },
+                onAbort = {
+                    keyboardController?.hide()
+                    viewModel.abortLocal()
+                    viewModel.abortCloud()
+                },
+                onClearChat = { viewModel.clearChat() },
+                onPickImage = onPickImage,
+                enabled = true,
+                isGenerating = state.isActive() || cloudState.isActive(),
+                isSpeaking = isSpeaking,
+                focusRequester = focusRequester,
+                isTtsReady = isTtsReady,
+                viewModel = viewModel,
+                context = context,
+                speechRecognizerLauncher = speechRecognizerLauncher,
+                isBound = isDeviceBound,
+                modelName = loadedModelName,
+                remainingTimeText = remainingTimeText,
+                isPermanentlyUnlocked = isPermanentlyUnlocked,
+                currentMode = currentMode,
+                modifier = Modifier.padding(8.dp),
+                colors = colors,
+                isDarkTheme = isDarkTheme
+            )
         }
 
-        if (imagePath != null) {
-            ImagePreview(imagePath = imagePath, colors = colors)
-        }
+        // ===== РОБОТ ПОВЕРХ ВСЕГО (после приземления) =====
+        if (robotIsLanded) {
+            var initialTouchX by remember { mutableStateOf(0f) }
+            var initialTouchY by remember { mutableStateOf(0f) }
+            var initialOffsetX by remember { mutableStateOf(0f) }
+            var initialOffsetY by remember { mutableStateOf(0f) }
+            var initialDistance by remember { mutableStateOf(0f) }
+            var initialScale by remember { mutableStateOf(1f) }
 
-        PromptInput(
-            prompt = promptInput,
-            onPromptChange = { promptInput = it },
-            onGenerate = {
-                keyboardController?.hide()
-                viewModel.sendUserMessage(promptInput)
-                promptInput = ""
-                onImageUsed()
-            },
-            onAbort = {
-                keyboardController?.hide()
-                viewModel.abortLocal()
-                viewModel.abortCloud()
-            },
-            onClearChat = { viewModel.clearChat() },
-            onPickImage = onPickImage,
-            enabled = true,
-            isGenerating = state.isActive() || cloudState.isActive(),
-            isSpeaking = isSpeaking,
-            focusRequester = focusRequester,
-            isTtsReady = isTtsReady,
-            viewModel = viewModel,
-            context = context,
-            speechRecognizerLauncher = speechRecognizerLauncher,
-            isBound = isDeviceBound,
-            modelName = loadedModelName,
-            remainingTimeText = remainingTimeText,
-            isPermanentlyUnlocked = isPermanentlyUnlocked,
-            currentMode = currentMode,
-            modifier = Modifier.padding(8.dp),
-            colors = colors,
-            isDarkTheme = isDarkTheme
-        )
+            Box(
+                modifier = Modifier
+                    .offset(x = robotOffsetX.dp, y = robotOffsetY.dp)
+                    .size(70.dp)
+                    .graphicsLayer(
+                        scaleX = robotScale,
+                        scaleY = robotScale
+                    )
+                    .pointerInput(Unit) {
+                        awaitEachGesture {
+                            val down = awaitFirstDown()
+                            initialTouchX = down.position.x
+                            initialTouchY = down.position.y
+                            initialOffsetX = robotOffsetX
+                            initialOffsetY = robotOffsetY
+                            initialScale = robotScale
+
+                            var isDragging = false
+                            var isPinching = false
+
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val pointers = event.changes
+
+                                if (pointers.size >= 2) {
+                                    // Pinch-to-zoom
+                                    isPinching = true
+                                    val p1 = pointers[0].position
+                                    val p2 = pointers[1].position
+                                    val distance = sqrt(
+                                        (p2.x - p1.x) * (p2.x - p1.x) +
+                                        (p2.y - p1.y) * (p2.y - p1.y)
+                                    )
+                                    if (initialDistance == 0f) {
+                                        initialDistance = distance
+                                    }
+                                    val scaleFactor = distance / initialDistance
+                                    robotScale = (initialScale * scaleFactor).coerceIn(0.5f, 3f)
+                                } else if (pointers.size == 1 && !isPinching) {
+                                    // Drag
+                                    isDragging = true
+                                    val current = pointers[0].position
+                                    val deltaX = current.x - initialTouchX
+                                    val deltaY = current.y - initialTouchY
+                                    robotOffsetX = initialOffsetX + deltaX
+                                    robotOffsetY = initialOffsetY + deltaY
+                                }
+
+                                if (event.changes.all { it.changedToUp() }) {
+                                    break
+                                }
+                            }
+                        }
+                    }
+            ) {
+                ThinkingRobotAnimation(
+                    height = 70.dp,
+                    isActive = false,
+                    isSpeaking = isSpeaking,
+                    isThinking = false,
+                    isIdle = true,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
     }
 }
 
@@ -1688,7 +1777,8 @@ private fun TopBarWithSwitch(
     isDarkTheme: Boolean,
     onToggleTheme: () -> Unit,
     colors: AppColors,
-    isTtsReady: Boolean
+    isTtsReady: Boolean,
+    onRobotLanded: () -> Unit = {}
 ) {
     val isLocalReady = isModelLoaded
     val isCloudReady = cloudConfig?.authKey?.isNotEmpty() == true
@@ -1733,13 +1823,13 @@ private fun TopBarWithSwitch(
         }
     }
     
-    val robotOnOrbitAlpha = if (flightProgress < 0.15f) 1f - (flightProgress / 0.15f) else 0f
+    LaunchedEffect(flightProgress) {
+        if (flightProgress >= 0.99f) {
+            onRobotLanded()
+        }
+    }
     
-    val robotAlpha by animateFloatAsState(
-        targetValue = if (flightProgress >= 0.99f) 1f else 0f,
-        animationSpec = tween(durationMillis = 400),
-        label = "robot_alpha"
-    )
+    val robotOnOrbitAlpha = if (flightProgress < 0.15f) 1f - (flightProgress / 0.15f) else 0f
 
     Box(
         modifier = Modifier
@@ -1820,7 +1910,6 @@ private fun TopBarWithSwitch(
                 val endSizePx = with(density2) { 70.dp.toPx() }
                 val currentSize = startSize + (endSizePx - startSize) * flightProgress
                 
-                // Вектор движения (для ориентации в полете)
                 val dx = 2f * oneMinusT * (ctrlX - startX) + 
                          2f * flightProgress * (endX - ctrlX)
                 val dy = 2f * oneMinusT * (ctrlY - startY) + 
@@ -1828,22 +1917,14 @@ private fun TopBarWithSwitch(
                 val angleRad = atan2(dy, dx)
                 val angleDeg = angleRad * 180f / PI.toFloat()
                 
-                // Плавная коррекция угла при приземлении
                 val landingProgress = if (flightProgress > 0.7f) {
                     (flightProgress - 0.7f) / 0.3f
                 } else {
                     0f
                 }
                 
-                // Стартовый угол полета (в градусах), от которого мы плавно отходим
                 val flightAngleDeg = angleDeg + 90f
-                // Целевой угол - 0 градусов (стоит ровно)
                 val targetAngle = 0f
-                
-                // ПЛАВНАЯ ИНТЕРПОЛЯЦИЯ УГЛА: 
-                // Пока не началось приземление (landingProgress < 1), 
-                // угол = текущий угол полета. 
-                // Как только началось приземление, угол плавно переходит к 0.
                 val finalAngle = flightAngleDeg * (1f - landingProgress) + targetAngle * landingProgress
                 
                 val scale = currentSize / endSizePx
@@ -1936,18 +2017,7 @@ private fun TopBarWithSwitch(
                     .fillMaxHeight(),
                 contentAlignment = Alignment.Center
             ) {
-                if (robotAlpha > 0.01f) {
-                    Box(modifier = Modifier.graphicsLayer(alpha = robotAlpha)) {
-                        ThinkingRobotAnimation(
-                            height = 70.dp,
-                            isActive = isGenerating,
-                            isSpeaking = isSpeaking,
-                            isThinking = isGenerating,
-                            isIdle = isLocalReady || isCloudReady,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
+                // Робот здесь больше не отображается — он в ChatScreen
             }
 
             Column(
@@ -2149,10 +2219,10 @@ private fun SpaceBackground(
             val rRy = h * SpaceConstants.ROBOT_ORBIT_RY
 
             val orbits = listOf(
-                Triple(rRx, rRy),
-                Triple(mRx, mRy),
-                Triple(eRx, eRy),
-                Triple(sRx, sRy)
+                Pair(rRx, rRy),
+                Pair(mRx, mRy),
+                Pair(eRx, eRy),
+                Pair(sRx, sRy)
             )
             for (orbit in orbits) {
                 val rx = orbit.first
