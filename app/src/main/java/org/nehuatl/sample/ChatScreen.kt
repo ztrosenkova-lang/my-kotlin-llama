@@ -1128,7 +1128,7 @@ fun ThinkingRobotAnimation(
                 // Внутреннее белое ядро пламени
                 drawOval(
                     Brush.verticalGradient(
-                        listOf(Color.White, cyanSoft.copy(alpha = 0f))
+                        listOf(Color.White, cyanBright.copy(alpha = 0f))
                     ),
                     topLeft = Offset(top.x + fw * 0.28f, top.y),
                     size = Size(fw * 0.44f, len * 0.55f)
@@ -1797,7 +1797,7 @@ private fun TopBarWithSwitch(
                 val startX = orbitCenterX + cos(startAngle) * robotOrbitRx
                 val startY = orbitCenterY + sin(startAngle) * robotOrbitRy
                 
-                                val density = LocalDensity.current
+                val density = LocalDensity.current
                 val logoWidth = with(density) { 56.dp.toPx() }
                 val rightWidth = with(density) { 132.dp.toPx() }
                 val robotCenterX = logoWidth + (w - logoWidth - rightWidth) / 2f
@@ -1816,10 +1816,11 @@ private fun TopBarWithSwitch(
                                flightProgress * flightProgress * endY
                 
                 val startSize = h * SpaceConstants.ROBOT_SIZE_RATIO
-                val density = LocalDensity.current
-                val endSizePx = with(density) { 70.dp.toPx() }
+                val density2 = LocalDensity.current
+                val endSizePx = with(density2) { 70.dp.toPx() }
                 val currentSize = startSize + (endSizePx - startSize) * flightProgress
                 
+                // Вектор движения (для ориентации в полете)
                 val dx = 2f * oneMinusT * (ctrlX - startX) + 
                          2f * flightProgress * (endX - ctrlX)
                 val dy = 2f * oneMinusT * (ctrlY - startY) + 
@@ -1827,18 +1828,27 @@ private fun TopBarWithSwitch(
                 val angleRad = atan2(dy, dx)
                 val angleDeg = angleRad * 180f / PI.toFloat()
                 
+                // Плавная коррекция угла при приземлении
                 val landingProgress = if (flightProgress > 0.7f) {
                     (flightProgress - 0.7f) / 0.3f
                 } else {
                     0f
                 }
+                
+                // Стартовый угол полета (в градусах), от которого мы плавно отходим
+                val flightAngleDeg = angleDeg + 90f
+                // Целевой угол - 0 градусов (стоит ровно)
                 val targetAngle = 0f
-                val currentAngle = angleDeg + 90f
-                val finalAngle = currentAngle * (1f - landingProgress) + targetAngle * landingProgress
+                
+                // ПЛАВНАЯ ИНТЕРПОЛЯЦИЯ УГЛА: 
+                // Пока не началось приземление (landingProgress < 1), 
+                // угол = текущий угол полета. 
+                // Как только началось приземление, угол плавно переходит к 0.
+                val finalAngle = flightAngleDeg * (1f - landingProgress) + targetAngle * landingProgress
                 
                 val scale = currentSize / endSizePx
-                val offsetXDp = with(density) { (currentX - endSizePx / 2f).toDp() }
-                val offsetYDp = with(density) { (currentY - endSizePx / 2f).toDp() }
+                val offsetXDp = with(density2) { (currentX - endSizePx / 2f).toDp() }
+                val offsetYDp = with(density2) { (currentY - endSizePx / 2f).toDp() }
                 
                 Box(
                     modifier = Modifier
@@ -2027,24 +2037,36 @@ private fun SpaceBackground(
             return (x % 1f + 1f) % 1f
         }
 
+        // ===================== ФОНОВЫЕ ТУМАННОСТИ =====================
+        // Огромный фиолетовый вихрь слева снизу
         drawCircle(
             Brush.radialGradient(
-                listOf(Color(0xFF7FB4FF).copy(alpha = 0.10f * vis), Color.Transparent),
-                center = Offset(w * 0.22f, h * 0.35f), radius = h * 0.9f
+                listOf(Color(0xFF9B59B6).copy(alpha = 0.08f * vis), Color.Transparent),
+                center = Offset(w * 0.18f, h * 0.75f), radius = h * 0.7f
             ),
-            radius = h * 0.9f, center = Offset(w * 0.22f, h * 0.35f)
+            radius = h * 0.7f, center = Offset(w * 0.18f, h * 0.75f)
         )
+        // Зеленый газовый пузырь справа сверху
         drawCircle(
             Brush.radialGradient(
-                listOf(Color(0xFFB48FE3).copy(alpha = 0.08f * vis), Color.Transparent),
-                center = Offset(w * 0.80f, h * 0.60f), radius = h * 0.8f
+                listOf(Color(0xFF2ECC71).copy(alpha = 0.05f * vis), Color.Transparent),
+                center = Offset(w * 0.75f, h * 0.25f), radius = h * 0.5f
             ),
-            radius = h * 0.8f, center = Offset(w * 0.80f, h * 0.60f)
+            radius = h * 0.5f, center = Offset(w * 0.75f, h * 0.25f)
+        )
+        // Дымка из звездной пыли, расширяющаяся от центра
+        drawCircle(
+            Brush.radialGradient(
+                listOf(Color(0xFFFFD1DC).copy(alpha = 0.05f * vis), Color.Transparent),
+                center = Offset(cx, cy), radius = h * 0.6f
+            ),
+            radius = h * 0.6f, center = Offset(cx, cy)
         )
 
+        // ===================== ЗВЁЗДЫ =====================
         val starCore = if (isDarkTheme) Color(0xFFEAF6FF) else Color(0xFF8FB6E8)
         val starGlow = Color(0xFF7FB4FF)
-        for (i in 0 until 46) {
+        for (i in 0 until 70) { // Увеличил количество звезд с 46 до 70
             val sx = rnd(i, 1) * w
             val sy = rnd(i, 2) * h
             val seed = rnd(i, 3)
@@ -2066,6 +2088,60 @@ private fun SpaceBackground(
                     Offset(sx - r * 3.5f, sy), Offset(sx + r * 3.5f, sy), strokeWidth = 1f)
                 drawLine(starCore.copy(alpha = la),
                     Offset(sx, sy - r * 3.5f), Offset(sx, sy + r * 3.5f), strokeWidth = 1f)
+            }
+        }
+
+        // ===================== УДАЛЕННЫЕ СВЕРХНОВЫЕ И КВАЗАРЫ =====================
+        // Квазар 1 (далекий яркий объект с мощными лучами)
+        val qx1 = w * 0.85f; val qy1 = h * 0.10f
+        val qPulse1 = 0.5f + 0.5f * sin(T * 5f)
+        drawCircle(
+            Brush.radialGradient(
+                listOf(Color(0xFFFFFFFF).copy(alpha = 0.9f * vis), Color(0xFF00FFFF).copy(alpha = 0.3f * vis), Color.Transparent),
+                center = Offset(qx1, qy1), radius = h * 0.05f
+            ),
+            radius = h * 0.05f, center = Offset(qx1, qy1)
+        )
+        rotate(45f, pivot = Offset(qx1, qy1)) {
+            drawLine(Color.White.copy(alpha = 0.3f * vis * qPulse1), Offset(qx1 - h * 0.09f, qy1), Offset(qx1 + h * 0.09f, qy1), strokeWidth = h * 0.002f)
+            drawLine(Color.White.copy(alpha = 0.2f * vis * qPulse1), Offset(qx1, qy1 - h * 0.09f), Offset(qx1, qy1 + h * 0.09f), strokeWidth = h * 0.002f)
+        }
+
+        // Квазар 2 (смещенный вправо вниз)
+        val qx2 = w * 0.08f; val qy2 = h * 0.35f
+        val qPulse2 = 0.5f + 0.5f * sin(T * 4f + 2f)
+        drawCircle(
+            Brush.radialGradient(
+                listOf(Color(0xFFFFFFFF).copy(alpha = 0.8f * vis), Color(0xFFFF00FF).copy(alpha = 0.2f * vis), Color.Transparent),
+                center = Offset(qx2, qy2), radius = h * 0.04f
+            ),
+            radius = h * 0.04f, center = Offset(qx2, qy2)
+        )
+        rotate(-30f, pivot = Offset(qx2, qy2)) {
+            drawLine(Color(0xFFFF00FF).copy(alpha = 0.3f * vis * qPulse2), Offset(qx2 - h * 0.06f, qy2), Offset(qx2 + h * 0.06f, qy2), strokeWidth = h * 0.0015f)
+            drawLine(Color(0xFFFF00FF).copy(alpha = 0.2f * vis * qPulse2), Offset(qx2, qy2 - h * 0.06f), Offset(qx2, qy2 + h * 0.06f), strokeWidth = h * 0.0015f)
+        }
+
+        // Сверхновая (взрывающаяся звезда в фоне)
+        val snX = w * 0.92f; val snY = h * 0.55f
+        val snLife = (T * 0.7f) % (2f * PI.toFloat()) // Жизненный цикл взрыва
+        val snPhase = snLife / (2f * PI.toFloat())
+        if (snPhase < 0.4f) {
+            val snBrightness = sin(PI.toFloat() * (snPhase / 0.4f))
+            drawCircle(
+                Brush.radialGradient(
+                    listOf(Color.White.copy(alpha = snBrightness * vis), Color(0xFFFFAA00).copy(alpha = snBrightness * 0.5f * vis), Color.Transparent),
+                    center = Offset(snX, snY), radius = h * 0.12f
+                ),
+                radius = h * 0.12f, center = Offset(snX, snY)
+            )
+            for (i in 0 until 12) {
+                val extAngle = (2f * PI.toFloat() / 12f) * i
+                val extDist = h * (0.08f + 0.1f * snPhase)
+                drawLine(Color(0xFFFFAA00).copy(alpha = (1f - snPhase) * 0.8f * vis), 
+                    Offset(snX, snY), 
+                    Offset(snX + cos(extAngle) * extDist, snY + sin(extAngle) * extDist), 
+                    strokeWidth = h * 0.002f)
             }
         }
 
@@ -2250,7 +2326,7 @@ private fun SpaceBackground(
             }
         }
 
-        // ===== ЛУНА (жёлтая, как в старой версии размер) =====
+        // ===== ЛУНА (жёлтая) =====
         val moonAngle = T * 2f + 2.1f
         val moonX = cx + cos(moonAngle) * mRx
         val moonY = cy + sin(moonAngle) * mRy
@@ -2270,7 +2346,7 @@ private fun SpaceBackground(
         drawCircle(Color(0xFFCCAA44).copy(alpha = 0.7f * vis), moonRadius * 0.35f,
             Offset(moonX - moonRadius * 0.25f, moonY + moonRadius * 0.10f))
 
-        // ===== ЗЕМЛЯ (как в старой версии) =====
+        // ===== ЗЕМЛЯ =====
         val earthAngle = T * 1f + 0.6f
         val earthX = cx + cos(earthAngle) * eRx
         val earthY = cy + sin(earthAngle) * eRy
@@ -2318,7 +2394,7 @@ private fun SpaceBackground(
             center = Offset(miniMoonX, miniMoonY)
         )
 
-        // ===== САТУРН (как в старой версии) =====
+        // ===== САТУРН =====
         val saturnAngle = T * 1f + 3.6f
         val saturnX = cx + cos(saturnAngle) * sRx
         val saturnY = cy + sin(saturnAngle) * sRy
@@ -2351,7 +2427,72 @@ private fun SpaceBackground(
                 style = Stroke(width = saturnRadius * 0.28f)
             )
         }
+
+        // ===================== СТРАНСТВУЮЩАЯ КОМЕТА =====================
+        // Траектория: входит слева-сверху, выходит справа-снизу
+        val comP = (T * 0.15f) % 1f
+        val cometX = lerp(-w * 0.2f, w * 1.3f, comP)
+        val cometY = lerp(h * 1.0f, -h * 0.2f, comP) // Идет снизу вверх
+        val cometAngle = atan2(-cometY, cometX)
+        val cometRadius = h * 0.015f
+        val cometTailLen = h * 0.18f * (1f - comP) // Хвост укорачивается
+        
+        rotate(degrees = cometAngle * 180f / PI.toFloat(), pivot = Offset(cometX, cometY)) {
+            // Яркое свечение ядра
+            drawCircle(
+                Brush.radialGradient(
+                    listOf(Color.White.copy(alpha = 0.9f * vis), Color(0xFF00FFFF).copy(alpha = 0.5f * vis), Color.Transparent),
+                    center = Offset(cometX, cometY),
+                    radius = cometRadius * 5f
+                ),
+                radius = cometRadius * 5f,
+                center = Offset(cometX, cometY)
+            )
+            
+            // Хвост (состоящий из частиц, убывающих по яркости)
+            val tailParticles = 30
+            for (i in 0 until tailParticles) {
+                val tailT = i / tailParticles.toFloat()
+                val tailX = cometX - cos(cometAngle) * (cometTailLen * tailT)
+                val tailY = cometY - sin(cometAngle) * (cometTailLen * tailT)
+                val alpha = (1f - tailT) * 0.8f * vis
+                val radius = (cometRadius * 0.8f) * (1f - tailT * 0.6f)
+                
+                drawCircle(
+                    Color(0xFF55FFFF).copy(alpha = alpha),
+                    radius,
+                    Offset(tailX, tailY)
+                )
+            }
+            
+            // Ядро кометы
+            drawCircle(
+                Brush.radialGradient(
+                    listOf(Color.White, Color(0xFF00FFFF)),
+                    center = Offset(cometX, cometY),
+                    radius = cometRadius
+                ),
+                radius = cometRadius,
+                center = Offset(cometX, cometY)
+            )
+        }
+
+        // ===================== ЛИНЗА ВРЕМЕНИ (Световой эффект по краям) =====================
+        drawCircle(
+            Brush.radialGradient(
+                listOf(Color.Transparent, Color.Black.copy(alpha = 0.35f * vis)),
+                center = Offset(cx, cy),
+                radius = h * 0.9f
+            ),
+            radius = h * 0.9f,
+            center = Offset(cx, cy)
+        )
     }
+}
+
+// Вспомогательная функция для интерполяции (добавляется вне Composable)
+private fun lerp(start: Float, stop: Float, fraction: Float): Float {
+    return start + (stop - start) * fraction
 }
 @Composable
 private fun StatusIndicator(
