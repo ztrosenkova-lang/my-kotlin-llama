@@ -2052,6 +2052,60 @@ private fun SpaceBackground(
     }
 }
 @Composable
+private fun StatusIndicator(
+    color: Color,
+    text: String,
+    colors: AppColors
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(10.dp)
+                .background(color, shape = CircleShape)
+                .border(0.5.dp, colors.borderGray, CircleShape)
+        )
+        Text(
+            text = text,
+            fontSize = 6.sp,
+            color = colors.text
+        )
+    }
+}
+
+@Composable
+private fun ModeButton(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    colors: AppColors
+) {
+    Box(
+        modifier = modifier
+            .clickable { onClick() }
+            .background(
+                color = if (isSelected) colors.accent else colors.surfaceGray,
+                shape = RoundedCornerShape(4.dp)
+            )
+            .border(
+                width = if (isSelected) 1.dp else 0.5.dp,
+                color = if (isSelected) colors.accent else colors.borderGray,
+                shape = RoundedCornerShape(4.dp)
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            color = if (isSelected) colors.background else colors.text,
+            fontSize = 7.sp,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+        )
+    }
+}
+@Composable
 private fun ControlPanel(
     onMemoryClick: () -> Unit,
     onSettingsClick: () -> Unit,
