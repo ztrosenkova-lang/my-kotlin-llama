@@ -131,6 +131,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _isDarkTheme = MutableStateFlow(false)
     val isDarkTheme: StateFlow<Boolean> = _isDarkTheme.asStateFlow()
 
+    private val _isFirstLaunch = MutableStateFlow(false)
+    val isFirstLaunch: StateFlow<Boolean> = _isFirstLaunch.asStateFlow()
+
     private val _isCompressing = MutableStateFlow(false)
     val isCompressing: StateFlow<Boolean> = _isCompressing.asStateFlow()
 
@@ -213,6 +216,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         instance = this
 
         _isDarkTheme.value = prefs.getBoolean(KEY_DARK_THEME, false)
+        _isFirstLaunch.value = prefs.getBoolean("first_launch", true)
+        if (_isFirstLaunch.value) {
+            prefs.edit().putBoolean("first_launch", false).apply()
+        }
 
         ttsReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
