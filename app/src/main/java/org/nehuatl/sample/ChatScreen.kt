@@ -810,8 +810,11 @@ fun ChatScreen(
                     isIdle = true,
                     modifier = Modifier.fillMaxSize()
                 )
+    
             }
         }
+    }
+}
 @Composable
 private fun VoiceWaveAnimation(
     color: Color,
