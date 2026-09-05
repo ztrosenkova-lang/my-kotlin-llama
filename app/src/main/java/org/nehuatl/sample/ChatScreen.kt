@@ -2192,7 +2192,7 @@ private fun SpaceBackground(
                 drawLine(Color(0xFFFF00FF).copy(alpha = 0.2f * vis * qPulse2), Offset(qx2, qy2 - h * 0.06f), Offset(qx2, qy2 + h * 0.06f), strokeWidth = h * 0.0015f)
             }
 
-            val snX = w * 0.92f; val snY = h * 0.55f
+            val snX = w * 0.20f; val snY = h * 0.45f
             val snLife = (T * 0.7f) % (2f * PI.toFloat())
             val snPhase = snLife / (2f * PI.toFloat())
             if (snPhase < 0.4f) {
