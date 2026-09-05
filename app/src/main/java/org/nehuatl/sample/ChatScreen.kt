@@ -171,16 +171,16 @@ enum class AIMode {
     CLOUD
 }
 private object SpaceConstants {
-    const val ORBIT_CENTER_X_RATIO = 0.80f
+    const val ORBIT_CENTER_X_RATIO = 0.50f
     const val ORBIT_CENTER_Y_RATIO = 0.50f
-    const val ROBOT_ORBIT_RX = 0.16f
-    const val ROBOT_ORBIT_RY = 0.12f
-    const val MOON_ORBIT_RX = 0.24f
-    const val MOON_ORBIT_RY = 0.18f
-    const val EARTH_ORBIT_RX = 0.32f
-    const val EARTH_ORBIT_RY = 0.24f
-    const val SATURN_ORBIT_RX = 0.42f
-    const val SATURN_ORBIT_RY = 0.32f
+    const val ROBOT_ORBIT_RX = 0.14f
+    const val ROBOT_ORBIT_RY = 0.10f
+    const val MOON_ORBIT_RX = 0.27f
+    const val MOON_ORBIT_RY = 0.22f
+    const val EARTH_ORBIT_RX = 0.37f
+    const val EARTH_ORBIT_RY = 0.33f
+    const val SATURN_ORBIT_RX = 0.46f
+    const val SATURN_ORBIT_RY = 0.42f
     const val ROBOT_SIZE_RATIO = 0.050f
     const val PLANET_SIZE_RATIO = 0.055f
 }
@@ -1617,7 +1617,7 @@ private fun TopBarWithSwitch(
                          2f * flightProgress * (endX - ctrlX)
                 val dy = 2f * oneMinusT * (ctrlY - startY) + 
                          2f * flightProgress * (endY - ctrlY)
-                                val angleRad = atan2(dy, dx)
+                val angleRad = atan2(dy, dx)
                 val angleDeg = angleRad * 180f / PI.toFloat()
                 
                 val landingProgress = if (flightProgress > 0.7f) {
@@ -1625,7 +1625,9 @@ private fun TopBarWithSwitch(
                 } else {
                     0f
                 }
-                val finalAngle = angleDeg * (1f - landingProgress)
+                val targetAngle = 0f
+                val currentAngle = angleDeg + 90f
+                val finalAngle = currentAngle * (1f - landingProgress) + targetAngle * landingProgress
                 
                 val scale = currentSize / endSizePx
                 val offsetXDp = with(density) { (currentX - endSizePx / 2f).toDp() }
@@ -1638,7 +1640,7 @@ private fun TopBarWithSwitch(
                         .graphicsLayer(
                             scaleX = scale,
                             scaleY = scale,
-                            rotationZ = finalAngle + 90f
+                            rotationZ = finalAngle
                         )
                 ) {
                     ThinkingRobotAnimation(
@@ -1798,7 +1800,7 @@ private fun SpaceBackground(
     val t by transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
-                animationSpec = infiniteRepeatable(
+        animationSpec = infiniteRepeatable(
             animation = tween(durationMillis = 24000, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
@@ -1813,11 +1815,26 @@ private fun SpaceBackground(
         val T = t * 2f * PI.toFloat()
         val vis = if (isDarkTheme) 1f else 0.55f
 
-        // ===== ЗВЁЗДЫ =====
         fun rnd(i: Int, s: Int): Float {
             val x = sin(i * 12.9898f + s * 78.233f) * 43758.5453f
             return (x % 1f + 1f) % 1f
         }
+
+        drawCircle(
+            Brush.radialGradient(
+                listOf(Color(0xFF7FB4FF).copy(alpha = 0.10f * vis), Color.Transparent),
+                center = Offset(w * 0.22f, h * 0.35f), radius = h * 0.9f
+            ),
+            radius = h * 0.9f, center = Offset(w * 0.22f, h * 0.35f)
+        )
+        drawCircle(
+            Brush.radialGradient(
+                listOf(Color(0xFFB48FE3).copy(alpha = 0.08f * vis), Color.Transparent),
+                center = Offset(w * 0.80f, h * 0.60f), radius = h * 0.8f
+            ),
+            radius = h * 0.8f, center = Offset(w * 0.80f, h * 0.60f)
+        )
+
         val starCore = if (isDarkTheme) Color(0xFFEAF6FF) else Color(0xFF8FB6E8)
         val starGlow = Color(0xFF7FB4FF)
         for (i in 0 until 46) {
@@ -1845,23 +1862,6 @@ private fun SpaceBackground(
             }
         }
 
-        // ===== ТУМАННОСТИ =====
-        drawCircle(
-            Brush.radialGradient(
-                listOf(Color(0xFF7FB4FF).copy(alpha = 0.10f * vis), Color.Transparent),
-                center = Offset(w * 0.22f, h * 0.35f), radius = h * 0.9f
-            ),
-            radius = h * 0.9f, center = Offset(w * 0.22f, h * 0.35f)
-        )
-        drawCircle(
-            Brush.radialGradient(
-                listOf(Color(0xFFB48FE3).copy(alpha = 0.08f * vis), Color.Transparent),
-                center = Offset(w * 0.80f, h * 0.60f), radius = h * 0.8f
-            ),
-            radius = h * 0.8f, center = Offset(w * 0.80f, h * 0.60f)
-        )
-
-        // ===== ОРБИТЫ (эллиптические) =====
         val orbitColor = Color(0xFF7FB4FF)
         val mRx = w * SpaceConstants.MOON_ORBIT_RX
         val mRy = h * SpaceConstants.MOON_ORBIT_RY
@@ -1892,29 +1892,50 @@ private fun SpaceBackground(
             }
         }
 
-        // ===== СОЛНЦЕ =====
-        val sunRadius = h * SpaceConstants.PLANET_SIZE_RATIO * planetPulse
+                // ===== ЭЛЕКТРИЧЕСКОЕ СОЛНЦЕ (пульсирующая сверхновая) =====
+        val baseSunRadius = h * SpaceConstants.PLANET_SIZE_RATIO
+        val sunPulse = 1f + 0.08f * sin(T * 4f)  // пульсация
+        val sunRadius = baseSunRadius * sunPulse * planetPulse
+
+        // Внешнее свечение (голубой ореол)
         drawCircle(
             Brush.radialGradient(
                 colors = listOf(
                     Color(0x00FFFFFF),
-                    Color(0x40CCEEFF),
-                    Color(0x8088CCFF),
+                    Color(0x30CCEEFF),
+                    Color(0x6088CCFF),
                     Color(0x004499FF)
                 ),
                 center = Offset(cx, cy),
-                radius = sunRadius * 3f
+                radius = sunRadius * 3.2f
             ),
-            radius = sunRadius * 3f,
+            radius = sunRadius * 3.2f,
             center = Offset(cx, cy)
         )
+
+        // Среднее свечение
+        drawCircle(
+            Brush.radialGradient(
+                colors = listOf(
+                    Color(0xFF00FFFF).copy(alpha = 0.8f * vis),
+                    Color(0xFF00BFFF).copy(alpha = 0.4f * vis),
+                    Color(0xFF0044FF).copy(alpha = 0f)
+                ),
+                center = Offset(cx, cy),
+                radius = sunRadius * 1.8f
+            ),
+            radius = sunRadius * 1.8f,
+            center = Offset(cx, cy)
+        )
+
+        // Ядро — ярко-голубое
         drawCircle(
             Brush.radialGradient(
                 colors = listOf(
                     Color.White,
-                    Color(0xFFE0F0FF),
-                    Color(0xFF88CCFF),
-                    Color(0xFF4499FF)
+                    Color(0xFF00FFFF),
+                    Color(0xFF00BFFF),
+                    Color(0xFF0044FF)
                 ),
                 center = Offset(cx, cy),
                 radius = sunRadius
@@ -1922,34 +1943,79 @@ private fun SpaceBackground(
             radius = sunRadius,
             center = Offset(cx, cy)
         )
-        for (i in 0..5) {
-            val sparkAngle = T * 2f + i * 1.1f
-            val sparkRadius = sunRadius * (1.2f + 0.2f * sin(T * 3f + i))
-            val sx = cx + cos(sparkAngle) * sparkRadius
-            val sy = cy + sin(sparkAngle) * sparkRadius
-            val sparkLen = sunRadius * 0.35f
-            val sparkColor = Color(0xFFAADDFF).copy(alpha = 0.8f * vis)
-            val dx = cos(sparkAngle + PI.toFloat() / 2f) * sparkLen
-            val dy = sin(sparkAngle + PI.toFloat() / 2f) * sparkLen
-            drawLine(
-                sparkColor,
-                Offset(sx - dx, sy - dy),
-                Offset(sx + dx, sy + dy),
-                strokeWidth = 1.5f
-            )
+
+        // Частицы пыли на поверхности (пиксельная сфера)
+        val particleCount = 80
+        for (i in 0 until particleCount) {
+            val u = rnd(i, 10) * 2f * PI.toFloat()
+            val v = rnd(i, 20) * PI.toFloat()
+            val px = cx + sunRadius * sin(v) * cos(u)
+            val py = cy + sunRadius * sin(v) * sin(u)
+            val pr = 0.5f + rnd(i, 30) * 1.2f
+            val pa = 0.3f + 0.5f * (0.5f + 0.5f * sin(T * 6f + i))
             drawCircle(
-                Color.White.copy(alpha = 0.9f * vis),
-                1.5f,
-                Offset(sx, sy)
+                Color(0xFF00FFFF).copy(alpha = pa * vis),
+                pr,
+                Offset(px, py)
             )
         }
 
-        // ===== РОБОТ НА ОРБИТЕ =====
+        // Электрические сгустки на внутренних орбитах
+        for (i in 0..2) {
+            val phase = i * 2f * PI.toFloat() / 3f
+            val orbitR = sunRadius * (1.5f + 0.2f * sin(T * 3f + i))
+            val boltAngle = T * 4f + phase
+            val bx = cx + cos(boltAngle) * orbitR
+            val by = cy + sin(boltAngle) * orbitR
+
+            // Шлейф (хвост)
+            val tailLen = 6f
+            for (tail in 0..5) {
+                val tailT = tail / 5f
+                val tailAngle = boltAngle - tailT * 0.4f
+                val tailX = cx + cos(tailAngle) * orbitR
+                val tailY = cy + sin(tailAngle) * orbitR
+                val tailAlpha = (1f - tailT) * 0.5f * vis
+                drawCircle(
+                    Color(0xFF00FFFF).copy(alpha = tailAlpha),
+                    2.5f - tailT * 1.5f,
+                    Offset(tailX, tailY)
+                )
+            }
+
+            // Яркий сгусток
+            drawCircle(
+                Brush.radialGradient(
+                    listOf(
+                        Color.White,
+                        Color(0xFF00FFFF).copy(alpha = 0.6f * vis),
+                        Color.Transparent
+                    ),
+                    center = Offset(bx, by),
+                    radius = 8f
+                ),
+                radius = 8f,
+                center = Offset(bx, by)
+            )
+            drawCircle(
+                Color.White.copy(alpha = 0.9f * vis),
+                2.5f,
+                Offset(bx, by)
+            )
+        }
+
+        // Блик на ядре
+        drawCircle(
+            Color.White.copy(alpha = 0.7f * vis),
+            sunRadius * 0.25f,
+            Offset(cx - sunRadius * 0.3f, cy - sunRadius * 0.3f)
+        )
+
+        // Робот на орбите
         if (robotOnOrbitAlpha > 0.01f) {
             val robotX = cx + cos(robotOrbitAngle) * rRx
             val robotY = cy + sin(robotOrbitAngle) * rRy
             val robotSize = h * SpaceConstants.ROBOT_SIZE_RATIO
-
             rotate(
                 degrees = (robotOrbitAngle * 180f / PI.toFloat()) + 90f,
                 pivot = Offset(robotX, robotY)
@@ -1990,7 +2056,7 @@ private fun SpaceBackground(
             }
         }
 
-        // ===== ЛУНА (жёлтая) =====
+        // Луна (жёлтая)
         val moonAngle = T * 2f
         val moonX = cx + cos(moonAngle) * mRx
         val moonY = cy + sin(moonAngle) * mRy
@@ -2005,7 +2071,7 @@ private fun SpaceBackground(
             center = Offset(moonX, moonY)
         )
 
-        // ===== ЗЕМЛЯ =====
+        // Земля
         val earthAngle = T * 2f * 0.6f
         val earthX = cx + cos(earthAngle) * eRx
         val earthY = cy + sin(earthAngle) * eRy
@@ -2020,7 +2086,7 @@ private fun SpaceBackground(
             center = Offset(earthX, earthY)
         )
 
-        // ===== МАЛЕНЬКАЯ ЛУНА ВОКРУГ ЗЕМЛИ =====
+        // Маленькая Луна вокруг Земли
         val moonOrbitRadius = earthRadius * 2.2f
         val moonAroundEarthAngle = T * 4f
         val miniMoonX = earthX + cos(moonAroundEarthAngle) * moonOrbitRadius
@@ -2036,7 +2102,7 @@ private fun SpaceBackground(
             center = Offset(miniMoonX, miniMoonY)
         )
 
-        // ===== САТУРН =====
+        // Сатурн
         val saturnAngle = T * 2f * 0.3f
         val saturnX = cx + cos(saturnAngle) * sRx
         val saturnY = cy + sin(saturnAngle) * sRy
