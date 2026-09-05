@@ -1806,7 +1806,7 @@ private fun SpaceBackground(
         val T = t * 2f * PI.toFloat()
         val vis = if (isDarkTheme) 1f else 0.55f
 
-        // ===== ЗВЁЗДЫ (как в старой сборке) =====
+        // ===== ЗВЁЗДЫ =====
         fun rnd(i: Int, s: Int): Float {
             val x = sin(i * 12.9898f + s * 78.233f) * 43758.5453f
             return (x % 1f + 1f) % 1f
@@ -1865,12 +1865,16 @@ private fun SpaceBackground(
         val rRx = w * SpaceConstants.ROBOT_ORBIT_RX
         val rRy = h * SpaceConstants.ROBOT_ORBIT_RY
 
-        for ((rx, ry, rot) in listOf(
-            rRx to rRy to -10f,
-            mRx to mRy to -8f,
-            eRx to eRy to 6f,
-            sRx to sRy to 12f
-        )) {
+        val orbits = listOf(
+            Triple(rRx, rRy, -10f),
+            Triple(mRx, mRy, -8f),
+            Triple(eRx, eRy, 6f),
+            Triple(sRx, sRy, 12f)
+        )
+        for (orbit in orbits) {
+            val rx = orbit.first
+            val ry = orbit.second
+            val rot = orbit.third
             rotate(rot, pivot = Offset(cx, cy)) {
                 drawOval(
                     orbitColor.copy(alpha = 0.14f * vis),
@@ -1881,9 +1885,8 @@ private fun SpaceBackground(
             }
         }
 
-        // ===== СОЛНЦЕ (в центре, с электрическими искрами) =====
+        // ===== СОЛНЦЕ =====
         val sunRadius = h * SpaceConstants.PLANET_SIZE_RATIO * planetPulse
-        // Внешнее свечение
         drawCircle(
             Brush.radialGradient(
                 colors = listOf(
@@ -1898,7 +1901,6 @@ private fun SpaceBackground(
             radius = sunRadius * 3f,
             center = Offset(cx, cy)
         )
-        // Ядро
         drawCircle(
             Brush.radialGradient(
                 colors = listOf(
@@ -1913,7 +1915,6 @@ private fun SpaceBackground(
             radius = sunRadius,
             center = Offset(cx, cy)
         )
-        // Электрические искры на внутренних орбитах
         for (i in 0..5) {
             val sparkAngle = T * 2f + i * 1.1f
             val sparkRadius = sunRadius * (1.2f + 0.2f * sin(T * 3f + i))
@@ -1938,10 +1939,8 @@ private fun SpaceBackground(
 
         // ===== РОБОТ НА ОРБИТЕ =====
         if (robotOnOrbitAlpha > 0.01f) {
-            val robotRx = w * SpaceConstants.ROBOT_ORBIT_RX
-            val robotRy = h * SpaceConstants.ROBOT_ORBIT_RY
-            val robotX = cx + cos(robotOrbitAngle) * robotRx
-            val robotY = cy + sin(robotOrbitAngle) * robotRy
+            val robotX = cx + cos(robotOrbitAngle) * rRx
+            val robotY = cy + sin(robotOrbitAngle) * rRy
             val robotSize = h * SpaceConstants.ROBOT_SIZE_RATIO
 
             rotate(
@@ -1984,7 +1983,7 @@ private fun SpaceBackground(
             }
         }
 
-        // ===== ЛУНА (жёлтая, ближе к Земле) =====
+        // ===== ЛУНА (жёлтая) =====
         val moonAngle = T * 2f
         val moonX = cx + cos(moonAngle) * mRx
         val moonY = cy + sin(moonAngle) * mRy
@@ -1999,7 +1998,7 @@ private fun SpaceBackground(
             center = Offset(moonX, moonY)
         )
 
-        // ===== ЗЕМЛЯ (сине-голубая) =====
+        // ===== ЗЕМЛЯ =====
         val earthAngle = T * 2f * 0.6f
         val earthX = cx + cos(earthAngle) * eRx
         val earthY = cy + sin(earthAngle) * eRy
@@ -2013,7 +2012,8 @@ private fun SpaceBackground(
             radius = earthRadius,
             center = Offset(earthX, earthY)
         )
-                // ===== МАЛЕНЬКАЯ ЛУНА ВОКРУГ ЗЕМЛИ =====
+
+        // ===== МАЛЕНЬКАЯ ЛУНА ВОКРУГ ЗЕМЛИ =====
         val moonOrbitRadius = earthRadius * 2.2f
         val moonAroundEarthAngle = T * 4f
         val miniMoonX = earthX + cos(moonAroundEarthAngle) * moonOrbitRadius
@@ -2029,7 +2029,7 @@ private fun SpaceBackground(
             center = Offset(miniMoonX, miniMoonY)
         )
 
-        // ===== САТУРН (золотистый с кольцом) =====
+        // ===== САТУРН =====
         val saturnAngle = T * 2f * 0.3f
         val saturnX = cx + cos(saturnAngle) * sRx
         val saturnY = cy + sin(saturnAngle) * sRy
@@ -2051,62 +2051,6 @@ private fun SpaceBackground(
         )
     }
 }
-
-@Composable
-private fun StatusIndicator(
-    color: Color,
-    text: String,
-    colors: AppColors
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(10.dp)
-                .background(color, shape = CircleShape)
-                .border(0.5.dp, colors.borderGray, CircleShape)
-        )
-        Text(
-            text = text,
-            fontSize = 6.sp,
-            color = colors.text
-        )
-    }
-}
-
-@Composable
-private fun ModeButton(
-    label: String,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    colors: AppColors
-) {
-    Box(
-        modifier = modifier
-            .clickable { onClick() }
-            .background(
-                color = if (isSelected) colors.accent else colors.surfaceGray,
-                shape = RoundedCornerShape(4.dp)
-            )
-            .border(
-                width = if (isSelected) 1.dp else 0.5.dp,
-                color = if (isSelected) colors.accent else colors.borderGray,
-                shape = RoundedCornerShape(4.dp)
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = label,
-            color = if (isSelected) colors.background else colors.text,
-            fontSize = 7.sp,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-        )
-    }
-}
-
 @Composable
 private fun ControlPanel(
     onMemoryClick: () -> Unit,
