@@ -1016,15 +1016,20 @@ fun ThinkingRobotAnimation(
             .height(height)
             .semantics { contentDescription = "ИИ обдумывает запрос" }
     ) {
-        val metalLight = Color(0xFFD5DBE0)
-        val metal = Color(0xFFB0B8C0)
-        val metalDark = Color(0xFF8C98A5)
-        val eyeDark = Color(0xFF0F3D4C)
+        // Новая, более глубокая палитра
+        val metalTop = Color(0xFFF2F6FA) // Почти белый хром (блик)
+        val metalLight = Color(0xFFCED6DF)
+        val metalMid = Color(0xFF9DA9B6)
+        val metalDark = Color(0xFF68737F)
+        val metalDeep = Color(0xFF353D45) // Глубокая тень
+        val eyeDark = Color(0xFF081C26)
         val cyan = Color(0xFF3FE3F5)
-        val cyanSoft = Color(0xFFB9F6FF)
+        val cyanBright = Color(0xFF9DF5FF)
+        val cyanDeep = Color(0xFF00A6C9)
         val brainPink = Color(0xFFEFA5B3)
-        val brainDark = Color(0xFFD67E93)
+        val brainDark = Color(0xFFB5536B)
         val orange = Color(0xFFF89B3C)
+        val orangeBright = Color(0xFFFFE0B2)
 
         val u = size.height / 84f
         val offX = (size.width - 100f * u) / 2f
@@ -1039,35 +1044,57 @@ fun ThinkingRobotAnimation(
         fun glow(center: Offset, radius: Float, color: Color) {
             if (radius <= 0f) return
             drawCircle(
-                Brush.radialGradient(listOf(color, color.copy(alpha = 0f)), center, radius),
+                Brush.radialGradient(
+                    listOf(color, color.copy(alpha = 0f)),
+                    center, radius
+                ),
                 radius,
                 center
             )
         }
 
         // ================= Плечи и корпус =================
+        // Основной овал с глубоким вертикальным градиентом
         drawOval(
-            Brush.verticalGradient(listOf(metalLight, metalDark)),
+            Brush.verticalGradient(listOf(metalLight, metalMid, metalDark)),
             topLeft = pt(28f, 77f),
             size = Size(44f * u, 18f * u)
         )
-        drawCircle(metal, 6f * u, pt(29f, 85f))
-        drawCircle(metal, 6f * u, pt(71f, 85f))
+        
+        // Добавляем блик сверху на плечи
+        drawOval(
+            Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.55f), Color.Transparent)),
+            topLeft = pt(30f, 77.5f),
+            size = Size(40f * u, 5f * u)
+        )
 
-        drawCircle(Color.White.copy(alpha = 0.35f), 1.6f * u, pt(27f, 83f))
-        drawCircle(Color.White.copy(alpha = 0.35f), 1.6f * u, pt(69f, 83f))
+        // Тень под плечами
+        drawOval(
+            Brush.verticalGradient(listOf(Color.Transparent, metalDeep.copy(alpha = 0.8f))),
+            topLeft = pt(28f, 90f),
+            size = Size(44f * u, 5f * u)
+        )
+
+        // Крепления и суставы
+        drawCircle(Brush.radialGradient(listOf(metalLight, metalDeep), center = pt(29f, 83f), radius = 7f*u), 6f * u, pt(29f, 85f))
+        drawCircle(Brush.radialGradient(listOf(metalLight, metalDeep), center = pt(71f, 83f), radius = 7f*u), 6f * u, pt(71f, 85f))
+        
+        drawCircle(Color.White.copy(alpha = 0.5f), 1.2f * u, pt(27.5f, 83f))
+        drawCircle(Color.White.copy(alpha = 0.5f), 1.2f * u, pt(69.5f, 83f))
+        
         drawOval(Color.White.copy(alpha = 0.15f), topLeft = pt(33f, 78.5f), size = Size(14f * u, 3.5f * u))
 
         // ================= Сопла + ракетное пламя =================
         for ((idx, sx) in listOf(29f, 71f).withIndex()) {
+            // Корпус сопла (с тенью внутри)
             drawRoundRect(
-                metalDark,
+                Brush.verticalGradient(listOf(metalDark, metalDeep)),
                 topLeft = pt(sx - 2.5f, 88.5f),
                 size = Size(5f * u, 3f * u),
                 cornerRadius = CornerRadius(1f * u)
             )
             drawRoundRect(
-                Color(0xFF334457),
+                Color(0xFF111A22),
                 topLeft = pt(sx - 1.6f, 90.6f),
                 size = Size(3.2f * u, 1.4f * u),
                 cornerRadius = CornerRadius(0.7f * u)
@@ -1077,23 +1104,28 @@ fun ThinkingRobotAnimation(
                 val len = (5f + 4.5f * flick) * u
                 val fw = 4.4f * u
                 val top = pt(sx - 2.2f, 91.2f)
+                
+                // Свечение пламени
                 glow(
                     Offset(top.x + fw / 2f, top.y + len * 0.4f),
-                    (5f + 2f * flick) * u,
-                    Color(0xFF2F80ED).copy(alpha = 0.35f)
+                    (6f + 3f * flick) * u,
+                    Color(0xFF0077FF).copy(alpha = 0.5f)
                 )
+                
+                // Пламя (глубокий градиент с горячим центром)
                 drawOval(
                     Brush.verticalGradient(
                         listOf(
-                            cyanSoft,
+                            cyanBright,
                             cyan,
-                            Color(0xFF2F80ED),
-                            Color(0xFF2F80ED).copy(alpha = 0f)
+                            Color(0xFF0066FF),
+                            Color(0xFF0033AA).copy(alpha = 0f)
                         )
                     ),
                     topLeft = top,
                     size = Size(fw, len)
                 )
+                // Внутреннее белое ядро пламени
                 drawOval(
                     Brush.verticalGradient(
                         listOf(Color.White, cyanSoft.copy(alpha = 0f))
@@ -1105,45 +1137,89 @@ fun ThinkingRobotAnimation(
         }
 
         // ================= Панель груди =================
+        // Основной корпус панели (объем)
         drawRoundRect(
-            Color(0xFF334457),
+            Brush.verticalGradient(listOf(metalMid, metalDark, metalDeep)),
             topLeft = pt(39f, 80f),
             size = Size(22f * u, 11f * u),
             cornerRadius = CornerRadius(3f * u)
         )
+        // Внутренний экран
         drawRoundRect(
-            Color(0xFF22303F),
+            Brush.verticalGradient(listOf(Color(0xFF1D2B3A), Color(0xFF0D1A26))),
             topLeft = pt(41f, 82f),
             size = Size(12f * u, 7f * u),
             cornerRadius = CornerRadius(2f * u)
         )
+        // Добавляем блик на стекло экрана
+        drawRoundRect(
+            Color.White.copy(alpha = 0.15f),
+            topLeft = pt(41.5f, 82.5f),
+            size = Size(11f * u, 2f * u),
+            cornerRadius = CornerRadius(2f * u)
+        )
+
+        // Основное ядро
         val coreP = 0.5f + 0.5f * sin(pulse * 1.5f)
-        glow(pt(47f, 85.5f), (4f + 1.5f * coreP) * u, cyan.copy(alpha = 0.4f))
-        drawCircle(cyan, (1.8f + 0.5f * coreP) * u, pt(47f, 85.5f))
+        glow(pt(47f, 85.5f), (5f + 2f * coreP) * u, cyan.copy(alpha = 0.5f))
+        drawCircle(Brush.radialGradient(listOf(cyanBright, cyan, cyanDeep), center = pt(47f, 84.5f), radius = 3f * u), (1.8f + 0.5f * coreP) * u, pt(47f, 85.5f))
         drawCircle(Color.White.copy(alpha = 0.9f), 0.7f * u, pt(46.4f, 84.9f))
-        drawCircle(orange, 1.3f * u, pt(56.5f, 83.5f))
-        drawCircle(Color(0xFF69D2A7), 1.3f * u, pt(56.5f, 87.5f))
+        
+        // Индикаторы состояния
+        drawCircle(Brush.radialGradient(listOf(orangeBright, orange, Color(0xFF9E4F00))), 1.3f * u, pt(56.5f, 83.5f))
+        drawCircle(Color.White.copy(alpha = 0.4f), 0.4f * u, pt(56.1f, 83.1f))
+        
+        drawCircle(Brush.radialGradient(listOf(Color(0xFF9DF5CB), Color(0xFF69D2A7), Color(0xFF1B7A4B))), 1.3f * u, pt(56.5f, 87.5f))
+        drawCircle(Color.White.copy(alpha = 0.4f), 0.4f * u, pt(56.1f, 87.1f))
 
-        // ================= Антенна (укороченная) =================
-        drawLine(metalDark, pt(24f, 63f), pt(24f, 34f), strokeWidth = 1.6f * u)
+        // ================= Антенна =================
+        // Стебель антенны
+        drawLine(
+            Brush.linearGradient(listOf(metalLight, metalDark), start = pt(23.2f, 63f), end = pt(24.8f, 63f)),
+            pt(24f, 63f), pt(24f, 34f), strokeWidth = 1.6f * u
+        )
+        // Основание антенны (соединительная гайка)
+        drawRoundRect(metalDark, topLeft = pt(23.2f, 60f), size = Size(1.6f * u, 4f * u), cornerRadius = CornerRadius(0.3f * u))
+
         val orbP = if (finalPulse != 0f) 0.5f + 0.5f * sin(finalPulse * 2f) else 0f
-        glow(pt(24f, 35f), (6f + 2f * orbP) * u, orange.copy(alpha = if (finalPulse != 0f) 0.55f else 0f))
-        drawCircle(orange, (2.6f + 0.4f * orbP) * u, pt(24f, 35f))
-        drawCircle(Color(0xFFFFD9A6), 1f * u, pt(23.2f, 34f))
+        // Мощное свечение вокруг шара
+        glow(pt(24f, 35f), (7f + 3f * orbP) * u, orange.copy(alpha = if (finalPulse != 0f) 0.65f else 0.2f))
+        // Сам шар (градиент для 3D объема)
+        drawCircle(
+            Brush.radialGradient(listOf(orangeBright, orange, Color(0xFFB35A00)), center = pt(23.5f, 34.5f), radius = 3.5f * u),
+            (2.6f + 0.4f * orbP) * u, pt(24f, 35f)
+        )
+        drawCircle(Color.White.copy(alpha = 0.9f), 1f * u, pt(23.2f, 34f))
 
-        // ================= Уши =================
-        drawOval(metal, topLeft = pt(19f, 55f), size = Size(9f * u, 16f * u))
-        drawOval(metal, topLeft = pt(72f, 55f), size = Size(9f * u, 16f * u))
-        drawOval(metalDark, topLeft = pt(21.5f, 58f), size = Size(4.5f * u, 10f * u))
-        drawOval(metalDark, topLeft = pt(74f, 58f), size = Size(4.5f * u, 10f * u))
+        // ================= Уши (с внутренними деталями) =================
+        // Левые
+        drawOval(Brush.verticalGradient(listOf(metalLight, metalDark)), topLeft = pt(19f, 55f), size = Size(9f * u, 16f * u))
+        drawOval(metalDeep, topLeft = pt(21.5f, 58f), size = Size(4.5f * u, 10f * u))
+        // Добавляем решетку внутри уха
+        for (i in 0 until 3) {
+            drawLine(metalDark, pt(22.2f, 59.5f + i * 2.5f), pt(25.3f, 59.5f + i * 2.5f), strokeWidth = 0.3f * u)
+        }
+
+        // Правые
+        drawOval(Brush.verticalGradient(listOf(metalLight, metalDark)), topLeft = pt(72f, 55f), size = Size(9f * u, 16f * u))
+        drawOval(metalDeep, topLeft = pt(74f, 58f), size = Size(4.5f * u, 10f * u))
+        for (i in 0 until 3) {
+            drawLine(metalDark, pt(74.7f, 59.5f + i * 2.5f), pt(77.8f, 59.5f + i * 2.5f), strokeWidth = 0.3f * u)
+        }
 
         // ================= Купол =================
         val domeC = pt(50f, 46f)
         val domeR = 26f * u
         val domeTL = Offset(domeC.x - domeR, domeC.y - domeR)
         val domeSize = Size(domeR * 2f, domeR * 2f)
+        
+        // Объемное стекло (затемнение снизу)
         drawArc(
-            Color(0xFFBFE9F2).copy(alpha = 0.40f),
+            Brush.verticalGradient(
+                0f to Color(0xFFBFE9F2).copy(alpha = 0.25f),
+                0.8f to Color(0xFFBFE9F2).copy(alpha = 0.15f),
+                1f to Color(0xFF446E79).copy(alpha = 0.45f)
+            ),
             180f,
             180f,
             true,
@@ -1155,15 +1231,24 @@ fun ThinkingRobotAnimation(
         val s = 1f + 0.05f * sin(finalPulse * 1.5f)
         fun bp(x: Float, y: Float) = pt(50f + (x - 50f) * s, 39f + (y - 39f) * s)
 
-        glow(bp(50f, 38f), 10f * u, Color(0xFFE36F8C).copy(alpha = if (finalPulse != 0f) 0.30f else 0f))
+        // Внутреннее свечение мозга
+        glow(bp(50f, 38f), 12f * u, Color(0xFFE36F8C).copy(alpha = if (finalPulse != 0f) 0.40f else 0.1f))
+        
+        // Извилины мозга (добавляем градиенты для полушарий)
         listOf(
             Triple(43f, 39f, 4.5f), Triple(57f, 39f, 4.5f),
             Triple(50f, 33f, 4.2f), Triple(50f, 42f, 4.2f),
             Triple(37f, 42f, 3f), Triple(63f, 42f, 3f),
             Triple(46f, 35f, 2.5f), Triple(54f, 35f, 2.5f),
             Triple(40f, 37f, 2.5f), Triple(60f, 37f, 2.5f)
-        ).forEach { (x, y, r) -> drawCircle(brainPink, r * s * u, bp(x, y)) }
+        ).forEach { (x, y, r) -> 
+            drawCircle(
+                Brush.radialGradient(listOf(brainPink.copy(alpha = 0.9f), brainDark), center = bp(x, y), radius = r * s * u),
+                r * s * u, bp(x, y)
+            ) 
+        }
 
+        // Тени между извилинами (борозды)
         listOf(
             42f to 33f, 50f to 30f, 58f to 34f,
             44f to 41f, 56f to 41f, 49f to 37f,
@@ -1177,14 +1262,21 @@ fun ThinkingRobotAnimation(
                 false,
                 topLeft = bp(x - 3f, y - 3f),
                 size = Size(6f * s * u, 6f * s * u),
-                style = Stroke(1.1f * u)
+                style = Stroke(1.4f * u, cap = StrokeCap.Round)
             )
         }
 
         // ================= Орбиты и искры =================
+        // Делаем орбиты более плавными и светящимися
         rotate(-16f, pivot = pt(50f, 38f)) {
             drawOval(
-                cyan.copy(alpha = 0.55f),
+                cyan.copy(alpha = 0.25f),
+                topLeft = pt(28f, 30.5f),
+                size = Size(44f * u, 15f * u),
+                style = Stroke(1.6f * u)
+            )
+            drawOval(
+                cyanBright.copy(alpha = 0.7f),
                 topLeft = pt(28f, 30.5f),
                 size = Size(44f * u, 15f * u),
                 style = Stroke(0.7f * u)
@@ -1192,7 +1284,13 @@ fun ThinkingRobotAnimation(
         }
         rotate(12f, pivot = pt(50f, 38f)) {
             drawOval(
-                cyan.copy(alpha = 0.45f),
+                cyan.copy(alpha = 0.25f),
+                topLeft = pt(29.5f, 31.5f),
+                size = Size(41f * u, 13f * u),
+                style = Stroke(1.6f * u)
+            )
+            drawOval(
+                cyanBright.copy(alpha = 0.65f),
                 topLeft = pt(29.5f, 31.5f),
                 size = Size(41f * u, 13f * u),
                 style = Stroke(0.7f * u)
@@ -1209,17 +1307,22 @@ fun ThinkingRobotAnimation(
         }
 
         if (finalPhase != 0f) {
-            for (i in 0..5) {
-                val a = finalPhase * (1.2f + 0.17f * i) + i * 1.9f
+            for (i in 0..7) { // Увеличили количество искр для красоты
+                val a = finalPhase * (1.2f + 0.15f * i) + i * 1.2f
                 val p = if (i % 2 == 0) orbitPos(22f, 7.5f, -16f, a)
                 else orbitPos(20.5f, 6.5f, 12f, a)
                 val tw = 0.5f + 0.5f * sin(finalPulse * 2f + i * 1.3f)
-                glow(p, (1.8f + 1.2f * tw) * u, cyan.copy(alpha = 0.25f + 0.45f * tw))
-                drawCircle(cyanSoft, 0.9f * u, p)
+                
+                // Мощное гало
+                glow(p, (3f + 2.5f * tw) * u, cyan.copy(alpha = 0.4f + 0.4f * tw))
+                // Ядро искры (белое + цветное)
+                drawCircle(cyanBright, 1.2f * u, p)
+                drawCircle(Color.White.copy(alpha = 0.8f), 0.5f * u, p)
             }
         }
 
         // ================= Купол: ободок и блик =================
+        // Двойная обводка для объема
         drawArc(
             Color(0xFFDFF7FC).copy(alpha = 0.6f),
             180f,
@@ -1230,91 +1333,175 @@ fun ThinkingRobotAnimation(
             style = Stroke(1.1f * u)
         )
         drawArc(
-            Color.White.copy(alpha = 0.8f),
+            metalDeep,
+            180f,
+            180f,
+            false,
+            topLeft = Offset(domeTL.x - 0.4f * u, domeTL.y + 0.4f * u),
+            size = domeSize,
+            style = Stroke(1.1f * u)
+        )
+        
+        // Блик на стекле
+        drawArc(
+            Color.White.copy(alpha = 0.9f),
             195f,
             45f,
             false,
             topLeft = Offset(domeC.x - domeR + 2.5f * u, domeC.y - domeR + 2.5f * u),
             size = Size(domeR * 2f - 5f * u, domeR * 2f - 5f * u),
-            style = Stroke(1.6f * u)
+            style = Stroke(1.6f * u, cap = StrokeCap.Round)
         )
+        // Добавляем второй, маленький блик снизу
+        drawArc(
+            Color.White.copy(alpha = 0.4f),
+            15f,
+            30f,
+            false,
+            topLeft = Offset(domeC.x - domeR + 3.5f * u, domeC.y - domeR - 1f * u),
+            size = Size(domeR * 2f - 7f * u, domeR * 2f - 7f * u),
+            style = Stroke(1f * u)
+        )
+
+        // Ободок купола (стекло->металл)
         drawOval(metalDark, topLeft = pt(27.5f, 46.2f), size = Size(45f * u, 3.4f * u))
+        drawOval(Color.White.copy(alpha = 0.3f), topLeft = pt(28f, 46.3f), size = Size(44f * u, 1.2f * u))
 
         // ================= Голова =================
+        // Объемный металлический корпус с бликом и тенью
         drawOval(
-            Brush.verticalGradient(listOf(metalLight, metal, metalDark)),
+            Brush.verticalGradient(listOf(metalLight, metalMid, metalDark, metalDeep)),
             topLeft = pt(26f, 47f),
             size = Size(48f * u, 32f * u)
         )
-
+        // Большой глянцевый блик слева-сверху
         rotate(-16f, pivot = pt(35f, 53f)) {
             drawOval(
-                Color.White.copy(alpha = 0.22f),
+                Brush.radialGradient(
+                    listOf(Color.White.copy(alpha = 0.45f), Color.Transparent),
+                    center = pt(35f, 52f),
+                    radius = 10f * u
+                ),
                 topLeft = pt(29f, 51f),
                 size = Size(13f * u, 3.6f * u)
             )
         }
-        glow(pt(37f, 67f), 4.5f * u, Color(0xFFE36F8C).copy(alpha = 0.20f))
-        glow(pt(63f, 67f), 4.5f * u, Color(0xFFE36F8C).copy(alpha = 0.20f))
+        
+        // Цветные рефлексы на металле
+        glow(pt(37f, 67f), 5f * u, Color(0xFFE36F8C).copy(alpha = 0.25f))
+        glow(pt(63f, 67f), 5f * u, Color(0xFFE36F8C).copy(alpha = 0.25f))
+        glow(pt(50f, 76f), 6f * u, cyan.copy(alpha = 0.15f)) // Отражение от света рта/экрана
 
         // ================= Глаза + зрачки =================
         for (sx in listOf(-1f, 1f)) {
             val ec = pt(50f + sx * 9.5f, 61f)
             val ry = 7f * u * finalBlink
-            glow(ec, 8f * u, cyan.copy(alpha = 0.30f))
+            
+            // Глубокое свечение вокруг глаз
+            glow(ec, 9f * u, cyan.copy(alpha = 0.45f))
+            
+            // Темная впадина глаза (объем)
+            drawOval(
+                Brush.radialGradient(listOf(Color(0xFF000000).copy(alpha = 0.8f), Color.Transparent), center = ec, radius = 7f * u),
+                topLeft = Offset(ec.x - 5f * u, ec.y - ry),
+                size = Size(10f * u, ry * 2f)
+            )
+            
+            // Само светящееся веко
             drawOval(
                 eyeDark,
                 topLeft = Offset(ec.x - 5f * u, ec.y - ry),
                 size = Size(10f * u, ry * 2f)
             )
+            
+            // Светящаяся радужка
             val iry = 5.8f * u * finalBlink
             drawOval(
-                Brush.verticalGradient(listOf(cyanSoft, cyan)),
+                Brush.verticalGradient(listOf(cyanBright, cyan, cyanDeep)),
                 topLeft = Offset(ec.x - 3.8f * u, ec.y - iry),
                 size = Size(7.6f * u, iry * 2f)
             )
+            
+            // Внутренний блик (светящийся эффект лампы)
+            drawOval(
+                Color.White.copy(alpha = 0.25f),
+                topLeft = Offset(ec.x - 3.5f * u, ec.y - iry + 0.8f * u * finalBlink),
+                size = Size(7f * u, 2f * u * finalBlink)
+            )
+
             if (finalBlink > 0.25f) {
                 val pr = 2.3f * u
                 val pc = Offset(
                     ec.x + finalLookX * 1.6f * u,
                     ec.y + finalLookY * 1.4f * u * finalBlink
                 )
+                
+                // Зрачок с объемом
                 drawOval(
-                    eyeDark,
+                    Brush.radialGradient(listOf(Color(0xFF000000), Color(0xFF081C26)), center = pc, radius = pr),
                     topLeft = Offset(pc.x - pr, pc.y - pr * finalBlink),
                     size = Size(pr * 2f, pr * 2f * finalBlink)
                 )
+                
+                // Блик на зрачке
                 drawCircle(
-                    Color.White,
+                    Color.White.copy(alpha = 0.95f),
                     0.7f * u,
                     Offset(pc.x - 0.6f * u, pc.y - 0.8f * u * finalBlink)
                 )
-            }
-            if (finalBlink > 0.3f) {
+                // Отражающий свет (снизу)
                 drawCircle(
-                    Color.White.copy(alpha = 0.9f * finalBlink),
-                    1.3f * u,
-                    Offset(ec.x - 1.6f * u, ec.y - 2.5f * u * finalBlink)
+                    Color(0xFF00FFFF).copy(alpha = 0.4f),
+                    0.3f * u,
+                    Offset(pc.x + 0.5f * u, pc.y + 0.6f * u * finalBlink)
+                )
+            }
+            
+            // Большой глянцевый блик на стекле глаза
+            if (finalBlink > 0.3f) {
+                drawOval(
+                    Brush.radialGradient(listOf(Color.White.copy(alpha = 0.9f * finalBlink), Color.Transparent), center = Offset(ec.x - 1.6f * u, ec.y - 2.5f * u), radius = 3f * u),
+                    topLeft = Offset(ec.x - 2.5f * u, ec.y - 3.5f * u * finalBlink),
+                    size = Size(5f * u, 4f * u * finalBlink)
                 )
             }
         }
 
         // ================= Нос =================
+        // Создаем 3D-объем носа с тенью снизу
         drawRoundRect(
-            metalDark,
+            Brush.verticalGradient(listOf(metalLight, metalDark)),
             topLeft = pt(48.4f, 64.2f),
             size = Size(3.2f * u, 2.2f * u),
             cornerRadius = CornerRadius(1.1f * u)
         )
-        drawCircle(Color.White.copy(alpha = 0.35f), 0.6f * u, pt(49.3f, 64.9f))
+        drawRoundRect(
+            metalDeep,
+            topLeft = pt(48.9f, 65.5f),
+            size = Size(2.2f * u, 0.5f * u),
+            cornerRadius = CornerRadius(0.2f * u)
+        )
+        drawCircle(Color.White.copy(alpha = 0.4f), 0.6f * u, pt(49.3f, 64.9f))
 
-        // ================= Рот =================
+        // ================= Рот (Улучшенная детализация) =================
+        // Тень от рта (подсветка челюсти)
+        drawOval(
+            Brush.radialGradient(listOf(Color(0xFF000000).copy(alpha = 0.3f), Color.Transparent), center = pt(50f, 73f), radius = 5f * u),
+            topLeft = pt(45f, 71f),
+            size = Size(10f * u, 4f * u)
+        )
+
         if (isSpeaking) {
             for (i in 0..4) {
                 val h = (3f + 4f * (0.5f + 0.5f * sin(finalPhase * 3f + i * 1.1f))) * u
                 val x = 50f + (i - 2) * 2.6f
+                
+                // Подсветка рта
+                glow(Offset(offX + x * u, offY + 73f * u - h / 2), h * 0.7f, cyan.copy(alpha = 0.4f))
+                
+                // Столбики с градиентом (3D)
                 drawRoundRect(
-                    cyan,
+                    Brush.verticalGradient(listOf(cyanBright, cyan, cyanDeep)),
                     topLeft = Offset(offX + (x - 0.7f) * u, offY + 73f * u - h),
                     size = Size(1.4f * u, h),
                     cornerRadius = CornerRadius(0.7f * u)
@@ -1324,34 +1511,50 @@ fun ThinkingRobotAnimation(
             for (i in 0..4) {
                 val h = (2.5f + 2f * (0.5f + 0.5f * sin(finalPhase * 2f + i * 1.1f))) * u
                 val x = 50f + (i - 2) * 2.6f
+                
+                glow(Offset(offX + x * u, offY + 73f * u - h / 2), h * 0.6f, cyan.copy(alpha = 0.3f))
+                
                 drawRoundRect(
-                    cyan,
+                    Brush.verticalGradient(listOf(cyanBright, cyan, cyanDeep)),
                     topLeft = Offset(offX + (x - 0.7f) * u, offY + 73f * u - h),
                     size = Size(1.4f * u, h),
                     cornerRadius = CornerRadius(0.7f * u)
                 )
             }
-                } else {
+        } else {
+            // Улыбка с многослойным свечением
             val smileTL = pt(44.5f, 62.5f)
             val smileSize = Size(13f * u, 11f * u)
+            
+            // Тень улыбки
             drawArc(
-                cyan.copy(alpha = 0.35f),
-                startAngle = 20f,
-                sweepAngle = 140f,
-                useCenter = false,
+                Color(0xFF000000).copy(alpha = 0.4f),
+                20f, 140f, false,
+                topLeft = Offset(smileTL.x, smileTL.y + 0.3f * u),
+                size = smileSize,
+                style = Stroke(3f * u, cap = StrokeCap.Round)
+            )
+            
+            // Внешнее свечение
+            drawArc(
+                cyan.copy(alpha = 0.4f),
+                20f, 140f, false,
                 topLeft = smileTL,
                 size = smileSize,
-                style = Stroke(2.6f * u, cap = StrokeCap.Round)
+                style = Stroke(3.5f * u, cap = StrokeCap.Round)
             )
+            
+            // Основная яркая линия
             drawArc(
                 cyan,
-                startAngle = 20f,
-                sweepAngle = 140f,
-                useCenter = false,
+                20f, 140f, false,
                 topLeft = smileTL,
                 size = smileSize,
                 style = Stroke(1.5f * u, cap = StrokeCap.Round)
             )
+            
+            // Блик в самой высокой точке улыбки
+            drawCircle(Color.White.copy(alpha = 0.8f), 0.3f * u, pt(50f, 60.5f))
         }
     }
 }
@@ -1594,7 +1797,11 @@ private fun TopBarWithSwitch(
                 val startX = orbitCenterX + cos(startAngle) * robotOrbitRx
                 val startY = orbitCenterY + sin(startAngle) * robotOrbitRy
                 
-                val endX = w / 2f
+                                val density = LocalDensity.current
+                val logoWidth = with(density) { 56.dp.toPx() }
+                val rightWidth = with(density) { 132.dp.toPx() }
+                val robotCenterX = logoWidth + (w - logoWidth - rightWidth) / 2f
+                val endX = robotCenterX
                 val endY = h / 2f
                 
                 val ctrlX = (startX + endX) / 2f
@@ -1862,13 +2069,11 @@ private fun SpaceBackground(
             }
         }
 
+        // ===== ОРБИТЫ (как в старой версии) =====
         val orbitColor = Color(0xFF7FB4FF)
-        val mRx = w * SpaceConstants.MOON_ORBIT_RX
-        val mRy = h * SpaceConstants.MOON_ORBIT_RY
-        val eRx = w * SpaceConstants.EARTH_ORBIT_RX
-        val eRy = h * SpaceConstants.EARTH_ORBIT_RY
-        val sRx = w * SpaceConstants.SATURN_ORBIT_RX
-        val sRy = h * SpaceConstants.SATURN_ORBIT_RY
+        val mRx = w * 0.27f; val mRy = h * 0.22f
+        val eRx = w * 0.37f; val eRy = h * 0.33f
+        val sRx = w * 0.46f; val sRy = h * 0.42f
         val rRx = w * SpaceConstants.ROBOT_ORBIT_RX
         val rRy = h * SpaceConstants.ROBOT_ORBIT_RY
 
@@ -1892,12 +2097,11 @@ private fun SpaceBackground(
             }
         }
 
-                // ===== ЭЛЕКТРИЧЕСКОЕ СОЛНЦЕ (пульсирующая сверхновая) =====
+        // ===== ЭЛЕКТРИЧЕСКОЕ СОЛНЦЕ (пульсирующая сверхновая) =====
         val baseSunRadius = h * SpaceConstants.PLANET_SIZE_RATIO
-        val sunPulse = 1f + 0.08f * sin(T * 4f)  // пульсация
+        val sunPulse = 1f + 0.08f * sin(T * 4f)
         val sunRadius = baseSunRadius * sunPulse * planetPulse
 
-        // Внешнее свечение (голубой ореол)
         drawCircle(
             Brush.radialGradient(
                 colors = listOf(
@@ -1912,8 +2116,6 @@ private fun SpaceBackground(
             radius = sunRadius * 3.2f,
             center = Offset(cx, cy)
         )
-
-        // Среднее свечение
         drawCircle(
             Brush.radialGradient(
                 colors = listOf(
@@ -1927,8 +2129,6 @@ private fun SpaceBackground(
             radius = sunRadius * 1.8f,
             center = Offset(cx, cy)
         )
-
-        // Ядро — ярко-голубое
         drawCircle(
             Brush.radialGradient(
                 colors = listOf(
@@ -1944,7 +2144,6 @@ private fun SpaceBackground(
             center = Offset(cx, cy)
         )
 
-        // Частицы пыли на поверхности (пиксельная сфера)
         val particleCount = 80
         for (i in 0 until particleCount) {
             val u = rnd(i, 10) * 2f * PI.toFloat()
@@ -1960,7 +2159,6 @@ private fun SpaceBackground(
             )
         }
 
-        // Электрические сгустки на внутренних орбитах
         for (i in 0..2) {
             val phase = i * 2f * PI.toFloat() / 3f
             val orbitR = sunRadius * (1.5f + 0.2f * sin(T * 3f + i))
@@ -1968,8 +2166,6 @@ private fun SpaceBackground(
             val bx = cx + cos(boltAngle) * orbitR
             val by = cy + sin(boltAngle) * orbitR
 
-            // Шлейф (хвост)
-            val tailLen = 6f
             for (tail in 0..5) {
                 val tailT = tail / 5f
                 val tailAngle = boltAngle - tailT * 0.4f
@@ -1983,7 +2179,6 @@ private fun SpaceBackground(
                 )
             }
 
-            // Яркий сгусток
             drawCircle(
                 Brush.radialGradient(
                     listOf(
@@ -2004,14 +2199,13 @@ private fun SpaceBackground(
             )
         }
 
-        // Блик на ядре
         drawCircle(
             Color.White.copy(alpha = 0.7f * vis),
             sunRadius * 0.25f,
             Offset(cx - sunRadius * 0.3f, cy - sunRadius * 0.3f)
         )
 
-        // Робот на орбите
+        // ===== РОБОТ НА ОРБИТЕ =====
         if (robotOnOrbitAlpha > 0.01f) {
             val robotX = cx + cos(robotOrbitAngle) * rRx
             val robotY = cy + sin(robotOrbitAngle) * rRy
@@ -2056,41 +2250,63 @@ private fun SpaceBackground(
             }
         }
 
-        // Луна (жёлтая)
-        val moonAngle = T * 2f
+        // ===== ЛУНА (жёлтая, как в старой версии размер) =====
+        val moonAngle = T * 2f + 2.1f
         val moonX = cx + cos(moonAngle) * mRx
         val moonY = cy + sin(moonAngle) * mRy
-        val moonRadius = h * 0.03f
+        val moonRadius = h * 0.055f
+        val moonTw = 0.5f + 0.5f * sin(T * 3f + 1f)
+        val moonCol = Color(0xFFFFEE88)
         drawCircle(
             Brush.radialGradient(
-                listOf(Color(0xFFFFEE88), Color(0xFFCCAA44)),
-                center = Offset(moonX - moonRadius * 0.3f, moonY - moonRadius * 0.3f),
-                radius = moonRadius
+                listOf(moonCol.copy(alpha = (0.15f + 0.25f * moonTw) * vis), Color.Transparent),
+                center = Offset(moonX, moonY),
+                radius = moonRadius * 3f
             ),
-            radius = moonRadius,
+            radius = moonRadius * 3f,
             center = Offset(moonX, moonY)
         )
+        drawCircle(moonCol.copy(alpha = 0.55f + 0.45f * vis), moonRadius, Offset(moonX, moonY))
+        drawCircle(Color(0xFFCCAA44).copy(alpha = 0.7f * vis), moonRadius * 0.35f,
+            Offset(moonX - moonRadius * 0.25f, moonY + moonRadius * 0.10f))
 
-        // Земля
-        val earthAngle = T * 2f * 0.6f
+        // ===== ЗЕМЛЯ (как в старой версии) =====
+        val earthAngle = T * 1f + 0.6f
         val earthX = cx + cos(earthAngle) * eRx
         val earthY = cy + sin(earthAngle) * eRy
-        val earthRadius = h * 0.06f
+        val earthRadius = h * 0.095f
+        val earthTw = 0.5f + 0.5f * sin(T * 2f + 2f)
+        val earthCol = Color(0xFF3F8FD6)
         drawCircle(
             Brush.radialGradient(
-                listOf(Color(0xFF4499FF), Color(0xFF2266AA)),
-                center = Offset(earthX - earthRadius * 0.3f, earthY - earthRadius * 0.3f),
-                radius = earthRadius
+                listOf(earthCol.copy(alpha = (0.20f + 0.30f * earthTw) * vis), Color.Transparent),
+                center = Offset(earthX, earthY),
+                radius = earthRadius * 3f
+            ),
+            radius = earthRadius * 3f,
+            center = Offset(earthX, earthY)
+        )
+        drawCircle(
+            Brush.radialGradient(
+                listOf(Color(0xFF9CD2FF), earthCol, Color(0xFF1F5FA0)),
+                center = Offset(earthX, earthY),
+                radius = earthRadius * 1.4f
             ),
             radius = earthRadius,
             center = Offset(earthX, earthY)
         )
+        drawCircle(Color(0xFF57B368).copy(alpha = 0.85f), earthRadius * 0.42f,
+            Offset(earthX - earthRadius * 0.25f, earthY - earthRadius * 0.15f))
+        drawCircle(Color(0xFF57B368).copy(alpha = 0.75f), earthRadius * 0.30f,
+            Offset(earthX + earthRadius * 0.30f, earthY + earthRadius * 0.25f))
+        drawCircle(Color.White.copy(alpha = 0.5f * vis), earthRadius * 0.22f,
+            Offset(earthX - earthRadius * 0.35f, earthY - earthRadius * 0.40f))
 
-        // Маленькая Луна вокруг Земли
-        val moonOrbitRadius = earthRadius * 2.2f
-        val moonAroundEarthAngle = T * 4f
-        val miniMoonX = earthX + cos(moonAroundEarthAngle) * moonOrbitRadius
-        val miniMoonY = earthY + sin(moonAroundEarthAngle) * moonOrbitRadius * 0.7f
+        // ===== МАЛЕНЬКАЯ ЛУНА ВОКРУГ ЗЕМЛИ =====
+        val miniMoonOrbitRadius = earthRadius * 2.2f
+        val miniMoonAngle = T * 4f
+        val miniMoonX = earthX + cos(miniMoonAngle) * miniMoonOrbitRadius
+        val miniMoonY = earthY + sin(miniMoonAngle) * miniMoonOrbitRadius * 0.7f
         val miniMoonRadius = earthRadius * 0.3f
         drawCircle(
             Brush.radialGradient(
@@ -2102,26 +2318,39 @@ private fun SpaceBackground(
             center = Offset(miniMoonX, miniMoonY)
         )
 
-        // Сатурн
-        val saturnAngle = T * 2f * 0.3f
+        // ===== САТУРН (как в старой версии) =====
+        val saturnAngle = T * 1f + 3.6f
         val saturnX = cx + cos(saturnAngle) * sRx
         val saturnY = cy + sin(saturnAngle) * sRy
-        val saturnRadius = h * 0.04f
+        val saturnRadius = h * 0.08f
+        val saturnTw = 0.5f + 0.5f * sin(T * 2f + 4f)
+        val saturnCol = Color(0xFFE0B97E)
         drawCircle(
             Brush.radialGradient(
-                listOf(Color(0xFFDDCC88), Color(0xFF997744)),
-                center = Offset(saturnX - saturnRadius * 0.3f, saturnY - saturnRadius * 0.3f),
-                radius = saturnRadius
+                listOf(saturnCol.copy(alpha = (0.18f + 0.28f * saturnTw) * vis), Color.Transparent),
+                center = Offset(saturnX, saturnY),
+                radius = saturnRadius * 3f
+            ),
+            radius = saturnRadius * 3f,
+            center = Offset(saturnX, saturnY)
+        )
+        drawCircle(
+            Brush.radialGradient(
+                listOf(Color(0xFFF4DCA8), saturnCol, Color(0xFF9C7A45)),
+                center = Offset(saturnX, saturnY),
+                radius = saturnRadius * 1.4f
             ),
             radius = saturnRadius,
             center = Offset(saturnX, saturnY)
         )
-        drawOval(
-            color = Color(0xFFAA9966).copy(alpha = 0.5f),
-            topLeft = Offset(saturnX - saturnRadius * 2f, saturnY - saturnRadius * 0.4f),
-            size = Size(saturnRadius * 4f, saturnRadius * 0.8f),
-            style = Stroke(width = 1.dp.toPx())
-        )
+        rotate(-18f, pivot = Offset(saturnX, saturnY)) {
+            drawOval(
+                Color(0xFFD9C08F).copy(alpha = 0.8f * vis),
+                topLeft = Offset(saturnX - saturnRadius * 1.9f, saturnY - saturnRadius * 0.55f),
+                size = Size(saturnRadius * 3.8f, saturnRadius * 1.1f),
+                style = Stroke(width = saturnRadius * 0.28f)
+            )
+        }
     }
 }
 @Composable
