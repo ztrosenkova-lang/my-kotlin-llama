@@ -171,16 +171,16 @@ enum class AIMode {
     CLOUD
 }
 private object SpaceConstants {
-    const val ORBIT_CENTER_X_RATIO = 0.20f
+    const val ORBIT_CENTER_X_RATIO = 0.80f
     const val ORBIT_CENTER_Y_RATIO = 0.50f
-    const val ROBOT_ORBIT_RX = 0.20f
-    const val ROBOT_ORBIT_RY = 0.16f
-    const val MOON_ORBIT_RX = 0.30f
-    const val MOON_ORBIT_RY = 0.24f
-    const val EARTH_ORBIT_RX = 0.38f
-    const val EARTH_ORBIT_RY = 0.30f
-    const val SATURN_ORBIT_RX = 0.48f
-    const val SATURN_ORBIT_RY = 0.38f
+    const val ROBOT_ORBIT_RX = 0.16f
+    const val ROBOT_ORBIT_RY = 0.12f
+    const val MOON_ORBIT_RX = 0.24f
+    const val MOON_ORBIT_RY = 0.18f
+    const val EARTH_ORBIT_RX = 0.32f
+    const val EARTH_ORBIT_RY = 0.24f
+    const val SATURN_ORBIT_RX = 0.42f
+    const val SATURN_ORBIT_RY = 0.32f
     const val ROBOT_SIZE_RATIO = 0.050f
     const val PLANET_SIZE_RATIO = 0.055f
 }
@@ -1519,7 +1519,7 @@ private fun TopBarWithSwitch(
     
     val flightProgress by animateFloatAsState(
         targetValue = if (isTtsReady && flightStarted) 1f else 0f,
-        animationSpec = tween(durationMillis = 1800, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 3000, easing = FastOutSlowInEasing),
         label = "flight_progress"
     )
     
@@ -1617,8 +1617,15 @@ private fun TopBarWithSwitch(
                          2f * flightProgress * (endX - ctrlX)
                 val dy = 2f * oneMinusT * (ctrlY - startY) + 
                          2f * flightProgress * (endY - ctrlY)
-                val angleRad = atan2(dy, dx)
+                                val angleRad = atan2(dy, dx)
                 val angleDeg = angleRad * 180f / PI.toFloat()
+                
+                val landingProgress = if (flightProgress > 0.7f) {
+                    (flightProgress - 0.7f) / 0.3f
+                } else {
+                    0f
+                }
+                val finalAngle = angleDeg * (1f - landingProgress)
                 
                 val scale = currentSize / endSizePx
                 val offsetXDp = with(density) { (currentX - endSizePx / 2f).toDp() }
@@ -1631,7 +1638,7 @@ private fun TopBarWithSwitch(
                         .graphicsLayer(
                             scaleX = scale,
                             scaleY = scale,
-                            rotationZ = angleDeg + 90f
+                            rotationZ = finalAngle + 90f
                         )
                 ) {
                     ThinkingRobotAnimation(
@@ -1791,7 +1798,7 @@ private fun SpaceBackground(
     val t by transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
-        animationSpec = infiniteRepeatable(
+                animationSpec = infiniteRepeatable(
             animation = tween(durationMillis = 24000, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
