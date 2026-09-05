@@ -280,19 +280,31 @@ fun ChatScreen(
         "А ещё я могу напоминать тебе о важных событиях,заменяя тебе органайзер. ⏰ " +
         "Давай общаться! Включи локальный движок Llama или облачный ИИ в шапке приложения, и погнали! 🚀"
 
+        val isFirstLaunch by viewModel.isFirstLaunch.collectAsStateWithLifecycle(initialValue = false)
+
     LaunchedEffect(isTtsReady) {
         if (isTtsReady && !welcomeStarted) {
             welcomeStarted = true
-            viewModel.speakText(fullWelcomeString)
+            val greeting = if (isFirstLaunch) {
+                fullWelcomeString
+            } else {
+                "Привет друг. Чем займемся?"
+            }
+            viewModel.speakText(greeting)
         }
     }
 
-    LaunchedEffect(speakStartTrigger) {
+        LaunchedEffect(speakStartTrigger) {
         if (speakStartTrigger && welcomeStarted && !welcomeTextPrinted) {
             welcomeTextPrinted = true
+            val greeting = if (isFirstLaunch) {
+                fullWelcomeString
+            } else {
+                "Привет друг. Чем займемся?"
+            }
             var runningText = ""
-            for (i in fullWelcomeString.indices) {
-                runningText += fullWelcomeString[i]
+            for (i in greeting.indices) {
+                runningText += greeting[i]
                 viewModel.updateLastSystemMessage(runningText)
                 delay(50)
             }
