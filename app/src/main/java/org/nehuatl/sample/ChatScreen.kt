@@ -1770,8 +1770,6 @@ private fun TopBarWithSwitch(
     var landingX by remember { mutableStateOf(0f) }
     var landingY by remember { mutableStateOf(0f) }
     var topBarPositionInRoot by remember { mutableStateOf(Offset.Zero) }
-    var topBarSize by remember { mutableStateOf(Size.Zero) }
-    
     val flightProgress by animateFloatAsState(
         targetValue = if (isTtsReady && flightStarted) 1f else 0f,
         animationSpec = tween(durationMillis = 3000, easing = FastOutSlowInEasing),
@@ -1800,8 +1798,7 @@ private fun TopBarWithSwitch(
             .padding(4.dp)
             .onGloballyPositioned { coordinates ->
                 topBarPositionInRoot = coordinates.positionInRoot()
-                topBarSize = coordinates.size.toSize()
-            }
+                }
     ) {
         Box(
             modifier = Modifier
