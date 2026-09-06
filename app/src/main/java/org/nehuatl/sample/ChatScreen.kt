@@ -723,7 +723,7 @@ fun ChatScreen(
                 }
             }
 
-            if (imagePath != null) {
+                       if (imagePath != null) {
                 ImagePreview(imagePath = imagePath, colors = colors)
             }
 
@@ -735,20 +735,18 @@ fun ChatScreen(
                     val command = promptInput.trim().lowercase()
                     when {
                         command == "лети домой" -> {
-                            if (robotIsLanded) {
-                                robotIsFlyingHome = true
-                                robotIsFlyingHere = false
-                                viewModel.appendSystemMessage("🤖 Робот улетает на орбиту")
-                                promptInput = ""
-                            }
+                            robotIsFlyingHome = true
+                            robotIsFlyingHere = false
+                            robotIsLanded = false
+                            viewModel.appendSystemMessage("🤖 Робот улетает на орбиту")
+                            promptInput = ""
                         }
                         command == "лети сюда" -> {
-                            if (robotOnOrbit) {
-                                robotIsFlyingHere = true
-                                robotIsFlyingHome = false
-                                viewModel.appendSystemMessage("🤖 Робот прилетает с орбиты")
-                                promptInput = ""
-                            }
+                            robotIsFlyingHere = true
+                            robotIsFlyingHome = false
+                            robotOnOrbit = false
+                            viewModel.appendSystemMessage("🤖 Робот прилетает с орбиты")
+                            promptInput = ""
                         }
                         else -> {
                             viewModel.sendUserMessage(promptInput)
