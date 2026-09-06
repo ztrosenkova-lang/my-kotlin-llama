@@ -548,7 +548,9 @@ fun ChatScreen(
                 onToggleTheme = { viewModel.toggleTheme() },
                 colors = colors,
                 isTtsReady = isTtsReady,
-                onRobotLanded = {
+                    onRobotLanded = { x, y ->
+                    robotOffsetX = x
+                    robotOffsetY = y
                     robotIsLanded = true
                 }
             )
@@ -745,7 +747,7 @@ fun ChatScreen(
             )
         }
 
-                       // ===== РОБОТ ПОВЕРХ ВСЕГО (после приземления) =====
+                              // ===== РОБОТ ПОВЕРХ ВСЕГО (после приземления) =====
         if (robotIsLanded) {
             Box(
                 modifier = Modifier
@@ -755,7 +757,7 @@ fun ChatScreen(
                         scaleX = robotScale,
                         scaleY = robotScale
                     )
-                    .pointerInput(robotIsLanded) {
+                    .pointerInput(Unit) {
                         awaitEachGesture {
                             val down = awaitFirstDown()
                             val initialTouchX = down.position.x
@@ -772,7 +774,6 @@ fun ChatScreen(
                                 val pointers = event.changes
 
                                 if (pointers.size >= 2) {
-                                    // Pinch-to-zoom
                                     isPinching = true
                                     val p1 = pointers[0].position
                                     val p2 = pointers[1].position
@@ -786,7 +787,6 @@ fun ChatScreen(
                                     val scaleFactor = distance / initialDistance
                                     robotScale = (initialScale * scaleFactor).coerceIn(0.5f, 3f)
                                 } else if (pointers.size == 1 && !isPinching) {
-                                    // Drag
                                     val current = pointers[0].position
                                     val deltaX = current.x - initialTouchX
                                     val deltaY = current.y - initialTouchY
@@ -810,7 +810,6 @@ fun ChatScreen(
                     isIdle = true,
                     modifier = Modifier.fillMaxSize()
                 )
-    
             }
         }
     }
@@ -1775,7 +1774,7 @@ private fun TopBarWithSwitch(
     onToggleTheme: () -> Unit,
     colors: AppColors,
     isTtsReady: Boolean,
-    onRobotLanded: () -> Unit = {}
+    onRobotLanded: (Float, Float) -> Unit = { _, _ -> }
 ) {
     val isLocalReady = isModelLoaded
     val isCloudReady = cloudConfig?.authKey?.isNotEmpty() == true
@@ -1822,7 +1821,12 @@ private fun TopBarWithSwitch(
     
     LaunchedEffect(flightProgress) {
         if (flightProgress >= 0.99f) {
-            onRobotLanded()
+            // Вычисляем координаты приземления
+            val density = LocalDensity.current
+            val logoWidth = with(density) { 56.dp.toPx() }
+            val rightWidth = with(density) { 132.dp.toPx() }
+            // Здесь w и h неизвестны, поэтому используем приблизительные значения
+            // В реальности нужно передать размеры из BoxWithConstraints
         }
     }
     
@@ -1927,6 +1931,13 @@ private fun TopBarWithSwitch(
                 val scale = currentSize / endSizePx
                 val offsetXDp = with(density2) { (currentX - endSizePx / 2f).toDp() }
                 val offsetYDp = with(density2) { (currentY - endSizePx / 2f).toDp() }
+                
+                // Передаём координаты приземления
+                LaunchedEffect(flightProgress) {
+                    if (flightProgress >= 0.99f) {
+                        onRobotLanded(endX - endSizePx / 2f, endY - endSizePx / 2f)
+                    }
+                }
                 
                 Box(
                     modifier = Modifier
