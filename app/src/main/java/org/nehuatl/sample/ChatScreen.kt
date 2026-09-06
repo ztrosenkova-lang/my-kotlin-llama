@@ -784,67 +784,39 @@ fun ChatScreen(
         }
 
         // ===== РОБОТ ПОВЕРХ ВСЕГО (после приземления) =====
-        if (robotIsLanded) {
-            Box(
-                modifier = Modifier
-                    .offset(x = robotOffsetX.dp, y = robotOffsetY.dp)
-                    .size(70.dp)
-                    .graphicsLayer(
-                        scaleX = robotScale,
-                        scaleY = robotScale
-                    )
-                    .pointerInput(Unit) {
-                        var previousPosition = Offset.Zero
-                        var previousDistance = 0f
-                        var isMultiTouch = false
-
-                        awaitEachGesture {
-                            awaitFirstDown()
-                            isMultiTouch = false
-                            previousDistance = 0f
-                            previousPosition = Offset.Zero
-
-                            do {
-                                val event = awaitPointerEvent()
-                                val pointers = event.changes
-
-                                if (pointers.size >= 2) {
-                                    isMultiTouch = true
-                                    val p1 = pointers[0].position
-                                    val p2 = pointers[1].position
-                                    val distance = sqrt(
-                                        (p2.x - p1.x) * (p2.x - p1.x) +
-                                        (p2.y - p1.y) * (p2.y - p1.y)
-                                    )
-                                    if (previousDistance > 0f) {
-                                        val scaleFactor = distance / previousDistance
-                                        robotScale = (robotScale * scaleFactor).coerceIn(0.5f, 3f)
-                                    }
-                                    previousDistance = distance
-                                } else if (pointers.size == 1 && !isMultiTouch) {
-                                    val current = pointers[0].position
-                                    if (previousPosition != Offset.Zero) {
-                                        val deltaX = current.x - previousPosition.x
-                                        val deltaY = current.y - previousPosition.y
-                                        robotOffsetX += deltaX
-                                        robotOffsetY += deltaY
-                                    }
-                                    previousPosition = current
-                                }
-
-                                val allUp = pointers.all { !it.pressed }
-                            } while (!allUp)
-                        }
-                    }
+                if (robotIsLanded) {
+            BoxWithConstraints(
+                modifier = Modifier.fillMaxSize()
             ) {
-                ThinkingRobotAnimation(
-                    height = 70.dp,
-                    isActive = false,
-                    isSpeaking = isSpeaking,
-                    isThinking = false,
-                    isIdle = true,
-                    modifier = Modifier.fillMaxSize()
-                )
+                val screenWidthPx = constraints.maxWidth.toFloat()
+                val screenHeightPx = constraints.maxHeight.toFloat()
+                val robotSizePx = with(LocalDensity.current) { 70.dp.toPx() }
+
+                Box(
+                    modifier = Modifier
+                        .offset(x = robotOffsetX.dp, y = robotOffsetY.dp)
+                        .size(70.dp)
+                        .graphicsLayer(
+                            scaleX = robotScale,
+                            scaleY = robotScale
+                        )
+                        .pointerInput(Unit) {
+                            detectTransformGestures { _, pan, zoom, _ ->
+                                robotOffsetX = (robotOffsetX + pan.x).coerceIn(0f, screenWidthPx - robotSizePx)
+                                robotOffsetY = (robotOffsetY + pan.y).coerceIn(0f, screenHeightPx - robotSizePx)
+                                robotScale = (robotScale * zoom).coerceIn(0.5f, 3f)
+                            }
+                        }
+                ) {
+                    ThinkingRobotAnimation(
+                        height = 70.dp,
+                        isActive = false,
+                        isSpeaking = isSpeaking,
+                        isThinking = false,
+                        isIdle = true,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
             }
         }
     }
@@ -2004,7 +1976,7 @@ private fun TopBarWithSwitch(
                 
                 // Сохраняем координаты приземления в глобальной системе координат
                 landingX = with(density) { (topBarPositionInRoot.x + endX - endSizePx / 2f).toDp().value }
-                landingY = with(density) { (topBarPositionInRoot.y + endY - endSizePx / 2f - 20f).toDp().value }
+                landingY = with(density) { (topBarPositionInRoot.y + endY - endSizePx / 2f - 60f).toDp().value }
                 
                 Box(
                     modifier = Modifier
