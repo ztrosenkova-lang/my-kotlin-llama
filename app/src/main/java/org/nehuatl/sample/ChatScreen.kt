@@ -1805,6 +1805,8 @@ private fun TopBarWithSwitch(
     
     var flightStarted by remember { mutableStateOf(false) }
     var startAngle by remember { mutableStateOf(0f) }
+    var landingX by remember { mutableStateOf(0f) }
+    var landingY by remember { mutableStateOf(0f) }
     
     val flightProgress by animateFloatAsState(
         targetValue = if (isTtsReady && flightStarted) 1f else 0f,
@@ -1821,12 +1823,7 @@ private fun TopBarWithSwitch(
     
     LaunchedEffect(flightProgress) {
         if (flightProgress >= 0.99f) {
-            // Вычисляем координаты приземления
-            val density = LocalDensity.current
-            val logoWidth = with(density) { 56.dp.toPx() }
-            val rightWidth = with(density) { 132.dp.toPx() }
-            // Здесь w и h неизвестны, поэтому используем приблизительные значения
-            // В реальности нужно передать размеры из BoxWithConstraints
+            onRobotLanded(landingX, landingY)
         }
     }
     
@@ -1932,12 +1929,9 @@ private fun TopBarWithSwitch(
                 val offsetXDp = with(density2) { (currentX - endSizePx / 2f).toDp() }
                 val offsetYDp = with(density2) { (currentY - endSizePx / 2f).toDp() }
                 
-                // Передаём координаты приземления
-                LaunchedEffect(flightProgress) {
-                    if (flightProgress >= 0.99f) {
-                        onRobotLanded(endX - endSizePx / 2f, endY - endSizePx / 2f)
-                    }
-                }
+                // Сохраняем координаты приземления
+                landingX = endX - endSizePx / 2f
+                landingY = endY - endSizePx / 2f
                 
                 Box(
                     modifier = Modifier
@@ -2083,6 +2077,7 @@ private fun TopBarWithSwitch(
         }
     }
 }
+
 @Composable
 private fun SpaceBackground(
     isDarkTheme: Boolean,
