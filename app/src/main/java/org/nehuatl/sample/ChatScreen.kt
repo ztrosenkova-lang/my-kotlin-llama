@@ -22,6 +22,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -103,6 +105,9 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -135,6 +140,7 @@ import kotlin.math.min
 import kotlin.math.sqrt
 import androidx.compose.animation.core.keyframes
 import java.util.Random
+import androidx.compose.runtime.rememberUpdatedState
 
 private data class AppColors(
     val background: Color,
@@ -503,6 +509,8 @@ fun ChatScreen(
         )
     }
 
+        val density = LocalDensity.current
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -693,16 +701,6 @@ fun ChatScreen(
                                     modifier = Modifier.padding(vertical = 2.dp)
                                 )
                             }
-
-                            if (cloudGeneratedText.isNotEmpty() && cloudState is CloudAIState.Generating) {
-                                Text(
-                                    text = "☁️ ИИ: $cloudGeneratedText",
-                                    color = colors.text.copy(alpha = 0.8f),
-                                    fontFamily = colors.chatFont,
-                                    fontSize = 10.sp,
-                                    modifier = Modifier.padding(vertical = 2.dp)
-                                )
-                            }
                         }
                     }
                 }
@@ -747,7 +745,7 @@ fun ChatScreen(
             )
         }
 
-                              // ===== РОБОТ ПОВЕРХ ВСЕГО (после приземления) =====
+        // ===== РОБОТ ПОВЕРХ ВСЕГО (после приземления) =====
         if (robotIsLanded) {
             Box(
                 modifier = Modifier
@@ -758,47 +756,10 @@ fun ChatScreen(
                         scaleY = robotScale
                     )
                     .pointerInput(Unit) {
-                        awaitEachGesture {
-                            val down = awaitFirstDown()
-                            val initialTouchX = down.position.x
-                            val initialTouchY = down.position.y
-                            val initialOffsetX = robotOffsetX
-                            val initialOffsetY = robotOffsetY
-                            val initialScale = robotScale
-
-                            var isPinching = false
-                            var initialDistance = 0f
-
-                            while (true) {
-                                val event = awaitPointerEvent()
-                                val pointers = event.changes
-
-                                if (pointers.size >= 2) {
-                                    isPinching = true
-                                    val p1 = pointers[0].position
-                                    val p2 = pointers[1].position
-                                    val distance = sqrt(
-                                        (p2.x - p1.x) * (p2.x - p1.x) +
-                                        (p2.y - p1.y) * (p2.y - p1.y)
-                                    )
-                                    if (initialDistance == 0f) {
-                                        initialDistance = distance
-                                    }
-                                    val scaleFactor = distance / initialDistance
-                                    robotScale = (initialScale * scaleFactor).coerceIn(0.5f, 3f)
-                                } else if (pointers.size == 1 && !isPinching) {
-                                    val current = pointers[0].position
-                                    val deltaX = current.x - initialTouchX
-                                    val deltaY = current.y - initialTouchY
-                                    robotOffsetX = initialOffsetX + deltaX
-                                    robotOffsetY = initialOffsetY + deltaY
-                                }
-
-                                val allUp = pointers.all { !it.pressed }
-                                if (allUp) {
-                                    break
-                                }
-                            }
+                        detectTransformGestures { _, pan, zoom, _ ->
+                            robotOffsetX += pan.x
+                            robotOffsetY += pan.y
+                            robotScale = (robotScale * zoom).coerceIn(0.5f, 3f)
                         }
                     }
             ) {
@@ -1807,6 +1768,8 @@ private fun TopBarWithSwitch(
     var startAngle by remember { mutableStateOf(0f) }
     var landingX by remember { mutableStateOf(0f) }
     var landingY by remember { mutableStateOf(0f) }
+    var topBarPositionInRoot by remember { mutableStateOf(Offset.Zero) }
+    var topBarSize by remember { mutableStateOf(Size.Zero) }
     
     val flightProgress by animateFloatAsState(
         targetValue = if (isTtsReady && flightStarted) 1f else 0f,
@@ -1834,6 +1797,10 @@ private fun TopBarWithSwitch(
             .fillMaxWidth()
             .height(84.dp)
             .padding(4.dp)
+            .onGloballyPositioned { coordinates ->
+                topBarPositionInRoot = coordinates.positionInRoot()
+                topBarSize = coordinates.size.toSize()
+            }
     ) {
         Box(
             modifier = Modifier
@@ -1929,9 +1896,10 @@ private fun TopBarWithSwitch(
                 val offsetXDp = with(density2) { (currentX - endSizePx / 2f).toDp() }
                 val offsetYDp = with(density2) { (currentY - endSizePx / 2f).toDp() }
                 
-                // Сохраняем координаты приземления
-                landingX = endX - endSizePx / 2f
-                landingY = endY - endSizePx / 2f
+                // Сохраняем координаты приземления в глобальной системе координат
+                val density3 = LocalDensity.current
+                landingX = with(density3) { (topBarPositionInRoot.x + endX - endSizePx / 2f).toDp().value }
+                landingY = with(density3) { (topBarPositionInRoot.y + endY - endSizePx / 2f).toDp().value }
                 
                 Box(
                     modifier = Modifier
