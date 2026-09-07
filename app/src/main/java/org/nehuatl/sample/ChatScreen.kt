@@ -799,8 +799,8 @@ fun ChatScreen(
             )
         }
 
-        // ===== РОБОТ ПОВЕРХ ВСЕГО (после приземления) =====
-                if (robotIsLanded) {
+                // ===== РОБОТ ПОВЕРХ ВСЕГО (после приземления) =====
+        if (robotIsLanded) {
             BoxWithConstraints(
                 modifier = Modifier.fillMaxSize()
             ) {
@@ -816,7 +816,7 @@ fun ChatScreen(
                             scaleX = robotScale,
                             scaleY = robotScale
                         )
-                                                .pointerInput(Unit) {
+                        .pointerInput(Unit) {
                             var previousPosition = Offset.Zero
                             var previousDistance = 0f
                             var isMultiTouch = false
@@ -864,8 +864,8 @@ fun ChatScreen(
                         height = 70.dp,
                         isActive = false,
                         isSpeaking = isSpeaking,
-                        isThinking = false,
-                        isIdle = true,
+                        isThinking = state is GenerationState.Generating || cloudState is CloudAIState.Generating,
+                        isIdle = !isSpeaking && state !is GenerationState.Generating && cloudState !is CloudAIState.Generating,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
