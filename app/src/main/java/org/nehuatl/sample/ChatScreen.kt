@@ -583,6 +583,7 @@ fun ChatScreen(
                 robotOnOrbit = robotOnOrbit,
                 robotIsFlyingHome = robotIsFlyingHome,
                 robotIsFlyingHere = robotIsFlyingHere,
+                robotIsLanded = robotIsLanded,
                 onRobotLanded = { x, y ->
                     robotOffsetX = x
                     robotOffsetY = y
@@ -815,11 +816,47 @@ fun ChatScreen(
                             scaleX = robotScale,
                             scaleY = robotScale
                         )
-                        .pointerInput(Unit) {
-                            detectTransformGestures { _, pan, zoom, _ ->
-                                robotOffsetX = (robotOffsetX + pan.x).coerceIn(0f, screenWidthPx - robotSizePx)
-                                robotOffsetY = (robotOffsetY + pan.y).coerceIn(0f, screenHeightPx - robotSizePx)
-                                robotScale = (robotScale * zoom).coerceIn(0.5f, 3f)
+                                                .pointerInput(Unit) {
+                            var previousPosition = Offset.Zero
+                            var previousDistance = 0f
+                            var isMultiTouch = false
+
+                            awaitEachGesture {
+                                awaitFirstDown()
+                                isMultiTouch = false
+                                previousDistance = 0f
+                                previousPosition = Offset.Zero
+
+                                do {
+                                    val event = awaitPointerEvent()
+                                    val pointers = event.changes
+
+                                    if (pointers.size >= 2) {
+                                        isMultiTouch = true
+                                        val p1 = pointers[0].position
+                                        val p2 = pointers[1].position
+                                        val distance = sqrt(
+                                            (p2.x - p1.x) * (p2.x - p1.x) +
+                                            (p2.y - p1.y) * (p2.y - p1.y)
+                                        )
+                                        if (previousDistance > 0f) {
+                                            val scaleFactor = distance / previousDistance
+                                            robotScale = (robotScale * scaleFactor).coerceIn(0.5f, 3f)
+                                        }
+                                        previousDistance = distance
+                                    } else if (pointers.size == 1 && !isMultiTouch) {
+                                        val current = pointers[0].position
+                                        if (previousPosition != Offset.Zero) {
+                                            val deltaX = current.x - previousPosition.x
+                                            val deltaY = current.y - previousPosition.y
+                                            robotOffsetX = (robotOffsetX + deltaX).coerceIn(0f, screenWidthPx - robotSizePx)
+                                            robotOffsetY = (robotOffsetY + deltaY).coerceIn(0f, screenHeightPx - robotSizePx)
+                                        }
+                                        previousPosition = current
+                                    }
+
+                                    val allUp = pointers.all { !it.pressed }
+                                } while (!allUp)
                             }
                         }
                 ) {
@@ -1799,6 +1836,7 @@ private fun TopBarWithSwitch(
     robotOnOrbit: Boolean,
     robotIsFlyingHome: Boolean,
     robotIsFlyingHere: Boolean,
+    robotIsLanded: Boolean,
     onRobotLanded: (Float, Float) -> Unit = { _, _ -> },
     onRobotReachedOrbit: () -> Unit = { }
 ) {
@@ -1861,8 +1899,8 @@ private fun TopBarWithSwitch(
         }
     }
     
-        val showRobotOnOrbit = robotOnOrbit || robotIsFlyingHome
-    val robotOnOrbitAlpha = if (showRobotOnOrbit && !robotIsFlyingHere) 1f else 0f
+    val showRobotOnOrbit = robotOnOrbit || robotIsFlyingHome
+    val robotOnOrbitAlpha = if (showRobotOnOrbit && !robotIsFlyingHere && !robotIsLanded) 1f else 0f
 
     Box(
         modifier = Modifier
@@ -1917,8 +1955,8 @@ private fun TopBarWithSwitch(
                 
                 val orbitCenterX = w * SpaceConstants.ORBIT_CENTER_X_RATIO
                 val orbitCenterY = h * SpaceConstants.ORBIT_CENTER_Y_RATIO
-                val robotOrbitRx = minDim * SpaceConstants.ROBOT_ORBIT_RX
-                val robotOrbitRy = minDim * SpaceConstants.ROBOT_ORBIT_RY
+                val robotOrbitRx = w * SpaceConstants.ROBOT_ORBIT_RX
+                val robotOrbitRy = h * SpaceConstants.ROBOT_ORBIT_RY
                 
                 val density = LocalDensity.current
                 val logoWidth = with(density) { 56.dp.toPx() }
@@ -1931,7 +1969,7 @@ private fun TopBarWithSwitch(
                 val startY = orbitCenterY + sin(startAngle) * robotOrbitRy
                 
                 val endSizePx = with(density) { 70.dp.toPx() }
-                val startSize = h * SpaceConstants.ROBOT_SIZE_RATIO
+                val startSize = h * 0.16f
                 
                 val ctrlX = (startX + endX) / 2f
                 val ctrlY = startY - h * 0.4f
@@ -2003,12 +2041,12 @@ private fun TopBarWithSwitch(
                             rotationZ = finalAngle
                         )
                 ) {
-                    ThinkingRobotAnimation(
+                        ThinkingRobotAnimation(
                         height = 70.dp,
                         isActive = false,
-                        isSpeaking = false,
-                        isThinking = false,
-                        isIdle = true,
+                        isSpeaking = isSpeaking,
+                        isThinking = state is GenerationState.Generating || cloudState is CloudAIState.Generating,
+                        isIdle = !isSpeaking && state !is GenerationState.Generating && cloudState !is CloudAIState.Generating,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
