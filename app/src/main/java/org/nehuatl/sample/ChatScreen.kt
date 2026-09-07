@@ -268,7 +268,7 @@ fun ChatScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val coroutineScope = rememberCoroutineScope()
 
-    val speechRecognizerLauncher = rememberLauncherForActivityResult(
+        val speechRecognizerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == android.app.Activity.RESULT_OK) {
@@ -277,7 +277,24 @@ fun ChatScreen(
             if (!results.isNullOrEmpty()) {
                 val recognizedText = results[0]
                 if (recognizedText.isNotBlank()) {
-                    viewModel.sendUserMessage(recognizedText)
+                    val command = recognizedText.trim().lowercase()
+                    when {
+                        command == "лети домой" -> {
+                            robotIsFlyingHome = true
+                            robotIsFlyingHere = false
+                            robotIsLanded = false
+                            viewModel.appendSystemMessage("🤖 Робот улетает на орбиту")
+                        }
+                        command == "лети сюда" -> {
+                            robotIsFlyingHere = true
+                            robotIsFlyingHome = false
+                            robotOnOrbit = false
+                            viewModel.appendSystemMessage("🤖 Робот прилетает с орбиты")
+                        }
+                        else -> {
+                            viewModel.sendUserMessage(recognizedText)
+                        }
+                    }
                 }
             }
         } else {
@@ -1165,35 +1182,35 @@ fun ThinkingRobotAnimation(
             size = Size(44f * u, 5f * u)
         )
 
-        // Крепления и суставы
-        drawCircle(Brush.radialGradient(listOf(metalLight, metalDeep), center = pt(29f, 83f), radius = 7f*u), 6f * u, pt(29f, 85f))
-        drawCircle(Brush.radialGradient(listOf(metalLight, metalDeep), center = pt(71f, 83f), radius = 7f*u), 6f * u, pt(71f, 85f))
+                // Крепления и суставы
+        drawCircle(Brush.radialGradient(listOf(metalLight, metalDeep), center = pt(28f, 83f), radius = 8f*u), 7f * u, pt(28f, 85f))
+        drawCircle(Brush.radialGradient(listOf(metalLight, metalDeep), center = pt(72f, 83f), radius = 8f*u), 7f * u, pt(72f, 85f))
         
-        drawCircle(Color.White.copy(alpha = 0.5f), 1.2f * u, pt(27.5f, 83f))
-        drawCircle(Color.White.copy(alpha = 0.5f), 1.2f * u, pt(69.5f, 83f))
+        drawCircle(Color.White.copy(alpha = 0.5f), 1.4f * u, pt(26f, 83f))
+        drawCircle(Color.White.copy(alpha = 0.5f), 1.4f * u, pt(70f, 83f))
         
         drawOval(Color.White.copy(alpha = 0.15f), topLeft = pt(33f, 78.5f), size = Size(14f * u, 3.5f * u))
 
         // ================= Сопла + ракетное пламя =================
-        for ((idx, sx) in listOf(29f, 71f).withIndex()) {
+                for ((idx, sx) in listOf(27f, 73f).withIndex()) {
             // Корпус сопла (с тенью внутри)
             drawRoundRect(
                 Brush.verticalGradient(listOf(metalDark, metalDeep)),
-                topLeft = pt(sx - 2.5f, 88.5f),
-                size = Size(5f * u, 3f * u),
-                cornerRadius = CornerRadius(1f * u)
+                topLeft = pt(sx - 3f, 88.5f),
+                size = Size(6f * u, 3f * u),
+                cornerRadius = CornerRadius(1.2f * u)
             )
             drawRoundRect(
                 Color(0xFF111A22),
-                topLeft = pt(sx - 1.6f, 90.6f),
-                size = Size(3.2f * u, 1.4f * u),
-                cornerRadius = CornerRadius(0.7f * u)
+                topLeft = pt(sx - 2f, 90.6f),
+                size = Size(4f * u, 1.4f * u),
+                cornerRadius = CornerRadius(0.8f * u)
             )
-            if (finalBob != 0f) {
+                        if (finalBob != 0f) {
                 val flick = 0.5f + 0.5f * sin(phase * 4f + idx * 2.1f)
                 val len = (5f + 4.5f * flick) * u
-                val fw = 4.4f * u
-                val top = pt(sx - 2.2f, 91.2f)
+                val fw = 5.2f * u
+                val top = pt(sx - 2.6f, 91.2f)
                 
                 // Свечение пламени
                 glow(
@@ -1296,168 +1313,7 @@ fun ThinkingRobotAnimation(
         for (i in 0 until 3) {
             drawLine(metalDark, pt(74.7f, 59.5f + i * 2.5f), pt(77.8f, 59.5f + i * 2.5f), strokeWidth = 0.3f * u)
         }
-
-        // ================= Купол =================
-        val domeC = pt(50f, 46f)
-        val domeR = 26f * u
-        val domeTL = Offset(domeC.x - domeR, domeC.y - domeR)
-        val domeSize = Size(domeR * 2f, domeR * 2f)
-        
-        // Объемное стекло (затемнение снизу)
-        drawArc(
-            Brush.verticalGradient(
-                0f to Color(0xFFBFE9F2).copy(alpha = 0.25f),
-                0.8f to Color(0xFFBFE9F2).copy(alpha = 0.15f),
-                1f to Color(0xFF446E79).copy(alpha = 0.45f)
-            ),
-            180f,
-            180f,
-            true,
-            topLeft = domeTL,
-            size = domeSize
-        )
-
-        // ================= Мозг =================
-        val s = 1f + 0.05f * sin(finalPulse * 1.5f)
-        fun bp(x: Float, y: Float) = pt(50f + (x - 50f) * s, 39f + (y - 39f) * s)
-
-        // Внутреннее свечение мозга
-        glow(bp(50f, 38f), 12f * u, Color(0xFFE36F8C).copy(alpha = if (finalPulse != 0f) 0.40f else 0.1f))
-        
-        // Извилины мозга (добавляем градиенты для полушарий)
-        listOf(
-            Triple(43f, 39f, 4.5f), Triple(57f, 39f, 4.5f),
-            Triple(50f, 33f, 4.2f), Triple(50f, 42f, 4.2f),
-            Triple(37f, 42f, 3f), Triple(63f, 42f, 3f),
-            Triple(46f, 35f, 2.5f), Triple(54f, 35f, 2.5f),
-            Triple(40f, 37f, 2.5f), Triple(60f, 37f, 2.5f)
-        ).forEach { (x, y, r) -> 
-            drawCircle(
-                Brush.radialGradient(listOf(brainPink.copy(alpha = 0.9f), brainDark), center = bp(x, y), radius = r * s * u),
-                r * s * u, bp(x, y)
-            ) 
-        }
-
-        // Тени между извилинами (борозды)
-        listOf(
-            42f to 33f, 50f to 30f, 58f to 34f,
-            44f to 41f, 56f to 41f, 49f to 37f,
-            38f to 39f, 62f to 39f, 46f to 33f,
-            54f to 33f, 41f to 36f, 59f to 36f
-        ).forEach { (x, y) ->
-            drawArc(
-                brainDark,
-                200f,
-                140f,
-                false,
-                topLeft = bp(x - 3f, y - 3f),
-                size = Size(6f * s * u, 6f * s * u),
-                style = Stroke(1.4f * u, cap = StrokeCap.Round)
-            )
-        }
-
-        // ================= Орбиты и искры =================
-        // Делаем орбиты более плавными и светящимися
-        rotate(-16f, pivot = pt(50f, 38f)) {
-            drawOval(
-                cyan.copy(alpha = 0.25f),
-                topLeft = pt(28f, 30.5f),
-                size = Size(44f * u, 15f * u),
-                style = Stroke(1.6f * u)
-            )
-            drawOval(
-                cyanBright.copy(alpha = 0.7f),
-                topLeft = pt(28f, 30.5f),
-                size = Size(44f * u, 15f * u),
-                style = Stroke(0.7f * u)
-            )
-        }
-        rotate(12f, pivot = pt(50f, 38f)) {
-            drawOval(
-                cyan.copy(alpha = 0.25f),
-                topLeft = pt(29.5f, 31.5f),
-                size = Size(41f * u, 13f * u),
-                style = Stroke(1.6f * u)
-            )
-            drawOval(
-                cyanBright.copy(alpha = 0.65f),
-                topLeft = pt(29.5f, 31.5f),
-                size = Size(41f * u, 13f * u),
-                style = Stroke(0.7f * u)
-            )
-        }
-
-        fun orbitPos(rx: Float, ry: Float, rotDeg: Float, a: Float): Offset {
-            val r = rotDeg * (PI / 180.0).toFloat()
-            val cr = cos(r)
-            val sr = sin(r)
-            val x = cos(a) * rx
-            val y = sin(a) * ry
-            return pt(50f + x * cr - y * sr, 38f + x * sr + y * cr)
-        }
-
-        if (finalPhase != 0f) {
-            for (i in 0..7) { // Увеличили количество искр для красоты
-                val a = finalPhase * (1.2f + 0.15f * i) + i * 1.2f
-                val p = if (i % 2 == 0) orbitPos(22f, 7.5f, -16f, a)
-                else orbitPos(20.5f, 6.5f, 12f, a)
-                val tw = 0.5f + 0.5f * sin(finalPulse * 2f + i * 1.3f)
-                
-                // Мощное гало
-                glow(p, (3f + 2.5f * tw) * u, cyan.copy(alpha = 0.4f + 0.4f * tw))
-                // Ядро искры (белое + цветное)
-                drawCircle(cyanBright, 1.2f * u, p)
-                drawCircle(Color.White.copy(alpha = 0.8f), 0.5f * u, p)
-            }
-        }
-
-        // ================= Купол: ободок и блик =================
-        // Двойная обводка для объема
-        drawArc(
-            Color(0xFFDFF7FC).copy(alpha = 0.6f),
-            180f,
-            180f,
-            false,
-            topLeft = domeTL,
-            size = domeSize,
-            style = Stroke(1.1f * u)
-        )
-        drawArc(
-            metalDeep,
-            180f,
-            180f,
-            false,
-            topLeft = Offset(domeTL.x - 0.4f * u, domeTL.y + 0.4f * u),
-            size = domeSize,
-            style = Stroke(1.1f * u)
-        )
-        
-        // Блик на стекле
-        drawArc(
-            Color.White.copy(alpha = 0.9f),
-            195f,
-            45f,
-            false,
-            topLeft = Offset(domeC.x - domeR + 2.5f * u, domeC.y - domeR + 2.5f * u),
-            size = Size(domeR * 2f - 5f * u, domeR * 2f - 5f * u),
-            style = Stroke(1.6f * u, cap = StrokeCap.Round)
-        )
-        // Добавляем второй, маленький блик снизу
-        drawArc(
-            Color.White.copy(alpha = 0.4f),
-            15f,
-            30f,
-            false,
-            topLeft = Offset(domeC.x - domeR + 3.5f * u, domeC.y - domeR - 1f * u),
-            size = Size(domeR * 2f - 7f * u, domeR * 2f - 7f * u),
-            style = Stroke(1f * u)
-        )
-
-        // Ободок купола (стекло->металл)
-        drawOval(metalDark, topLeft = pt(27.5f, 46.2f), size = Size(45f * u, 3.4f * u))
-        drawOval(Color.White.copy(alpha = 0.3f), topLeft = pt(28f, 46.3f), size = Size(44f * u, 1.2f * u))
-
-        // ================= Голова =================
+         // ================= Голова =================
         // Объемный металлический корпус с бликом и тенью
         drawOval(
             Brush.verticalGradient(listOf(metalLight, metalMid, metalDark, metalDeep)),
@@ -1481,6 +1337,167 @@ fun ThinkingRobotAnimation(
         glow(pt(37f, 67f), 5f * u, Color(0xFFE36F8C).copy(alpha = 0.25f))
         glow(pt(63f, 67f), 5f * u, Color(0xFFE36F8C).copy(alpha = 0.25f))
         glow(pt(50f, 76f), 6f * u, cyan.copy(alpha = 0.15f)) // Отражение от света рта/экрана
+                
+        // ================= Купол =================
+        val domeC = pt(50f, 46f)
+        val domeR = 23.4f * u
+        val domeTL = Offset(domeC.x - domeR, domeC.y - domeR)
+        val domeSize = Size(domeR * 2f, domeR * 2f)
+        
+        // Объемное стекло (затемнение снизу)
+        drawArc(
+            Brush.verticalGradient(
+                0f to Color(0xFFBFE9F2).copy(alpha = 0.25f),
+                0.8f to Color(0xFFBFE9F2).copy(alpha = 0.15f),
+                1f to Color(0xFF446E79).copy(alpha = 0.45f)
+            ),
+            180f,
+            180f,
+            true,
+            topLeft = domeTL,
+            size = domeSize
+        )
+
+        // ================= Мозг =================
+        val s = 1f + 0.05f * sin(finalPulse * 1.5f)
+        fun bp(x: Float, y: Float) = pt(50f + (x - 50f) * s * 0.9f, 39f + (y - 39f) * s * 0.9f)
+
+        // Внутреннее свечение мозга
+        glow(bp(50f, 38f), 10.8f * u, Color(0xFFE36F8C).copy(alpha = if (finalPulse != 0f) 0.40f else 0.1f))
+        
+        // Извилины мозга (добавляем градиенты для полушарий)
+        listOf(
+            Triple(43f, 39f, 4.05f), Triple(57f, 39f, 4.05f),
+            Triple(50f, 33f, 3.78f), Triple(50f, 42f, 3.78f),
+            Triple(37f, 42f, 2.7f), Triple(63f, 42f, 2.7f),
+            Triple(46f, 35f, 2.25f), Triple(54f, 35f, 2.25f),
+            Triple(40f, 37f, 2.25f), Triple(60f, 37f, 2.25f)
+        ).forEach { (x, y, r) -> 
+            drawCircle(
+                Brush.radialGradient(listOf(brainPink.copy(alpha = 0.9f), brainDark), center = bp(x, y), radius = r * s * u),
+                r * s * u, bp(x, y)
+            ) 
+        }
+
+        // Тени между извилинами (борозды)
+        listOf(
+            42f to 33f, 50f to 30f, 58f to 34f,
+            44f to 41f, 56f to 41f, 49f to 37f,
+            38f to 39f, 62f to 39f, 46f to 33f,
+            54f to 33f, 41f to 36f, 59f to 36f
+        ).forEach { (x, y) ->
+            drawArc(
+                brainDark,
+                200f,
+                140f,
+                false,
+                topLeft = bp(x - 2.7f, y - 2.7f),
+                size = Size(5.4f * s * u, 5.4f * s * u),
+                style = Stroke(1.26f * u, cap = StrokeCap.Round)
+            )
+        }
+
+        // ================= Орбиты и искры =================
+        // Делаем орбиты более плавными и светящимися
+        rotate(-16f, pivot = pt(50f, 38f)) {
+            drawOval(
+                cyan.copy(alpha = 0.25f),
+                topLeft = pt(29.2f, 31.5f),
+                size = Size(39.6f * u, 13.5f * u),
+                style = Stroke(1.44f * u)
+            )
+            drawOval(
+                cyanBright.copy(alpha = 0.7f),
+                topLeft = pt(29.2f, 31.5f),
+                size = Size(39.6f * u, 13.5f * u),
+                style = Stroke(0.63f * u)
+            )
+        }
+        rotate(12f, pivot = pt(50f, 38f)) {
+            drawOval(
+                cyan.copy(alpha = 0.25f),
+                topLeft = pt(30.6f, 32.4f),
+                size = Size(36.9f * u, 11.7f * u),
+                style = Stroke(1.44f * u)
+            )
+            drawOval(
+                cyanBright.copy(alpha = 0.65f),
+                topLeft = pt(30.6f, 32.4f),
+                size = Size(36.9f * u, 11.7f * u),
+                style = Stroke(0.63f * u)
+            )
+        }
+
+        fun orbitPos(rx: Float, ry: Float, rotDeg: Float, a: Float): Offset {
+            val r = rotDeg * (PI / 180.0).toFloat()
+            val cr = cos(r)
+            val sr = sin(r)
+            val x = cos(a) * rx
+            val y = sin(a) * ry
+            return pt(50f + x * cr - y * sr, 38f + x * sr + y * cr)
+        }
+
+        if (finalPhase != 0f) {
+            for (i in 0..7) { // Увеличили количество искр для красоты
+                val a = finalPhase * (1.2f + 0.15f * i) + i * 1.2f
+                val p = if (i % 2 == 0) orbitPos(19.8f, 6.75f, -16f, a)
+                else orbitPos(18.45f, 5.85f, 12f, a)
+                val tw = 0.5f + 0.5f * sin(finalPulse * 2f + i * 1.3f)
+                
+                // Мощное гало
+                glow(p, (2.7f + 2.25f * tw) * u, cyan.copy(alpha = 0.4f + 0.4f * tw))
+                // Ядро искры (белое + цветное)
+                drawCircle(cyanBright, 1.08f * u, p)
+                drawCircle(Color.White.copy(alpha = 0.8f), 0.45f * u, p)
+            }
+        }
+
+        // ================= Купол: ободок и блик =================
+        // Двойная обводка для объема
+        drawArc(
+            Color(0xFFDFF7FC).copy(alpha = 0.6f),
+            180f,
+            180f,
+            false,
+            topLeft = domeTL,
+            size = domeSize,
+            style = Stroke(0.99f * u)
+        )
+        drawArc(
+            metalDeep,
+            180f,
+            180f,
+            false,
+            topLeft = Offset(domeTL.x - 0.36f * u, domeTL.y + 0.36f * u),
+            size = domeSize,
+            style = Stroke(0.99f * u)
+        )
+        
+        // Блик на стекле
+        drawArc(
+            Color.White.copy(alpha = 0.9f),
+            195f,
+            45f,
+            false,
+            topLeft = Offset(domeC.x - domeR + 2.25f * u, domeC.y - domeR + 2.25f * u),
+            size = Size(domeR * 2f - 4.5f * u, domeR * 2f - 4.5f * u),
+            style = Stroke(1.44f * u, cap = StrokeCap.Round)
+        )
+        // Добавляем второй, маленький блик снизу
+        drawArc(
+            Color.White.copy(alpha = 0.4f),
+            15f,
+            30f,
+            false,
+            topLeft = Offset(domeC.x - domeR + 3.15f * u, domeC.y - domeR - 0.9f * u),
+            size = Size(domeR * 2f - 6.3f * u, domeR * 2f - 6.3f * u),
+            style = Stroke(0.9f * u)
+        )
+
+        // Ободок купола (стекло->металл)
+        drawOval(metalDark, topLeft = pt(28.5f, 46.2f), size = Size(40.5f * u, 3.4f * u))
+        drawOval(Color.White.copy(alpha = 0.3f), topLeft = pt(29f, 46.3f), size = Size(39.6f * u, 1.2f * u))
+        
 
         // ================= Глаза + зрачки =================
         for (sx in listOf(-1f, 1f)) {
@@ -1844,8 +1861,8 @@ private fun TopBarWithSwitch(
         }
     }
     
-    val showRobotOnOrbit = robotOnOrbit && !robotIsFlyingHere
-    val robotOnOrbitAlpha = if (showRobotOnOrbit) 1f else 0f
+        val showRobotOnOrbit = robotOnOrbit || robotIsFlyingHome
+    val robotOnOrbitAlpha = if (showRobotOnOrbit && !robotIsFlyingHere) 1f else 0f
 
     Box(
         modifier = Modifier
@@ -1974,7 +1991,7 @@ private fun TopBarWithSwitch(
                 
                 // Сохраняем координаты приземления в глобальной системе координат
                 landingX = with(density) { (topBarPositionInRoot.x + endX - endSizePx / 2f).toDp().value }
-                landingY = with(density) { (topBarPositionInRoot.y + endY - endSizePx / 2f - 60f).toDp().value }
+                landingY = with(density) { (topBarPositionInRoot.y + endY - endSizePx / 2f - 85f).toDp().value }
                 
                 Box(
                     modifier = Modifier
