@@ -268,7 +268,7 @@ fun ChatScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val coroutineScope = rememberCoroutineScope()
 
-        val speechRecognizerLauncher = rememberLauncherForActivityResult(
+    val speechRecognizerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == android.app.Activity.RESULT_OK) {
@@ -320,7 +320,7 @@ fun ChatScreen(
         "А ещё я могу напоминать тебе о важных событиях,заменяя тебе органайзер. ⏰ " +
         "Давай общаться! Включи локальный движок Llama или облачный ИИ в шапке приложения, и погнали! 🚀"
 
-        val isFirstLaunch by viewModel.isFirstLaunch.collectAsStateWithLifecycle(initialValue = false)
+    val isFirstLaunch by viewModel.isFirstLaunch.collectAsStateWithLifecycle(initialValue = false)
 
     LaunchedEffect(isTtsReady) {
         if (isTtsReady && !welcomeStarted) {
@@ -333,12 +333,14 @@ fun ChatScreen(
             viewModel.speakText(greeting)
         }
     }
+
     LaunchedEffect(isTtsReady, robotOnOrbit, robotIsLanded) {
         if (isTtsReady && robotOnOrbit && !robotIsLanded && !robotIsFlyingHere) {
             robotIsFlyingHere = true
         }
     }
-        LaunchedEffect(speakStartTrigger) {
+
+    LaunchedEffect(speakStartTrigger) {
         if (speakStartTrigger && welcomeStarted && !welcomeTextPrinted) {
             welcomeTextPrinted = true
             val greeting = if (isFirstLaunch) {
@@ -533,14 +535,14 @@ fun ChatScreen(
         )
     }
 
-        val density = LocalDensity.current
+    val density = LocalDensity.current
 
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(colors.background)
     ) {
-                Column(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .imePadding()
@@ -741,7 +743,7 @@ fun ChatScreen(
                 }
             }
 
-                       if (imagePath != null) {
+            if (imagePath != null) {
                 ImagePreview(imagePath = imagePath, colors = colors)
             }
 
@@ -799,7 +801,7 @@ fun ChatScreen(
             )
         }
 
-                // ===== РОБОТ ПОВЕРХ ВСЕГО (после приземления) =====
+        // ===== РОБОТ ПОВЕРХ ВСЕГО (после приземления) =====
         if (robotIsLanded) {
             BoxWithConstraints(
                 modifier = Modifier.fillMaxSize()
@@ -1846,7 +1848,7 @@ private fun TopBarWithSwitch(
     val cloudIndicatorColor = if (isCloudReady) colors.green else colors.paleYellow
 
     val transition = rememberInfiniteTransition(label = "top_bar_transition")
-    
+
     val planetPulse by transition.animateFloat(
         initialValue = 0.85f,
         targetValue = 1.2f,
@@ -1856,7 +1858,7 @@ private fun TopBarWithSwitch(
         ),
         label = "planet_pulse"
     )
-    
+
     val robotOrbitAngle by transition.animateFloat(
         initialValue = 0f,
         targetValue = 2f * PI.toFloat(),
@@ -1866,19 +1868,19 @@ private fun TopBarWithSwitch(
         ),
         label = "robot_orbit"
     )
-    
+
     var flightDirection by remember { mutableStateOf(0) } // 1 = на посадку, -1 = на орбиту
     var startAngle by remember { mutableStateOf(0f) }
     var landingX by remember { mutableStateOf(0f) }
     var landingY by remember { mutableStateOf(0f) }
     var topBarPositionInRoot by remember { mutableStateOf(Offset.Zero) }
-    
+
     val flightProgress by animateFloatAsState(
         targetValue = if (robotIsFlyingHere || robotIsFlyingHome) 1f else 0f,
         animationSpec = tween(durationMillis = 3000, easing = FastOutSlowInEasing),
         label = "flight_progress"
     )
-    
+
     LaunchedEffect(robotIsFlyingHere, robotIsFlyingHome) {
         if (robotIsFlyingHere) {
             flightDirection = 1
@@ -1888,7 +1890,7 @@ private fun TopBarWithSwitch(
             startAngle = robotOrbitAngle
         }
     }
-    
+
     LaunchedEffect(flightProgress, flightDirection) {
         if (flightProgress >= 0.99f) {
             if (flightDirection == 1) {
@@ -1898,7 +1900,7 @@ private fun TopBarWithSwitch(
             }
         }
     }
-    
+
     val showRobotOnOrbit = robotOnOrbit || robotIsFlyingHome
     val robotOnOrbitAlpha = if (showRobotOnOrbit && !robotIsFlyingHere && !robotIsLanded) 1f else 0f
 
@@ -1946,91 +1948,91 @@ private fun TopBarWithSwitch(
             robotOrbitAngle = robotOrbitAngle,
             robotOnOrbitAlpha = robotOnOrbitAlpha
         )
-        
+
         if ((robotIsFlyingHere || robotIsFlyingHome) && flightProgress > 0f && flightProgress < 1f) {
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val w = constraints.maxWidth.toFloat()
                 val h = constraints.maxHeight.toFloat()
                 val minDim = min(w, h)
-                
+
                 val orbitCenterX = w * SpaceConstants.ORBIT_CENTER_X_RATIO
                 val orbitCenterY = h * SpaceConstants.ORBIT_CENTER_Y_RATIO
                 val robotOrbitRx = w * SpaceConstants.ROBOT_ORBIT_RX
                 val robotOrbitRy = h * SpaceConstants.ROBOT_ORBIT_RY
-                
+
                 val density = LocalDensity.current
                 val logoWidth = with(density) { 56.dp.toPx() }
                 val rightWidth = with(density) { 132.dp.toPx() }
                 val robotCenterX = logoWidth + (w - logoWidth - rightWidth) / 2f
                 val endX = robotCenterX
                 val endY = h / 2f
-                
+
                 val startX = orbitCenterX + cos(startAngle) * robotOrbitRx
                 val startY = orbitCenterY + sin(startAngle) * robotOrbitRy
-                
+
                 val endSizePx = with(density) { 70.dp.toPx() }
                 val startSize = h * 0.16f
-                
+
                 val ctrlX = (startX + endX) / 2f
                 val ctrlY = startY - h * 0.4f
-                
+
                 val oneMinusT = 1f - flightProgress
-                
+
                 val currentX: Float
                 val currentY: Float
                 val currentSize: Float
-                
+
                 if (flightDirection == 1) {
                     // Полёт на посадку
-                    currentX = oneMinusT * oneMinusT * startX + 
-                               2f * oneMinusT * flightProgress * ctrlX + 
-                               flightProgress * flightProgress * endX
-                    currentY = oneMinusT * oneMinusT * startY + 
-                               2f * oneMinusT * flightProgress * ctrlY + 
-                               flightProgress * flightProgress * endY
+                    currentX = oneMinusT * oneMinusT * startX +
+                            2f * oneMinusT * flightProgress * ctrlX +
+                            flightProgress * flightProgress * endX
+                    currentY = oneMinusT * oneMinusT * startY +
+                            2f * oneMinusT * flightProgress * ctrlY +
+                            flightProgress * flightProgress * endY
                     currentSize = startSize + (endSizePx - startSize) * flightProgress
                 } else {
                     // Полёт на орбиту (обратная траектория)
-                    currentX = oneMinusT * oneMinusT * endX + 
-                               2f * oneMinusT * flightProgress * ctrlX + 
-                               flightProgress * flightProgress * startX
-                    currentY = oneMinusT * oneMinusT * endY + 
-                               2f * oneMinusT * flightProgress * ctrlY + 
-                               flightProgress * flightProgress * startY
+                    currentX = oneMinusT * oneMinusT * endX +
+                            2f * oneMinusT * flightProgress * ctrlX +
+                            flightProgress * flightProgress * startX
+                    currentY = oneMinusT * oneMinusT * endY +
+                            2f * oneMinusT * flightProgress * ctrlY +
+                            flightProgress * flightProgress * startY
                     currentSize = endSizePx + (startSize - endSizePx) * flightProgress
                 }
-                
+
                 val dx: Float
                 val dy: Float
                 if (flightDirection == 1) {
-                    dx = 2f * oneMinusT * (ctrlX - startX) + 
-                         2f * flightProgress * (endX - ctrlX)
-                    dy = 2f * oneMinusT * (ctrlY - startY) + 
-                         2f * flightProgress * (endY - ctrlY)
+                    dx = 2f * oneMinusT * (ctrlX - startX) +
+                        2f * flightProgress * (endX - ctrlX)
+                    dy = 2f * oneMinusT * (ctrlY - startY) +
+                        2f * flightProgress * (endY - ctrlY)
                 } else {
-                    dx = 2f * oneMinusT * (ctrlX - endX) + 
-                         2f * flightProgress * (startX - ctrlX)
-                    dy = 2f * oneMinusT * (ctrlY - endY) + 
-                         2f * flightProgress * (startY - ctrlY)
+                    dx = 2f * oneMinusT * (ctrlX - endX) +
+                        2f * flightProgress * (startX - ctrlX)
+                    dy = 2f * oneMinusT * (ctrlY - endY) +
+                        2f * flightProgress * (startY - ctrlY)
                 }
-                
+
                 val angleRad = atan2(dy, dx)
                 val angleDeg = angleRad * 180f / PI.toFloat()
-                
+
                 val flightAngleDeg = angleDeg + 90f
                 val targetAngle = 0f
-                
+
                 val smoothProgress = flightProgress * flightProgress * (3f - 2f * flightProgress)
                 val finalAngle = flightAngleDeg * (1f - smoothProgress) + targetAngle * smoothProgress
-                
+
                 val scale = currentSize / endSizePx
                 val offsetXDp = with(density) { (currentX - currentSize / 2f).toDp() }
                 val offsetYDp = with(density) { (currentY - currentSize / 2f).toDp() }
-                
+
                 // Сохраняем координаты приземления в глобальной системе координат
                 landingX = with(density) { (topBarPositionInRoot.x + endX - endSizePx / 2f).toDp().value }
                 landingY = with(density) { (topBarPositionInRoot.y + endY - endSizePx / 2f - 85f).toDp().value }
-                
+
                 Box(
                     modifier = Modifier
                         .offset(x = offsetXDp, y = offsetYDp)
@@ -2041,12 +2043,12 @@ private fun TopBarWithSwitch(
                             rotationZ = finalAngle
                         )
                 ) {
-                        ThinkingRobotAnimation(
+                    ThinkingRobotAnimation(
                         height = 70.dp,
                         isActive = false,
-                        isSpeaking = isSpeaking,
-                        isThinking = state is GenerationState.Generating || cloudState is CloudAIState.Generating,
-                        isIdle = !isSpeaking && state !is GenerationState.Generating && cloudState !is CloudAIState.Generating,
+                        isSpeaking = false,
+                        isThinking = false,
+                        isIdle = true,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
