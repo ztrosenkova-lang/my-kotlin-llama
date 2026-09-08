@@ -857,7 +857,7 @@ fun ChatScreen(
                 val orbitSize = topBarHeight * 0.16f
 
                 val density = LocalDensity.current
-                val robotSizeOnScreen = with(density) { (70f * robotScale).toPx() }
+                val robotSizeOnScreen = with(density) { (70.dp * robotScale).toPx() }
 
                 val startX: Float
                 val startY: Float
