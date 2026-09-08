@@ -336,11 +336,13 @@ fun ChatScreen(
         }
     }
 
-    LaunchedEffect(isTtsReady, robotOnOrbit, robotIsLanded) {
-        if (isTtsReady && robotOnOrbit && !robotIsLanded && !robotIsFlyingHere) {
-            robotIsFlyingHere = true
-        }
+    LaunchedEffect(Unit) {
+    delay(1500)
+    if (!robotIsLanded && !robotIsFlyingHome) {
+        robotIsFlyingHere = true
+        robotOnOrbit = false
     }
+}
             LaunchedEffect(robotOnOrbit) {
         if (robotOnOrbit) {
             while (true) {
@@ -795,6 +797,25 @@ fun ChatScreen(
                 isDarkTheme = isDarkTheme
             )
         }
+                val flightProgress by animateFloatAsState(
+            targetValue = if (robotIsFlyingHere || robotIsFlyingHome) 1f else 0f,
+            animationSpec = tween(durationMillis = 3000, easing = FastOutSlowInEasing),
+            label = "flight_progress"
+        )
+
+        LaunchedEffect(flightProgress) {
+            if (flightProgress >= 0.99f) {
+                if (robotIsFlyingHere) {
+                    robotIsFlyingHere = false
+                    robotIsLanded = true
+                    robotOnOrbit = false
+                } else if (robotIsFlyingHome) {
+                    robotIsFlyingHome = false
+                    robotIsLanded = false
+                    robotOnOrbit = true
+                }
+            }
+        }
 
         // ===== ЕДИНЫЙ РОБОТ =====
         // Робот на орбите
@@ -884,26 +905,6 @@ fun ChatScreen(
                     endSize = orbitSize
                 }
 
-                val flightProgress by animateFloatAsState(
-                    targetValue = 1f,
-                    animationSpec = tween(durationMillis = 3000, easing = FastOutSlowInEasing),
-                    label = "flight_progress"
-                )
-
-                LaunchedEffect(flightProgress) {
-                    if (flightProgress >= 0.99f) {
-                        if (robotIsFlyingHere) {
-                            robotIsFlyingHere = false
-                            robotIsLanded = true
-                            robotOnOrbit = false
-                        } else {
-                            robotIsFlyingHome = false
-                            robotIsLanded = false
-                            robotOnOrbit = true
-                        }
-                    }
-                }
-
                 val t = flightProgress
                 val oneMinusT = 1f - t
                 val ctrlX = (startX + endX) / 2f
@@ -956,57 +957,12 @@ fun ChatScreen(
                             scaleY = robotScale
                         )
                         .pointerInput(Unit) {
-                            var startOffsetX = 0f
-                            var startOffsetY = 0f
-                            var startScale = 1f
-                            var lastCentroid = Offset.Zero
-                            var initialDistance = 0f
-
-                            awaitEachGesture {
-                                val down = awaitFirstDown()
-                                startOffsetX = robotOffsetX
-                                startOffsetY = robotOffsetY
-                                startScale = robotScale
-                                lastCentroid = down.position
-
-                                while (true) {
-                                    val event = awaitPointerEvent()
-                                    val pointers = event.changes.filter { it.pressed }
-
-                                    if (pointers.isEmpty()) break
-
-                                    if (pointers.size == 1) {
-                                        val change = pointers[0]
-                                        val delta = change.position - change.previousPosition
-                                        robotOffsetX = (startOffsetX + delta.x).coerceIn(0f, screenWidthPx - robotSizePx * robotScale)
-                                        robotOffsetY = (startOffsetY + delta.y).coerceIn(0f, screenHeightPx - robotSizePx * robotScale)
-                                        change.consume()
-                                    } else if (pointers.size >= 2) {
-                                        val currentCentroid = pointers.map { it.position }.reduce { acc, pos -> Offset(acc.x + pos.x, acc.y + pos.y) } / pointers.size.toFloat()
-                                        val currentDistance = sqrt(
-                                            (pointers[0].position.x - pointers[1].position.x).let { it * it } +
-                                            (pointers[0].position.y - pointers[1].position.y).let { it * it }
-                                        )
-
-                                        if (initialDistance == 0f) {
-                                            initialDistance = currentDistance
-                                        }
-
-                                        val scaleFactor = currentDistance / initialDistance
-                                        val newScale = (startScale * scaleFactor).coerceIn(0.5f, 3f)
-
-                                        val scaleChange = newScale / robotScale
-                                        val centroidDelta = currentCentroid - lastCentroid
-
-                                        robotOffsetX = (robotOffsetX + centroidDelta.x / scaleChange).coerceIn(0f, screenWidthPx - robotSizePx * newScale)
-                                        robotOffsetY = (robotOffsetY + centroidDelta.y / scaleChange).coerceIn(0f, screenHeightPx - robotSizePx * newScale)
-                                        robotScale = newScale
-
-                                        lastCentroid = currentCentroid
-
-                                        pointers.forEach { it.consume() }
-                                    }
-                                }
+    detectTransformGestures { _, pan, zoom, _ ->
+        robotOffsetX = (robotOffsetX + pan.x).coerceIn(0f, screenWidthPx - robotSizePx * robotScale)
+        robotOffsetY = (robotOffsetY + pan.y).coerceIn(0f, screenHeightPx - robotSizePx * robotScale)
+        robotScale = (robotScale * zoom).coerceIn(0.5f, 3f)
+    }
+}
                             }
                         }
                 ) {
