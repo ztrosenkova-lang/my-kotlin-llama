@@ -819,48 +819,12 @@ fun ChatScreen(
                             scaleY = robotScale
                         )
                         .pointerInput(Unit) {
-                            var previousPosition = Offset.Zero
-                            var previousDistance = 0f
-                            var isMultiTouch = false
-
-                            awaitEachGesture {
-                                awaitFirstDown()
-                                isMultiTouch = false
-                                previousDistance = 0f
-                                previousPosition = Offset.Zero
-
-                                do {
-                                    val event = awaitPointerEvent()
-                                    val pointers = event.changes
-
-                                    if (pointers.size >= 2) {
-                                        isMultiTouch = true
-                                        val p1 = pointers[0].position
-                                        val p2 = pointers[1].position
-                                        val distance = sqrt(
-                                            (p2.x - p1.x) * (p2.x - p1.x) +
-                                            (p2.y - p1.y) * (p2.y - p1.y)
-                                        )
-                                        if (previousDistance > 0f) {
-                                            val scaleFactor = distance / previousDistance
-                                            robotScale = (robotScale * scaleFactor).coerceIn(0.5f, 3f)
-                                        }
-                                        previousDistance = distance
-                                    } else if (pointers.size == 1 && !isMultiTouch) {
-                                        val current = pointers[0].position
-                                        if (previousPosition != Offset.Zero) {
-                                            val deltaX = current.x - previousPosition.x
-                                            val deltaY = current.y - previousPosition.y
-                                            robotOffsetX = (robotOffsetX + deltaX).coerceIn(0f, screenWidthPx - robotSizePx)
-                                            robotOffsetY = (robotOffsetY + deltaY).coerceIn(0f, screenHeightPx - robotSizePx)
-                                        }
-                                        previousPosition = current
-                                    }
-
-                                    val allUp = pointers.all { !it.pressed }
-                                } while (!allUp)
-                            }
-                        }
+    detectTransformGestures { _, pan, zoom, _ ->
+        robotOffsetX = (robotOffsetX + pan.x).coerceIn(0f, screenWidthPx - robotSizePx)
+        robotOffsetY = (robotOffsetY + pan.y).coerceIn(0f, screenHeightPx - robotSizePx)
+        robotScale = (robotScale * zoom).coerceIn(0.5f, 3f)
+    }
+}
                 ) {
                     ThinkingRobotAnimation(
                         height = 70.dp,
@@ -1870,7 +1834,7 @@ private fun TopBarWithSwitch(
     )
 
     var flightDirection by remember { mutableStateOf(0) } // 1 = на посадку, -1 = на орбиту
-    var startAngle by remember { mutableStateOf(0f) }
+   var startAngle by remember { mutableStateOf(0f) }
     var landingX by remember { mutableStateOf(0f) }
     var landingY by remember { mutableStateOf(0f) }
     var topBarPositionInRoot by remember { mutableStateOf(Offset.Zero) }
@@ -1881,15 +1845,13 @@ private fun TopBarWithSwitch(
         label = "flight_progress"
     )
 
-    LaunchedEffect(robotIsFlyingHere, robotIsFlyingHome) {
-        if (robotIsFlyingHere) {
-            flightDirection = 1
-            startAngle = robotOrbitAngle
-        } else if (robotIsFlyingHome) {
-            flightDirection = -1
-            startAngle = robotOrbitAngle
-        }
+   LaunchedEffect(robotIsFlyingHere, robotIsFlyingHome) {
+    if (robotIsFlyingHere) {
+        flightDirection = 1
+    } else if (robotIsFlyingHome) {
+        flightDirection = -1
     }
+}
 
     LaunchedEffect(flightProgress, flightDirection) {
         if (flightProgress >= 0.99f) {
@@ -1967,8 +1929,8 @@ private fun TopBarWithSwitch(
                 val endX = robotCenterX
                 val endY = h / 2f
 
-                val startX = orbitCenterX + cos(startAngle) * robotOrbitRx
-                val startY = orbitCenterY + sin(startAngle) * robotOrbitRy
+                val startX = orbitCenterX + cos(robotOrbitAngle) * robotOrbitRx
+                val startY = orbitCenterY + sin(robotOrbitAngle) * robotOrbitRy
 
                 val endSizePx = with(density) { 70.dp.toPx() }
                 val startSize = h * 0.16f
