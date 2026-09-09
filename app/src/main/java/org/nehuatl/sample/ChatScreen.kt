@@ -961,8 +961,7 @@ fun ChatScreen(
         robotOffsetX = (robotOffsetX + pan.x).coerceIn(0f, screenWidthPx - robotSizePx * robotScale)
         robotOffsetY = (robotOffsetY + pan.y).coerceIn(0f, screenHeightPx - robotSizePx * robotScale)
         robotScale = (robotScale * zoom).coerceIn(0.5f, 3f)
-    }
-}
+
                             }
                         }
                 ) {
