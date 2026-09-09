@@ -1254,12 +1254,12 @@ fun ThinkingRobotAnimation(
 
     val finalPhase = if (isThinking || isSpeaking) phase else 0f
     val finalPulse = if (isThinking || isSpeaking) pulse else 0f
-    val finalBob = if (isIdle) bob else 0f
+    val finalBob = bob
     val finalBlink = if (isActive || isSpeaking) blink else 1f
-    val finalLookX = if (isIdle) lookX else 0f
+    val finalLookX = if (isIdle || isThinking) lookX else 0f
     val finalLookY = when {
         isIdle -> lookY
-        isThinking -> -0.6f
+        isThinking -> lookY
         else -> 0f
     }
 
@@ -1324,12 +1324,60 @@ fun ThinkingRobotAnimation(
             size = Size(40f * u, 5f * u)
         )
 
-        // Тень под плечами
+                // Тень под плечами (остаётся)
         drawOval(
             Brush.verticalGradient(listOf(Color.Transparent, metalDeep.copy(alpha = 0.8f))),
             topLeft = pt(28f, 90f),
             size = Size(44f * u, 5f * u)
         )
+
+        // ================= ИНДИКАТОР ЗАРЯДКИ ВНУТРИ ТЕНИ =================
+        // Отступ от краёв тени (20% от ширины 44 => 8.8 слева и справа)
+        val chargeBarLeft = 28f + 44f * 0.20f   // 36.8
+        val chargeBarRight = 72f - 44f * 0.20f  // 63.2
+        val chargeBarWidth = chargeBarRight - chargeBarLeft // 26.4
+        val chargeBarHeight = 1.4f
+        val chargeBarY = 91.6f  // внутри тени (тень от 90 до 95)
+
+        // Анимация бегущей полоски (используем pulse)
+        val chargeProgress = ((pulse % (2f * PI.toFloat())) / (2f * PI.toFloat())).toFloat()
+
+        // Фон индикатора (тёмный)
+        drawRoundRect(
+            Color(0xFF0A1520),
+            topLeft = pt(chargeBarLeft, chargeBarY),
+            size = Size(chargeBarWidth * u, chargeBarHeight * u),
+            cornerRadius = CornerRadius(0.7f * u)
+        )
+
+        // Бегущая полоска (слева направо)
+        val chargeBarTravel = chargeBarWidth * chargeProgress
+        val chargeBarStart = chargeBarLeft + chargeBarTravel
+
+        if (chargeBarTravel > 0.1f) {
+            drawRoundRect(
+                Brush.horizontalGradient(
+                    listOf(cyanDeep, cyan, cyanBright),
+                    startX = offX + chargeBarStart * u,
+                    endX = offX + (chargeBarStart + 3f) * u
+                ),
+                topLeft = pt(chargeBarStart, chargeBarY),
+                size = Size(3f * u, chargeBarHeight * u),
+                cornerRadius = CornerRadius(0.7f * u)
+            )
+
+            glow(
+                Offset(offX + chargeBarStart * u + 1.5f * u, offY + chargeBarY * u + 0.7f * u),
+                3f * u,
+                cyan.copy(alpha = 0.35f)
+            )
+
+            drawCircle(
+                cyanBright.copy(alpha = 0.9f),
+                0.5f * u,
+                Offset(offX + chargeBarStart * u + 3f * u, offY + chargeBarY * u + 0.7f * u)
+            )
+        }
 
         // Крепления и суставы
         drawCircle(Brush.radialGradient(listOf(metalLight, metalDeep), center = pt(28f, 83f), radius = 8f*u), 7f * u, pt(28f, 85f))
@@ -1470,11 +1518,6 @@ fun ThinkingRobotAnimation(
         drawCircle(Brush.radialGradient(listOf(Color(0xFF9DF5CB), Color(0xFF69D2A7), Color(0xFF1B7A4B))), 1.3f * u, pt(56.5f, 87.5f))
         drawCircle(Color.White.copy(alpha = 0.4f), 0.4f * u, pt(56.1f, 87.1f))
         
-        // Добавляем третий индикатор (фиолетовый)
-        glow(pt(56.5f, 79.5f), 3f * u, purple.copy(alpha = 0.3f))
-        drawCircle(Brush.radialGradient(listOf(Color(0xFFD9A0FF), purple, Color(0xFF7A1FA0))), 1.3f * u, pt(56.5f, 79.5f))
-        drawCircle(Color.White.copy(alpha = 0.4f), 0.4f * u, pt(56.1f, 79.1f))
-
         // Штрих-код на панели (техно-деталь)
         for (i in 0..6) {
             val barWidth = if (i % 2 == 0) 0.8f else 0.4f
@@ -1973,23 +2016,7 @@ fun ThinkingRobotAnimation(
         }
 
         // ================= ДОПОЛНИТЕЛЬНЫЕ ДЕТАЛИ =================
-        // Индикатор энергии на боку
-        for (i in 0..2) {
-            val energyY = 50f + i * 8f
-            val energyAlpha = 0.3f + 0.2f * sin(pulse * 2f + i * 0.8f)
-            drawRoundRect(
-                cyan.copy(alpha = energyAlpha),
-                topLeft = pt(26.5f, energyY),
-                size = Size(1.5f * u, 6f * u),
-                cornerRadius = CornerRadius(0.3f * u)
-            )
-            drawRoundRect(
-                cyanBright.copy(alpha = energyAlpha * 0.7f),
-                topLeft = pt(26.8f, energyY + 0.5f * u),
-                size = Size(0.8f * u, 5f * u),
-                cornerRadius = CornerRadius(0.3f * u)
-            )
-        }
+       
 
         // Шея (соединительное кольцо)
         drawOval(metalDark, topLeft = pt(44f, 74f), size = Size(12f * u, 3f * u))
