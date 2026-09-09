@@ -887,18 +887,21 @@ fun ChatScreen(
                 val endY: Float
                 val endSize: Float
 
+                               val currentRobotCenterX = robotOffsetX + with(density) { (70.dp * robotScale).toPx() } / 2f
+                val currentRobotCenterY = robotOffsetY + with(density) { (70.dp * robotScale).toPx() } / 2f
+
                 if (robotIsFlyingHere) {
                     // С орбиты на экран
                     startX = orbitCenterX + cos(robotOrbitAngle) * orbitRx
                     startY = orbitCenterY + sin(robotOrbitAngle) * orbitRy
                     startSize = orbitSize
-                    endX = robotOffsetX + robotSizeOnScreen / 2f
-                    endY = robotOffsetY + robotSizeOnScreen / 2f
+                    endX = currentRobotCenterX
+                    endY = currentRobotCenterY
                     endSize = robotSizeOnScreen
                 } else {
                     // С экрана на орбиту
-                    startX = robotOffsetX + robotSizeOnScreen / 2f
-                    startY = robotOffsetY + robotSizeOnScreen / 2f
+                    startX = currentRobotCenterX
+                    startY = currentRobotCenterY
                     startSize = robotSizeOnScreen
                     endX = orbitCenterX + cos(robotOrbitAngle) * orbitRx
                     endY = orbitCenterY + sin(robotOrbitAngle) * orbitRy
