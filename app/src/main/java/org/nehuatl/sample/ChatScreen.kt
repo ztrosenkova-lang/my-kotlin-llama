@@ -1212,7 +1212,8 @@ fun ThinkingRobotAnimation(
         val whiteBody = Color(0xFFF2F2F2)
         val shadowWhite = Color(0xFFD6D6D6)
         val darkGray = Color(0xFF3A3D40)
-        val lightGray = Color(0xFF55595D)
+        val mediumGray = Color(0xFF55595D)
+        val lightGray = Color(0xFF8B8F94)
         val screenBlack = Color(0xFF1A1C1E)
 
         val neonBlueBase = Color(0xFF5CE1E6)
@@ -1222,162 +1223,358 @@ fun ThinkingRobotAnimation(
             neonBlueBase
         }
 
-        // 1. РАКЕТНОЕ ПЛАМЯ
-        val flameWidth = 40f * scale
-        val flameHeight = (30f + sin(phase) * 10f) * scale
+        // 1. РАКЕТНОЕ ПЛАМЯ (снизу)
+        val flameWidth = 35f * scale
+        val flameHeight = (25f + sin(phase) * 8f) * scale
         val flamePath = Path().apply {
-            moveTo(size.width / 2 - flameWidth / 2, 250f * scale + bobOffset)
+            moveTo(size.width / 2 - flameWidth / 2, 280f * scale + bobOffset)
             quadraticBezierTo(
-                size.width / 2, 250f * scale + flameHeight + bobOffset,
-                size.width / 2 + flameWidth / 2, 250f * scale + bobOffset
+                size.width / 2, 280f * scale + flameHeight + bobOffset,
+                size.width / 2 + flameWidth / 2, 280f * scale + bobOffset
             )
             close()
         }
         drawPath(flamePath, color = Color(0xFFFF5722))
         drawPath(flamePath, color = Color(0xFFFFC107), style = Stroke(width = 3f * scale))
 
-        // 2. НОГИ
-        val leftFootX = size.width / 2 - 45f * scale
-        val rightFootX = size.width / 2 + 15f * scale
-
-        drawRoundRect(color = shadowWhite, topLeft = Offset(leftFootX, 200f * scale), size = Size(25f * scale, 50f * scale), cornerRadius = CornerRadius(10f * scale))
-        drawOval(color = whiteBody, topLeft = Offset(leftFootX - 5f * scale, 240f * scale), size = Size(35f * scale, 20f * scale))
-        drawOval(color = darkGray, topLeft = Offset(leftFootX - 5f * scale, 240f * scale), size = Size(35f * scale, 20f * scale), style = Stroke(width = 2f * scale))
-
-        drawRoundRect(color = shadowWhite, topLeft = Offset(rightFootX, 200f * scale), size = Size(25f * scale, 50f * scale), cornerRadius = CornerRadius(10f * scale))
-        drawOval(color = whiteBody, topLeft = Offset(rightFootX - 5f * scale, 240f * scale), size = Size(35f * scale, 20f * scale))
-        drawOval(color = darkGray, topLeft = Offset(rightFootX - 5f * scale, 240f * scale), size = Size(35f * scale, 20f * scale), style = Stroke(width = 2f * scale))
-
-        // 3. РУКИ
-        drawCircle(color = whiteBody, radius = 15f * scale, center = Offset(size.width / 2 - 60f * scale, 135f * scale + bobOffset))
-        drawCircle(color = darkGray, radius = 15f * scale, center = Offset(size.width / 2 - 60f * scale, 135f * scale + bobOffset), style = Stroke(width = 2f * scale))
-
-        val leftArmPath = Path().apply {
-            moveTo(size.width / 2 - 65f * scale, 145f * scale + bobOffset)
-            lineTo(size.width / 2 - 80f * scale, 185f * scale + bobOffset)
-            lineTo(size.width / 2 - 60f * scale, 185f * scale + bobOffset)
-            close()
-        }
-        drawPath(leftArmPath, color = whiteBody)
-        drawPath(leftArmPath, color = darkGray, style = Stroke(width = 2f * scale))
-
-        drawRoundRect(color = lightGray, topLeft = Offset(size.width / 2 - 85f * scale, 185f * scale + bobOffset), size = Size(30f * scale, 25f * scale), cornerRadius = CornerRadius(5f * scale))
-
-        drawCircle(color = whiteBody, radius = 15f * scale, center = Offset(size.width / 2 + 60f * scale, 135f * scale + bobOffset))
-        drawCircle(color = darkGray, radius = 15f * scale, center = Offset(size.width / 2 + 60f * scale, 135f * scale + bobOffset), style = Stroke(width = 2f * scale))
-
-        val rightArmPath = Path().apply {
-            moveTo(size.width / 2 + 65f * scale, 145f * scale + bobOffset)
-            lineTo(size.width / 2 + 80f * scale, 185f * scale + bobOffset)
-            lineTo(size.width / 2 + 60f * scale, 185f * scale + bobOffset)
-            close()
-        }
-        drawPath(rightArmPath, color = whiteBody)
-        drawPath(rightArmPath, color = darkGray, style = Stroke(width = 2f * scale))
-
-        drawRoundRect(color = lightGray, topLeft = Offset(size.width / 2 + 55f * scale, 185f * scale + bobOffset), size = Size(30f * scale, 25f * scale), cornerRadius = CornerRadius(5f * scale))
-
-        // 4. ТУЛОВИЩЕ
-        val bodyCenter = Offset(size.width / 2, 160f * scale + bobOffset)
-
+        // 2. НОГИ (сегментированные)
+        // Левая нога - бедро
         drawRoundRect(
             color = whiteBody,
-            topLeft = Offset(bodyCenter.x - 45f * scale, bodyCenter.y - 35f * scale),
-            size = Size(90f * scale, 70f * scale),
-            cornerRadius = CornerRadius(25f * scale)
+            topLeft = Offset(size.width / 2 - 35f * scale, 220f * scale + bobOffset),
+            size = Size(20f * scale, 30f * scale),
+            cornerRadius = CornerRadius(8f * scale)
         )
         drawRoundRect(
             color = darkGray,
-            topLeft = Offset(bodyCenter.x - 45f * scale, bodyCenter.y - 35f * scale),
-            size = Size(90f * scale, 70f * scale),
-            cornerRadius = CornerRadius(25f * scale),
-            style = Stroke(width = 2.5f * scale)
+            topLeft = Offset(size.width / 2 - 35f * scale, 220f * scale + bobOffset),
+            size = Size(20f * scale, 30f * scale),
+            cornerRadius = CornerRadius(8f * scale),
+            style = Stroke(width = 2f * scale)
+        )
+        
+        // Левая нога - голень
+        drawRoundRect(
+            color = whiteBody,
+            topLeft = Offset(size.width / 2 - 33f * scale, 250f * scale + bobOffset),
+            size = Size(16f * scale, 30f * scale),
+            cornerRadius = CornerRadius(6f * scale)
         )
         drawRoundRect(
+            color = darkGray,
+            topLeft = Offset(size.width / 2 - 33f * scale, 250f * scale + bobOffset),
+            size = Size(16f * scale, 30f * scale),
+            cornerRadius = CornerRadius(6f * scale),
+            style = Stroke(width = 2f * scale)
+        )
+        
+        // Левая ступня
+        drawOval(
+            color = darkGray,
+            topLeft = Offset(size.width / 2 - 38f * scale, 275f * scale + bobOffset),
+            size = Size(26f * scale, 12f * scale)
+        )
+
+        // Правая нога - бедро
+        drawRoundRect(
+            color = whiteBody,
+            topLeft = Offset(size.width / 2 + 15f * scale, 220f * scale + bobOffset),
+            size = Size(20f * scale, 30f * scale),
+            cornerRadius = CornerRadius(8f * scale)
+        )
+        drawRoundRect(
+            color = darkGray,
+            topLeft = Offset(size.width / 2 + 15f * scale, 220f * scale + bobOffset),
+            size = Size(20f * scale, 30f * scale),
+            cornerRadius = CornerRadius(8f * scale),
+            style = Stroke(width = 2f * scale)
+        )
+        
+        // Правая нога - голень
+        drawRoundRect(
+            color = whiteBody,
+            topLeft = Offset(size.width / 2 + 17f * scale, 250f * scale + bobOffset),
+            size = Size(16f * scale, 30f * scale),
+            cornerRadius = CornerRadius(6f * scale)
+        )
+        drawRoundRect(
+            color = darkGray,
+            topLeft = Offset(size.width / 2 + 17f * scale, 250f * scale + bobOffset),
+            size = Size(16f * scale, 30f * scale),
+            cornerRadius = CornerRadius(6f * scale),
+            style = Stroke(width = 2f * scale)
+        )
+        
+        // Правая ступня
+        drawOval(
+            color = darkGray,
+            topLeft = Offset(size.width / 2 + 12f * scale, 275f * scale + bobOffset),
+            size = Size(26f * scale, 12f * scale)
+        )
+
+        // 3. РУКИ (сегментированные с суставами)
+        // Левое плечо
+        drawCircle(
+            color = whiteBody,
+            radius = 12f * scale,
+            center = Offset(size.width / 2 - 55f * scale, 145f * scale + bobOffset)
+        )
+        drawCircle(
+            color = darkGray,
+            radius = 12f * scale,
+            center = Offset(size.width / 2 - 55f * scale, 145f * scale + bobOffset),
+            style = Stroke(width = 2f * scale)
+        )
+        
+        // Левое предплечье
+        val leftForearmPath = Path().apply {
+            moveTo(size.width / 2 - 58f * scale, 155f * scale + bobOffset)
+            lineTo(size.width / 2 - 68f * scale, 190f * scale + bobOffset)
+            lineTo(size.width / 2 - 52f * scale, 192f * scale + bobOffset)
+            close()
+        }
+        drawPath(leftForearmPath, color = whiteBody)
+        drawPath(leftForearmPath, color = darkGray, style = Stroke(width = 2f * scale))
+        
+        // Левая кисть (перчатка)
+        drawCircle(
+            color = darkGray,
+            radius = 10f * scale,
+            center = Offset(size.width / 2 - 60f * scale, 200f * scale + bobOffset)
+        )
+
+        // Правое плечо
+        drawCircle(
+            color = whiteBody,
+            radius = 12f * scale,
+            center = Offset(size.width / 2 + 55f * scale, 145f * scale + bobOffset)
+        )
+        drawCircle(
+            color = darkGray,
+            radius = 12f * scale,
+            center = Offset(size.width / 2 + 55f * scale, 145f * scale + bobOffset),
+            style = Stroke(width = 2f * scale)
+        )
+        
+        // Правое предплечье
+        val rightForearmPath = Path().apply {
+            moveTo(size.width / 2 + 58f * scale, 155f * scale + bobOffset)
+            lineTo(size.width / 2 + 68f * scale, 190f * scale + bobOffset)
+            lineTo(size.width / 2 + 52f * scale, 192f * scale + bobOffset)
+            close()
+        }
+        drawPath(rightForearmPath, color = whiteBody)
+        drawPath(rightForearmPath, color = darkGray, style = Stroke(width = 2f * scale))
+        
+        // Правая кисть (перчатка)
+        drawCircle(
+            color = darkGray,
+            radius = 10f * scale,
+            center = Offset(size.width / 2 + 60f * scale, 200f * scale + bobOffset)
+        )
+
+        // 4. ТУЛОВИЩЕ (с тёмной грудной частью)
+        val bodyCenter = Offset(size.width / 2, 170f * scale + bobOffset)
+
+        // Верхняя часть (белая)
+        drawRoundRect(
+            color = whiteBody,
+            topLeft = Offset(bodyCenter.x - 40f * scale, bodyCenter.y - 40f * scale),
+            size = Size(80f * scale, 35f * scale),
+            cornerRadius = CornerRadius(20f * scale)
+        )
+        drawRoundRect(
+            color = darkGray,
+            topLeft = Offset(bodyCenter.x - 40f * scale, bodyCenter.y - 40f * scale),
+            size = Size(80f * scale, 35f * scale),
+            cornerRadius = CornerRadius(20f * scale),
+            style = Stroke(width = 2.5f * scale)
+        )
+        
+        // Грудная часть (тёмная)
+        drawRoundRect(
             color = screenBlack,
-            topLeft = Offset(bodyCenter.x - 30f * scale, bodyCenter.y + 5f * scale),
-            size = Size(60f * scale, 20f * scale),
-            cornerRadius = CornerRadius(10f * scale)
+            topLeft = Offset(bodyCenter.x - 35f * scale, bodyCenter.y - 10f * scale),
+            size = Size(70f * scale, 40f * scale),
+            cornerRadius = CornerRadius(15f * scale)
+        )
+        drawRoundRect(
+            color = darkGray,
+            topLeft = Offset(bodyCenter.x - 35f * scale, bodyCenter.y - 10f * scale),
+            size = Size(70f * scale, 40f * scale),
+            cornerRadius = CornerRadius(15f * scale),
+            style = Stroke(width = 2f * scale)
+        )
+        
+        // Нижняя часть (белая)
+        drawRoundRect(
+            color = whiteBody,
+            topLeft = Offset(bodyCenter.x - 38f * scale, bodyCenter.y + 25f * scale),
+            size = Size(76f * scale, 30f * scale),
+            cornerRadius = CornerRadius(18f * scale)
+        )
+        drawRoundRect(
+            color = darkGray,
+            topLeft = Offset(bodyCenter.x - 38f * scale, bodyCenter.y + 25f * scale),
+            size = Size(76f * scale, 30f * scale),
+            cornerRadius = CornerRadius(18f * scale),
+            style = Stroke(width = 2.5f * scale)
         )
 
         // 5. ШЕЯ
         drawRoundRect(
-            color = lightGray,
-            topLeft = Offset(size.width / 2 - 15f * scale, 105f * scale + bobOffset),
-            size = Size(30f * scale, 20f * scale),
+            color = mediumGray,
+            topLeft = Offset(size.width / 2 - 12f * scale, 115f * scale + bobOffset),
+            size = Size(24f * scale, 15f * scale),
             cornerRadius = CornerRadius(4f * scale)
         )
 
         // 6. ГОЛОВА И НАУШНИКИ
-        val headSize = Size(120f * scale, 95f * scale)
-        val headTopLeft = Offset(size.width / 2 - headSize.width / 2, 25f * scale + bobOffset)
+        val headSize = Size(110f * scale, 90f * scale)
+        val headTopLeft = Offset(size.width / 2 - headSize.width / 2, 35f * scale + bobOffset)
 
-        drawRoundRect(color = lightGray, topLeft = Offset(headTopLeft.x - 12f * scale, headTopLeft.y + 25f * scale), size = Size(15f * scale, 45f * scale), cornerRadius = CornerRadius(8f * scale))
-        drawRoundRect(color = darkGray, topLeft = Offset(headTopLeft.x - 12f * scale, headTopLeft.y + 25f * scale), size = Size(15f * scale, 45f * scale), cornerRadius = CornerRadius(8f * scale), style = Stroke(width = 2f * scale))
+        // Левый наушник (цилиндрический)
+        drawRoundRect(
+            color = lightGray,
+            topLeft = Offset(headTopLeft.x - 18f * scale, headTopLeft.y + 20f * scale),
+            size = Size(20f * scale, 50f * scale),
+            cornerRadius = CornerRadius(10f * scale)
+        )
+        drawRoundRect(
+            color = darkGray,
+            topLeft = Offset(headTopLeft.x - 18f * scale, headTopLeft.y + 20f * scale),
+            size = Size(20f * scale, 50f * scale),
+            cornerRadius = CornerRadius(10f * scale),
+            style = Stroke(width = 2f * scale)
+        )
+        drawRoundRect(
+            color = mediumGray,
+            topLeft = Offset(headTopLeft.x - 16f * scale, headTopLeft.y + 25f * scale),
+            size = Size(16f * scale, 40f * scale),
+            cornerRadius = CornerRadius(8f * scale)
+        )
 
-        drawRoundRect(color = lightGray, topLeft = Offset(headTopLeft.x + headSize.width - 3f * scale, headTopLeft.y + 25f * scale), size = Size(15f * scale, 45f * scale), cornerRadius = CornerRadius(8f * scale))
-        drawRoundRect(color = darkGray, topLeft = Offset(headTopLeft.x + headSize.width - 3f * scale, headTopLeft.y + 25f * scale), size = Size(15f * scale, 45f * scale), cornerRadius = CornerRadius(8f * scale), style = Stroke(width = 2f * scale))
+        // Правый наушник (цилиндрический)
+        drawRoundRect(
+            color = lightGray,
+            topLeft = Offset(headTopLeft.x + headSize.width - 2f * scale, headTopLeft.y + 20f * scale),
+            size = Size(20f * scale, 50f * scale),
+            cornerRadius = CornerRadius(10f * scale)
+        )
+        drawRoundRect(
+            color = darkGray,
+            topLeft = Offset(headTopLeft.x + headSize.width - 2f * scale, headTopLeft.y + 20f * scale),
+            size = Size(20f * scale, 50f * scale),
+            cornerRadius = CornerRadius(10f * scale),
+            style = Stroke(width = 2f * scale)
+        )
+        drawRoundRect(
+            color = mediumGray,
+            topLeft = Offset(headTopLeft.x + headSize.width - 14f * scale, headTopLeft.y + 25f * scale),
+            size = Size(16f * scale, 40f * scale),
+            cornerRadius = CornerRadius(8f * scale)
+        )
+        
+        // Светящаяся точка на правом наушнике
+        drawCircle(
+            color = neonBlueBase,
+            radius = 6f * scale,
+            center = Offset(headTopLeft.x + headSize.width + 8f * scale, headTopLeft.y + 45f * scale)
+        )
 
-        drawCircle(color = neonBlueBase, radius = 8f * scale, center = Offset(headTopLeft.x + headSize.width + 4f * scale, headTopLeft.y + 47.5f * scale))
+        // Основная голова (белая округлая)
+        drawRoundRect(
+            color = whiteBody,
+            topLeft = headTopLeft,
+            size = headSize,
+            cornerRadius = CornerRadius(35f * scale)
+        )
+        drawRoundRect(
+            color = darkGray,
+            topLeft = headTopLeft,
+            size = headSize,
+            cornerRadius = CornerRadius(35f * scale),
+            style = Stroke(width = 2.5f * scale)
+        )
 
-        drawRoundRect(color = whiteBody, topLeft = headTopLeft, size = headSize, cornerRadius = CornerRadius(40f * scale))
-        drawRoundRect(color = darkGray, topLeft = headTopLeft, size = headSize, cornerRadius = CornerRadius(40f * scale), style = Stroke(width = 2.5f * scale))
+        // 7. ЛИЦЕВОЙ ЭКРАН (чёрный)
+        val maskSize = Size(85f * scale, 65f * scale)
+        val maskTopLeft = Offset(size.width / 2 - maskSize.width / 2, 48f * scale + bobOffset)
+        drawRoundRect(
+            color = screenBlack,
+            topLeft = maskTopLeft,
+            size = maskSize,
+            cornerRadius = CornerRadius(25f * scale)
+        )
+        drawRoundRect(
+            color = darkGray,
+            topLeft = maskTopLeft,
+            size = maskSize,
+            cornerRadius = CornerRadius(25f * scale),
+            style = Stroke(width = 2f * scale)
+        )
 
-        // 7. ЛИЦЕВОЙ ЭКРАН
-        val maskSize = Size(96f * scale, 72f * scale)
-        val maskTopLeft = Offset(size.width / 2 - maskSize.width / 2, 36f * scale + bobOffset)
-        drawRoundRect(color = screenBlack, topLeft = maskTopLeft, size = maskSize, cornerRadius = CornerRadius(30f * scale))
+        // 8. ГЛАЗА (овальные голубые)
+        val eyeWidth = 12f * scale
+        val eyeHeight = if (isThinking) (18f + sin(pulse) * 3f) * scale else 20f * scale
 
-        // 8. ГЛАЗА
-        val eyeWidth = 14f * scale
-        val eyeHeight = if (isThinking) (22f + sin(pulse) * 4f) * scale else 24f * scale
-
-        val leftEyeCenter = Offset(size.width / 2 - 24f * scale, 65f * scale + bobOffset)
-        val rightEyeCenter = Offset(size.width / 2 + 24f * scale, 65f * scale + bobOffset)
+        val leftEyeCenter = Offset(size.width / 2 - 22f * scale, 72f * scale + bobOffset)
+        val rightEyeCenter = Offset(size.width / 2 + 22f * scale, 72f * scale + bobOffset)
 
         if (isActive) {
             drawRoundRect(
                 color = neonBluePulse,
                 topLeft = Offset(leftEyeCenter.x - eyeWidth / 2, leftEyeCenter.y - eyeHeight / 2),
                 size = Size(eyeWidth, eyeHeight),
-                cornerRadius = CornerRadius(10f * scale)
+                cornerRadius = CornerRadius(8f * scale)
             )
             drawRoundRect(
                 color = neonBluePulse,
                 topLeft = Offset(rightEyeCenter.x - eyeWidth / 2, rightEyeCenter.y - eyeHeight / 2),
                 size = Size(eyeWidth, eyeHeight),
-                cornerRadius = CornerRadius(10f * scale)
+                cornerRadius = CornerRadius(8f * scale)
             )
         } else {
-            drawRect(color = lightGray, topLeft = Offset(leftEyeCenter.x - 8f * scale, leftEyeCenter.y), size = Size(16f * scale, 3f * scale))
-            drawRect(color = lightGray, topLeft = Offset(rightEyeCenter.x - 8f * scale, rightEyeCenter.y), size = Size(16f * scale, 3f * scale))
+            // Закрытые глаза (линии)
+            drawRect(
+                color = lightGray,
+                topLeft = Offset(leftEyeCenter.x - 8f * scale, leftEyeCenter.y),
+                size = Size(16f * scale, 3f * scale)
+            )
+            drawRect(
+                color = lightGray,
+                topLeft = Offset(rightEyeCenter.x - 8f * scale, rightEyeCenter.y),
+                size = Size(16f * scale, 3f * scale)
+            )
         }
 
-        // 9. РОТ
+        // 9. РОТ (улыбка)
         if (isActive) {
-            val mouthY = 82f * scale + bobOffset
+            val mouthY = 92f * scale + bobOffset
             val mouthPath = Path()
 
             if (isSpeaking) {
-                val mouthWave = (5f + sin(phase * 2) * 4f) * scale
+                // Анимированный рот при разговоре
+                val mouthWave = (4f + sin(phase * 2) * 3f) * scale
                 val mouthRect = Rect(
-                    size.width / 2 - 15f * scale,
+                    size.width / 2 - 12f * scale,
                     mouthY - mouthWave / 2,
-                    size.width / 2 + 15f * scale,
+                    size.width / 2 + 12f * scale,
                     mouthY + mouthWave / 2
                 )
                 mouthPath.addOval(mouthRect)
                 drawPath(mouthPath, color = neonBlueBase)
             } else {
-                mouthPath.moveTo(size.width / 2 - 16f * scale, mouthY - 2f * scale)
+                // Улыбка
+                mouthPath.moveTo(size.width / 2 - 14f * scale, mouthY - 2f * scale)
                 mouthPath.quadraticBezierTo(
-                    size.width / 2, mouthY + 8f * scale,
-                    size.width / 2 + 16f * scale, mouthY - 2f * scale
+                    size.width / 2, mouthY + 6f * scale,
+                    size.width / 2 + 14f * scale, mouthY - 2f * scale
                 )
                 drawPath(
                     path = mouthPath,
                     color = neonBlueBase,
-                    style = Stroke(width = 3.5f * scale, cap = StrokeCap.Round)
+                    style = Stroke(width = 3f * scale, cap = StrokeCap.Round)
                 )
             }
         }
