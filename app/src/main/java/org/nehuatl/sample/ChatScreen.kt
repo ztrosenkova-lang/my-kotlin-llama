@@ -94,6 +94,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -141,7 +142,6 @@ import kotlin.math.sqrt
 import androidx.compose.animation.core.keyframes
 import java.util.Random
 import androidx.compose.runtime.rememberUpdatedState
-
 private data class AppColors(
     val background: Color,
     val surfaceGray: Color,
@@ -1165,813 +1165,227 @@ fun ThinkingRobotAnimation(
     isThinking: Boolean = false,
     isIdle: Boolean = false
 ) {
-    val transition = rememberInfiniteTransition(label = "thinking_robot")
+    val infiniteTransition = rememberInfiniteTransition(label = "RobotAnimation")
 
-    val phase by transition.animateFloat(
+    val phase by infiniteTransition.animateFloat(
         initialValue = 0f,
-        targetValue = (2.0 * PI).toFloat(),
+        targetValue = (2 * PI).toFloat(),
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2400, easing = LinearEasing)
+            animation = tween(2400, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
         ),
         label = "phase"
     )
 
-    val pulse by transition.animateFloat(
+    val pulse by infiniteTransition.animateFloat(
         initialValue = 0f,
-        targetValue = (2.0 * PI).toFloat(),
+        targetValue = (2 * PI).toFloat(),
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1500, easing = LinearEasing)
+            animation = tween(1500, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
         ),
         label = "pulse"
     )
 
-    val bob by transition.animateFloat(
+    val bob by infiniteTransition.animateFloat(
         initialValue = 0f,
-        targetValue = (2.0 * PI).toFloat(),
+        targetValue = (2 * PI).toFloat(),
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 3200, easing = LinearEasing)
+            animation = tween(2000, easing = SineClientEasing),
+            repeatMode = RepeatMode.Reverse
         ),
         label = "bob"
     )
 
-    val blink by transition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = keyframes {
-                durationMillis = 3600
-                1f at 0
-                1f at 3200
-                0.08f at 3350
-                1f at 3500
-                1f at 3600
-            }
-        ),
-        label = "blink"
-    )
-
-    val lookX by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 0f,
-        animationSpec = infiniteRepeatable(
-            animation = keyframes {
-                durationMillis = 7000
-                0f at 0
-                0f at 1000
-                1f at 1400
-                1f at 2600
-                -1f at 3000
-                -1f at 4200
-                0f at 4600
-                0f at 5200
-                0.6f at 5600
-                0.6f at 6200
-                0f at 6600
-                0f at 7000
-            }
-        ),
-        label = "lookX"
-    )
-
-    val lookY by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 0f,
-        animationSpec = infiniteRepeatable(
-            animation = keyframes {
-                durationMillis = 7000
-                0f at 0
-                0f at 1800
-                -0.7f at 2200
-                -0.7f at 3000
-                0.5f at 3400
-                0.5f at 4200
-                0f at 4600
-                0f at 7000
-            }
-        ),
-        label = "lookY"
-    )
-
-    val finalPhase = if (isThinking || isSpeaking) phase else 0f
-    val finalPulse = if (isThinking || isSpeaking) pulse else 0f
-    val finalBob = bob
-    val finalBlink = if (isActive || isSpeaking) blink else 1f
-    val finalLookX = if (isIdle || isThinking) lookX else 0f
-    val finalLookY = when {
-        isIdle -> lookY
-        isThinking -> lookY
-        else -> 0f
-    }
+    val width = height * 1.1f
 
     Canvas(
         modifier = modifier
             .height(height)
-            .semantics { contentDescription = "ИИ обдумывает запрос" }
+            .width(width)
     ) {
-        // ================= ПАЛИТРА =================
-        val metalTop = Color(0xFFF2F6FA)
-        val metalLight = Color(0xFFCED6DF)
-        val metalMid = Color(0xFF9DA9B6)
-        val metalDark = Color(0xFF68737F)
-        val metalDeep = Color(0xFF353D45)
-        val eyeDark = Color(0xFF081C26)
-        val cyan = Color(0xFF3FE3F5)
-        val cyanBright = Color(0xFF9DF5FF)
-        val cyanDeep = Color(0xFF00A6C9)
-        val brainPink = Color(0xFFEFA5B3)
-        val brainDark = Color(0xFFB5536B)
-        val orange = Color(0xFFF89B3C)
-        val orangeBright = Color(0xFFFFE0B2)
-        val red = Color(0xFFFF4444)
-        val green = Color(0xFF44FF44)
-        val purple = Color(0xFFBF5FFF)
-        val gold = Color(0xFFFFD700)
+        val scale = size.height / 300f
 
-        val u = size.height / 84f
-        val offX = (size.width - 100f * u) / 2f
-        val robotTop = 27f
-        val robotBottom = 100f
-        val robotVisualHeight = (robotBottom - robotTop) * u
-        val baseOffY = (size.height - robotVisualHeight) / 2f - robotTop * u
-        val offY = baseOffY + 1.2f * u * sin(finalBob)
+        val bobAmplitude = if (isIdle) 8f else 4f
+        val bobOffset = sin(bob) * bobAmplitude * scale
 
-        fun pt(x: Float, y: Float) = Offset(offX + x * u, offY + y * u)
+        val whiteBody = Color(0xFFF2F2F2)
+        val shadowWhite = Color(0xFFD6D6D6)
+        val darkGray = Color(0xFF3A3D40)
+        val lightGray = Color(0xFF55595D)
+        val screenBlack = Color(0xFF1A1C1E)
 
-        fun glow(center: Offset, radius: Float, color: Color) {
-            if (radius <= 0f) return
-            drawCircle(
-                Brush.radialGradient(
-                    listOf(color, color.copy(alpha = 0f)),
-                    center, radius
-                ),
-                radius,
-                center
-            )
-        }
-
-        // ================= ПЛЕЧИ И КОРПУС =================
-        // Основной овал с глубоким вертикальным градиентом
-        drawOval(
-            Brush.verticalGradient(listOf(metalLight, metalMid, metalDark)),
-            topLeft = pt(28f, 77f),
-            size = Size(44f * u, 18f * u)
-        )
-        
-        // Блик сверху на плечи
-        drawOval(
-            Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.55f), Color.Transparent)),
-            topLeft = pt(30f, 77.5f),
-            size = Size(40f * u, 5f * u)
-        )
-
-                // Тень под плечами (остаётся)
-        drawOval(
-            Brush.verticalGradient(listOf(Color.Transparent, metalDeep.copy(alpha = 0.8f))),
-            topLeft = pt(28f, 90f),
-            size = Size(44f * u, 5f * u)
-        )
-
-        // ================= ИНДИКАТОР ЗАРЯДКИ ВНУТРИ ТЕНИ =================
-        // Отступ от краёв тени (20% от ширины 44 => 8.8 слева и справа)
-        val chargeBarLeft = 28f + 44f * 0.20f   // 36.8
-        val chargeBarRight = 72f - 44f * 0.20f  // 63.2
-        val chargeBarWidth = chargeBarRight - chargeBarLeft // 26.4
-        val chargeBarHeight = 1.4f
-        val chargeBarY = 91.6f  // внутри тени (тень от 90 до 95)
-
-        // Анимация бегущей полоски (используем pulse)
-        val chargeProgress = ((pulse % (2f * PI.toFloat())) / (2f * PI.toFloat())).toFloat()
-
-        // Фон индикатора (тёмный)
-        drawRoundRect(
-            Color(0xFF0A1520),
-            topLeft = pt(chargeBarLeft, chargeBarY),
-            size = Size(chargeBarWidth * u, chargeBarHeight * u),
-            cornerRadius = CornerRadius(0.7f * u)
-        )
-
-        // Бегущая полоска (слева направо)
-        val chargeBarTravel = chargeBarWidth * chargeProgress
-        val chargeBarStart = chargeBarLeft + chargeBarTravel
-
-        if (chargeBarTravel > 0.1f) {
-            drawRoundRect(
-                Brush.horizontalGradient(
-                    listOf(cyanDeep, cyan, cyanBright),
-                    startX = offX + chargeBarStart * u,
-                    endX = offX + (chargeBarStart + 3f) * u
-                ),
-                topLeft = pt(chargeBarStart, chargeBarY),
-                size = Size(3f * u, chargeBarHeight * u),
-                cornerRadius = CornerRadius(0.7f * u)
-            )
-
-            glow(
-                Offset(offX + chargeBarStart * u + 1.5f * u, offY + chargeBarY * u + 0.7f * u),
-                3f * u,
-                cyan.copy(alpha = 0.35f)
-            )
-
-            drawCircle(
-                cyanBright.copy(alpha = 0.9f),
-                0.5f * u,
-                Offset(offX + chargeBarStart * u + 3f * u, offY + chargeBarY * u + 0.7f * u)
-            )
-        }
-
-        // Крепления и суставы
-        drawCircle(Brush.radialGradient(listOf(metalLight, metalDeep), center = pt(28f, 83f), radius = 8f*u), 7f * u, pt(28f, 85f))
-        drawCircle(Brush.radialGradient(listOf(metalLight, metalDeep), center = pt(72f, 83f), radius = 8f*u), 7f * u, pt(72f, 85f))
-        
-        drawCircle(Color.White.copy(alpha = 0.5f), 1.4f * u, pt(26f, 83f))
-        drawCircle(Color.White.copy(alpha = 0.5f), 1.4f * u, pt(70f, 83f))
-        
-        drawOval(Color.White.copy(alpha = 0.15f), topLeft = pt(33f, 78.5f), size = Size(14f * u, 3.5f * u))
-
-        // Детали на плечах - болты и заклёпки
-        for (i in 0..4) {
-            val boltX = 30f + i * 10f
-            val boltY = 80f
-            drawCircle(metalDeep, 0.8f * u, pt(boltX, boltY))
-            drawCircle(Color.White.copy(alpha = 0.3f), 0.3f * u, pt(boltX - 0.2f, boltY - 0.2f))
-        }
-
-        // Кнопка на груди (доп. деталь)
-        drawRoundRect(
-            Brush.verticalGradient(listOf(metalLight, metalDark)),
-            topLeft = pt(38f, 79f),
-            size = Size(24f * u, 3f * u),
-            cornerRadius = CornerRadius(1.5f * u)
-        )
-
-        // ================= СОПЛА + РАКЕТНОЕ ПЛАМЯ =================
-        for ((idx, sx) in listOf(27f, 73f).withIndex()) {
-            // Корпус сопла (с тенью внутри)
-            drawRoundRect(
-                Brush.verticalGradient(listOf(metalDark, metalDeep)),
-                topLeft = pt(sx - 3f, 88.5f),
-                size = Size(6f * u, 3f * u),
-                cornerRadius = CornerRadius(1.2f * u)
-            )
-            drawRoundRect(
-                Color(0xFF111A22),
-                topLeft = pt(sx - 2f, 90.6f),
-                size = Size(4f * u, 1.4f * u),
-                cornerRadius = CornerRadius(0.8f * u)
-            )
-            
-            // Внутренние рёбра сопла
-            drawLine(metalDark, pt(sx - 2.5f, 89.5f), pt(sx - 0.5f, 90.5f), strokeWidth = 0.3f * u)
-            drawLine(metalDark, pt(sx + 2.5f, 89.5f), pt(sx + 0.5f, 90.5f), strokeWidth = 0.3f * u)
-            
-            if (finalBob != 0f) {
-                val flick = 0.5f + 0.5f * sin(phase * 4f + idx * 2.1f)
-                val len = (5f + 4.5f * flick) * u
-                val fw = 5.2f * u
-                val top = pt(sx - 2.6f, 91.2f)
-                
-                // Свечение пламени
-                glow(
-                    Offset(top.x + fw / 2f, top.y + len * 0.4f),
-                    (6f + 3f * flick) * u,
-                    Color(0xFF0077FF).copy(alpha = 0.5f)
-                )
-                
-                // Пламя (глубокий градиент с горячим центром)
-                drawOval(
-                    Brush.verticalGradient(
-                        listOf(
-                            cyanBright,
-                            cyan,
-                            Color(0xFF0066FF),
-                            Color(0xFF0033AA).copy(alpha = 0f)
-                        )
-                    ),
-                    topLeft = top,
-                    size = Size(fw, len)
-                )
-                // Внутреннее белое ядро пламени
-                drawOval(
-                    Brush.verticalGradient(
-                        listOf(Color.White, cyanBright.copy(alpha = 0f))
-                    ),
-                    topLeft = Offset(top.x + fw * 0.28f, top.y),
-                    size = Size(fw * 0.44f, len * 0.55f)
-                )
-                
-                // Искры от пламени
-                val sparkCount = 5
-                for (s in 0 until sparkCount) {
-                    val sparkAngle = phase * 3f + s * 1.25f
-                    val sparkDist = (2f + s * 0.5f) * u
-                    val sparkX = top.x + fw / 2f + cos(sparkAngle) * sparkDist
-                    val sparkY = top.y + len * 0.7f + sin(sparkAngle) * sparkDist * 0.5f
-                    drawCircle(
-                        Color(0xFFFFAA00).copy(alpha = 0.6f * (1f - s * 0.15f)),
-                        0.5f * u,
-                        Offset(sparkX, sparkY)
-                    )
-                }
-            }
-        }
-
-        // ================= ПАНЕЛЬ ГРУДИ =================
-        // Основной корпус панели (объем)
-        drawRoundRect(
-            Brush.verticalGradient(listOf(metalMid, metalDark, metalDeep)),
-            topLeft = pt(39f, 80f),
-            size = Size(22f * u, 11f * u),
-            cornerRadius = CornerRadius(3f * u)
-        )
-        // Внутренний экран
-        drawRoundRect(
-            Brush.verticalGradient(listOf(Color(0xFF1D2B3A), Color(0xFF0D1A26))),
-            topLeft = pt(41f, 82f),
-            size = Size(12f * u, 7f * u),
-            cornerRadius = CornerRadius(2f * u)
-        )
-        // Блик на стекло экрана
-        drawRoundRect(
-            Color.White.copy(alpha = 0.15f),
-            topLeft = pt(41.5f, 82.5f),
-            size = Size(11f * u, 2f * u),
-            cornerRadius = CornerRadius(2f * u)
-        )
-
-        // Основное ядро
-        val coreP = 0.5f + 0.5f * sin(pulse * 1.5f)
-        glow(pt(47f, 85.5f), (5f + 2f * coreP) * u, cyan.copy(alpha = 0.5f))
-        drawCircle(Brush.radialGradient(listOf(cyanBright, cyan, cyanDeep), center = pt(47f, 84.5f), radius = 3f * u), (1.8f + 0.5f * coreP) * u, pt(47f, 85.5f))
-        drawCircle(Color.White.copy(alpha = 0.9f), 0.7f * u, pt(46.4f, 84.9f))
-        
-        // Кольцо вокруг ядра
-        drawCircle(cyan.copy(alpha = 0.3f), (2.5f + 0.3f * coreP) * u, pt(47f, 85.5f), style = Stroke(0.5f * u))
-        
-        // Индикаторы состояния - улучшенные
-        // Оранжевый индикатор
-        glow(pt(56.5f, 83.5f), 3f * u, orange.copy(alpha = 0.3f))
-        drawCircle(Brush.radialGradient(listOf(orangeBright, orange, Color(0xFF9E4F00))), 1.3f * u, pt(56.5f, 83.5f))
-        drawCircle(Color.White.copy(alpha = 0.4f), 0.4f * u, pt(56.1f, 83.1f))
-        
-        // Зелёный индикатор
-        glow(pt(56.5f, 87.5f), 3f * u, green.copy(alpha = 0.3f))
-        drawCircle(Brush.radialGradient(listOf(Color(0xFF9DF5CB), Color(0xFF69D2A7), Color(0xFF1B7A4B))), 1.3f * u, pt(56.5f, 87.5f))
-        drawCircle(Color.White.copy(alpha = 0.4f), 0.4f * u, pt(56.1f, 87.1f))
-        
-        // ================= АНТЕННА =================
-        // Стебель антенны
-        drawLine(
-            Brush.linearGradient(listOf(metalLight, metalDark), start = pt(23.2f, 63f), end = pt(24.8f, 63f)),
-            pt(24f, 63f), pt(24f, 34f), strokeWidth = 1.6f * u
-        )
-        // Основание антенны (соединительная гайка)
-        drawRoundRect(metalDark, topLeft = pt(23.2f, 60f), size = Size(1.6f * u, 4f * u), cornerRadius = CornerRadius(0.3f * u))
-        
-        // Дополнительное кольцо на антенне
-        drawCircle(metalLight, 1.5f * u, pt(24f, 55f))
-        drawCircle(metalDark, 0.8f * u, pt(24f, 55f))
-
-        val orbP = if (finalPulse != 0f) 0.5f + 0.5f * sin(finalPulse * 2f) else 0f
-        // Мощное свечение вокруг шара
-        glow(pt(24f, 35f), (7f + 3f * orbP) * u, orange.copy(alpha = if (finalPulse != 0f) 0.65f else 0.2f))
-        // Сам шар (градиент для 3D объема)
-        drawCircle(
-            Brush.radialGradient(listOf(orangeBright, orange, Color(0xFFB35A00)), center = pt(23.5f, 34.5f), radius = 3.5f * u),
-            (2.6f + 0.4f * orbP) * u, pt(24f, 35f)
-        )
-        drawCircle(Color.White.copy(alpha = 0.9f), 1f * u, pt(23.2f, 34f))
-        
-        // Энергетические кольца вокруг шара
-        if (finalPulse != 0f) {
-            drawCircle(orange.copy(alpha = 0.3f), (3.5f + 0.5f * orbP) * u, pt(24f, 35f), style = Stroke(0.5f * u))
-            drawCircle(orange.copy(alpha = 0.1f), (4.5f + 0.3f * orbP) * u, pt(24f, 35f), style = Stroke(0.3f * u))
-        }
-
-        // ================= УШИ (с внутренними деталями) =================
-        // Левые
-        drawOval(Brush.verticalGradient(listOf(metalLight, metalDark)), topLeft = pt(19f, 55f), size = Size(9f * u, 16f * u))
-        drawOval(metalDeep, topLeft = pt(21.5f, 58f), size = Size(4.5f * u, 10f * u))
-        // Решетка внутри уха
-        for (i in 0 until 3) {
-            drawLine(metalDark, pt(22.2f, 59.5f + i * 2.5f), pt(25.3f, 59.5f + i * 2.5f), strokeWidth = 0.3f * u)
-        }
-               
-        // Правые
-        drawOval(Brush.verticalGradient(listOf(metalLight, metalDark)), topLeft = pt(72f, 55f), size = Size(9f * u, 16f * u))
-        drawOval(metalDeep, topLeft = pt(74f, 58f), size = Size(4.5f * u, 10f * u))
-        for (i in 0 until 3) {
-            drawLine(metalDark, pt(74.7f, 59.5f + i * 2.5f), pt(77.8f, 59.5f + i * 2.5f), strokeWidth = 0.3f * u)
-        }
-        // ================= ГОЛОВА =================
-        // Объемный металлический корпус с бликом и тенью
-        drawOval(
-            Brush.verticalGradient(listOf(metalLight, metalMid, metalDark, metalDeep)),
-            topLeft = pt(26f, 47f),
-            size = Size(48f * u, 32f * u)
-        )
-        // Большой глянцевый блик слева-сверху
-        rotate(-16f, pivot = pt(35f, 53f)) {
-            drawOval(
-                Brush.radialGradient(
-                    listOf(Color.White.copy(alpha = 0.45f), Color.Transparent),
-                    center = pt(35f, 52f),
-                    radius = 10f * u
-                ),
-                topLeft = pt(29f, 51f),
-                size = Size(13f * u, 3.6f * u)
-            )
-        }
-        
-        // Цветные рефлексы на металле
-        glow(pt(37f, 67f), 5f * u, Color(0xFFE36F8C).copy(alpha = 0.25f))
-        glow(pt(63f, 67f), 5f * u, Color(0xFFE36F8C).copy(alpha = 0.25f))
-        glow(pt(50f, 76f), 6f * u, cyan.copy(alpha = 0.15f))
-        
-       
-        // ================= КУПОЛ =================
-        val domeC = pt(50f, 46f)
-        val domeR = 18.72f * u
-        val domeTL = Offset(domeC.x - domeR, domeC.y - domeR)
-        val domeSize = Size(domeR * 2f, domeR * 2f)
-        
-        // Объемное стекло (затемнение снизу)
-        drawArc(
-            Brush.verticalGradient(
-                0f to Color(0xFFBFE9F2).copy(alpha = 0.25f),
-                0.8f to Color(0xFFBFE9F2).copy(alpha = 0.15f),
-                1f to Color(0xFF446E79).copy(alpha = 0.45f)
-            ),
-            180f,
-            180f,
-            true,
-            topLeft = domeTL,
-            size = domeSize
-        )
-
-        // Дополнительные отражения на стекле
-        drawArc(
-            Color(0xFFBFE9F2).copy(alpha = 0.1f),
-            200f,
-            140f,
-            false,
-            topLeft = domeTL,
-            size = domeSize,
-            style = Stroke(2f * u)
-        )
-
-        // ================= МОЗГ =================
-        val s = 1f + 0.05f * sin(finalPulse * 1.5f)
-        fun bp(x: Float, y: Float) = pt(50f + (x - 50f) * s * 0.72f, 39f + (y - 39f) * s * 0.72f)
-
-        // Внутреннее свечение мозга
-        glow(bp(50f, 38f), 8.64f * u, Color(0xFFE36F8C).copy(alpha = if (finalPulse != 0f) 0.40f else 0.1f))
-        
-        // Извилины мозга
-        listOf(
-            Triple(43f, 39f, 4.05f), Triple(57f, 39f, 4.05f),
-            Triple(50f, 33f, 3.78f), Triple(50f, 42f, 3.78f),
-            Triple(37f, 42f, 2.7f), Triple(63f, 42f, 2.7f),
-            Triple(46f, 35f, 2.25f), Triple(54f, 35f, 2.25f),
-            Triple(40f, 37f, 2.25f), Triple(60f, 37f, 2.25f),
-            Triple(43f, 34f, 1.8f), Triple(57f, 34f, 1.8f),
-            Triple(50f, 40f, 1.8f), Triple(44f, 43f, 1.8f),
-            Triple(56f, 43f, 1.8f)
-        ).forEach { (x, y, r) -> 
-            drawCircle(
-                Brush.radialGradient(listOf(brainPink.copy(alpha = 0.9f), brainDark), center = bp(x, y), radius = r * s * u),
-                r * s * u, bp(x, y)
-            ) 
-        }
-
-        // Тени между извилинами
-        listOf(
-            42f to 33f, 50f to 30f, 58f to 34f,
-            44f to 41f, 56f to 41f, 49f to 37f,
-            38f to 39f, 62f to 39f, 46f to 33f,
-            54f to 33f, 41f to 36f, 59f to 36f
-        ).forEach { (x, y) ->
-            drawArc(
-                brainDark,
-                200f,
-                140f,
-                false,
-                topLeft = bp(x - 2.7f, y - 2.7f),
-                size = Size(5.4f * s * u, 5.4f * s * u),
-                style = Stroke(1.26f * u, cap = StrokeCap.Round)
-            )
-        }
-        
-        // Дополнительные мелкие извилины для детализации
-        listOf(
-            47f to 32f, 53f to 32f, 39f to 40f, 61f to 40f,
-            45f to 45f, 55f to 45f, 36f to 38f, 64f to 38f,
-            48f to 43f, 52f to 43f
-        ).forEach { (x, y) ->
-            drawCircle(
-                brainPink.copy(alpha = 0.5f),
-                1.35f * s * u,
-                bp(x, y)
-            )
-        }
-
-        // ================= ОРБИТЫ И ИСКРЫ =================
-        rotate(-16f, pivot = pt(50f, 38f)) {
-            drawOval(
-                cyan.copy(alpha = 0.25f),
-                topLeft = pt(32.2f, 32.6f),
-                size = Size(31.68f * u, 10.8f * u),
-                style = Stroke(1.44f * u)
-            )
-            drawOval(
-                cyanBright.copy(alpha = 0.7f),
-                topLeft = pt(32.2f, 32.6f),
-                size = Size(31.68f * u, 10.8f * u),
-                style = Stroke(0.63f * u)
-            )
-        }
-        rotate(12f, pivot = pt(50f, 38f)) {
-            drawOval(
-                cyan.copy(alpha = 0.25f),
-                topLeft = pt(33.3f, 33.3f),
-                size = Size(29.52f * u, 9.36f * u),
-                style = Stroke(1.44f * u)
-            )
-            drawOval(
-                cyanBright.copy(alpha = 0.65f),
-                topLeft = pt(33.3f, 33.3f),
-                size = Size(29.52f * u, 9.36f * u),
-                style = Stroke(0.63f * u)
-            )
-        }
-
-        fun orbitPos(rx: Float, ry: Float, rotDeg: Float, a: Float): Offset {
-            val r = rotDeg * (PI / 180.0).toFloat()
-            val cr = cos(r)
-            val sr = sin(r)
-            val x = cos(a) * rx
-            val y = sin(a) * ry
-            return pt(50f + x * cr - y * sr, 38f + x * sr + y * cr)
-        }
-
-            if (finalPhase != 0f) {
-            for (i in 0..9) {
-                val a = finalPhase * (1.2f + 0.15f * i) + i * 1.2f
-                val p = if (i % 2 == 0) orbitPos(15.84f, 5.4f, -16f, a)
-                else orbitPos(14.76f, 4.68f, 12f, a)
-                val tw = 0.5f + 0.5f * sin(finalPulse * 2f + i * 1.3f)
-                
-                glow(p, (2.7f + 2.25f * tw) * u, cyan.copy(alpha = 0.4f + 0.4f * tw))
-                drawCircle(cyanBright, 1.08f * u, p)
-                drawCircle(Color.White.copy(alpha = 0.8f), 0.45f * u, p)
-            }
-        }
-
-        // ================= КУПОЛ: ОБОДОК И БЛИК =================
-        drawArc(
-            Color(0xFFDFF7FC).copy(alpha = 0.6f),
-            180f,
-            180f,
-            false,
-            topLeft = domeTL,
-            size = domeSize,
-            style = Stroke(0.99f * u)
-        )
-        drawArc(
-            metalDeep,
-            180f,
-            180f,
-            false,
-            topLeft = Offset(domeTL.x - 0.36f * u, domeTL.y + 0.36f * u),
-            size = domeSize,
-            style = Stroke(0.99f * u)
-        )
-        
-        drawArc(
-            Color.White.copy(alpha = 0.9f),
-            195f,
-            45f,
-            false,
-            topLeft = Offset(domeC.x - domeR + 2.25f * u, domeC.y - domeR + 2.25f * u),
-            size = Size(domeR * 2f - 4.5f * u, domeR * 2f - 4.5f * u),
-            style = Stroke(1.44f * u, cap = StrokeCap.Round)
-        )
-        drawArc(
-            Color.White.copy(alpha = 0.4f),
-            15f,
-            30f,
-            false,
-            topLeft = Offset(domeC.x - domeR + 3.15f * u, domeC.y - domeR - 0.9f * u),
-            size = Size(domeR * 2f - 6.3f * u, domeR * 2f - 6.3f * u),
-            style = Stroke(0.9f * u)
-        )
-
-               // Ободок купола
-        drawOval(metalDark, topLeft = pt(31.2f, 46.6f), size = Size(32.4f * u, 2.72f * u))
-        drawOval(Color.White.copy(alpha = 0.3f), topLeft = pt(31.6f, 46.7f), size = Size(31.68f * u, 0.96f * u))
-        
-        // Дополнительный декоративный ободок
-        drawOval(
-            Brush.verticalGradient(listOf(cyan.copy(alpha = 0.3f), Color.Transparent)),
-            topLeft = pt(31.6f, 46.8f),
-            size = Size(33.6f * u, 1.6f * u),
-            style = Stroke(0.5f * u)
-        )
-
-        // ================= ГЛАЗА + ЗРАЧКИ =================
-        for (sx in listOf(-1f, 1f)) {
-            val ec = pt(50f + sx * 9.5f, 61f)
-            val ry = 7f * u * finalBlink
-            
-            // Глубокое свечение вокруг глаз
-            glow(ec, 9f * u, cyan.copy(alpha = 0.45f))
-            
-            // Темная впадина глаза
-            drawOval(
-                Brush.radialGradient(listOf(Color(0xFF000000).copy(alpha = 0.8f), Color.Transparent), center = ec, radius = 7f * u),
-                topLeft = Offset(ec.x - 5f * u, ec.y - ry),
-                size = Size(10f * u, ry * 2f)
-            )
-            
-            // Само светящееся веко
-            drawOval(
-                eyeDark,
-                topLeft = Offset(ec.x - 5f * u, ec.y - ry),
-                size = Size(10f * u, ry * 2f)
-            )
-            
-            // Светящаяся радужка
-            val iry = 5.8f * u * finalBlink
-            drawOval(
-                Brush.verticalGradient(listOf(cyanBright, cyan, cyanDeep)),
-                topLeft = Offset(ec.x - 3.8f * u, ec.y - iry),
-                size = Size(7.6f * u, iry * 2f)
-            )
-            
-            // Внутренний блик
-            drawOval(
-                Color.White.copy(alpha = 0.25f),
-                topLeft = Offset(ec.x - 3.5f * u, ec.y - iry + 0.8f * u * finalBlink),
-                size = Size(7f * u, 2f * u * finalBlink)
-            )
-
-            // Рамка вокруг глаза (металлическая оправа)
-            drawOval(
-                metalDark.copy(alpha = 0.6f),
-                topLeft = Offset(ec.x - 5.5f * u, ec.y - ry - 0.5f * u),
-                size = Size(11f * u, (ry * 2f) + u),
-                style = Stroke(0.5f * u)
-            )
-
-            if (finalBlink > 0.25f) {
-                val pr = 2.3f * u
-                val pc = Offset(
-                    ec.x + finalLookX * 1.6f * u,
-                    ec.y + finalLookY * 1.4f * u * finalBlink
-                )
-                
-                // Зрачок с объемом
-                drawOval(
-                    Brush.radialGradient(listOf(Color(0xFF000000), Color(0xFF081C26)), center = pc, radius = pr),
-                    topLeft = Offset(pc.x - pr, pc.y - pr * finalBlink),
-                    size = Size(pr * 2f, pr * 2f * finalBlink)
-                )
-                
-                // Блик на зрачке
-                drawCircle(
-                    Color.White.copy(alpha = 0.95f),
-                    0.7f * u,
-                    Offset(pc.x - 0.6f * u, pc.y - 0.8f * u * finalBlink)
-                )
-                // Отражающий свет
-                drawCircle(
-                    Color(0xFF00FFFF).copy(alpha = 0.4f),
-                    0.3f * u,
-                    Offset(pc.x + 0.5f * u, pc.y + 0.6f * u * finalBlink)
-                )
-                
-                // Вторичный блик
-                drawCircle(
-                    Color(0xFF00FFFF).copy(alpha = 0.2f),
-                    0.2f * u,
-                    Offset(pc.x + 0.8f * u, pc.y - 0.5f * u * finalBlink)
-                )
-            }
-            
-            // Большой глянцевый блик на стекле глаза
-            if (finalBlink > 0.3f) {
-                drawOval(
-                    Brush.radialGradient(listOf(Color.White.copy(alpha = 0.9f * finalBlink), Color.Transparent), center = Offset(ec.x - 1.6f * u, ec.y - 2.5f * u), radius = 3f * u),
-                    topLeft = Offset(ec.x - 2.5f * u, ec.y - 3.5f * u * finalBlink),
-                    size = Size(5f * u, 4f * u * finalBlink)
-                )
-            }
-        }
-
-        // ================= НОС =================
-        drawRoundRect(
-            Brush.verticalGradient(listOf(metalLight, metalDark)),
-            topLeft = pt(48.4f, 64.2f),
-            size = Size(3.2f * u, 2.2f * u),
-            cornerRadius = CornerRadius(1.1f * u)
-        )
-        drawRoundRect(
-            metalDeep,
-            topLeft = pt(48.9f, 65.5f),
-            size = Size(2.2f * u, 0.5f * u),
-            cornerRadius = CornerRadius(0.2f * u)
-        )
-        drawCircle(Color.White.copy(alpha = 0.4f), 0.6f * u, pt(49.3f, 64.9f))
-        
-        // Тень под носом
-        drawOval(
-            metalDeep.copy(alpha = 0.3f),
-            topLeft = pt(48f, 65f),
-            size = Size(4f * u, 1f * u)
-        )
-
-        // ================= РОТ =================
-        // Тень от рта
-        drawOval(
-            Brush.radialGradient(listOf(Color(0xFF000000).copy(alpha = 0.3f), Color.Transparent), center = pt(50f, 73f), radius = 5f * u),
-            topLeft = pt(45f, 71f),
-            size = Size(10f * u, 4f * u)
-        )
-
-        if (isSpeaking) {
-            for (i in 0..4) {
-                val h = (3f + 4f * (0.5f + 0.5f * sin(finalPhase * 3f + i * 1.1f))) * u
-                val x = 50f + (i - 2) * 2.6f
-                
-                glow(Offset(offX + x * u, offY + 73f * u - h / 2), h * 0.7f, cyan.copy(alpha = 0.4f))
-                
-                drawRoundRect(
-                    Brush.verticalGradient(listOf(cyanBright, cyan, cyanDeep)),
-                    topLeft = Offset(offX + (x - 0.7f) * u, offY + 73f * u - h),
-                    size = Size(1.4f * u, h),
-                    cornerRadius = CornerRadius(0.7f * u)
-                )
-            }
-            
-            
+        val neonBlueBase = Color(0xFF5CE1E6)
+        val neonBluePulse = if (isThinking) {
+            neonBlueBase.copy(alpha = 0.7f + sin(pulse) * 0.3f)
         } else {
-            // Улыбка с многослойным свечением
-            val smileTL = pt(44.5f, 62.5f)
-            val smileSize = Size(13f * u, 8.8f * u)
-            
-            // Тень улыбки
-            drawArc(
-                Color(0xFF000000).copy(alpha = 0.4f),
-                40f, 100f, false,
-                topLeft = Offset(smileTL.x, smileTL.y + 0.3f * u),
-                size = smileSize,
-                style = Stroke(3f * u, cap = StrokeCap.Round)
-            )
-            
-            // Внешнее свечение
-            drawArc(
-                cyan.copy(alpha = 0.4f),
-                40f, 100f, false,
-                topLeft = smileTL,
-                size = smileSize,
-                style = Stroke(3.5f * u, cap = StrokeCap.Round)
-            )
-            
-            // Основная яркая линия
-            drawArc(
-                cyan,
-                40f, 100f, false,
-                topLeft = smileTL,
-                size = smileSize,
-                style = Stroke(1.5f * u, cap = StrokeCap.Round)
-            )
-            
-            // Блик в самой высокой точке улыбки
-            drawCircle(Color.White.copy(alpha = 0.8f), 0.3f * u, pt(50f, 60.5f))
-            
-            // Уголки улыбки
-            drawCircle(cyan, 0.6f * u, pt(44.8f, 66.5f))
-            drawCircle(cyan, 0.6f * u, pt(55.2f, 66.5f))
+            neonBlueBase
         }
-        // ================= ДОПОЛНИТЕЛЬНЫЕ ДЕТАЛИ =================
-       
 
-        // Шея (соединительное кольцо)
-        drawOval(metalDark, topLeft = pt(44f, 74f), size = Size(12f * u, 3f * u))
-        drawOval(metalLight.copy(alpha = 0.5f), topLeft = pt(44.5f, 74.2f), size = Size(11f * u, 1f * u))
-        drawCircle(metalDeep, 1f * u, pt(46f, 75.5f))
-        drawCircle(metalDeep, 1f * u, pt(54f, 75.5f))
-        
-        // Тикающий индикатор работы в углу экрана
-        if (isThinking || isSpeaking) {
-            val tickPhase = (pulse * 2f) % (2f * PI.toFloat())
-            val tickAlpha = if (tickPhase < PI.toFloat()) 0.8f else 0.2f
-            drawCircle(
-                green.copy(alpha = tickAlpha),
-                0.8f * u,
-                pt(20f, 75f)
+        // 1. РАКЕТНОЕ ПЛАМЯ
+        val flameWidth = 40f * scale
+        val flameHeight = (30f + sin(phase) * 10f) * scale
+        val flamePath = Path().apply {
+            moveTo(size.width / 2 - flameWidth / 2, 250f * scale + bobOffset)
+            quadraticBezierTo(
+                size.width / 2, 250f * scale + flameHeight + bobOffset,
+                size.width / 2 + flameWidth / 2, 250f * scale + bobOffset
             )
+            close()
+        }
+        drawPath(flamePath, color = Color(0xFFFF5722))
+        drawPath(flamePath, color = Color(0xFFFFC107), style = Stroke(width = 3f * scale))
+
+        // 2. НОГИ
+        val leftFootX = size.width / 2 - 45f * scale
+        val rightFootX = size.width / 2 + 15f * scale
+
+        drawRoundRect(color = shadowWhite, topLeft = Offset(leftFootX, 200f * scale), size = Size(25f * scale, 50f * scale), cornerRadius = CornerRadius(10f * scale))
+        drawOval(color = whiteBody, topLeft = Offset(leftFootX - 5f * scale, 240f * scale), size = Size(35f * scale, 20f * scale))
+        drawOval(color = darkGray, topLeft = Offset(leftFootX - 5f * scale, 240f * scale), size = Size(35f * scale, 20f * scale), style = Stroke(width = 2f * scale))
+
+        drawRoundRect(color = shadowWhite, topLeft = Offset(rightFootX, 200f * scale), size = Size(25f * scale, 50f * scale), cornerRadius = CornerRadius(10f * scale))
+        drawOval(color = whiteBody, topLeft = Offset(rightFootX - 5f * scale, 240f * scale), size = Size(35f * scale, 20f * scale))
+        drawOval(color = darkGray, topLeft = Offset(rightFootX - 5f * scale, 240f * scale), size = Size(35f * scale, 20f * scale), style = Stroke(width = 2f * scale))
+
+        // 3. РУКИ
+        drawCircle(color = whiteBody, radius = 15f * scale, center = Offset(size.width / 2 - 60f * scale, 135f * scale + bobOffset))
+        drawCircle(color = darkGray, radius = 15f * scale, center = Offset(size.width / 2 - 60f * scale, 135f * scale + bobOffset), style = Stroke(width = 2f * scale))
+
+        val leftArmPath = Path().apply {
+            moveTo(size.width / 2 - 65f * scale, 145f * scale + bobOffset)
+            lineTo(size.width / 2 - 80f * scale, 185f * scale + bobOffset)
+            lineTo(size.width / 2 - 60f * scale, 185f * scale + bobOffset)
+            close()
+        }
+        drawPath(leftArmPath, color = whiteBody)
+        drawPath(leftArmPath, color = darkGray, style = Stroke(width = 2f * scale))
+
+        drawRoundRect(color = lightGray, topLeft = Offset(size.width / 2 - 85f * scale, 185f * scale + bobOffset), size = Size(30f * scale, 25f * scale), cornerRadius = CornerRadius(5f * scale))
+
+        drawCircle(color = whiteBody, radius = 15f * scale, center = Offset(size.width / 2 + 60f * scale, 135f * scale + bobOffset))
+        drawCircle(color = darkGray, radius = 15f * scale, center = Offset(size.width / 2 + 60f * scale, 135f * scale + bobOffset), style = Stroke(width = 2f * scale))
+
+        val rightArmPath = Path().apply {
+            moveTo(size.width / 2 + 65f * scale, 145f * scale + bobOffset)
+            lineTo(size.width / 2 + 80f * scale, 185f * scale + bobOffset)
+            lineTo(size.width / 2 + 60f * scale, 185f * scale + bobOffset)
+            close()
+        }
+        drawPath(rightArmPath, color = whiteBody)
+        drawPath(rightArmPath, color = darkGray, style = Stroke(width = 2f * scale))
+
+        drawRoundRect(color = lightGray, topLeft = Offset(size.width / 2 + 55f * scale, 185f * scale + bobOffset), size = Size(30f * scale, 25f * scale), cornerRadius = CornerRadius(5f * scale))
+
+        // 4. ТУЛОВИЩЕ
+        val bodyCenter = Offset(size.width / 2, 160f * scale + bobOffset)
+
+        drawRoundRect(
+            color = whiteBody,
+            topLeft = Offset(bodyCenter.x - 45f * scale, bodyCenter.y - 35f * scale),
+            size = Size(90f * scale, 70f * scale),
+            cornerRadius = CornerRadius(25f * scale)
+        )
+        drawRoundRect(
+            color = darkGray,
+            topLeft = Offset(bodyCenter.x - 45f * scale, bodyCenter.y - 35f * scale),
+            size = Size(90f * scale, 70f * scale),
+            cornerRadius = CornerRadius(25f * scale),
+            style = Stroke(width = 2.5f * scale)
+        )
+        drawRoundRect(
+            color = screenBlack,
+            topLeft = Offset(bodyCenter.x - 30f * scale, bodyCenter.y + 5f * scale),
+            size = Size(60f * scale, 20f * scale),
+            cornerRadius = CornerRadius(10f * scale)
+        )
+
+        // 5. ШЕЯ
+        drawRoundRect(
+            color = lightGray,
+            topLeft = Offset(size.width / 2 - 15f * scale, 105f * scale + bobOffset),
+            size = Size(30f * scale, 20f * scale),
+            cornerRadius = CornerRadius(4f * scale)
+        )
+
+        // 6. ГОЛОВА И НАУШНИКИ
+        val headSize = Size(120f * scale, 95f * scale)
+        val headTopLeft = Offset(size.width / 2 - headSize.width / 2, 25f * scale + bobOffset)
+
+        drawRoundRect(color = lightGray, topLeft = Offset(headTopLeft.x - 12f * scale, headTopLeft.y + 25f * scale), size = Size(15f * scale, 45f * scale), cornerRadius = CornerRadius(8f * scale))
+        drawRoundRect(color = darkGray, topLeft = Offset(headTopLeft.x - 12f * scale, headTopLeft.y + 25f * scale), size = Size(15f * scale, 45f * scale), cornerRadius = CornerRadius(8f * scale), style = Stroke(width = 2f * scale))
+
+        drawRoundRect(color = lightGray, topLeft = Offset(headTopLeft.x + headSize.width - 3f * scale, headTopLeft.y + 25f * scale), size = Size(15f * scale, 45f * scale), cornerRadius = CornerRadius(8f * scale))
+        drawRoundRect(color = darkGray, topLeft = Offset(headTopLeft.x + headSize.width - 3f * scale, headTopLeft.y + 25f * scale), size = Size(15f * scale, 45f * scale), cornerRadius = CornerRadius(8f * scale), style = Stroke(width = 2f * scale))
+
+        drawCircle(color = neonBlueBase, radius = 8f * scale, center = Offset(headTopLeft.x + headSize.width + 4f * scale, headTopLeft.y + 47.5f * scale))
+
+        drawRoundRect(color = whiteBody, topLeft = headTopLeft, size = headSize, cornerRadius = CornerRadius(40f * scale))
+        drawRoundRect(color = darkGray, topLeft = headTopLeft, size = headSize, cornerRadius = CornerRadius(40f * scale), style = Stroke(width = 2.5f * scale))
+
+        // 7. ЛИЦЕВОЙ ЭКРАН
+        val maskSize = Size(96f * scale, 72f * scale)
+        val maskTopLeft = Offset(size.width / 2 - maskSize.width / 2, 36f * scale + bobOffset)
+        drawRoundRect(color = screenBlack, topLeft = maskTopLeft, size = maskSize, cornerRadius = CornerRadius(30f * scale))
+
+        // 8. ГЛАЗА
+        val eyeWidth = 14f * scale
+        val eyeHeight = if (isThinking) (22f + sin(pulse) * 4f) * scale else 24f * scale
+
+        val leftEyeCenter = Offset(size.width / 2 - 24f * scale, 65f * scale + bobOffset)
+        val rightEyeCenter = Offset(size.width / 2 + 24f * scale, 65f * scale + bobOffset)
+
+        if (isActive) {
+            drawRoundRect(
+                color = neonBluePulse,
+                topLeft = Offset(leftEyeCenter.x - eyeWidth / 2, leftEyeCenter.y - eyeHeight / 2),
+                size = Size(eyeWidth, eyeHeight),
+                cornerRadius = CornerRadius(10f * scale)
+            )
+            drawRoundRect(
+                color = neonBluePulse,
+                topLeft = Offset(rightEyeCenter.x - eyeWidth / 2, rightEyeCenter.y - eyeHeight / 2),
+                size = Size(eyeWidth, eyeHeight),
+                cornerRadius = CornerRadius(10f * scale)
+            )
+        } else {
+            drawRect(color = lightGray, topLeft = Offset(leftEyeCenter.x - 8f * scale, leftEyeCenter.y), size = Size(16f * scale, 3f * scale))
+            drawRect(color = lightGray, topLeft = Offset(rightEyeCenter.x - 8f * scale, rightEyeCenter.y), size = Size(16f * scale, 3f * scale))
+        }
+
+        // 9. РОТ
+        if (isActive) {
+            val mouthY = 82f * scale + bobOffset
+            val mouthPath = Path()
+
+            if (isSpeaking) {
+                val mouthWave = (5f + sin(phase * 2) * 4f) * scale
+                val mouthRect = Rect(
+                    size.width / 2 - 15f * scale,
+                    mouthY - mouthWave / 2,
+                    size.width / 2 + 15f * scale,
+                    mouthY + mouthWave / 2
+                )
+                mouthPath.addOval(mouthRect)
+                drawPath(mouthPath, color = neonBlueBase)
+            } else {
+                mouthPath.moveTo(size.width / 2 - 16f * scale, mouthY - 2f * scale)
+                mouthPath.quadraticBezierTo(
+                    size.width / 2, mouthY + 8f * scale,
+                    size.width / 2 + 16f * scale, mouthY - 2f * scale
+                )
+                drawPath(
+                    path = mouthPath,
+                    color = neonBlueBase,
+                    style = Stroke(width = 3.5f * scale, cap = StrokeCap.Round)
+                )
+            }
         }
     }
+}
+
+private val SineClientEasing = Easing { fraction ->
+    sin(fraction * PI.toFloat() / 2).toFloat()
 }
 @Composable
 private fun LockScreen(
