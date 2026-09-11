@@ -1268,21 +1268,23 @@ fun ThinkingRobotAnimation(
     ) {
         val u = size.height / 200f
         val cx = size.width / 2f
-        val bobOffset = if (isActive) sin(bob) * 1.5f * u else 0f
+        val bobOffset = if (isActive) sin(bob) * 1.8f * u else 0f
         val lookOffsetX = lookX * 1f * u
         val lookOffsetY = lookY * 0.8f * u
         val currentBlink = if (isActive) blink else 1f
 
-        // Цвета
-        val whiteBody = Color(0xFFF8F9FA)
-        val lightGray = Color(0xFFE9ECEF)
-        val mediumGray = Color(0xFFADB5BD)
-        val darkGray = Color(0xFF495057)
-        val darkerGray = Color(0xFF343A40)
-        val screenBlack = Color(0xFF1A1A2E)
+        // ================= ПАЛИТРА =================
+        val whiteBody = Color(0xFFF4F6F8)
+        val whiteHighlight = Color(0xFFFFFFFF)
+        val lightGray = Color(0xFFD9DEE3)
+        val mediumGray = Color(0xFFA8AFB6)
+        val darkGray = Color(0xFF4A525A)
+        val darkerGray = Color(0xFF2C3238)
+        val visorDark = Color(0xFF1A1A2E)
+        val visorGlass = Color(0xFF22303C)
         val neonBlue = Color(0xFF00D9FF)
         val neonBlueGlow = Color(0xFF80EFFF)
-        
+
         val neonBluePulse = if (isThinking) {
             neonBlue.copy(alpha = 0.7f + sin(pulse) * 0.3f)
         } else {
@@ -1291,49 +1293,46 @@ fun ThinkingRobotAnimation(
 
         fun pt(x: Float, y: Float) = Offset(cx + x * u, y * u + bobOffset)
 
-        // ================= ПЛАМЯ РАКЕТНОГО ДВИГАТЕЛЯ (с градиентом) =================
-        val flameFlicker = sin(flamePhase * 2f) * 1.5f
-        val flameHeight = 35f + flameFlicker
-        
-        // Внешнее пламя (градиент оранжево-красный)
-        val outerFlamePath = Path().apply {
-            moveTo(pt(-11f, 172f).x, pt(-11f, 172f).y)
+        // ================= ПЛАМЯ РАКЕТНОГО ДВИГАТЕЛЯ =================
+        val flameFlicker = sin(flamePhase * 2f) * 1.8f
+
+        // Внешнее пламя (оранжево-красное)
+                val outerFlamePath = Path().apply {
+            moveTo(pt(-22f, 182f).x, pt(-22f, 182f).y)
             quadraticBezierTo(
-                pt(-8f, 195f + flameFlicker).x, pt(-8f, 195f + flameFlicker).y,
-                pt(0f, 202f + flameFlicker).x, pt(0f, 202f + flameFlicker).y
+                pt(-16f, 205f + flameFlicker).x, pt(-16f, 205f + flameFlicker).y,
+                pt(0f, 218f + flameFlicker).x, pt(0f, 218f + flameFlicker).y
             )
             quadraticBezierTo(
-                pt(8f, 195f + flameFlicker).x, pt(8f, 195f + flameFlicker).y,
-                pt(11f, 172f).x, pt(11f, 172f).y
+                pt(16f, 205f + flameFlicker).x, pt(16f, 205f + flameFlicker).y,
+                pt(22f, 182f).x, pt(22f, 182f).y
             )
         }
-        
         drawPath(
             outerFlamePath,
             brush = Brush.verticalGradient(
                 colors = listOf(
                     Color(0xFFFF6600),
                     Color(0xFFFF4500),
-                    Color(0xFFFF3300).copy(alpha = 0.8f)
+                    Color(0xFFFF3300).copy(alpha = 0.7f)
                 ),
-                startY = pt(-11f, 172f).y,
-                endY = pt(0f, 202f + flameFlicker).y
+                startY = pt(-10f, 182f).y,
+                endY = pt(0f, 210f + flameFlicker).y
             )
         )
 
-        // Внутреннее пламя (жёлтое)
-        val innerFlamePath = Path().apply {
-            moveTo(pt(-5f, 172f).x, pt(-5f, 172f).y)
+        // Внутреннее пламя (жёлто-оранжевое)
+                val innerFlamePath = Path().apply {
+            moveTo(pt(-10f, 182f).x, pt(-10f, 182f).y)
             quadraticBezierTo(
-                pt(-3f, 185f + flameFlicker * 0.7f).x, pt(-3f, 185f + flameFlicker * 0.7f).y,
-                pt(0f, 192f + flameFlicker * 0.7f).x, pt(0f, 192f + flameFlicker * 0.7f).y
+                pt(-6f, 197f + flameFlicker * 0.7f).x, pt(-6f, 197f + flameFlicker * 0.7f).y,
+                pt(0f, 207f + flameFlicker * 0.7f).x, pt(0f, 207f + flameFlicker * 0.7f).y
             )
             quadraticBezierTo(
-                pt(3f, 185f + flameFlicker * 0.7f).x, pt(3f, 185f + flameFlicker * 0.7f).y,
-                pt(5f, 172f).x, pt(5f, 172f).y
+                pt(6f, 197f + flameFlicker * 0.7f).x, pt(6f, 197f + flameFlicker * 0.7f).y,
+                pt(10f, 182f).x, pt(10f, 182f).y
             )
         }
-        
         drawPath(
             innerFlamePath,
             brush = Brush.verticalGradient(
@@ -1342,456 +1341,969 @@ fun ThinkingRobotAnimation(
                     Color(0xFFFFAA00),
                     Color(0xFFFF8C00)
                 ),
-                startY = pt(-5f, 172f).y,
-                endY = pt(0f, 192f + flameFlicker * 0.7f).y
+                startY = pt(-5f, 182f).y,
+                endY = pt(0f, 200f + flameFlicker * 0.7f).y
             )
         )
 
-        // ================= СОПЛО =================
-        // Тень под соплом
-        drawRoundRect(
-            color = Color.Black.copy(alpha = 0.15f),
-            topLeft = pt(-17f, 163f),
-            size = Size(34f * u, 7f * u),
-            cornerRadius = CornerRadius(3f * u)
+                // ================= РАКЕТНОЕ СОПЛО =================
+        // Обрезанный конус, сужается к верху
+        // Верх: ширина 42 (-21..21), низ: ширина 56 (-28..28)
+        val nozzlePath = Path().apply {
+            moveTo(pt(-21f, 160f).x, pt(-21f, 160f).y)
+            lineTo(pt(21f, 160f).x, pt(21f, 160f).y)
+            lineTo(pt(28f, 180f).x, pt(28f, 180f).y)
+            lineTo(pt(-28f, 180f).x, pt(-28f, 180f).y)
+            close()
+        }
+
+        // Заливка сопла
+        drawPath(
+            nozzlePath,
+            brush = Brush.verticalGradient(
+                colors = listOf(mediumGray, darkGray, darkerGray),
+                startY = pt(0f, 160f).y,
+                endY = pt(0f, 180f).y
+            )
         )
-        
-        // Верхний фланец сопла
+        drawPath(nozzlePath, color = darkerGray, style = Stroke(width = 1.4f * u))
+
+        // Горизонтальные линии-решётки на сопле
+        drawLine(darkerGray, pt(-23f, 165f), pt(23f, 165f), strokeWidth = 0.8f * u)
+        drawLine(darkerGray, pt(-25f, 170f), pt(25f, 170f), strokeWidth = 0.8f * u)
+        drawLine(darkerGray, pt(-27f, 175f), pt(27f, 175f), strokeWidth = 0.8f * u)
+
+        // Блик слева на сопле
+        drawRoundRect(
+            color = whiteHighlight.copy(alpha = 0.5f),
+            topLeft = pt(-19f, 163f),
+            size = Size(3f * u, 14f * u),
+            cornerRadius = CornerRadius(1.5f * u)
+        )
+
+        // Верхний ободок сопла (переход от цилиндра 2 к соплу)
+        drawRoundRect(
+            color = mediumGray,
+            topLeft = pt(-22f, 159f),
+            size = Size(44f * u, 3f * u),
+            cornerRadius = CornerRadius(1.5f * u)
+        )
         drawRoundRect(
             color = darkerGray,
-            topLeft = pt(-16f, 162f),
-            size = Size(32f * u, 5f * u),
+            topLeft = pt(-22f, 159f),
+            size = Size(44f * u, 3f * u),
+            cornerRadius = CornerRadius(1.5f * u),
+            style = Stroke(width = 1f * u)
+        )
+
+        // Нижний ободок сопла (выход пламени)
+        drawRoundRect(
+            color = darkerGray,
+            topLeft = pt(-29f, 179f),
+            size = Size(58f * u, 3f * u),
+            cornerRadius = CornerRadius(1.5f * u)
+        )
+        drawRoundRect(
+            color = Color(0xFF0A0A14),
+            topLeft = pt(-29f, 179f),
+            size = Size(58f * u, 3f * u),
+            cornerRadius = CornerRadius(1.5f * u),
+            style = Stroke(width = 1f * u)
+        )
+                // ================= ТУЛОВИЩЕ =================
+        // ЦИЛИНДР 1 — верхний (сужается к низу на 30%)
+        // Верх: ширина 84 (-42..42), низ: ширина 58.8 (-29.4..29.4)
+        val cylinder1Path = Path().apply {
+            moveTo(pt(-42f, 74f).x, pt(-42f, 74f).y)
+            lineTo(pt(42f, 74f).x, pt(42f, 74f).y)
+            lineTo(pt(29.4f, 128f).x, pt(29.4f, 128f).y)
+            lineTo(pt(-29.4f, 128f).x, pt(-29.4f, 128f).y)
+            close()
+        }
+
+        // Тень под цилиндром 1
+        drawPath(cylinder1Path, color = Color.Black.copy(alpha = 0.08f))
+
+        // Заливка цилиндра 1
+        drawPath(
+            cylinder1Path,
+            brush = Brush.verticalGradient(
+                colors = listOf(whiteHighlight, whiteBody, lightGray),
+                startY = pt(0f, 74f).y,
+                endY = pt(0f, 128f).y
+            )
+        )
+        drawPath(cylinder1Path, color = darkGray, style = Stroke(width = 1.4f * u))
+
+        // Ободок сверху цилиндра 1
+        drawRoundRect(
+            color = mediumGray,
+            topLeft = pt(-42f, 74f),
+            size = Size(84f * u, 4f * u),
             cornerRadius = CornerRadius(2f * u)
         )
         drawRoundRect(
             color = darkGray,
-            topLeft = pt(-16f, 162f),
-            size = Size(32f * u, 5f * u),
+            topLeft = pt(-42f, 74f),
+            size = Size(84f * u, 4f * u),
             cornerRadius = CornerRadius(2f * u),
-            style = Stroke(width = 1.2f * u)
+            style = Stroke(width = 1f * u)
         )
-        
-        // Основной раструб
-        val nozzlePath = Path().apply {
-            moveTo(pt(-16f, 167f).x, pt(-16f, 167f).y)
-            lineTo(pt(-11f, 172f).x, pt(-11f, 172f).y)
-            lineTo(pt(11f, 172f).x, pt(11f, 172f).y)
-            lineTo(pt(16f, 167f).x, pt(16f, 167f).y)
-        }
-        drawPath(nozzlePath, color = darkerGray)
-        drawPath(nozzlePath, color = darkGray, style = Stroke(width = 1.2f * u))
 
-        // ================= ТУЛОВИЩЕ =================
-        // Тень
-        val upperBodyShadow = Path().apply {
-            moveTo(pt(-42f, 89f).x, pt(-42f, 89f).y)
-            quadraticBezierTo(pt(-48f, 79f).x, pt(-48f, 79f).y, pt(-42f, 75f).x, pt(-42f, 75f).y)
-            lineTo(pt(42f, 75f).x, pt(42f, 75f).y)
-            quadraticBezierTo(pt(48f, 79f).x, pt(48f, 79f).y, pt(42f, 89f).x, pt(42f, 89f).y)
-            lineTo(pt(36f, 121f).x, pt(36f, 121f).y)
-            quadraticBezierTo(pt(30f, 146f).x, pt(30f, 146f).y, pt(17f, 163f).x, pt(17f, 163f).y)
-            lineTo(pt(-17f, 163f).x, pt(-17f, 163f).y)
-            quadraticBezierTo(pt(-30f, 146f).x, pt(-30f, 146f).y, pt(-36f, 121f).x, pt(-36f, 121f).y)
+        // Блик слева на цилиндре 1
+        drawRoundRect(
+            color = whiteHighlight.copy(alpha = 0.7f),
+            topLeft = pt(-38f, 80f),
+            size = Size(5f * u, 42f * u),
+            cornerRadius = CornerRadius(2.5f * u)
+        )
+
+        // Горизонтальные сегменты на цилиндре 1
+        drawLine(mediumGray, pt(-40f, 92f), pt(40f, 92f), strokeWidth = 0.6f * u)
+        drawLine(mediumGray, pt(-36f, 108f), pt(36f, 108f), strokeWidth = 0.6f * u)
+
+        // Ободок между цилиндром 1 и 2
+        drawRoundRect(
+            color = mediumGray,
+            topLeft = pt(-31f, 126f),
+            size = Size(62f * u, 5f * u),
+            cornerRadius = CornerRadius(2.5f * u)
+        )
+        drawRoundRect(
+            color = darkGray,
+            topLeft = pt(-31f, 126f),
+            size = Size(62f * u, 5f * u),
+            cornerRadius = CornerRadius(2.5f * u),
+            style = Stroke(width = 1f * u)
+        )
+
+        // ЦИЛИНДР 2 — нижний (20% от основной длины, сужается к низу)
+        // Верх: ширина 58 (-29..29), низ: ширина 42 (-21..21)
+        val cylinder2Path = Path().apply {
+            moveTo(pt(-29f, 131f).x, pt(-29f, 131f).y)
+            lineTo(pt(29f, 131f).x, pt(29f, 131f).y)
+            lineTo(pt(21f, 160f).x, pt(21f, 160f).y)
+            lineTo(pt(-21f, 160f).x, pt(-21f, 160f).y)
             close()
         }
-        drawPath(upperBodyShadow, color = Color.Black.copy(alpha = 0.1f))
 
-        // Верхняя часть груди (градиент)
-        val upperBodyPath = Path().apply {
-            moveTo(pt(-42f, 88f).x, pt(-42f, 88f).y)
-            quadraticBezierTo(pt(-48f, 78f).x, pt(-48f, 78f).y, pt(-42f, 74f).x, pt(-42f, 74f).y)
-            lineTo(pt(42f, 74f).x, pt(42f, 74f).y)
-            quadraticBezierTo(pt(48f, 78f).x, pt(48f, 78f).y, pt(42f, 88f).x, pt(42f, 88f).y)
-            lineTo(pt(36f, 120f).x, pt(36f, 120f).y)
-            quadraticBezierTo(pt(30f, 145f).x, pt(30f, 145f).y, pt(16f, 162f).x, pt(16f, 162f).y)
-            lineTo(pt(-16f, 162f).x, pt(-16f, 162f).y)
-            quadraticBezierTo(pt(-30f, 145f).x, pt(-30f, 145f).y, pt(-36f, 120f).x, pt(-36f, 120f).y)
-            close()
-        }
-        
         drawPath(
-            upperBodyPath,
+            cylinder2Path,
             brush = Brush.verticalGradient(
-                colors = listOf(whiteBody, lightGray),
-                startY = pt(-42f, 74f).y,
-                endY = pt(-36f, 120f).y
+                colors = listOf(whiteBody, lightGray, mediumGray),
+                startY = pt(0f, 131f).y,
+                endY = pt(0f, 160f).y
             )
         )
-        drawPath(upperBodyPath, color = darkGray, style = Stroke(width = 1.2f * u))
+        drawPath(cylinder2Path, color = darkGray, style = Stroke(width = 1.4f * u))
 
-        // Панель на груди (тёмная с градиентом)
+        // Блик слева на цилиндре 2
         drawRoundRect(
-            color = screenBlack,
-            topLeft = pt(-24f, 92f),
-            size = Size(48f * u, 42f * u),
-            cornerRadius = CornerRadius(10f * u)
+            color = whiteHighlight.copy(alpha = 0.7f),
+            topLeft = pt(-26f, 134f),
+            size = Size(4f * u, 22f * u),
+            cornerRadius = CornerRadius(2f * u)
+        )
+
+        // Сегмент на цилиндре 2
+        drawLine(mediumGray, pt(-27f, 145f), pt(27f, 145f), strokeWidth = 0.6f * u)
+
+                // ================= ПУЛЬСИРУЮЩЕЕ СОЛНЦЕ НА ГРУДИ =================
+        // Точная копия солнца с орбиты
+
+        val heartCenter = pt(0f, 100f)
+        val corePulse = 0.5f + 0.5f * sin(pulse * 1.5f)
+        val sunRadius = 10f * u * (1f + 0.15f * coreP)
+
+        // 1. Внешнее свечение вокруг солнца (большое гало)
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color(0x0000FFFF),
+                    Color(0x3000BFFF).copy(alpha = 0.4f + 0.2f * coreP),
+                    Color(0x600088FF).copy(alpha = 0.3f),
+                    Color.Transparent
+                ),
+                center = heartCenter,
+                radius = sunRadius * 3.2f
+            ),
+            radius = sunRadius * 3.2f,
+            center = heartCenter
+        )
+
+        // 2. Среднее свечение (циан)
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color(0xFF00FFFF).copy(alpha = (0.7f + 0.3f * coreP) * 0.8f),
+                    Color(0xFF00BFFF).copy(alpha = 0.5f),
+                    Color(0xFF0044FF).copy(alpha = 0f)
+                ),
+                center = heartCenter,
+                radius = sunRadius * 1.8f
+            ),
+            radius = sunRadius * 1.8f,
+            center = heartCenter
+        )
+
+        // 3. Основное ядро солнца (яркое, белое с голубым)
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color.White,
+                    Color(0xFF00FFFF),
+                    Color(0xFF00BFFF),
+                    Color(0xFF0044FF)
+                ),
+                center = heartCenter,
+                radius = sunRadius
+            ),
+            radius = sunRadius,
+            center = heartCenter
+        )
+
+        // 4. Точечные частицы вокруг солнца (как на орбите)
+        val particleCount = 12
+        for (i in 0 until particleCount) {
+            val angle = (i.toFloat() / particleCount) * 2f * PI.toFloat() + pulse
+            val distance = sunRadius * (1.3f + 0.4f * sin(pulse * 2f + i * 0.8f))
+            val px = heartCenter.x + cos(angle) * distance
+            val py = heartCenter.y + sin(angle) * distance
+            val pr = (0.6f + 0.6f * sin(pulse * 3f + i)) * u
+
+            drawCircle(
+                color = Color(0xFF00FFFF).copy(alpha = 0.4f + 0.4f * sin(pulse * 4f + i)),
+                radius = pr,
+                center = Offset(px, py)
+            )
+        }
+
+        // 5. Внутренний белый блик (яркий центр)
+        drawCircle(
+            color = Color.White.copy(alpha = 0.9f),
+            radius = sunRadius * 0.35f,
+            center = Offset(heartCenter.x - sunRadius * 0.2f, heartCenter.y - sunRadius * 0.2f)
+        )
+
+        // 6. Тонкое кольцо-орбита вокруг солнца (как на картинке)
+        drawCircle(
+            color = Color(0xFF00FFFF).copy(alpha = 0.3f + 0.2f * coreP),
+            radius = sunRadius * 1.6f,
+            center = heartCenter,
+            style = Stroke(width = 0.6f * u)
+        )
+
+                // ================= ШЕЯ (гибкое сочленение из колец) =================
+        // 4 кольца — сужаются к голове
+
+        // Нижнее кольцо (самое широкое, основание)
+        drawRoundRect(
+            color = lightGray,
+            topLeft = pt(-14f, 62f),
+            size = Size(28f * u, 4f * u),
+            cornerRadius = CornerRadius(2f * u)
         )
         drawRoundRect(
+            color = darkGray,
+            topLeft = pt(-14f, 62f),
+            size = Size(28f * u, 4f * u),
+            cornerRadius = CornerRadius(2f * u),
+            style = Stroke(width = 1f * u)
+        )
+
+        // Второе кольцо
+        drawRoundRect(
+            color = mediumGray,
+            topLeft = pt(-13f, 66f),
+            size = Size(26f * u, 3.5f * u),
+            cornerRadius = CornerRadius(1.8f * u)
+        )
+        drawRoundRect(
+            color = darkGray,
+            topLeft = pt(-13f, 66f),
+            size = Size(26f * u, 3.5f * u),
+            cornerRadius = CornerRadius(1.8f * u),
+            style = Stroke(width = 1f * u)
+        )
+
+        // Третье кольцо
+        drawRoundRect(
+            color = lightGray,
+            topLeft = pt(-12f, 69.5f),
+            size = Size(24f * u, 3.5f * u),
+            cornerRadius = CornerRadius(1.8f * u)
+        )
+        drawRoundRect(
+            color = darkGray,
+            topLeft = pt(-12f, 69.5f),
+            size = Size(24f * u, 3.5f * u),
+            cornerRadius = CornerRadius(1.8f * u),
+            style = Stroke(width = 1f * u)
+        )
+
+        // Четвёртое кольцо (самое узкое, у головы)
+        drawRoundRect(
+            color = mediumGray,
+            topLeft = pt(-11f, 73f),
+            size = Size(22f * u, 3f * u),
+            cornerRadius = CornerRadius(1.5f * u)
+        )
+        drawRoundRect(
+            color = darkGray,
+            topLeft = pt(-11f, 73f),
+            size = Size(22f * u, 3f * u),
+            cornerRadius = CornerRadius(1.5f * u),
+            style = Stroke(width = 1f * u)
+        )
+
+        // Тёмный жёлоб между кольцами (для эффекта сочленения)
+        drawLine(
+            darkerGray,
+            pt(-12f, 65.5f),
+            pt(12f, 65.5f),
+            strokeWidth = 0.5f * u
+        )
+        drawLine(
+            darkerGray,
+            pt(-12f, 69f),
+            pt(12f, 69f),
+            strokeWidth = 0.5f * u
+        )
+        drawLine(
+            darkerGray,
+            pt(-11f, 72.5f),
+            pt(11f, 72.5f),
+            strokeWidth = 0.5f * u
+        )
+
+        // Блик слева на кольцах
+        drawRoundRect(
+            color = whiteHighlight.copy(alpha = 0.6f),
+            topLeft = pt(-13f, 62.5f),
+            size = Size(2f * u, 3f * u),
+            cornerRadius = CornerRadius(1f * u)
+        )
+        drawRoundRect(
+            color = whiteHighlight.copy(alpha = 0.6f),
+            topLeft = pt(-12f, 66.5f),
+            size = Size(2f * u, 2.5f * u),
+            cornerRadius = CornerRadius(1f * u)
+        )
+        drawRoundRect(
+            color = whiteHighlight.copy(alpha = 0.6f),
+            topLeft = pt(-11f, 70f),
+            size = Size(2f * u, 2.5f * u),
+            cornerRadius = CornerRadius(1f * u)
+        )
+        drawRoundRect(
+            color = whiteHighlight.copy(alpha = 0.6f),
+            topLeft = pt(-10f, 73.5f),
+            size = Size(2f * u, 2f * u),
+            cornerRadius = CornerRadius(1f * u)
+        )
+
+                // ================= ЛЕВЫЙ НАУШНИК (полукруг) =================
+        // Внешний полукруг (плоская сторона справа, к голове)
+        val leftEarOuterPath = Path().apply {
+            moveTo(pt(-40f, 26f).x, pt(-40f, 26f).y)
+            // Дуга влево (полукруг)
+            cubicTo(
+                pt(-58f, 28f).x, pt(-58f, 28f).y,
+                pt(-58f, 56f).x, pt(-58f, 56f).y,
+                pt(-40f, 58f).x, pt(-40f, 58f).y
+            )
+            // Плоская сторона обратно
+            lineTo(pt(-40f, 26f).x, pt(-40f, 26f).y)
+            close()
+        }
+        drawPath(
+            leftEarOuterPath,
+            brush = Brush.horizontalGradient(
+                colors = listOf(lightGray, whiteBody),
+                startX = pt(-58f, 42f).x,
+                endX = pt(-40f, 42f).x
+            )
+        )
+        drawPath(leftEarOuterPath, color = darkGray, style = Stroke(width = 1.3f * u))
+
+        // Внутренний полукруг (поменьше)
+        val leftEarInnerPath = Path().apply {
+            moveTo(pt(-46f, 32f).x, pt(-46f, 32f).y)
+            cubicTo(
+                pt(-56f, 34f).x, pt(-56f, 34f).y,
+                pt(-56f, 50f).x, pt(-56f, 50f).y,
+                pt(-46f, 52f).x, pt(-46f, 52f).y
+            )
+            lineTo(pt(-46f, 32f).x, pt(-46f, 32f).y)
+            close()
+        }
+        drawPath(leftEarInnerPath, color = mediumGray)
+        drawPath(leftEarInnerPath, color = darkGray, style = Stroke(width = 1.1f * u))
+
+        // Тёмный центр
+        drawCircle(
             color = darkerGray,
-            topLeft = pt(-20f, 96f),
-            size = Size(40f * u, 34f * u),
-            cornerRadius = CornerRadius(8f * u)
+            radius = 3.5f * u,
+            center = pt(-50f, 42f)
         )
 
-        // Индикатор-сердце (светящийся)
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(neonBluePulse, neonBlue.copy(alpha = 0.5f), Color.Transparent),
-                radius = 12f * u
-            ),
-            center = pt(0f, 113f),
-            radius = 12f * u
-        )
-        drawCircle(
-            color = neonBlue,
-            radius = 10f * u,
-            center = pt(0f, 113f)
-        )
-        drawCircle(
-            color = neonBlueGlow,
-            radius = 5f * u,
-            center = pt(0f, 113f)
-        )
-
-        // ================= ШЕЯ =================
-        drawRoundRect(
-            color = mediumGray,
-            topLeft = pt(-14f, 62f),
-            size = Size(28f * u, 14f * u),
-            cornerRadius = CornerRadius(4f * u)
-        )
-        drawRoundRect(
-            color = darkGray,
-            topLeft = pt(-14f, 62f),
-            size = Size(28f * u, 14f * u),
-            cornerRadius = CornerRadius(4f * u),
-            style = Stroke(width = 1.2f * u)
-        )
-
-        // ================= ЛЕВЫЙ НАУШНИК =================
-        drawRoundRect(
-            color = lightGray,
-            topLeft = pt(-58f, 22f),
-            size = Size(14f * u, 32f * u),
-            cornerRadius = CornerRadius(7f * u)
-        )
-        drawRoundRect(
-            color = darkGray,
-            topLeft = pt(-58f, 22f),
-            size = Size(14f * u, 32f * u),
-            cornerRadius = CornerRadius(7f * u),
-            style = Stroke(width = 1.2f * u)
-        )
-        drawCircle(
-            color = mediumGray,
-            center = pt(-51f, 38f),
-            radius = 7f * u
-        )
-        drawCircle(
-            color = darkGray,
-            center = pt(-51f, 38f),
-            radius = 7f * u,
-            style = Stroke(width = 1.2f * u)
-        )
-        drawCircle(
-            color = neonBlue.copy(alpha = 0.6f + sin(pulse) * 0.4f),
-            center = pt(-51f, 38f),
-            radius = 3f * u
-        )
-
-        // ================= ПРАВЫЙ НАУШНИК =================
-        drawRoundRect(
-            color = lightGray,
-            topLeft = pt(44f, 22f),
-            size = Size(14f * u, 32f * u),
-            cornerRadius = CornerRadius(7f * u)
-        )
-        drawRoundRect(
-            color = darkGray,
-            topLeft = pt(44f, 22f),
-            size = Size(14f * u, 32f * u),
-            cornerRadius = CornerRadius(7f * u),
-            style = Stroke(width = 1.2f * u)
-        )
-        drawCircle(
-            color = mediumGray,
-            center = pt(51f, 38f),
-            radius = 7f * u
-        )
-        drawCircle(
-            color = darkGray,
-            center = pt(51f, 38f),
-            radius = 7f * u,
-            style = Stroke(width = 1.2f * u)
-        )
-        // Светящаяся точка на правом наушнике
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(neonBlue, neonBlue.copy(alpha = 0.3f), Color.Transparent),
-                radius = 8f * u
-            ),
-            center = pt(51f, 38f),
-            radius = 8f * u
-        )
-        drawCircle(
-            color = neonBlue,
-            center = pt(51f, 38f),
-            radius = 5f * u
-        )
-
-        // ================= ГОЛОВА =================
-        // Тень головы
-        val headShadowPath = Path().apply {
-            moveTo(pt(-42f, 53f).x, pt(-42f, 53f).y)
-            quadraticBezierTo(pt(-46f, 31f).x, pt(-46f, 31f).y, pt(-40f, 17f).x, pt(-40f, 17f).y)
-            quadraticBezierTo(pt(-30f, 5f).x, pt(-30f, 5f).y, pt(0f, 5f).x, pt(0f, 5f).y)
-            quadraticBezierTo(pt(30f, 5f).x, pt(30f, 5f).y, pt(40f, 17f).x, pt(40f, 17f).y)
-            quadraticBezierTo(pt(46f, 31f).x, pt(46f, 31f).y, pt(42f, 53f).x, pt(42f, 53f).y)
+                // ================= ПРАВЫЙ НАУШНИК (полукруг) =================
+        val rightEarOuterPath = Path().apply {
+            moveTo(pt(40f, 26f).x, pt(40f, 26f).y)
+            // Дуга вправо
+            cubicTo(
+                pt(58f, 28f).x, pt(58f, 28f).y,
+                pt(58f, 56f).x, pt(58f, 56f).y,
+                pt(40f, 58f).x, pt(40f, 58f).y
+            )
+            lineTo(pt(40f, 26f).x, pt(40f, 26f).y)
             close()
         }
-        drawPath(headShadowPath, color = Color.Black.copy(alpha = 0.08f))
+        drawPath(
+            rightEarOuterPath,
+            brush = Brush.horizontalGradient(
+                colors = listOf(whiteBody, lightGray),
+                startX = pt(40f, 42f).x,
+                endX = pt(58f, 42f).x
+            )
+        )
+        drawPath(rightEarOuterPath, color = darkGray, style = Stroke(width = 1.3f * u))
 
-        // Основная голова (градиент)
+        // Внутренний полукруг
+        val rightEarInnerPath = Path().apply {
+            moveTo(pt(46f, 32f).x, pt(46f, 32f).y)
+            cubicTo(
+                pt(56f, 34f).x, pt(56f, 34f).y,
+                pt(56f, 50f).x, pt(56f, 50f).y,
+                pt(46f, 52f).x, pt(46f, 52f).y
+            )
+            lineTo(pt(46f, 32f).x, pt(46f, 32f).y)
+            close()
+        }
+        drawPath(rightEarInnerPath, color = mediumGray)
+        drawPath(rightEarInnerPath, color = darkGray, style = Stroke(width = 1.1f * u))
+
+        drawCircle(
+            color = darkerGray,
+            radius = 3.5f * u,
+            center = pt(50f, 42f)
+        )
+
+                // ================= ГОЛОВА (обрезанный шар) =================
+        // Верхняя часть головы — половина круга, низ — прямая линия
         val headPath = Path().apply {
+            // Левая точка нижнего края
             moveTo(pt(-42f, 52f).x, pt(-42f, 52f).y)
-            quadraticBezierTo(pt(-46f, 30f).x, pt(-46f, 30f).y, pt(-40f, 16f).x, pt(-40f, 16f).y)
-            quadraticBezierTo(pt(-30f, 4f).x, pt(-30f, 4f).y, pt(0f, 4f).x, pt(0f, 4f).y)
-            quadraticBezierTo(pt(30f, 4f).x, pt(30f, 4f).y, pt(40f, 16f).x, pt(40f, 16f).y)
-            quadraticBezierTo(pt(46f, 30f).x, pt(46f, 30f).y, pt(42f, 52f).x, pt(42f, 52f).y)
+            // Дуга вверх (половина круга)
+            cubicTo(
+                pt(-42f, 20f).x, pt(-42f, 20f).y,
+                pt(-25f, 4f).x, pt(-25f, 4f).y,
+                pt(0f, 4f).x, pt(0f, 4f).y
+            )
+            cubicTo(
+                pt(25f, 4f).x, pt(25f, 4f).y,
+                pt(42f, 20f).x, pt(42f, 20f).y,
+                pt(42f, 52f).x, pt(42f, 52f).y
+            )
+            // Низ — прямая линия
+            lineTo(pt(-42f, 52f).x, pt(-42f, 52f).y)
             close()
         }
-        
+
+        // Заливка головы с градиентом
         drawPath(
             headPath,
             brush = Brush.verticalGradient(
-                colors = listOf(whiteBody, lightGray),
-                startY = pt(-40f, 16f).y,
+                colors = listOf(whiteHighlight, whiteBody, lightGray),
+                startY = pt(0f, 4f).y,
                 endY = pt(-42f, 52f).y
             )
         )
         drawPath(headPath, color = darkGray, style = Stroke(width = 1.5f * u))
 
-        // ================= ВИЗОР (чёрный экран) =================
+        // ================= ОБОДОК ВНИЗУ ГОЛОВЫ =================
+        // Основной ободок (толстая полоса)
         drawRoundRect(
-            color = screenBlack,
-            topLeft = pt(-36f, 18f),
-            size = Size(72f * u, 38f * u),
-            cornerRadius = CornerRadius(18f * u)
+            color = mediumGray,
+            topLeft = pt(-44f, 52f),
+            size = Size(88f * u, 6f * u),
+            cornerRadius = CornerRadius(2f * u)
         )
         drawRoundRect(
-            color = darkerGray,
-            topLeft = pt(-32f, 22f),
-            size = Size(64f * u, 30f * u),
-            cornerRadius = CornerRadius(15f * u)
+            color = darkGray,
+            topLeft = pt(-44f, 52f),
+            size = Size(88f * u, 6f * u),
+            cornerRadius = CornerRadius(2f * u),
+            style = Stroke(width = 1.2f * u)
+        )
+        // Тонкая линия внутри ободка
+        drawLine(
+            darkerGray,
+            pt(-42f, 55f),
+            pt(42f, 55f),
+            strokeWidth = 0.6f * u
         )
 
-        // ================= ГЛАЗА (светящиеся) =================
-        val eyeY = 38f
-        val eyeRX = 5f * u
-        val eyeRY = if (currentBlink < 0.5f) 1.2f * u else 8f * u
+        // ================= ДВЕ ВЕРТИКАЛЬНЫЕ ЛИНИИ НА ГОЛОВЕ =================
+        // Левая линия (от верха головы вниз, не доходя до визора)
+        val leftHeadLinePath = Path().apply {
+            moveTo(pt(-16f, 10f).x, pt(-16f, 10f).y)
+            quadraticBezierTo(
+                pt(-15f, 18f).x, pt(-15f, 18f).y,
+                pt(-15f, 20f).x, pt(-15f, 20f).y
+            )
+        }
+        drawPath(
+            leftHeadLinePath,
+            color = darkGray,
+            style = Stroke(width = 1f * u, cap = StrokeCap.Round)
+        )
 
-        // Левый глаз
-        val leftEyeX = -18f + lookOffsetX / u
-        val leftEyeCenter = pt(leftEyeX, eyeY + lookOffsetY / u)
-        
-        // Свечение глаза
+        // Правая линия (симметрично)
+        val rightHeadLinePath = Path().apply {
+            moveTo(pt(16f, 10f).x, pt(16f, 10f).y)
+            quadraticBezierTo(
+                pt(15f, 18f).x, pt(15f, 18f).y,
+                pt(15f, 20f).x, pt(15f, 20f).y
+            )
+        }
+        drawPath(
+            rightHeadLinePath,
+            color = darkGray,
+            style = Stroke(width = 1f * u, cap = StrokeCap.Round)
+        )
+
+        // ================= ВИЗОР (СТЕКЛО) =================
+        // Основное стекло (тёмное, скруглённое сверху сильнее)
+        val visorPath = Path().apply {
+            moveTo(pt(-34f, 22f).x, pt(-34f, 22f).y)
+            quadraticBezierTo(
+                pt(-36f, 14f).x, pt(-36f, 14f).y,
+                pt(-28f, 14f).x, pt(-28f, 14f).y
+            )
+            lineTo(pt(28f, 14f).x, pt(28f, 14f).y)
+            quadraticBezierTo(
+                pt(36f, 14f).x, pt(36f, 14f).y,
+                pt(34f, 22f).x, pt(34f, 22f).y
+            )
+            // Низ визора — сужается к носу
+            quadraticBezierTo(
+                pt(30f, 36f).x, pt(30f, 36f).y,
+                pt(0f, 40f).x, pt(0f, 40f).y
+            )
+            quadraticBezierTo(
+                pt(-30f, 36f).x, pt(-30f, 36f).y,
+                pt(-34f, 22f).x, pt(-34f, 22f).y
+            )
+            close()
+        }
+
+        drawPath(
+            visorPath,
+            brush = Brush.verticalGradient(
+                colors = listOf(visorGlass, visorDark),
+                startY = pt(-28f, 14f).y,
+                endY = pt(0f, 40f).y
+            )
+        )
+        drawPath(visorPath, color = darkerGray, style = Stroke(width = 1.5f * u))
+
+        // Блик на стекле (сверху-слева)
+        val glassHighlight = Path().apply {
+            moveTo(pt(-30f, 18f).x, pt(-30f, 18f).y)
+            quadraticBezierTo(
+                pt(-32f, 16f).x, pt(-32f, 16f).y,
+                pt(-26f, 16f).x, pt(-26f, 16f).y
+            )
+            lineTo(pt(-10f, 16f).x, pt(-10f, 16f).y)
+            quadraticBezierTo(
+                pt(-18f, 20f).x, pt(-18f, 20f).y,
+                pt(-30f, 18f).x, pt(-30f, 18f).y
+            )
+            close()
+        }
+        drawPath(glassHighlight, color = Color.White.copy(alpha = 0.3f))
+
+        // ================= ГЛАЗА =================
+        val eyeY = 26f
+        val eyeRX = 7f * u
+        val eyeRY = if (currentBlink < 0.5f) 1.5f * u else 10f * u
+
+        // Левый глаз — овальный, тёмный контур, светлый центр
+        val leftEyeX = -15f + lookOffsetX / u
+        // Внешний контур глаза (тёмный)
         drawOval(
-            brush = Brush.radialGradient(
-                colors = listOf(neonBluePulse, neonBlue.copy(alpha = 0.4f), Color.Transparent),
-                radius = 12f * u
-            ),
-            topLeft = pt(leftEyeX - 6f, eyeY + lookOffsetY / u - 10f),
-            size = Size(12f * u, 20f * u)
+            color = Color(0xFF0A0A14),
+            topLeft = pt(leftEyeX - eyeRX / u - 0.5f, eyeY + lookOffsetY / u - eyeRY / u - 0.5f),
+            size = Size(eyeRX * 2f + 1f * u, eyeRY * 2f + 1f * u)
         )
-        
-        // Основная часть глаза
+        // Сам глаз
         drawOval(
             color = neonBluePulse,
             topLeft = pt(leftEyeX - eyeRX / u, eyeY + lookOffsetY / u - eyeRY / u),
             size = Size(eyeRX * 2f, eyeRY * 2f)
         )
-        
         if (currentBlink > 0.5f) {
             // Зрачок
             drawCircle(
-                color = Color.White,
-                radius = 2f * u,
-                center = leftEyeCenter
+                color = Color(0xFF0A0A14),
+                radius = 2.5f * u,
+                center = pt(leftEyeX, eyeY + lookOffsetY / u)
             )
             // Блик
             drawCircle(
-                color = Color.White.copy(alpha = 0.8f),
-                radius = 0.7f * u,
-                center = pt(leftEyeX - 1f, eyeY + lookOffsetY / u - 1f)
+                color = Color.White.copy(alpha = 0.95f),
+                radius = 1.2f * u,
+                center = pt(leftEyeX - 1.5f, eyeY + lookOffsetY / u - 1.5f)
             )
         }
 
         // Правый глаз
-        val rightEyeX = 18f + lookOffsetX / u
-        val rightEyeCenter = pt(rightEyeX, eyeY + lookOffsetY / u)
-        
+        val rightEyeX = 15f + lookOffsetX / u
         drawOval(
-            brush = Brush.radialGradient(
-                colors = listOf(neonBluePulse, neonBlue.copy(alpha = 0.4f), Color.Transparent),
-                radius = 12f * u
-            ),
-            topLeft = pt(rightEyeX - 6f, eyeY + lookOffsetY / u - 10f),
-            size = Size(12f * u, 20f * u)
+            color = Color(0xFF0A0A14),
+            topLeft = pt(rightEyeX - eyeRX / u - 0.5f, eyeY + lookOffsetY / u - eyeRY / u - 0.5f),
+            size = Size(eyeRX * 2f + 1f * u, eyeRY * 2f + 1f * u)
         )
-        
         drawOval(
             color = neonBluePulse,
             topLeft = pt(rightEyeX - eyeRX / u, eyeY + lookOffsetY / u - eyeRY / u),
             size = Size(eyeRX * 2f, eyeRY * 2f)
         )
-        
         if (currentBlink > 0.5f) {
             drawCircle(
-                color = Color.White,
-                radius = 2f * u,
-                center = rightEyeCenter
+                color = Color(0xFF0A0A14),
+                radius = 2.5f * u,
+                center = pt(rightEyeX, eyeY + lookOffsetY / u)
             )
             drawCircle(
-                color = Color.White.copy(alpha = 0.8f),
-                radius = 0.7f * u,
-                center = pt(rightEyeX - 1f, eyeY + lookOffsetY / u - 1f)
+                color = Color.White.copy(alpha = 0.95f),
+                radius = 1.2f * u,
+                center = pt(rightEyeX - 1.5f, eyeY + lookOffsetY / u - 1.5f)
             )
         }
 
-        // ================= РОТ =================
+        // ================= НОС (маленький треугольник) =================
+        val nosePath = Path().apply {
+            moveTo(pt(-3f, 44f).x, pt(-3f, 44f).y)
+            lineTo(pt(3f, 44f).x, pt(3f, 44f).y)
+            lineTo(pt(0f, 47f).x, pt(0f, 47f).y)
+            close()
+        }
+        drawPath(nosePath, color = mediumGray, style = Stroke(width = 0.9f * u))
+
+               // ================= РОТ =================
         if (isSpeaking) {
-            val mouthH = (3f + 2f * sin(mouthPhase)) * u
+            // Открытый рот при говорении
+            val mouthH = (3f + 3f * sin(mouthPhase)) * u
             drawOval(
-                color = neonBlue,
-                topLeft = pt(-10f, 50f - mouthH / u / 2f),
+                color = darkerGray,
+                topLeft = pt(-10f, 52f - mouthH / u / 2f),
                 size = Size(20f * u, mouthH * 2f)
             )
+            drawOval(
+                color = Color(0xFF0A0A14),
+                topLeft = pt(-8f, 52f - mouthH / u / 2f + 0.5f),
+                size = Size(16f * u, mouthH * 2f - 1f * u)
+            )
         } else {
-            // Улыбка
-            drawArc(
-                color = neonBlue,
-                startAngle = 30f,
-                sweepAngle = 120f,
-                useCenter = false,
-                topLeft = pt(-14f, 48f),
-                size = Size(28f * u, 14f * u),
+            // Улыбка-запятая (лежит на боку)
+            val smilePath = Path().apply {
+                // Начало слева, ниже
+                moveTo(pt(-10f, 53f).x, pt(-10f, 53f).y)
+                // Изгиб вверх и вправо
+                cubicTo(
+                    pt(-6f, 48f).x, pt(-6f, 48f).y,
+                    pt(2f, 48f).x, pt(2f, 48f).y,
+                    pt(8f, 50f).x, pt(8f, 50f).y
+                )
+            }
+            drawPath(
+                smilePath,
+                color = darkerGray,
                 style = Stroke(width = 2f * u, cap = StrokeCap.Round)
+            )
+
+            // Утолщённый кончик запятой (справа)
+            drawCircle(
+                color = darkerGray,
+                radius = 1.5f * u,
+                center = pt(8f, 50f)
             )
         }
 
         // ================= АНТЕННЫ =================
+        // Левая антенна
         drawLine(
             color = darkGray,
-            start = pt(-28f, 8f),
-            end = pt(-28f, -6f),
-            strokeWidth = 2.5f * u,
+            start = pt(-24f, 10f),
+            end = pt(-24f, -8f),
+            strokeWidth = 2f * u,
             cap = StrokeCap.Round
         )
-        drawLine(
-            color = darkGray,
-            start = pt(28f, 8f),
-            end = pt(28f, -6f),
-            strokeWidth = 2.5f * u,
-            cap = StrokeCap.Round
+        drawCircle(
+            color = darkerGray,
+            radius = 1.5f * u,
+            center = pt(-24f, -8f)
         )
 
-        // ================= РУКИ =================
+        // Правая антенна
+        drawLine(
+            color = darkGray,
+            start = pt(24f, 10f),
+            end = pt(24f, -8f),
+            strokeWidth = 2f * u,
+            cap = StrokeCap.Round
+        )
+        drawCircle(
+            color = darkerGray,
+            radius = 1.5f * u,
+            center = pt(24f, -8f)
+        )
+
+        // ================= РУКИ (согнуты, кисти на груди) =================
+
         // ЛЕВАЯ РУКА
+        // Плечо (круглый сустав)
         drawCircle(
-            color = lightGray,
-            center = pt(-46f, 92f),
-            radius = 14f * u
+            brush = Brush.radialGradient(
+                colors = listOf(whiteHighlight, lightGray),
+                radius = 14f * u,
+                center = pt(-42f, 92f)
+            ),
+            radius = 14f * u,
+            center = pt(-42f, 92f)
         )
         drawCircle(
             color = darkGray,
-            center = pt(-46f, 92f),
             radius = 14f * u,
-            style = Stroke(width = 1.2f * u)
+            center = pt(-42f, 92f),
+            style = Stroke(width = 1.3f * u)
         )
-        
-        val leftArmPath = Path().apply {
-            moveTo(pt(-58f, 100f).x, pt(-58f, 100f).y)
-            quadraticBezierTo(
-                pt(-68f, 118f).x, pt(-68f, 118f).y,
-                pt(-56f, 130f).x, pt(-56f, 130f).y
-            )
-        }
-        drawPath(leftArmPath, color = lightGray)
-        drawPath(leftArmPath, color = darkGray, style = Stroke(width = 1.2f * u))
-        
         drawCircle(
-            color = darkerGray,
-            center = pt(-56f, 128f),
-            radius = 7f * u
+            color = mediumGray,
+            radius = 5f * u,
+            center = pt(-42f, 92f)
         )
 
-        // ЛЕВАЯ КИСТЬ
-        drawOval(
-            color = darkerGray,
-            topLeft = pt(-42f, 118f),
-            size = Size(24f * u, 18f * u)
-        )
-        for (i in 0..3) {
-            val fx = -38f + i * 7f
-            drawRoundRect(
-                color = darkGray,
-                topLeft = pt(fx, 110f),
-                size = Size(6f * u, 14f * u),
-                cornerRadius = CornerRadius(3f * u)
-            )
+        // Плечевая часть руки (от плеча вниз)
+        val leftUpperArmPath = Path().apply {
+            moveTo(pt(-54f, 100f).x, pt(-54f, 100f).y)
+            lineTo(pt(-52f, 128f).x, pt(-52f, 128f).y)
+            lineTo(pt(-38f, 128f).x, pt(-38f, 128f).y)
+            lineTo(pt(-32f, 100f).x, pt(-32f, 100f).y)
         }
+        drawPath(leftUpperArmPath, color = lightGray)
+        drawPath(leftUpperArmPath, color = darkGray, style = Stroke(width = 1.3f * u))
+
+        // Блик на предплечье
+        drawRoundRect(
+            color = whiteHighlight.copy(alpha = 0.8f),
+            topLeft = pt(-50f, 104f),
+            size = Size(3f * u, 18f * u),
+            cornerRadius = CornerRadius(1.5f * u)
+        )
+
+        // ЛОКОТЬ — сустав
+        drawCircle(
+            color = mediumGray,
+            radius = 7f * u,
+            center = pt(-45f, 132f)
+        )
+        drawCircle(
+            color = darkGray,
+            radius = 7f * u,
+            center = pt(-45f, 132f),
+            style = Stroke(width = 1.3f * u)
+        )
+
+        // ПРЕДПЛЕЧЬЕ (от локтя к центру груди)
+        val leftForearmPath = Path().apply {
+            moveTo(pt(-52f, 134f).x, pt(-52f, 134f).y)
+            lineTo(pt(-26f, 142f).x, pt(-26f, 142f).y)
+            lineTo(pt(-22f, 130f).x, pt(-22f, 130f).y)
+            lineTo(pt(-48f, 124f).x, pt(-48f, 124f).y)
+        }
+        drawPath(leftForearmPath, color = lightGray)
+        drawPath(leftForearmPath, color = darkGray, style = Stroke(width = 1.3f * u))
+        drawRoundRect(
+            color = whiteHighlight.copy(alpha = 0.8f),
+            topLeft = pt(-46f, 128f),
+            size = Size(20f * u, 2.5f * u),
+            cornerRadius = CornerRadius(1.2f * u)
+        )
 
         // ПРАВАЯ РУКА
         drawCircle(
-            color = lightGray,
-            center = pt(46f, 92f),
-            radius = 14f * u
+            brush = Brush.radialGradient(
+                colors = listOf(whiteHighlight, lightGray),
+                radius = 14f * u,
+                center = pt(42f, 92f)
+            ),
+            radius = 14f * u,
+            center = pt(42f, 92f)
         )
         drawCircle(
             color = darkGray,
-            center = pt(46f, 92f),
             radius = 14f * u,
-            style = Stroke(width = 1.2f * u)
+            center = pt(42f, 92f),
+            style = Stroke(width = 1.3f * u)
         )
-        
-        val rightArmPath = Path().apply {
-            moveTo(pt(58f, 100f).x, pt(58f, 100f).y)
-            quadraticBezierTo(
-                pt(68f, 118f).x, pt(68f, 118f).y,
-                pt(56f, 130f).x, pt(56f, 130f).y
-            )
-        }
-        drawPath(rightArmPath, color = lightGray)
-        drawPath(rightArmPath, color = darkGray, style = Stroke(width = 1.2f * u))
-        
         drawCircle(
-            color = darkerGray,
-            center = pt(56f, 128f),
-            radius = 7f * u
+            color = mediumGray,
+            radius = 5f * u,
+            center = pt(42f, 92f)
         )
 
-        // ПРАВАЯ КИСТЬ
-        drawOval(
-            color = darkerGray,
-            topLeft = pt(18f, 120f),
-            size = Size(26f * u, 18f * u)
+        val rightUpperArmPath = Path().apply {
+            moveTo(pt(54f, 100f).x, pt(54f, 100f).y)
+            lineTo(pt(52f, 128f).x, pt(52f, 128f).y)
+            lineTo(pt(38f, 128f).x, pt(38f, 128f).y)
+            lineTo(pt(32f, 100f).x, pt(32f, 100f).y)
+        }
+        drawPath(rightUpperArmPath, color = lightGray)
+        drawPath(rightUpperArmPath, color = darkGray, style = Stroke(width = 1.3f * u))
+        drawRoundRect(
+            color = whiteHighlight.copy(alpha = 0.8f),
+            topLeft = pt(46f, 104f),
+            size = Size(3f * u, 18f * u),
+            cornerRadius = CornerRadius(1.5f * u)
         )
-       for (i in 0..3) {
-            val fx = 22f + i * 7f
+
+        drawCircle(
+            color = mediumGray,
+            radius = 7f * u,
+            center = pt(45f, 132f)
+        )
+        drawCircle(
+            color = darkGray,
+            radius = 7f * u,
+            center = pt(45f, 132f),
+            style = Stroke(width = 1.3f * u)
+        )
+
+        val rightForearmPath = Path().apply {
+            moveTo(pt(52f, 134f).x, pt(52f, 134f).y)
+            lineTo(pt(26f, 142f).x, pt(26f, 142f).y)
+            lineTo(pt(22f, 130f).x, pt(22f, 130f).y)
+            lineTo(pt(48f, 124f).x, pt(48f, 124f).y)
+        }
+        drawPath(rightForearmPath, color = lightGray)
+        drawPath(rightForearmPath, color = darkGray, style = Stroke(width = 1.3f * u))
+        drawRoundRect(
+            color = whiteHighlight.copy(alpha = 0.8f),
+            topLeft = pt(26f, 128f),
+            size = Size(20f * u, 2.5f * u),
+            cornerRadius = CornerRadius(1.2f * u)
+        )
+
+        // ================= КИСТИ РУК (сложены вместе на груди) =================
+        // Левая кисть
+        drawOval(
+            color = lightGray,
+            topLeft = pt(-22f, 136f),
+            size = Size(22f * u, 18f * u)
+        )
+        drawOval(
+            color = darkGray,
+            topLeft = pt(-22f, 136f),
+            size = Size(22f * u, 18f * u),
+            style = Stroke(width = 1.3f * u)
+        )
+
+        // Пальцы левой кисти (3 видимых)
+        for (i in 0..2) {
+            val fx = -20f + i * 6f
+            drawRoundRect(
+                color = mediumGray,
+                topLeft = pt(fx, 134f),
+                size = Size(5f * u, 10f * u),
+                cornerRadius = CornerRadius(2.5f * u)
+            )
             drawRoundRect(
                 color = darkGray,
-                topLeft = pt(fx, 112f),
-                size = Size(6f * u, 14f * u),
-                cornerRadius = CornerRadius(3f * u)
+                topLeft = pt(fx, 134f),
+                size = Size(5f * u, 10f * u),
+                cornerRadius = CornerRadius(2.5f * u),
+                style = Stroke(width = 1f * u)
+            )
+            // Сустав
+            drawCircle(
+                color = darkerGray,
+                radius = 1.2f * u,
+                center = pt(fx + 2.5f, 139f)
             )
         }
+
+        // Правая кисть (поверх левой)
+        drawOval(
+            color = lightGray,
+            topLeft = pt(-4f, 138f),
+            size = Size(22f * u, 16f * u)
+        )
+        drawOval(
+            color = darkGray,
+            topLeft = pt(-4f, 138f),
+            size = Size(22f * u, 16f * u),
+            style = Stroke(width = 1.3f * u)
+        )
+
+        // Пальцы правой кисти (3 видимых)
+        for (i in 0..2) {
+            val fx = -2f + i * 6f
+            drawRoundRect(
+                color = mediumGray,
+                topLeft = pt(fx, 136f),
+                size = Size(5f * u, 10f * u),
+                cornerRadius = CornerRadius(2.5f * u)
+            )
+            drawRoundRect(
+                color = darkGray,
+                topLeft = pt(fx, 136f),
+                size = Size(5f * u, 10f * u),
+                cornerRadius = CornerRadius(2.5f * u),
+                style = Stroke(width = 1f * u)
+            )
+            drawCircle(
+                color = darkerGray,
+                radius = 1.2f * u,
+                center = pt(fx + 2.5f, 141f)
+            )
+        }
+
+        // Большие пальцы
+        drawRoundRect(
+            color = mediumGray,
+            topLeft = pt(-24f, 144f),
+            size = Size(6f * u, 8f * u),
+            cornerRadius = CornerRadius(3f * u)
+        )
+        drawRoundRect(
+            color = darkGray,
+            topLeft = pt(-24f, 144f),
+            size = Size(6f * u, 8f * u),
+            cornerRadius = CornerRadius(3f * u),
+            style = Stroke(width = 1f * u)
+        )
+        drawRoundRect(
+            color = mediumGray,
+            topLeft = pt(18f, 144f),
+            size = Size(6f * u, 8f * u),
+            cornerRadius = CornerRadius(3f * u)
+        )
+        drawRoundRect(
+            color = darkGray,
+            topLeft = pt(18f, 144f),
+            size = Size(6f * u, 8f * u),
+            cornerRadius = CornerRadius(3f * u),
+            style = Stroke(width = 1f * u)
+        )
     }
 }
 
 private val SineClientEasing = Easing { fraction ->
     sin(fraction * PI.toFloat() / 2f).toFloat()
 }
-
 
 @Composable
 private fun LockScreen(
