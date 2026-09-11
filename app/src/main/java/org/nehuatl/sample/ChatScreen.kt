@@ -1733,7 +1733,7 @@ fun ThinkingRobotAnimation(
         )
         for (i in 0..3) {
             val fx = -38f + i * 7f
-            drawOval(
+            drawRoundRect(
                 color = darkGray,
                 topLeft = pt(fx, 110f),
                 size = Size(6f * u, 14f * u),
@@ -1776,9 +1776,9 @@ fun ThinkingRobotAnimation(
             topLeft = pt(18f, 120f),
             size = Size(26f * u, 18f * u)
         )
-        for (i in 0..3) {
+       for (i in 0..3) {
             val fx = 22f + i * 7f
-            drawOval(
+            drawRoundRect(
                 color = darkGray,
                 topLeft = pt(fx, 112f),
                 size = Size(6f * u, 14f * u),
