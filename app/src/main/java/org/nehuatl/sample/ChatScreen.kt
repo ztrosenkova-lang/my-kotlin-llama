@@ -1508,19 +1508,19 @@ fun ThinkingRobotAnimation(
         // Сегмент на цилиндре 2
         drawLine(mediumGray, pt(-27f, 145f), pt(27f, 145f), strokeWidth = 0.6f * u)
 
-                // ================= ПУЛЬСИРУЮЩЕЕ СОЛНЦЕ НА ГРУДИ =================
+                        // ================= ПУЛЬСИРУЮЩЕЕ СОЛНЦЕ НА ГРУДИ =================
         // Точная копия солнца с орбиты
 
         val heartCenter = pt(0f, 100f)
         val corePulse = 0.5f + 0.5f * sin(pulse * 1.5f)
-        val sunRadius = 10f * u * (1f + 0.15f * coreP)
+        val sunRadius = 10f * u * (1f + 0.15f * corePulse)
 
         // 1. Внешнее свечение вокруг солнца (большое гало)
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(
                     Color(0x0000FFFF),
-                    Color(0x3000BFFF).copy(alpha = 0.4f + 0.2f * coreP),
+                    Color(0x3000BFFF).copy(alpha = 0.4f + 0.2f * corePulse),
                     Color(0x600088FF).copy(alpha = 0.3f),
                     Color.Transparent
                 ),
@@ -1535,7 +1535,7 @@ fun ThinkingRobotAnimation(
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(
-                    Color(0xFF00FFFF).copy(alpha = (0.7f + 0.3f * coreP) * 0.8f),
+                    Color(0xFF00FFFF).copy(alpha = (0.7f + 0.3f * corePulse) * 0.8f),
                     Color(0xFF00BFFF).copy(alpha = 0.5f),
                     Color(0xFF0044FF).copy(alpha = 0f)
                 ),
@@ -1587,7 +1587,7 @@ fun ThinkingRobotAnimation(
 
         // 6. Тонкое кольцо-орбита вокруг солнца (как на картинке)
         drawCircle(
-            color = Color(0xFF00FFFF).copy(alpha = 0.3f + 0.2f * coreP),
+            color = Color(0xFF00FFFF).copy(alpha = 0.3f + 0.2f * corePulse),
             radius = sunRadius * 1.6f,
             center = heartCenter,
             style = Stroke(width = 0.6f * u)
