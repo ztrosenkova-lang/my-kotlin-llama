@@ -2009,11 +2009,11 @@ fun ThinkingRobotAnimation(
         rotate(antennaTilt, pivot = pt(0f, 26f)) {
             // Стебель
             drawLine(
-                Brush.verticalGradient(listOf(bodyMid, bodyDark), start = pt(0f, 26f), end = pt(0f, 18f)),
-                pt(0f, 26f),
-                pt(0f, 18f),
-                strokeWidth = 1.5f * u
-            )
+    Brush.verticalGradient(listOf(bodyMid, bodyDark)),
+    pt(0f, 26f),
+    pt(0f, 18f),
+    strokeWidth = 1.5f * u
+)
             // Шарик
             if (isThinking) {
                 glow(pt(0f, 17f), 4f * u, accentBright)
