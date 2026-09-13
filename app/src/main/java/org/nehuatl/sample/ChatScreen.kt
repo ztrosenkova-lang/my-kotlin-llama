@@ -1293,15 +1293,78 @@ fun ThinkingRobotAnimation(
 
         fun pt(x: Float, y: Float) = Offset(cx + x * u, y * u + bobOffset)
 
-                // ================= ПЛАМЯ РАКЕТНОГО ДВИГАТЕЛЯ (улучшенное) =================
+                       // ================= СОПЛО (подогнано под новый корпус) =================
+        // Верх: ширина 44 (-22..22), низ: ширина 44.8 (-22.4..22.4) — почти цилиндр
+        val nozzlePath = Path().apply {
+            moveTo(pt(-22f, 160f).x, pt(-22f, 160f).y)
+            lineTo(pt(22f, 160f).x, pt(22f, 160f).y)
+            lineTo(pt(24f, 180f).x, pt(24f, 180f).y)
+            lineTo(pt(-24f, 180f).x, pt(-24f, 180f).y)
+            close()
+        }
+
+        // Заливка сопла
+        drawPath(
+            nozzlePath,
+            brush = Brush.verticalGradient(
+                colors = listOf(mediumGray, darkGray, darkerGray),
+                startY = pt(0f, 160f).y,
+                endY = pt(0f, 180f).y
+            )
+        )
+        drawPath(nozzlePath, color = darkerGray, style = Stroke(width = 1.4f * u))
+
+        // Горизонтальные линии-решётки на сопле
+        drawLine(darkerGray, pt(-22.5f, 165f), pt(22.5f, 165f), strokeWidth = 0.8f * u)
+        drawLine(darkerGray, pt(-23f, 170f), pt(23f, 170f), strokeWidth = 0.8f * u)
+        drawLine(darkerGray, pt(-23.5f, 175f), pt(23.5f, 175f), strokeWidth = 0.8f * u)
+
+        // Блик слева на сопле
+        drawRoundRect(
+            color = whiteHighlight.copy(alpha = 0.5f),
+            topLeft = pt(-20f, 163f),
+            size = Size(3f * u, 14f * u),
+            cornerRadius = CornerRadius(1.5f * u)
+        )
+
+        // Верхний ободок сопла
+        drawRoundRect(
+            color = mediumGray,
+            topLeft = pt(-23f, 159f),
+            size = Size(46f * u, 3f * u),
+            cornerRadius = CornerRadius(1.5f * u)
+        )
+        drawRoundRect(
+            color = darkerGray,
+            topLeft = pt(-23f, 159f),
+            size = Size(46f * u, 3f * u),
+            cornerRadius = CornerRadius(1.5f * u),
+            style = Stroke(width = 1f * u)
+        )
+
+        // Нижний ободок сопла (выход пламени)
+        drawRoundRect(
+            color = darkerGray,
+            topLeft = pt(-25f, 179f),
+            size = Size(50f * u, 3f * u),
+            cornerRadius = CornerRadius(1.5f * u)
+        )
+        drawRoundRect(
+            color = Color(0xFF0A0A14),
+            topLeft = pt(-25f, 179f),
+            size = Size(50f * u, 3f * u),
+            cornerRadius = CornerRadius(1.5f * u),
+            style = Stroke(width = 1f * u)
+        )
+
+        // ================= ПЛАМЯ РАКЕТНОГО ДВИГАТЕЛЯ (подогнано) =================
         // Три слоя пламени + искры + свечение + дымка
 
         val flameFlicker = sin(flamePhase * 2f) * 1.8f
-        val flameFlickerX = sin(flamePhase * 3.3f) * 1.2f  // боковое дрожание
-        val flamePulse = 0.7f + 0.3f * sin(flamePhase * 5f) // общая пульсация
+        val flameFlickerX = sin(flamePhase * 3.3f) * 1.2f
+        val flamePulse = 0.7f + 0.3f * sin(flamePhase * 5f)
 
         // ===== СЛОЙ 0. СВЕЧЕНИЕ ВОКРУГ ПЛАМЕНИ =====
-        // Мощное голубое гало вокруг зоны пламени
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(
@@ -1310,30 +1373,30 @@ fun ThinkingRobotAnimation(
                     Color.Transparent
                 ),
                 center = pt(0f, 200f).copy(x = pt(0f, 200f).x + flameFlickerX * u),
-                radius = 32f * u
+                radius = 26f * u
             ),
-            radius = 32f * u,
+            radius = 26f * u,
             center = pt(0f, 200f).copy(x = pt(0f, 200f).x + flameFlickerX * u)
         )
 
         // ===== СЛОЙ 1. ВНЕШНЕЕ ПЛАМЯ (красно-оранжевое) =====
         val outerFlamePath = Path().apply {
-            moveTo(pt(-22f, 182f).x, pt(-22f, 182f).y)
+            moveTo(pt(-18f, 182f).x, pt(-18f, 182f).y)
             quadraticBezierTo(
-                pt(-18f + flameFlickerX, 200f + flameFlicker).x,
-                pt(-18f + flameFlickerX, 200f + flameFlicker).y,
-                pt(-6f + flameFlickerX * 0.5f, 212f + flameFlicker).x,
-                pt(-6f + flameFlickerX * 0.5f, 212f + flameFlicker).y
+                pt(-14f + flameFlickerX, 200f + flameFlicker).x,
+                pt(-14f + flameFlickerX, 200f + flameFlicker).y,
+                pt(-5f + flameFlickerX * 0.5f, 212f + flameFlicker).x,
+                pt(-5f + flameFlickerX * 0.5f, 212f + flameFlicker).y
             )
             quadraticBezierTo(
                 pt(0f, 222f + flameFlicker * 1.2f).x, pt(0f, 222f + flameFlicker * 1.2f).y,
-                pt(6f + flameFlickerX * 0.5f, 212f + flameFlicker).x,
-                pt(6f + flameFlickerX * 0.5f, 212f + flameFlicker).y
+                pt(5f + flameFlickerX * 0.5f, 212f + flameFlicker).x,
+                pt(5f + flameFlickerX * 0.5f, 212f + flameFlicker).y
             )
             quadraticBezierTo(
-                pt(18f + flameFlickerX, 200f + flameFlicker).x,
-                pt(18f + flameFlickerX, 200f + flameFlicker).y,
-                pt(22f, 182f).x, pt(22f, 182f).y
+                pt(14f + flameFlickerX, 200f + flameFlicker).x,
+                pt(14f + flameFlickerX, 200f + flameFlicker).y,
+                pt(18f, 182f).x, pt(18f, 182f).y
             )
         }
         drawPath(
@@ -1352,22 +1415,22 @@ fun ThinkingRobotAnimation(
 
         // ===== СЛОЙ 2. СРЕДНЕЕ ПЛАМЯ (оранжево-жёлтое) =====
         val middleFlamePath = Path().apply {
-            moveTo(pt(-15f, 182f).x, pt(-15f, 182f).y)
+            moveTo(pt(-12f, 182f).x, pt(-12f, 182f).y)
             quadraticBezierTo(
-                pt(-12f + flameFlickerX * 0.7f, 197f + flameFlicker * 0.9f).x,
-                pt(-12f + flameFlickerX * 0.7f, 197f + flameFlicker * 0.9f).y,
-                pt(-4f + flameFlickerX * 0.3f, 206f + flameFlicker * 0.9f).x,
-                pt(-4f + flameFlickerX * 0.3f, 206f + flameFlicker * 0.9f).y
+                pt(-10f + flameFlickerX * 0.7f, 197f + flameFlicker * 0.9f).x,
+                pt(-10f + flameFlickerX * 0.7f, 197f + flameFlicker * 0.9f).y,
+                pt(-3f + flameFlickerX * 0.3f, 206f + flameFlicker * 0.9f).x,
+                pt(-3f + flameFlickerX * 0.3f, 206f + flameFlicker * 0.9f).y
             )
             quadraticBezierTo(
                 pt(0f, 213f + flameFlicker * 1.0f).x, pt(0f, 213f + flameFlicker * 1.0f).y,
-                pt(4f + flameFlickerX * 0.3f, 206f + flameFlicker * 0.9f).x,
-                pt(4f + flameFlickerX * 0.3f, 206f + flameFlicker * 0.9f).y
+                pt(3f + flameFlickerX * 0.3f, 206f + flameFlicker * 0.9f).x,
+                pt(3f + flameFlickerX * 0.3f, 206f + flameFlicker * 0.9f).y
             )
             quadraticBezierTo(
-                pt(12f + flameFlickerX * 0.7f, 197f + flameFlicker * 0.9f).x,
-                pt(12f + flameFlickerX * 0.7f, 197f + flameFlicker * 0.9f).y,
-                pt(15f, 182f).x, pt(15f, 182f).y
+                pt(10f + flameFlickerX * 0.7f, 197f + flameFlicker * 0.9f).x,
+                pt(10f + flameFlickerX * 0.7f, 197f + flameFlicker * 0.9f).y,
+                pt(12f, 182f).x, pt(12f, 182f).y
             )
         }
         drawPath(
@@ -1386,10 +1449,10 @@ fun ThinkingRobotAnimation(
 
         // ===== СЛОЙ 3. ВНУТРЕННЕЕ БЕЛО-ЖЁЛТОЕ ЯДРО =====
         val innerFlamePath = Path().apply {
-            moveTo(pt(-8f, 182f).x, pt(-8f, 182f).y)
+            moveTo(pt(-6f, 182f).x, pt(-6f, 182f).y)
             quadraticBezierTo(
-                pt(-6f + flameFlickerX * 0.4f, 192f + flameFlicker * 0.7f).x,
-                pt(-6f + flameFlickerX * 0.4f, 192f + flameFlicker * 0.7f).y,
+                pt(-5f + flameFlickerX * 0.4f, 192f + flameFlicker * 0.7f).x,
+                pt(-5f + flameFlickerX * 0.4f, 192f + flameFlicker * 0.7f).y,
                 pt(-2f + flameFlickerX * 0.2f, 198f + flameFlicker * 0.7f).x,
                 pt(-2f + flameFlickerX * 0.2f, 198f + flameFlicker * 0.7f).y
             )
@@ -1399,9 +1462,9 @@ fun ThinkingRobotAnimation(
                 pt(2f + flameFlickerX * 0.2f, 198f + flameFlicker * 0.7f).y
             )
             quadraticBezierTo(
-                pt(6f + flameFlickerX * 0.4f, 192f + flameFlicker * 0.7f).x,
-                pt(6f + flameFlickerX * 0.4f, 192f + flameFlicker * 0.7f).y,
-                pt(8f, 182f).x, pt(8f, 182f).y
+                pt(5f + flameFlickerX * 0.4f, 192f + flameFlicker * 0.7f).x,
+                pt(5f + flameFlickerX * 0.4f, 192f + flameFlicker * 0.7f).y,
+                pt(6f, 182f).x, pt(6f, 182f).y
             )
         }
         drawPath(
@@ -1427,30 +1490,25 @@ fun ThinkingRobotAnimation(
                     Color.Transparent
                 ),
                 center = pt(0f, 190f),
-                radius = 8f * u
+                radius = 7f * u
             ),
-            radius = 8f * u,
+            radius = 7f * u,
             center = pt(0f, 190f)
         )
 
         // ===== СЛОЙ 5. ИСКРЫ, ЛЕТЯЩИЕ ВНИЗ =====
         val sparkCount = 8
         for (i in 0 until sparkCount) {
-            // Фаза каждой искры своя, чтобы они летели с разной скоростью
             val sparkPhase = (flamePhase * 2f + i * 0.7f) % (2f * PI.toFloat())
             val sparkProgress = sparkPhase / (2f * PI.toFloat())
 
-            // Искра летит от сопла вниз
             val sparkY = 182f + sparkProgress * 45f
-            val sparkX = -12f + i * 3.4f + sin(sparkPhase * 3f) * 2f
+            val sparkX = -10f + i * 2.8f + sin(sparkPhase * 3f) * 2f
 
-            // Прозрачность падает по мере полёта
             val sparkAlpha = (1f - sparkProgress) * 0.9f
-            // Размер уменьшается
-            val sparkR = (1.2f - sparkProgress * 0.8f) * u
+            val sparkR = (1.1f - sparkProgress * 0.75f) * u
 
             if (sparkAlpha > 0.05f && sparkR > 0f) {
-                // Свечение искры
                 drawCircle(
                     brush = Brush.radialGradient(
                         colors = listOf(
@@ -1464,13 +1522,11 @@ fun ThinkingRobotAnimation(
                     radius = sparkR * 3f,
                     center = pt(sparkX, sparkY)
                 )
-                // Сама искра (яркая точка)
                 drawCircle(
                     color = Color(0xFFFFEE88).copy(alpha = sparkAlpha),
                     radius = sparkR,
                     center = pt(sparkX, sparkY)
                 )
-                // Яркий центр
                 drawCircle(
                     color = Color.White.copy(alpha = sparkAlpha * 0.9f),
                     radius = sparkR * 0.5f,
@@ -1488,82 +1544,293 @@ fun ThinkingRobotAnimation(
                     Color.Transparent
                 ),
                 center = pt(0f, 215f + flameFlicker),
-                radius = 14f * u
+                radius = 12f * u
             ),
-            radius = 14f * u,
+            radius = 12f * u,
             center = pt(0f, 215f + flameFlicker)
         )
 
-                // ================= РАКЕТНОЕ СОПЛО =================
-        // Обрезанный конус, сужается к верху
-        // Верх: ширина 42 (-21..21), низ: ширина 56 (-28..28)
-        val nozzlePath = Path().apply {
-            moveTo(pt(-21f, 160f).x, pt(-21f, 160f).y)
-            lineTo(pt(21f, 160f).x, pt(21f, 160f).y)
-            lineTo(pt(28f, 180f).x, pt(28f, 180f).y)
-            lineTo(pt(-28f, 180f).x, pt(-28f, 180f).y)
-            close()
-        }
+                 // ================= РУКИ (опущены вниз по бокам) =================
+        // Предплечье в 2 раза толще бицепса. Руки укорочены на 20%.
+        // Все части выровнены по центральной оси. Левая ось: X = -46f. Правая ось: X = 46f.
 
-        // Заливка сопла
-        drawPath(
-            nozzlePath,
-            brush = Brush.verticalGradient(
-                colors = listOf(mediumGray, darkGray, darkerGray),
-                startY = pt(0f, 160f).y,
-                endY = pt(0f, 180f).y
-            )
+        // ЛЕВАЯ РУКА
+        // Плечо (круглый сустав)
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(whiteHighlight, lightGray),
+                radius = 13f * u,
+                center = pt(-46f, 96f)
+            ),
+            radius = 13f * u,
+            center = pt(-46f, 96f)
         )
-        drawPath(nozzlePath, color = darkerGray, style = Stroke(width = 1.4f * u))
+        drawCircle(
+            color = darkGray,
+            radius = 13f * u,
+            center = pt(-46f, 96f),
+            style = Stroke(width = 1.3f * u)
+        )
+        drawCircle(
+            color = mediumGray,
+            radius = 4.5f * u,
+            center = pt(-46f, 96f)
+        )
 
-        // Горизонтальные линии-решётки на сопле
-        drawLine(darkerGray, pt(-23f, 165f), pt(23f, 165f), strokeWidth = 0.8f * u)
-        drawLine(darkerGray, pt(-25f, 170f), pt(25f, 170f), strokeWidth = 0.8f * u)
-        drawLine(darkerGray, pt(-27f, 175f), pt(27f, 175f), strokeWidth = 0.8f * u)
-
-        // Блик слева на сопле
+        // Бицепс — ширина 16, скругление 4, высота 21 (укорочено на 20%)
         drawRoundRect(
-            color = whiteHighlight.copy(alpha = 0.5f),
-            topLeft = pt(-19f, 163f),
+            color = lightGray,
+            topLeft = pt(-54f, 104f),
+            size = Size(16f * u, 21f * u),
+            cornerRadius = CornerRadius(4f * u)
+        )
+        drawRoundRect(
+            color = darkGray,
+            topLeft = pt(-54f, 104f),
+            size = Size(16f * u, 21f * u),
+            cornerRadius = CornerRadius(4f * u),
+            style = Stroke(width = 1.3f * u)
+        )
+        // Блик на бицепсе
+        drawRoundRect(
+            color = whiteHighlight.copy(alpha = 0.8f),
+            topLeft = pt(-52f, 108f),
             size = Size(3f * u, 14f * u),
             cornerRadius = CornerRadius(1.5f * u)
         )
 
-        // Верхний ободок сопла (переход от цилиндра 2 к соплу)
+        // ЛОКОТЬ — сдвинут вверх
+        drawCircle(
+            color = mediumGray,
+            radius = 7f * u,
+            center = pt(-46f, 126f)
+        )
+        drawCircle(
+            color = darkGray,
+            radius = 7f * u,
+            center = pt(-46f, 126f),
+            style = Stroke(width = 1.3f * u)
+        )
+
+        // Предплечье — ширина 32 (в 2 раза толще бицепса), скругление 7
+        drawRoundRect(
+            color = lightGray,
+            topLeft = pt(-62f, 128f),
+            size = Size(32f * u, 22f * u),
+            cornerRadius = CornerRadius(7f * u)
+        )
+        drawRoundRect(
+            color = darkGray,
+            topLeft = pt(-62f, 128f),
+            size = Size(32f * u, 22f * u),
+            cornerRadius = CornerRadius(7f * u),
+            style = Stroke(width = 1.3f * u)
+        )
+        // Блик на предплечье
+        drawRoundRect(
+            color = whiteHighlight.copy(alpha = 0.8f),
+            topLeft = pt(-56f, 132f),
+            size = Size(3f * u, 15f * u),
+            cornerRadius = CornerRadius(1.5f * u)
+        )
+
+        // ЛЕВАЯ КИСТЬ
+        drawOval(
+            color = lightGray,
+            topLeft = pt(-54f, 150f),
+            size = Size(16f * u, 20f * u)
+        )
+        drawOval(
+            color = darkGray,
+            topLeft = pt(-54f, 150f),
+            size = Size(16f * u, 20f * u),
+            style = Stroke(width = 1.3f * u)
+        )
+
+        // Пальцы левой кисти
+        for (i in 0..3) {
+            val fx = -52f + i * 4f
+            drawRoundRect(
+                color = mediumGray,
+                topLeft = pt(fx, 162f),
+                size = Size(3.5f * u, 12f * u),
+                cornerRadius = CornerRadius(1.75f * u)
+            )
+            drawRoundRect(
+                color = darkGray,
+                topLeft = pt(fx, 162f),
+                size = Size(3.5f * u, 12f * u),
+                cornerRadius = CornerRadius(1.75f * u),
+                style = Stroke(width = 0.9f * u)
+            )
+            drawCircle(
+                color = darkerGray,
+                radius = 0.8f * u,
+                center = pt(fx + 1.75f, 167f)
+            )
+            drawCircle(
+                color = darkerGray,
+                radius = 0.8f * u,
+                center = pt(fx + 1.75f, 172f)
+            )
+        }
+
+        // Большой палец левой кисти
         drawRoundRect(
             color = mediumGray,
-            topLeft = pt(-22f, 159f),
-            size = Size(44f * u, 3f * u),
-            cornerRadius = CornerRadius(1.5f * u)
+            topLeft = pt(-51f, 156f),
+            size = Size(5f * u, 10f * u),
+            cornerRadius = CornerRadius(2.5f * u)
         )
         drawRoundRect(
-            color = darkerGray,
-            topLeft = pt(-22f, 159f),
-            size = Size(44f * u, 3f * u),
-            cornerRadius = CornerRadius(1.5f * u),
-            style = Stroke(width = 1f * u)
+            color = darkGray,
+            topLeft = pt(-51f, 156f),
+            size = Size(5f * u, 10f * u),
+            cornerRadius = CornerRadius(2.5f * u),
+            style = Stroke(width = 0.9f * u)
         )
 
-        // Нижний ободок сопла (выход пламени)
+        // ================= ПРАВАЯ РУКА =================
+        // Плечо
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(whiteHighlight, lightGray),
+                radius = 13f * u,
+                center = pt(46f, 96f)
+            ),
+            radius = 13f * u,
+            center = pt(46f, 96f)
+        )
+        drawCircle(
+            color = darkGray,
+            radius = 13f * u,
+            center = pt(46f, 96f),
+            style = Stroke(width = 1.3f * u)
+        )
+        drawCircle(
+            color = mediumGray,
+            radius = 4.5f * u,
+            center = pt(46f, 96f)
+        )
+
+        // Бицепс — ширина 16, скругление 4, высота 21
         drawRoundRect(
-            color = darkerGray,
-            topLeft = pt(-29f, 179f),
-            size = Size(58f * u, 3f * u),
+            color = lightGray,
+            topLeft = pt(38f, 104f),
+            size = Size(16f * u, 21f * u),
+            cornerRadius = CornerRadius(4f * u)
+        )
+        drawRoundRect(
+            color = darkGray,
+            topLeft = pt(38f, 104f),
+            size = Size(16f * u, 21f * u),
+            cornerRadius = CornerRadius(4f * u),
+            style = Stroke(width = 1.3f * u)
+        )
+        // Блик на бицепсе
+        drawRoundRect(
+            color = whiteHighlight.copy(alpha = 0.8f),
+            topLeft = pt(49f, 108f),
+            size = Size(3f * u, 14f * u),
             cornerRadius = CornerRadius(1.5f * u)
         )
-        drawRoundRect(
-            color = Color(0xFF0A0A14),
-            topLeft = pt(-29f, 179f),
-            size = Size(58f * u, 3f * u),
-            cornerRadius = CornerRadius(1.5f * u),
-            style = Stroke(width = 1f * u)
+
+        // ЛОКОТЬ
+        drawCircle(
+            color = mediumGray,
+            radius = 7f * u,
+            center = pt(46f, 126f)
         )
-                                // ================= ТУЛОВИЩЕ (3D цилиндр) =================
-        // Верх шире низа на 20%. Верх: ширина 84 (-42..42), низ: ширина 67.2 (-33.6..33.6)
-        // Верхний овал виден как крышка 3D-цилиндра. Верхние углы скруглены.
+        drawCircle(
+            color = darkGray,
+            radius = 7f * u,
+            center = pt(46f, 126f),
+            style = Stroke(width = 1.3f * u)
+        )
+
+        // Предплечье — ширина 32, скругление 7
+        drawRoundRect(
+            color = lightGray,
+            topLeft = pt(30f, 128f),
+            size = Size(32f * u, 22f * u),
+            cornerRadius = CornerRadius(7f * u)
+        )
+        drawRoundRect(
+            color = darkGray,
+            topLeft = pt(30f, 128f),
+            size = Size(32f * u, 22f * u),
+            cornerRadius = CornerRadius(7f * u),
+            style = Stroke(width = 1.3f * u)
+        )
+        // Блик на предплечье
+        drawRoundRect(
+            color = whiteHighlight.copy(alpha = 0.8f),
+            topLeft = pt(53f, 132f),
+            size = Size(3f * u, 15f * u),
+            cornerRadius = CornerRadius(1.5f * u)
+        )
+
+        // ПРАВАЯ КИСТЬ
+        drawOval(
+            color = lightGray,
+            topLeft = pt(38f, 150f),
+            size = Size(16f * u, 20f * u)
+        )
+        drawOval(
+            color = darkGray,
+            topLeft = pt(38f, 150f),
+            size = Size(16f * u, 20f * u),
+            style = Stroke(width = 1.3f * u)
+        )
+
+        // Пальцы правой кисти
+        for (i in 0..3) {
+            val fx = 40f + i * 4f
+            drawRoundRect(
+                color = mediumGray,
+                topLeft = pt(fx, 162f),
+                size = Size(3.5f * u, 12f * u),
+                cornerRadius = CornerRadius(1.75f * u)
+            )
+            drawRoundRect(
+                color = darkGray,
+                topLeft = pt(fx, 162f),
+                size = Size(3.5f * u, 12f * u),
+                cornerRadius = CornerRadius(1.75f * u),
+                style = Stroke(width = 0.9f * u)
+            )
+            drawCircle(
+                color = darkerGray,
+                radius = 0.8f * u,
+                center = pt(fx + 1.75f, 167f)
+            )
+            drawCircle(
+                color = darkerGray,
+                radius = 0.8f * u,
+                center = pt(fx + 1.75f, 172f)
+            )
+        }
+
+               // Большой палец правой кисти
+        drawRoundRect(
+            color = mediumGray,
+            topLeft = pt(46f, 156f),
+            size = Size(5f * u, 10f * u),
+            cornerRadius = CornerRadius(2.5f * u)
+        )
+        drawRoundRect(
+            color = darkGray,
+            topLeft = pt(46f, 156f),
+            size = Size(5f * u, 10f * u),
+            cornerRadius = CornerRadius(2.5f * u),
+            style = Stroke(width = 0.9f * u)
+        )
+        
+        // ================= ТУЛОВИЩЕ (3D цилиндр) =================
+        // Верх: 84 (-42..42), низ сужен на 20% от предыдущего: 67.2 - 20% = 53.76 (-26.88..26.88)
+        // Верхний овал виден как крышка 3D-цилиндра. Верхние углы скруглены сильнее.
 
         // 1. ЗАДНЯЯ ЧАСТЬ ВЕРХНЕГО ОВАЛА (тёмная половина, за головой)
-        // Уменьшен, чтобы скругление корпуса было видно
         drawOval(
             color = mediumGray,
             topLeft = pt(-37f, 70f),
@@ -1571,25 +1838,25 @@ fun ThinkingRobotAnimation(
         )
 
         // 2. ОСНОВНОЕ ТЕЛО ЦИЛИНДРА (боковые стенки, сужаются к низу)
-        // Верхние углы скруглены радиусом 6
+        // Верхние углы скруглены радиусом 10 (было 6)
         val cylinderPath = Path().apply {
-            // Начало — верхний левый угол (после скругления)
-            moveTo(pt(-36f, 77f).x, pt(-36f, 77f).y)
-            // Скругление верхнего левого угла
+            // Начало — верхний левый угол (после большего скругления)
+            moveTo(pt(-32f, 77f).x, pt(-32f, 77f).y)
+            // Скругление верхнего левого угла — больше
             quadraticBezierTo(
                 pt(-42f, 77f).x, pt(-42f, 77f).y,
-                pt(-42f, 83f).x, pt(-42f, 83f).y
+                pt(-42f, 87f).x, pt(-42f, 87f).y
             )
-            // Левая боковина вниз
-            lineTo(pt(-33.6f, 160f).x, pt(-33.6f, 160f).y)
+            // Левая боковина вниз (новый низ — уже)
+            lineTo(pt(-26.88f, 160f).x, pt(-26.88f, 160f).y)
             // Низ
-            lineTo(pt(33.6f, 160f).x, pt(33.6f, 160f).y)
+            lineTo(pt(26.88f, 160f).x, pt(26.88f, 160f).y)
             // Правая боковина вверх
-            lineTo(pt(42f, 83f).x, pt(42f, 83f).y)
+            lineTo(pt(42f, 87f).x, pt(42f, 87f).y)
             // Скругление верхнего правого угла
             quadraticBezierTo(
                 pt(42f, 77f).x, pt(42f, 77f).y,
-                pt(36f, 77f).x, pt(36f, 77f).y
+                pt(32f, 77f).x, pt(32f, 77f).y
             )
             close()
         }
@@ -1626,15 +1893,15 @@ fun ThinkingRobotAnimation(
         // 3. ЛЕВЫЙ БЛИК (главный, широкий)
         drawRoundRect(
             color = whiteHighlight.copy(alpha = 0.85f),
-            topLeft = pt(-36f, 90f),
-            size = Size(7f * u, 56f * u),
+            topLeft = pt(-36f, 94f),
+            size = Size(7f * u, 52f * u),
             cornerRadius = CornerRadius(3.5f * u)
         )
 
         // 4. ПРАВЫЙ БОКОВОЙ БЛИК (узкий, для объёма)
         drawRoundRect(
             color = whiteHighlight.copy(alpha = 0.5f),
-            topLeft = pt(30f, 94f),
+            topLeft = pt(30f, 96f),
             size = Size(4f * u, 46f * u),
             cornerRadius = CornerRadius(2f * u)
         )
@@ -1642,13 +1909,12 @@ fun ThinkingRobotAnimation(
         // 5. ТЁМНАЯ ЗОНА СПРАВА (затенение для 3D)
         drawRoundRect(
             color = darkGray.copy(alpha = 0.15f),
-            topLeft = pt(34f, 90f),
-            size = Size(7f * u, 56f * u),
+            topLeft = pt(34f, 94f),
+            size = Size(7f * u, 52f * u),
             cornerRadius = CornerRadius(3.5f * u)
         )
 
         // 6. ПЕРЕДНЯЯ ЧАСТЬ ВЕРХНЕГО ОВАЛА (светлая половина, крышка цилиндра)
-        // Уменьшен, чтобы скругление корпуса было видно
         drawOval(
             color = whiteBody,
             topLeft = pt(-37f, 70f),
@@ -1681,37 +1947,37 @@ fun ThinkingRobotAnimation(
             size = Size(28f * u, 4f * u)
         )
 
-        // 9. Горизонтальные сегменты на корпусе
+        // 9. Горизонтальные сегменты на корпусе (подогнаны под новый сужающийся корпус)
         drawLine(
             mediumGray.copy(alpha = 0.5f),
-            pt(-40f, 105f),
-            pt(40f, 105f),
+            pt(-39f, 105f),
+            pt(39f, 105f),
             strokeWidth = 0.6f * u
         )
         drawLine(
             mediumGray.copy(alpha = 0.4f),
-            pt(-38f, 125f),
-            pt(38f, 125f),
+            pt(-35f, 125f),
+            pt(35f, 125f),
             strokeWidth = 0.6f * u
         )
         drawLine(
             mediumGray.copy(alpha = 0.3f),
-            pt(-36f, 145f),
-            pt(36f, 145f),
+            pt(-30f, 145f),
+            pt(30f, 145f),
             strokeWidth = 0.6f * u
         )
 
-        // 10. ОБОДОК МЕЖДУ ЦИЛИНДРОМ И СОПЛОМ (внизу корпуса)
+        // 10. ОБОДОК МЕЖДУ ЦИЛИНДРОМ И СОПЛОМ (внизу корпуса, сужен)
         drawRoundRect(
             color = mediumGray,
-            topLeft = pt(-35f, 158f),
-            size = Size(70f * u, 4f * u),
+            topLeft = pt(-28f, 158f),
+            size = Size(56f * u, 4f * u),
             cornerRadius = CornerRadius(2f * u)
         )
         drawRoundRect(
             color = darkGray,
-            topLeft = pt(-35f, 158f),
-            size = Size(70f * u, 4f * u),
+            topLeft = pt(-28f, 158f),
+            size = Size(56f * u, 4f * u),
             cornerRadius = CornerRadius(2f * u),
             style = Stroke(width = 1f * u)
         )
@@ -2380,7 +2646,7 @@ fun ThinkingRobotAnimation(
                 center = pt(-11f, 58f)
             )
 
-            // Плавное утолщение к левому концу (широкий мазок)
+                        // Плавное утолщение к левому концу (широкий мазок)
             val thickPath = Path().apply {
                 moveTo(pt(-4f, 60f).x, pt(-4f, 60f).y)
                 cubicTo(
@@ -2402,318 +2668,12 @@ fun ThinkingRobotAnimation(
                 center = pt(-8f, 59.5f)
             )
         }
-
-        // ================= АНТЕННЫ =================
-        // Левая антенна
-        drawLine(
-            color = darkGray,
-            start = pt(-24f, 10f),
-            end = pt(-24f, -8f),
-            strokeWidth = 2f * u,
-            cap = StrokeCap.Round
-        )
-        drawCircle(
-            color = darkerGray,
-            radius = 1.5f * u,
-            center = pt(-24f, -8f)
-        )
-
-        // Правая антенна
-        drawLine(
-            color = darkGray,
-            start = pt(24f, 10f),
-            end = pt(24f, -8f),
-            strokeWidth = 2f * u,
-            cap = StrokeCap.Round
-        )
-        drawCircle(
-            color = darkerGray,
-            radius = 1.5f * u,
-            center = pt(24f, -8f)
-        )
-
-                       // ================= РУКИ (опущены вниз по бокам) =================
-        // Все части выровнены по центральной оси. Левая ось: X = -46f. Правая ось: X = 46f.
-
-        // ЛЕВАЯ РУКА
-        // Плечо (круглый сустав)
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(whiteHighlight, lightGray),
-                radius = 13f * u,
-                center = pt(-46f, 96f)
-            ),
-            radius = 13f * u,
-            center = pt(-46f, 96f)
-        )
-        drawCircle(
-            color = darkGray,
-            radius = 13f * u,
-            center = pt(-46f, 96f),
-            style = Stroke(width = 1.3f * u)
-        )
-        drawCircle(
-            color = mediumGray,
-            radius = 4.5f * u,
-            center = pt(-46f, 96f)
-        )
-
-        // Верхняя часть руки (бицепс) — центр на X = -46
-        drawRoundRect(
-            color = lightGray,
-            topLeft = pt(-54f, 104f),
-            size = Size(16f * u, 26f * u),
-            cornerRadius = CornerRadius(4f * u)
-        )
-        drawRoundRect(
-            color = darkGray,
-            topLeft = pt(-54f, 104f),
-            size = Size(16f * u, 26f * u),
-            cornerRadius = CornerRadius(4f * u),
-            style = Stroke(width = 1.3f * u)
-        )
-        // Блик
-        drawRoundRect(
-            color = whiteHighlight.copy(alpha = 0.8f),
-            topLeft = pt(-52f, 108f),
-            size = Size(3f * u, 18f * u),
-            cornerRadius = CornerRadius(1.5f * u)
-        )
-
-        // ЛОКОТЬ — центр на X = -46
-        drawCircle(
-            color = mediumGray,
-            radius = 7f * u,
-            center = pt(-46f, 134f)
-        )
-        drawCircle(
-            color = darkGray,
-            radius = 7f * u,
-            center = pt(-46f, 134f),
-            style = Stroke(width = 1.3f * u)
-        )
-
-        // Предплечье — центр на X = -46
-        drawRoundRect(
-            color = lightGray,
-            topLeft = pt(-53f, 136f),
-            size = Size(14f * u, 26f * u),
-            cornerRadius = CornerRadius(3.5f * u)
-        )
-        drawRoundRect(
-            color = darkGray,
-            topLeft = pt(-53f, 136f),
-            size = Size(14f * u, 26f * u),
-            cornerRadius = CornerRadius(3.5f * u),
-            style = Stroke(width = 1.3f * u)
-        )
-        // Блик
-        drawRoundRect(
-            color = whiteHighlight.copy(alpha = 0.8f),
-            topLeft = pt(-50f, 140f),
-            size = Size(3f * u, 18f * u),
-            cornerRadius = CornerRadius(1.5f * u)
-        )
-
-        // ЛЕВАЯ КИСТЬ — центр на X = -46
-        drawOval(
-            color = lightGray,
-            topLeft = pt(-54f, 162f),
-            size = Size(16f * u, 20f * u)
-        )
-        drawOval(
-            color = darkGray,
-            topLeft = pt(-54f, 162f),
-            size = Size(16f * u, 20f * u),
-            style = Stroke(width = 1.3f * u)
-        )
-
-        // Пальцы левой кисти — центрированы относительно кисти (центр X = -46)
-        // 4 пальца с шагом 4, центр 4 пальцев: (-46 - 3*2 + 1.75) ≈ -46
-        for (i in 0..3) {
-            val fx = -52f + i * 4f
-            drawRoundRect(
-                color = mediumGray,
-                topLeft = pt(fx, 174f),
-                size = Size(3.5f * u, 12f * u),
-                cornerRadius = CornerRadius(1.75f * u)
-            )
-            drawRoundRect(
-                color = darkGray,
-                topLeft = pt(fx, 174f),
-                size = Size(3.5f * u, 12f * u),
-                cornerRadius = CornerRadius(1.75f * u),
-                style = Stroke(width = 0.9f * u)
-            )
-            drawCircle(
-                color = darkerGray,
-                radius = 0.8f * u,
-                center = pt(fx + 1.75f, 179f)
-            )
-            drawCircle(
-                color = darkerGray,
-                radius = 0.8f * u,
-                center = pt(fx + 1.75f, 184f)
-            )
-        }
-
-        // Большой палец левой кисти — по оси кисти, справа
-        drawRoundRect(
-            color = mediumGray,
-            topLeft = pt(-51f, 168f),
-            size = Size(5f * u, 10f * u),
-            cornerRadius = CornerRadius(2.5f * u)
-        )
-        drawRoundRect(
-            color = darkGray,
-            topLeft = pt(-51f, 168f),
-            size = Size(5f * u, 10f * u),
-            cornerRadius = CornerRadius(2.5f * u),
-            style = Stroke(width = 0.9f * u)
-        )
-
-        // ================= ПРАВАЯ РУКА =================
-        // Плечо — центр на X = 46
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(whiteHighlight, lightGray),
-                radius = 13f * u,
-                center = pt(46f, 96f)
-            ),
-            radius = 13f * u,
-            center = pt(46f, 96f)
-        )
-        drawCircle(
-            color = darkGray,
-            radius = 13f * u,
-            center = pt(46f, 96f),
-            style = Stroke(width = 1.3f * u)
-        )
-        drawCircle(
-            color = mediumGray,
-            radius = 4.5f * u,
-            center = pt(46f, 96f)
-        )
-
-        // Бицепс — центр на X = 46
-        drawRoundRect(
-            color = lightGray,
-            topLeft = pt(38f, 104f),
-            size = Size(16f * u, 26f * u),
-            cornerRadius = CornerRadius(4f * u)
-        )
-        drawRoundRect(
-            color = darkGray,
-            topLeft = pt(38f, 104f),
-            size = Size(16f * u, 26f * u),
-            cornerRadius = CornerRadius(4f * u),
-            style = Stroke(width = 1.3f * u)
-        )
-        // Блик
-        drawRoundRect(
-            color = whiteHighlight.copy(alpha = 0.8f),
-            topLeft = pt(49f, 108f),
-            size = Size(3f * u, 18f * u),
-            cornerRadius = CornerRadius(1.5f * u)
-        )
-
-        // ЛОКОТЬ — центр на X = 46
-        drawCircle(
-            color = mediumGray,
-            radius = 7f * u,
-            center = pt(46f, 134f)
-        )
-        drawCircle(
-            color = darkGray,
-            radius = 7f * u,
-            center = pt(46f, 134f),
-            style = Stroke(width = 1.3f * u)
-        )
-
-        // Предплечье — центр на X = 46
-        drawRoundRect(
-            color = lightGray,
-            topLeft = pt(39f, 136f),
-            size = Size(14f * u, 26f * u),
-            cornerRadius = CornerRadius(3.5f * u)
-        )
-        drawRoundRect(
-            color = darkGray,
-            topLeft = pt(39f, 136f),
-            size = Size(14f * u, 26f * u),
-            cornerRadius = CornerRadius(3.5f * u),
-            style = Stroke(width = 1.3f * u)
-        )
-        // Блик
-        drawRoundRect(
-            color = whiteHighlight.copy(alpha = 0.8f),
-            topLeft = pt(47f, 140f),
-            size = Size(3f * u, 18f * u),
-            cornerRadius = CornerRadius(1.5f * u)
-        )
-
-        // ПРАВАЯ КИСТЬ — центр на X = 46
-        drawOval(
-            color = lightGray,
-            topLeft = pt(38f, 162f),
-            size = Size(16f * u, 20f * u)
-        )
-        drawOval(
-            color = darkGray,
-            topLeft = pt(38f, 162f),
-            size = Size(16f * u, 20f * u),
-            style = Stroke(width = 1.3f * u)
-        )
-
-        // Пальцы правой кисти
-        for (i in 0..3) {
-            val fx = 40f + i * 4f
-            drawRoundRect(
-                color = mediumGray,
-                topLeft = pt(fx, 174f),
-                size = Size(3.5f * u, 12f * u),
-                cornerRadius = CornerRadius(1.75f * u)
-            )
-            drawRoundRect(
-                color = darkGray,
-                topLeft = pt(fx, 174f),
-                size = Size(3.5f * u, 12f * u),
-                cornerRadius = CornerRadius(1.75f * u),
-                style = Stroke(width = 0.9f * u)
-            )
-            drawCircle(
-                color = darkerGray,
-                radius = 0.8f * u,
-                center = pt(fx + 1.75f, 179f)
-            )
-            drawCircle(
-                color = darkerGray,
-                radius = 0.8f * u,
-                center = pt(fx + 1.75f, 184f)
-            )
-        }
-
-        // Большой палец правой кисти
-        drawRoundRect(
-            color = mediumGray,
-            topLeft = pt(46f, 168f),
-            size = Size(5f * u, 10f * u),
-            cornerRadius = CornerRadius(2.5f * u)
-        )
-        drawRoundRect(
-            color = darkGray,
-            topLeft = pt(46f, 168f),
-            size = Size(5f * u, 10f * u),
-            cornerRadius = CornerRadius(2.5f * u),
-            style = Stroke(width = 0.9f * u)
-        )
     }
 }
 
 private val SineClientEasing = Easing { fraction ->
     sin(fraction * PI.toFloat() / 2f).toFloat()
 }
-
 @Composable
 private fun LockScreen(
     secretPhrase: String,
