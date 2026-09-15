@@ -2617,203 +2617,198 @@ fun ThinkingRobotAnimation(
         }
         drawPath(glassHighlight, color = Color.White.copy(alpha = 0.3f))
 
-                // ================= ГЛАЗА (трапеция, длинный край к носу) =================
-        // У левого глаза: длинный край — справа (к носу), короткий — слева (наружу).
-        // У правого глаза: длинный край — слева (к носу), короткий — справа (наружу).
-        val eyeY = 28f
+               // ================= ГЛАЗА (миндалевидные, выразительные) =================
+val eyeY = 28f
 
-        val eyeRX = 5f * u
-        val eyeRY = if (currentBlink < 0.5f) 1.2f * u else 8f * u
+val eyeRX = 5f * u
+val eyeRY = if (currentBlink < 0.5f) 1f * u else 7.5f * u
 
-        val eyeOffsetX = lookOffsetX / u
-        val eyeOffsetY = lookOffsetY / u
+val eyeOffsetX = lookOffsetX / u
+val eyeOffsetY = lookOffsetY / u
 
-        // Угол наклона верхней линии (высокий край к носу)
-        val eyeTilt = 2.5f
+// Плавный наклон для миндалевидной формы
+val eyeTilt = 3.5f
 
-        // Радиус скругления углов трапеции
-        val eyeCornerRadius = 1.5f
+val eyeCornerRadius = 2f
 
-        // ========== ЛЕВЫЙ ГЛАЗ ==========
-        val leftEyeCenterX = -13f + eyeOffsetX
-        val leftEyeCenterY = eyeY + eyeOffsetY
+// ========== ЛЕВЫЙ ГЛАЗ ==========
+val leftEyeCenterX = -13f + eyeOffsetX
+val leftEyeCenterY = eyeY + eyeOffsetY
 
-        // Внутренний край (к носу, справа) — ДЛИННЫЙ
-        val leftEyeInnerTopY = leftEyeCenterY - eyeRY / u
-        val leftEyeInnerBottomY = leftEyeCenterY + eyeRY / u
+// Внутренний край (к носу) — высокий
+val leftEyeInnerTopY = leftEyeCenterY - eyeRY / u + eyeTilt * 0.3f
+val leftEyeInnerBottomY = leftEyeCenterY + eyeRY / u + eyeTilt * 0.3f
 
-        // Внешний край (наружу, слева) — КОРОТКИЙ (45% от длинного)
-        val leftEyeOuterTopY = leftEyeCenterY - (eyeRY * 0.45f) / u
-        val leftEyeOuterBottomY = leftEyeCenterY + (eyeRY * 0.45f) / u
+// Внешний край (наружу) — заострённый
+val leftEyeOuterTopY = leftEyeCenterY - (eyeRY * 0.5f) / u - eyeTilt * 0.2f
+val leftEyeOuterBottomY = leftEyeCenterY + (eyeRY * 0.5f) / u - eyeTilt * 0.2f
 
-        // X-координаты краёв
-        // Внутренний край — на месте
-        val leftEyeInnerX = leftEyeCenterX + eyeRX
-        // Внешний край — отодвинут наружу на 30% (eyeRX * 0.3)
-        val leftEyeOuterX = leftEyeCenterX - eyeRX - eyeRX * 0.3f
+val leftEyeInnerX = leftEyeCenterX + eyeRX * 0.8f
+val leftEyeOuterX = leftEyeCenterX - eyeRX * 1.1f
 
-        val leftEyePath = Path().apply {
-            // Внутренний верхний угол (к носу) — со скруглением
-            moveTo(pt(leftEyeInnerX - eyeCornerRadius, leftEyeInnerTopY).x,
-                   pt(leftEyeInnerX - eyeCornerRadius, leftEyeInnerTopY).y)
-            // Верхняя сторона — к внешнему верхнему углу
-            lineTo(pt(leftEyeOuterX + eyeCornerRadius, leftEyeOuterTopY).x,
-                   pt(leftEyeOuterX + eyeCornerRadius, leftEyeOuterTopY).y)
-            // Скругление внешнего верхнего угла
-            quadraticBezierTo(
-                pt(leftEyeOuterX, leftEyeOuterTopY).x,
-                pt(leftEyeOuterX, leftEyeOuterTopY).y,
-                pt(leftEyeOuterX, leftEyeOuterTopY + eyeCornerRadius).x,
-                pt(leftEyeOuterX, leftEyeOuterTopY + eyeCornerRadius).y
-            )
-            // Внешняя вертикаль (короткая)
-            lineTo(pt(leftEyeOuterX, leftEyeOuterBottomY - eyeCornerRadius).x,
-                   pt(leftEyeOuterX, leftEyeOuterBottomY - eyeCornerRadius).y)
-            // Скругление внешнего нижнего угла
-            quadraticBezierTo(
-                pt(leftEyeOuterX, leftEyeOuterBottomY).x,
-                pt(leftEyeOuterX, leftEyeOuterBottomY).y,
-                pt(leftEyeOuterX + eyeCornerRadius, leftEyeOuterBottomY).x,
-                pt(leftEyeOuterX + eyeCornerRadius, leftEyeOuterBottomY).y
-            )
-            // Нижняя сторона — к внутреннему нижнему углу
-            lineTo(pt(leftEyeInnerX - eyeCornerRadius, leftEyeInnerBottomY).x,
-                   pt(leftEyeInnerX - eyeCornerRadius, leftEyeInnerBottomY).y)
-            // Скругление внутреннего нижнего угла
-            quadraticBezierTo(
-                pt(leftEyeInnerX, leftEyeInnerBottomY).x,
-                pt(leftEyeInnerX, leftEyeInnerBottomY).y,
-                pt(leftEyeInnerX, leftEyeInnerBottomY - eyeCornerRadius).x,
-                pt(leftEyeInnerX, leftEyeInnerBottomY - eyeCornerRadius).y
-            )
-            // Внутренняя вертикаль (длинная)
-            lineTo(pt(leftEyeInnerX, leftEyeInnerTopY + eyeCornerRadius).x,
-                   pt(leftEyeInnerX, leftEyeInnerTopY + eyeCornerRadius).y)
-            // Скругление внутреннего верхнего угла
-            quadraticBezierTo(
-                pt(leftEyeInnerX, leftEyeInnerTopY).x,
-                pt(leftEyeInnerX, leftEyeInnerTopY).y,
-                pt(leftEyeInnerX - eyeCornerRadius, leftEyeInnerTopY).x,
-                pt(leftEyeInnerX - eyeCornerRadius, leftEyeInnerTopY).y
-            )
-            close()
-        }
+val leftEyePath = Path().apply {
+    // Внутренний верхний угол (к носу)
+    moveTo(pt(leftEyeInnerX, leftEyeInnerTopY).x, pt(leftEyeInnerX, leftEyeInnerTopY).y)
+    
+    // Верхняя кривая к внешнему углу
+    quadraticBezierTo(
+        pt((leftEyeInnerX + leftEyeOuterX) / 2, leftEyeInnerTopY - 2f).x,
+        pt((leftEyeInnerX + leftEyeOuterX) / 2, leftEyeInnerTopY - 2f).y,
+        pt(leftEyeOuterX, leftEyeOuterTopY).x, pt(leftEyeOuterX, leftEyeOuterTopY).y
+    )
+    
+    // Внешний угол (заострённый)
+    quadraticBezierTo(
+        pt(leftEyeOuterX - 1f, leftEyeOuterTopY + 3f).x,
+        pt(leftEyeOuterX - 1f, leftEyeOuterTopY + 3f).y,
+        pt(leftEyeOuterX, leftEyeOuterBottomY).x, pt(leftEyeOuterX, leftEyeOuterBottomY).y
+    )
+    
+    // Нижняя кривая к внутреннему углу
+    quadraticBezierTo(
+        pt((leftEyeInnerX + leftEyeOuterX) / 2, leftEyeInnerBottomY + 2f).x,
+        pt((leftEyeInnerX + leftEyeOuterX) / 2, leftEyeInnerBottomY + 2f).y,
+        pt(leftEyeInnerX, leftEyeInnerBottomY).x, pt(leftEyeInnerX, leftEyeInnerBottomY).y
+    )
+    
+    // Внутренний угол (закруглённый)
+    quadraticBezierTo(
+        pt(leftEyeInnerX + 1f, leftEyeInnerBottomY - 3f).x,
+        pt(leftEyeInnerX + 1f, leftEyeInnerBottomY - 3f).y,
+        pt(leftEyeInnerX, leftEyeInnerTopY).x, pt(leftEyeInnerX, leftEyeInnerTopY).y
+    )
+    close()
+}
 
-        // Заливка глаза
-        drawPath(leftEyePath, color = Color(0xFF0A0A14))
-        drawPath(leftEyePath, color = neonBluePulse)
+// Свечение вокруг глаза
+drawPath(
+    leftEyePath,
+    brush = Brush.radialGradient(
+        colors = listOf(
+            neonBluePulse.copy(alpha = 0.3f),
+            Color.Transparent
+        ),
+        radius = 15f * u
+    )
+)
 
-        // Зрачок — вертикальный овал, сдвинут к внутреннему (длинному) краю
-        val leftPupilCenterX = leftEyeCenterX + eyeRX * 0.25f
-        val leftPupilCenterY = leftEyeCenterY + eyeTilt * 0.3f
+// Основная форма глаза
+drawPath(leftEyePath, color = Color(0xFF0A0A14))
+drawPath(leftEyePath, color = neonBluePulse)
 
-        val leftPupilHalfHeight = if (currentBlink > 0.5f) 0.3f * u else 2.5f * u
-        val leftPupilHalfWidth = 1.2f * u
+// Зрачок — элегантный вертикальный овал
+val leftPupilCenterX = leftEyeCenterX + eyeRX * 0.2f
+val leftPupilCenterY = leftEyeCenterY + eyeTilt * 0.2f
 
-        drawOval(
-            color = Color(0xFF0A0A14),
-            topLeft = pt(leftPupilCenterX - leftPupilHalfWidth / u,
-                         leftPupilCenterY - leftPupilHalfHeight / u),
-            size = Size(leftPupilHalfWidth * 2f, leftPupilHalfHeight * 2f)
-        )
+val leftPupilHeight = if (currentBlink > 0.5f) 0.8f * u else 5.5f * u
+val leftPupilWidth = if (currentBlink > 0.5f) 0.8f * u else 1.8f * u
 
-        // Блик на зрачке
-        drawCircle(
-            color = Color.White.copy(alpha = 0.95f),
-            radius = if (currentBlink > 0.5f) 0.3f * u else 0.7f * u,
-            center = pt(leftPupilCenterX - 0.8f,
-                        leftPupilCenterY - leftPupilHalfHeight / u * 0.5f)
-        )
+drawOval(
+    color = Color(0xFF0A0A14),
+    topLeft = pt(leftPupilCenterX - leftPupilWidth / (2 * u),
+                 leftPupilCenterY - leftPupilHeight / (2 * u)),
+    size = Size(leftPupilWidth, leftPupilHeight)
+)
 
-        // ========== ПРАВЫЙ ГЛАЗ ==========
-        val rightEyeCenterX = 13f + eyeOffsetX
-        val rightEyeCenterY = eyeY + eyeOffsetY
+// Блик 1 — вертикальная полоса
+drawOval(
+    color = Color.White.copy(alpha = 0.95f),
+    topLeft = pt(leftPupilCenterX - 0.4f,
+                 leftPupilCenterY - leftPupilHeight * 0.35f),
+    size = Size(0.8f * u, leftPupilHeight * 0.7f)
+)
 
-        // Внутренний край (к носу, слева) — ДЛИННЫЙ
-        val rightEyeInnerTopY = rightEyeCenterY - eyeRY / u
-        val rightEyeInnerBottomY = rightEyeCenterY + eyeRY / u
+// Блик 2 — маленькая точка
+drawCircle(
+    color = Color.White.copy(alpha = 0.85f),
+    radius = 0.5f * u,
+    center = pt(leftPupilCenterX + 0.4f, leftPupilCenterY - leftPupilHeight * 0.25f)
+)
 
-        // Внешний край (наружу, справа) — КОРОТКИЙ (45% от длинного)
-        val rightEyeOuterTopY = rightEyeCenterY - (eyeRY * 0.45f) / u
-        val rightEyeOuterBottomY = rightEyeCenterY + (eyeRY * 0.45f) / u
+// ========== ПРАВЫЙ ГЛАЗ ==========
+val rightEyeCenterX = 13f + eyeOffsetX
+val rightEyeCenterY = eyeY + eyeOffsetY
 
-        // X-координаты краёв
-        // Внутренний край — на месте
-        val rightEyeInnerX = rightEyeCenterX - eyeRX
-        // Внешний край — отодвинут наружу на 30% (eyeRX * 0.3)
-        val rightEyeOuterX = rightEyeCenterX + eyeRX + eyeRX * 0.3f
+// Внутренний край (к носу) — высокий
+val rightEyeInnerTopY = rightEyeCenterY - eyeRY / u + eyeTilt * 0.3f
+val rightEyeInnerBottomY = rightEyeCenterY + eyeRY / u + eyeTilt * 0.3f
 
-        val rightEyePath = Path().apply {
-            // Внутренний верхний угол (к носу) — со скруглением
-            moveTo(pt(rightEyeInnerX + eyeCornerRadius, rightEyeInnerTopY).x,
-                   pt(rightEyeInnerX + eyeCornerRadius, rightEyeInnerTopY).y)
-            // Верхняя сторона — к внешнему верхнему углу
-            lineTo(pt(rightEyeOuterX - eyeCornerRadius, rightEyeOuterTopY).x,
-                   pt(rightEyeOuterX - eyeCornerRadius, rightEyeOuterTopY).y)
-            // Скругление внешнего верхнего угла
-            quadraticBezierTo(
-                pt(rightEyeOuterX, rightEyeOuterTopY).x,
-                pt(rightEyeOuterX, rightEyeOuterTopY).y,
-                pt(rightEyeOuterX, rightEyeOuterTopY + eyeCornerRadius).x,
-                pt(rightEyeOuterX, rightEyeOuterTopY + eyeCornerRadius).y
-            )
-            // Внешняя вертикаль (короткая)
-            lineTo(pt(rightEyeOuterX, rightEyeOuterBottomY - eyeCornerRadius).x,
-                   pt(rightEyeOuterX, rightEyeOuterBottomY - eyeCornerRadius).y)
-            // Скругление внешнего нижнего угла
-            quadraticBezierTo(
-                pt(rightEyeOuterX, rightEyeOuterBottomY).x,
-                pt(rightEyeOuterX, rightEyeOuterBottomY).y,
-                pt(rightEyeOuterX - eyeCornerRadius, rightEyeOuterBottomY).x,
-                pt(rightEyeOuterX - eyeCornerRadius, rightEyeOuterBottomY).y
-            )
-            // Нижняя сторона — к внутреннему нижнему углу
-            lineTo(pt(rightEyeInnerX + eyeCornerRadius, rightEyeInnerBottomY).x,
-                   pt(rightEyeInnerX + eyeCornerRadius, rightEyeInnerBottomY).y)
-            // Скругление внутреннего нижнего угла
-            quadraticBezierTo(
-                pt(rightEyeInnerX, rightEyeInnerBottomY).x,
-                pt(rightEyeInnerX, rightEyeInnerBottomY).y,
-                pt(rightEyeInnerX, rightEyeInnerBottomY - eyeCornerRadius).x,
-                pt(rightEyeInnerX, rightEyeInnerBottomY - eyeCornerRadius).y
-            )
-            // Внутренняя вертикаль (длинная)
-            lineTo(pt(rightEyeInnerX, rightEyeInnerTopY + eyeCornerRadius).x,
-                   pt(rightEyeInnerX, rightEyeInnerTopY + eyeCornerRadius).y)
-            // Скругление внутреннего верхнего угла
-            quadraticBezierTo(
-                pt(rightEyeInnerX, rightEyeInnerTopY).x,
-                pt(rightEyeInnerX, rightEyeInnerTopY).y,
-                pt(rightEyeInnerX + eyeCornerRadius, rightEyeInnerTopY).x,
-                pt(rightEyeInnerX + eyeCornerRadius, rightEyeInnerTopY).y
-            )
-            close()
-        }
+// Внешний край (наружу) — заострённый
+val rightEyeOuterTopY = rightEyeCenterY - (eyeRY * 0.5f) / u - eyeTilt * 0.2f
+val rightEyeOuterBottomY = rightEyeCenterY + (eyeRY * 0.5f) / u - eyeTilt * 0.2f
 
-        drawPath(rightEyePath, color = Color(0xFF0A0A14))
-        drawPath(rightEyePath, color = neonBluePulse)
+val rightEyeInnerX = rightEyeCenterX - eyeRX * 0.8f
+val rightEyeOuterX = rightEyeCenterX + eyeRX * 1.1f
 
-        // Зрачок — вертикальный овал, сдвинут к внутреннему (длинному) краю
-        val rightPupilCenterX = rightEyeCenterX - eyeRX * 0.25f
-        val rightPupilCenterY = rightEyeCenterY + eyeTilt * 0.3f
+val rightEyePath = Path().apply {
+    moveTo(pt(rightEyeInnerX, rightEyeInnerTopY).x, pt(rightEyeInnerX, rightEyeInnerTopY).y)
+    
+    quadraticBezierTo(
+        pt((rightEyeInnerX + rightEyeOuterX) / 2, rightEyeInnerTopY - 2f).x,
+        pt((rightEyeInnerX + rightEyeOuterX) / 2, rightEyeInnerTopY - 2f).y,
+        pt(rightEyeOuterX, rightEyeOuterTopY).x, pt(rightEyeOuterX, rightEyeOuterTopY).y
+    )
+    
+    quadraticBezierTo(
+        pt(rightEyeOuterX + 1f, rightEyeOuterTopY + 3f).x,
+        pt(rightEyeOuterX + 1f, rightEyeOuterTopY + 3f).y,
+        pt(rightEyeOuterX, rightEyeOuterBottomY).x, pt(rightEyeOuterX, rightEyeOuterBottomY).y
+    )
+    
+    quadraticBezierTo(
+        pt((rightEyeInnerX + rightEyeOuterX) / 2, rightEyeInnerBottomY + 2f).x,
+        pt((rightEyeInnerX + rightEyeOuterX) / 2, rightEyeInnerBottomY + 2f).y,
+        pt(rightEyeInnerX, rightEyeInnerBottomY).x, pt(rightEyeInnerX, rightEyeInnerBottomY).y
+    )
+    
+    quadraticBezierTo(
+        pt(rightEyeInnerX - 1f, rightEyeInnerBottomY - 3f).x,
+        pt(rightEyeInnerX - 1f, rightEyeInnerBottomY - 3f).y,
+        pt(rightEyeInnerX, rightEyeInnerTopY).x, pt(rightEyeInnerX, rightEyeInnerTopY).y
+    )
+    close()
+}
 
-        val rightPupilHalfHeight = if (currentBlink > 0.5f) 0.3f * u else 2.5f * u
-        val rightPupilHalfWidth = 1.2f * u
+drawPath(
+    rightEyePath,
+    brush = Brush.radialGradient(
+        colors = listOf(
+            neonBluePulse.copy(alpha = 0.3f),
+            Color.Transparent
+        ),
+        radius = 15f * u
+    )
+)
 
-        drawOval(
-            color = Color(0xFF0A0A14),
-            topLeft = pt(rightPupilCenterX - rightPupilHalfWidth / u,
-                         rightPupilCenterY - rightPupilHalfHeight / u),
-            size = Size(rightPupilHalfWidth * 2f, rightPupilHalfHeight * 2f)
-        )
+drawPath(rightEyePath, color = Color(0xFF0A0A14))
+drawPath(rightEyePath, color = neonBluePulse)
 
-        // Блик на зрачке
-        drawCircle(
-            color = Color.White.copy(alpha = 0.95f),
-            radius = if (currentBlink > 0.5f) 0.3f * u else 0.7f * u,
-            center = pt(rightPupilCenterX - 0.8f,
-                        rightPupilCenterY - rightPupilHalfHeight / u * 0.5f)
-        )
+// Зрачок
+val rightPupilCenterX = rightEyeCenterX - eyeRX * 0.2f
+val rightPupilCenterY = rightEyeCenterY + eyeTilt * 0.2f
+
+val rightPupilHeight = if (currentBlink > 0.5f) 0.8f * u else 5.5f * u
+val rightPupilWidth = if (currentBlink > 0.5f) 0.8f * u else 1.8f * u
+
+drawOval(
+    color = Color(0xFF0A0A14),
+    topLeft = pt(rightPupilCenterX - rightPupilWidth / (2 * u),
+                 rightPupilCenterY - rightPupilHeight / (2 * u)),
+    size = Size(rightPupilWidth, rightPupilHeight)
+)
+
+drawOval(
+    color = Color.White.copy(alpha = 0.95f),
+    topLeft = pt(rightPupilCenterX - 0.4f,
+                 rightPupilCenterY - rightPupilHeight * 0.35f),
+    size = Size(0.8f * u, rightPupilHeight * 0.7f)
+)
+
+drawCircle(
+    color = Color.White.copy(alpha = 0.85f),
+    radius = 0.5f * u,
+    center = pt(rightPupilCenterX - 0.4f, rightPupilCenterY - rightPupilHeight * 0.25f)
+)
         
                 // ================= РОТ =================
         if (isSpeaking) {
