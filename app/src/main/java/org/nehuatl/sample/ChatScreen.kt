@@ -2438,18 +2438,19 @@ fun ThinkingRobotAnimation(
 
         // ================= ОБОДОК ВНИЗУ ГОЛОВЫ (широкий, от края до края полушария) =================
         // Ободок повторяет выпуклую дугу низа головы. Концы совпадают с краями головы (±42).
+        // Ширина ободка одинакова по всей длине — 9.6 единиц (8 × 1.2).
         val visorBandPath = Path().apply {
-            // Начало — левый край головы (совпадает с краем полушария)
+            // Начало — левый край головы
             moveTo(pt(-42f, 48f).x, pt(-42f, 48f).y)
-            // Нижняя дуга ободка (выпуклая вниз, шире головы)
+            // Нижняя дуга ободка (параллельна верхней, сдвинута вниз на 9.6)
             cubicTo(
-                pt(-42f, 64f).x, pt(-42f, 64f).y,
-                pt(-22f, 68f).x, pt(-22f, 68f).y,
-                pt(0f, 68f).x, pt(0f, 68f).y
+                pt(-42f, 57.6f).x, pt(-42f, 57.6f).y,
+                pt(-20f, 69.6f).x, pt(-20f, 69.6f).y,
+                pt(0f, 69.6f).x, pt(0f, 69.6f).y
             )
             cubicTo(
-                pt(22f, 68f).x, pt(22f, 68f).y,
-                pt(42f, 64f).x, pt(42f, 64f).y,
+                pt(20f, 69.6f).x, pt(20f, 69.6f).y,
+                pt(42f, 57.6f).x, pt(42f, 57.6f).y,
                 pt(42f, 48f).x, pt(42f, 48f).y
             )
             // Верхняя дуга ободка (совпадает с низом головы)
@@ -2466,9 +2467,55 @@ fun ThinkingRobotAnimation(
             close()
         }
 
-        // Заливка ободка
-        drawPath(visorBandPath, color = mediumGray)
+        // Обводка ободка (без заливки)
         drawPath(visorBandPath, color = darkGray, style = Stroke(width = 1.2f * u))
+
+        // ================= КЛЁПКИ В СЕРЕДИНЕ ОБОДКА =================
+        // 7 клёпок с равным промежутком вдоль средней линии ободка.
+        // Средняя линия = верхняя дуга + 4.8 единицы по Y (половина ширины 9.6).
+        val rivetColor = mediumGray
+        val rivetRadius = 1f * u
+
+        // Левая половина: 3 клёпки
+        drawCircle(
+            color = rivetColor,
+            radius = rivetRadius,
+            center = pt(-38.25f, 52.90f)
+        )
+        drawCircle(
+            color = rivetColor,
+            radius = rivetRadius,
+            center = pt(-28.5f, 56.55f)
+        )
+        drawCircle(
+            color = rivetColor,
+            radius = rivetRadius,
+            center = pt(-15.01f, 58.33f)
+        )
+
+        // Центр: 1 клёпка
+        drawCircle(
+            color = rivetColor,
+            radius = rivetRadius,
+            center = pt(0f, 64.8f)
+        )
+
+        // Правая половина: 3 клёпки (симметрично)
+        drawCircle(
+            color = rivetColor,
+            radius = rivetRadius,
+            center = pt(15.01f, 58.33f)
+        )
+        drawCircle(
+            color = rivetColor,
+            radius = rivetRadius,
+            center = pt(28.5f, 56.55f)
+        )
+        drawCircle(
+            color = rivetColor,
+            radius = rivetRadius,
+            center = pt(38.25f, 52.90f)
+        )
         
                 // ================= ДВЕ ЛИНИИ НА ГОЛОВЕ (от верхнего края шлема до визора) =================
         // Левая линия — идёт по дуге шлема сверху вниз до верхней кромки визора (y = 14)
@@ -2584,6 +2631,9 @@ fun ThinkingRobotAnimation(
         // Угол наклона верхней линии (высокий край к носу)
         val eyeTilt = 2.5f
 
+        // Радиус скругления углов трапеции
+        val eyeCornerRadius = 1.5f
+
         // ========== ЛЕВЫЙ ГЛАЗ ==========
         val leftEyeCenterX = -13f + eyeOffsetX
         val leftEyeCenterY = eyeY + eyeOffsetY
@@ -2597,23 +2647,55 @@ fun ThinkingRobotAnimation(
         val leftEyeOuterBottomY = leftEyeCenterY + (eyeRY * 0.45f) / u
 
         // X-координаты краёв
+        // Внутренний край — на месте
         val leftEyeInnerX = leftEyeCenterX + eyeRX
-        val leftEyeOuterX = leftEyeCenterX - eyeRX
+        // Внешний край — отодвинут наружу на 30% (eyeRX * 0.3)
+        val leftEyeOuterX = leftEyeCenterX - eyeRX - eyeRX * 0.3f
 
         val leftEyePath = Path().apply {
-            // Внутренний верхний угол (длинный край, к носу)
-            moveTo(pt(leftEyeInnerX, leftEyeInnerTopY).x,
-                   pt(leftEyeInnerX, leftEyeInnerTopY).y)
-            // Верхняя сторона — прямая к внешнему верхнему углу
-            lineTo(pt(leftEyeOuterX, leftEyeOuterTopY).x,
-                   pt(leftEyeOuterX, leftEyeOuterTopY).y)
+            // Внутренний верхний угол (к носу) — со скруглением
+            moveTo(pt(leftEyeInnerX - eyeCornerRadius, leftEyeInnerTopY).x,
+                   pt(leftEyeInnerX - eyeCornerRadius, leftEyeInnerTopY).y)
+            // Верхняя сторона — к внешнему верхнему углу
+            lineTo(pt(leftEyeOuterX + eyeCornerRadius, leftEyeOuterTopY).x,
+                   pt(leftEyeOuterX + eyeCornerRadius, leftEyeOuterTopY).y)
+            // Скругление внешнего верхнего угла
+            quadraticBezierTo(
+                pt(leftEyeOuterX, leftEyeOuterTopY).x,
+                pt(leftEyeOuterX, leftEyeOuterTopY).y,
+                pt(leftEyeOuterX, leftEyeOuterTopY + eyeCornerRadius).x,
+                pt(leftEyeOuterX, leftEyeOuterTopY + eyeCornerRadius).y
+            )
             // Внешняя вертикаль (короткая)
-            lineTo(pt(leftEyeOuterX, leftEyeOuterBottomY).x,
-                   pt(leftEyeOuterX, leftEyeOuterBottomY).y)
-            // Нижняя сторона — прямая к внутреннему нижнему углу
-            lineTo(pt(leftEyeInnerX, leftEyeInnerBottomY).x,
-                   pt(leftEyeInnerX, leftEyeInnerBottomY).y)
-            // Внутренняя вертикаль (длинная) — замыкаем
+            lineTo(pt(leftEyeOuterX, leftEyeOuterBottomY - eyeCornerRadius).x,
+                   pt(leftEyeOuterX, leftEyeOuterBottomY - eyeCornerRadius).y)
+            // Скругление внешнего нижнего угла
+            quadraticBezierTo(
+                pt(leftEyeOuterX, leftEyeOuterBottomY).x,
+                pt(leftEyeOuterX, leftEyeOuterBottomY).y,
+                pt(leftEyeOuterX + eyeCornerRadius, leftEyeOuterBottomY).x,
+                pt(leftEyeOuterX + eyeCornerRadius, leftEyeOuterBottomY).y
+            )
+            // Нижняя сторона — к внутреннему нижнему углу
+            lineTo(pt(leftEyeInnerX - eyeCornerRadius, leftEyeInnerBottomY).x,
+                   pt(leftEyeInnerX - eyeCornerRadius, leftEyeInnerBottomY).y)
+            // Скругление внутреннего нижнего угла
+            quadraticBezierTo(
+                pt(leftEyeInnerX, leftEyeInnerBottomY).x,
+                pt(leftEyeInnerX, leftEyeInnerBottomY).y,
+                pt(leftEyeInnerX, leftEyeInnerBottomY - eyeCornerRadius).x,
+                pt(leftEyeInnerX, leftEyeInnerBottomY - eyeCornerRadius).y
+            )
+            // Внутренняя вертикаль (длинная)
+            lineTo(pt(leftEyeInnerX, leftEyeInnerTopY + eyeCornerRadius).x,
+                   pt(leftEyeInnerX, leftEyeInnerTopY + eyeCornerRadius).y)
+            // Скругление внутреннего верхнего угла
+            quadraticBezierTo(
+                pt(leftEyeInnerX, leftEyeInnerTopY).x,
+                pt(leftEyeInnerX, leftEyeInnerTopY).y,
+                pt(leftEyeInnerX - eyeCornerRadius, leftEyeInnerTopY).x,
+                pt(leftEyeInnerX - eyeCornerRadius, leftEyeInnerTopY).y
+            )
             close()
         }
 
@@ -2656,23 +2738,55 @@ fun ThinkingRobotAnimation(
         val rightEyeOuterBottomY = rightEyeCenterY + (eyeRY * 0.45f) / u
 
         // X-координаты краёв
+        // Внутренний край — на месте
         val rightEyeInnerX = rightEyeCenterX - eyeRX
-        val rightEyeOuterX = rightEyeCenterX + eyeRX
+        // Внешний край — отодвинут наружу на 30% (eyeRX * 0.3)
+        val rightEyeOuterX = rightEyeCenterX + eyeRX + eyeRX * 0.3f
 
         val rightEyePath = Path().apply {
-            // Внутренний верхний угол (длинный край, к носу)
-            moveTo(pt(rightEyeInnerX, rightEyeInnerTopY).x,
-                   pt(rightEyeInnerX, rightEyeInnerTopY).y)
-            // Верхняя сторона — прямая к внешнему верхнему углу
-            lineTo(pt(rightEyeOuterX, rightEyeOuterTopY).x,
-                   pt(rightEyeOuterX, rightEyeOuterTopY).y)
+            // Внутренний верхний угол (к носу) — со скруглением
+            moveTo(pt(rightEyeInnerX + eyeCornerRadius, rightEyeInnerTopY).x,
+                   pt(rightEyeInnerX + eyeCornerRadius, rightEyeInnerTopY).y)
+            // Верхняя сторона — к внешнему верхнему углу
+            lineTo(pt(rightEyeOuterX - eyeCornerRadius, rightEyeOuterTopY).x,
+                   pt(rightEyeOuterX - eyeCornerRadius, rightEyeOuterTopY).y)
+            // Скругление внешнего верхнего угла
+            quadraticBezierTo(
+                pt(rightEyeOuterX, rightEyeOuterTopY).x,
+                pt(rightEyeOuterX, rightEyeOuterTopY).y,
+                pt(rightEyeOuterX, rightEyeOuterTopY + eyeCornerRadius).x,
+                pt(rightEyeOuterX, rightEyeOuterTopY + eyeCornerRadius).y
+            )
             // Внешняя вертикаль (короткая)
-            lineTo(pt(rightEyeOuterX, rightEyeOuterBottomY).x,
-                   pt(rightEyeOuterX, rightEyeOuterBottomY).y)
-            // Нижняя сторона — прямая к внутреннему нижнему углу
-            lineTo(pt(rightEyeInnerX, rightEyeInnerBottomY).x,
-                   pt(rightEyeInnerX, rightEyeInnerBottomY).y)
-            // Внутренняя вертикаль (длинная) — замыкаем
+            lineTo(pt(rightEyeOuterX, rightEyeOuterBottomY - eyeCornerRadius).x,
+                   pt(rightEyeOuterX, rightEyeOuterBottomY - eyeCornerRadius).y)
+            // Скругление внешнего нижнего угла
+            quadraticBezierTo(
+                pt(rightEyeOuterX, rightEyeOuterBottomY).x,
+                pt(rightEyeOuterX, rightEyeOuterBottomY).y,
+                pt(rightEyeOuterX - eyeCornerRadius, rightEyeOuterBottomY).x,
+                pt(rightEyeOuterX - eyeCornerRadius, rightEyeOuterBottomY).y
+            )
+            // Нижняя сторона — к внутреннему нижнему углу
+            lineTo(pt(rightEyeInnerX + eyeCornerRadius, rightEyeInnerBottomY).x,
+                   pt(rightEyeInnerX + eyeCornerRadius, rightEyeInnerBottomY).y)
+            // Скругление внутреннего нижнего угла
+            quadraticBezierTo(
+                pt(rightEyeInnerX, rightEyeInnerBottomY).x,
+                pt(rightEyeInnerX, rightEyeInnerBottomY).y,
+                pt(rightEyeInnerX, rightEyeInnerBottomY - eyeCornerRadius).x,
+                pt(rightEyeInnerX, rightEyeInnerBottomY - eyeCornerRadius).y
+            )
+            // Внутренняя вертикаль (длинная)
+            lineTo(pt(rightEyeInnerX, rightEyeInnerTopY + eyeCornerRadius).x,
+                   pt(rightEyeInnerX, rightEyeInnerTopY + eyeCornerRadius).y)
+            // Скругление внутреннего верхнего угла
+            quadraticBezierTo(
+                pt(rightEyeInnerX, rightEyeInnerTopY).x,
+                pt(rightEyeInnerX, rightEyeInnerTopY).y,
+                pt(rightEyeInnerX + eyeCornerRadius, rightEyeInnerTopY).x,
+                pt(rightEyeInnerX + eyeCornerRadius, rightEyeInnerTopY).y
+            )
             close()
         }
 
