@@ -1275,8 +1275,9 @@ fun ThinkingRobotAnimation(
         label = "armPhase"
     )
 
-    val textMeasurer = rememberTextMeasurer()
-    
+       val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+
     Canvas(
         modifier = modifier
             .height(height)
@@ -2217,7 +2218,7 @@ fun ThinkingRobotAnimation(
         )
                        // ================= НАДПИСЬ "ИИ-Друг" МЕЖДУ ЭКРАНОМ И РЕМНЁМ =================
         val labelText = "ИИ-Друг"
-        val labelFontSize = with(LocalDensity.current) { (10f * u).toSp() }
+                val labelFontSize = with(density) { (10f * u).toSp() }
         val labelStyle = TextStyle(
             color = Color.Black,
             fontSize = labelFontSize,
