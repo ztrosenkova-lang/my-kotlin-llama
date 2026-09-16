@@ -1180,17 +1180,18 @@ fun ThinkingRobotAnimation(
         label = "bob"
     )
 
-    val blink by transition.animateFloat(
+        val blink by transition.animateFloat(
         initialValue = 1f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
             animation = keyframes {
-                durationMillis = 4500
+                durationMillis = 6000
                 1f at 0
-                1f at 4000
-                0.05f at 4180
-                1f at 4350
                 1f at 4500
+                0.05f at 4700
+                0.05f at 5600
+                1f at 5800
+                1f at 6000
             }
         ),
         label = "blink"
@@ -1254,7 +1255,7 @@ fun ThinkingRobotAnimation(
         label = "flamePhase"
     )
 
-    val pulse by transition.animateFloat(
+       val pulse by transition.animateFloat(
         initialValue = 0f,
         targetValue = (2 * PI).toFloat(),
         animationSpec = infiniteRepeatable(
@@ -1263,6 +1264,17 @@ fun ThinkingRobotAnimation(
         ),
         label = "pulse"
     )
+
+    val armPhase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2 * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(3000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "armPhase"
+    )
+
     val textMeasurer = rememberTextMeasurer()
     
     Canvas(
@@ -1554,7 +1566,22 @@ fun ThinkingRobotAnimation(
             center = pt(0f, 215f + flameFlicker)
         )
 
-                // ================= РУКИ (опущены вниз по бокам) =================
+                        // ================= АНИМАЦИЯ РУК =================
+        val armSway = sin(armPhase)
+        val leftArmOffsetY = when {
+            isSpeaking -> armSway * 4f
+            isThinking -> (sin(armPhase * 0.5f) * 1.5f) - 3f
+            isIdle -> armSway * 2f
+            else -> 0f
+        }
+        val rightArmOffsetY = when {
+            isSpeaking -> sin(armPhase + PI.toFloat()) * 4f
+            isThinking -> (sin(armPhase * 0.5f + PI.toFloat()) * 1.5f) - 3f
+            isIdle -> sin(armPhase + PI.toFloat()) * 2f
+            else -> 0f
+        }
+
+        // ================= РУКИ (опущены вниз по бокам) =================
         // Предплечье в 2 раза толще бицепса. Руки укорочены на 20%.
         // Все части выровнены по центральной оси. Левая ось: X = -46f. Правая ось: X = 46f.
 
@@ -1564,33 +1591,33 @@ fun ThinkingRobotAnimation(
             brush = Brush.radialGradient(
                 colors = listOf(whiteHighlight, lightGray),
                 radius = 13f * u,
-                center = pt(-46f, 96f)
+                center = pt(-46f, 96f + leftArmOffsetY)
             ),
             radius = 13f * u,
-            center = pt(-46f, 96f)
+            center = pt(-46f, 96f + leftArmOffsetY)
         )
         drawCircle(
             color = darkGray,
             radius = 13f * u,
-            center = pt(-46f, 96f),
+            center = pt(-46f, 96f + leftArmOffsetY),
             style = Stroke(width = 1.3f * u)
         )
         drawCircle(
             color = mediumGray,
             radius = 4.5f * u,
-            center = pt(-46f, 96f)
+            center = pt(-46f, 96f + leftArmOffsetY)
         )
 
         // Бицепс — ширина 16, скругление 4, высота 21
         drawRoundRect(
             color = lightGray,
-            topLeft = pt(-54f, 104f),
+            topLeft = pt(-54f, 104f + leftArmOffsetY),
             size = Size(16f * u, 21f * u),
             cornerRadius = CornerRadius(4f * u)
         )
         drawRoundRect(
             color = darkGray,
-            topLeft = pt(-54f, 104f),
+            topLeft = pt(-54f, 104f + leftArmOffsetY),
             size = Size(16f * u, 21f * u),
             cornerRadius = CornerRadius(4f * u),
             style = Stroke(width = 1.3f * u)
@@ -1598,7 +1625,7 @@ fun ThinkingRobotAnimation(
         // Блик на бицепсе
         drawRoundRect(
             color = whiteHighlight.copy(alpha = 0.8f),
-            topLeft = pt(-52f, 108f),
+            topLeft = pt(-52f, 108f + leftArmOffsetY),
             size = Size(3f * u, 14f * u),
             cornerRadius = CornerRadius(1.5f * u)
         )
@@ -1607,25 +1634,25 @@ fun ThinkingRobotAnimation(
         drawCircle(
             color = mediumGray,
             radius = 7f * u,
-            center = pt(-46f, 126f)
+            center = pt(-46f, 126f + leftArmOffsetY)
         )
         drawCircle(
             color = darkGray,
             radius = 7f * u,
-            center = pt(-46f, 126f),
+            center = pt(-46f, 126f + leftArmOffsetY),
             style = Stroke(width = 1.3f * u)
         )
 
         // Предплечье — ширина 25.92 (уменьшено на 10%), высота 24.2 (увеличено на 10%), скругление 7
         drawRoundRect(
             color = lightGray,
-            topLeft = pt(-58.96f, 128f),
+            topLeft = pt(-58.96f, 128f + leftArmOffsetY),
             size = Size(25.92f * u, 24.2f * u),
             cornerRadius = CornerRadius(7f * u)
         )
         drawRoundRect(
             color = darkGray,
-            topLeft = pt(-58.96f, 128f),
+            topLeft = pt(-58.96f, 128f + leftArmOffsetY),
             size = Size(25.92f * u, 24.2f * u),
             cornerRadius = CornerRadius(7f * u),
             style = Stroke(width = 1.3f * u)
@@ -1633,7 +1660,7 @@ fun ThinkingRobotAnimation(
         // Блик на предплечье
         drawRoundRect(
             color = whiteHighlight.copy(alpha = 0.8f),
-            topLeft = pt(-56f, 132f),
+            topLeft = pt(-56f, 132f + leftArmOffsetY),
             size = Size(3f * u, 15f * u),
             cornerRadius = CornerRadius(1.5f * u)
         )
@@ -1641,12 +1668,12 @@ fun ThinkingRobotAnimation(
         // ЛЕВАЯ КИСТЬ
         drawOval(
             color = lightGray,
-            topLeft = pt(-54f, 150f),
+            topLeft = pt(-54f, 150f + leftArmOffsetY),
             size = Size(16f * u, 20f * u)
         )
         drawOval(
             color = darkGray,
-            topLeft = pt(-54f, 150f),
+            topLeft = pt(-54f, 150f + leftArmOffsetY),
             size = Size(16f * u, 20f * u),
             style = Stroke(width = 1.3f * u)
         )
@@ -1656,13 +1683,13 @@ fun ThinkingRobotAnimation(
             val fx = -52f + i * 4f
             drawRoundRect(
                 color = mediumGray,
-                topLeft = pt(fx, 162f),
+                topLeft = pt(fx, 162f + leftArmOffsetY),
                 size = Size(3.5f * u, 12f * u),
                 cornerRadius = CornerRadius(1.75f * u)
             )
             drawRoundRect(
                 color = darkGray,
-                topLeft = pt(fx, 162f),
+                topLeft = pt(fx, 162f + leftArmOffsetY),
                 size = Size(3.5f * u, 12f * u),
                 cornerRadius = CornerRadius(1.75f * u),
                 style = Stroke(width = 0.9f * u)
@@ -1670,25 +1697,25 @@ fun ThinkingRobotAnimation(
             drawCircle(
                 color = darkerGray,
                 radius = 0.8f * u,
-                center = pt(fx + 1.75f, 167f)
+                center = pt(fx + 1.75f, 167f + leftArmOffsetY)
             )
             drawCircle(
                 color = darkerGray,
                 radius = 0.8f * u,
-                center = pt(fx + 1.75f, 172f)
+                center = pt(fx + 1.75f, 172f + leftArmOffsetY)
             )
         }
 
         // Большой палец левой кисти
         drawRoundRect(
             color = mediumGray,
-            topLeft = pt(-51f, 156f),
+            topLeft = pt(-51f, 156f + leftArmOffsetY),
             size = Size(5f * u, 10f * u),
             cornerRadius = CornerRadius(2.5f * u)
         )
         drawRoundRect(
             color = darkGray,
-            topLeft = pt(-51f, 156f),
+            topLeft = pt(-51f, 156f + leftArmOffsetY),
             size = Size(5f * u, 10f * u),
             cornerRadius = CornerRadius(2.5f * u),
             style = Stroke(width = 0.9f * u)
@@ -1700,33 +1727,33 @@ fun ThinkingRobotAnimation(
             brush = Brush.radialGradient(
                 colors = listOf(whiteHighlight, lightGray),
                 radius = 13f * u,
-                center = pt(46f, 96f)
+                center = pt(46f, 96f + rightArmOffsetY)
             ),
             radius = 13f * u,
-            center = pt(46f, 96f)
+            center = pt(46f, 96f + rightArmOffsetY)
         )
         drawCircle(
             color = darkGray,
             radius = 13f * u,
-            center = pt(46f, 96f),
+            center = pt(46f, 96f + rightArmOffsetY),
             style = Stroke(width = 1.3f * u)
         )
         drawCircle(
             color = mediumGray,
             radius = 4.5f * u,
-            center = pt(46f, 96f)
+            center = pt(46f, 96f + rightArmOffsetY)
         )
 
         // Бицепс — ширина 16, скругление 4, высота 21
         drawRoundRect(
             color = lightGray,
-            topLeft = pt(38f, 104f),
+            topLeft = pt(38f, 104f + rightArmOffsetY),
             size = Size(16f * u, 21f * u),
             cornerRadius = CornerRadius(4f * u)
         )
         drawRoundRect(
             color = darkGray,
-            topLeft = pt(38f, 104f),
+            topLeft = pt(38f, 104f + rightArmOffsetY),
             size = Size(16f * u, 21f * u),
             cornerRadius = CornerRadius(4f * u),
             style = Stroke(width = 1.3f * u)
@@ -1734,7 +1761,7 @@ fun ThinkingRobotAnimation(
         // Блик на бицепсе
         drawRoundRect(
             color = whiteHighlight.copy(alpha = 0.8f),
-            topLeft = pt(49f, 108f),
+            topLeft = pt(49f, 108f + rightArmOffsetY),
             size = Size(3f * u, 14f * u),
             cornerRadius = CornerRadius(1.5f * u)
         )
@@ -1743,25 +1770,25 @@ fun ThinkingRobotAnimation(
         drawCircle(
             color = mediumGray,
             radius = 7f * u,
-            center = pt(46f, 126f)
+            center = pt(46f, 126f + rightArmOffsetY)
         )
         drawCircle(
             color = darkGray,
             radius = 7f * u,
-            center = pt(46f, 126f),
+            center = pt(46f, 126f + rightArmOffsetY),
             style = Stroke(width = 1.3f * u)
         )
 
-        // Предплечье — ширина 25.92 (уменьшено на 10%), высота 24.2 (увеличено на 10%), скругление 7
+        // Предплечье
         drawRoundRect(
             color = lightGray,
-            topLeft = pt(33.04f, 128f),
+            topLeft = pt(33.04f, 128f + rightArmOffsetY),
             size = Size(25.92f * u, 24.2f * u),
             cornerRadius = CornerRadius(7f * u)
         )
         drawRoundRect(
             color = darkGray,
-            topLeft = pt(33.04f, 128f),
+            topLeft = pt(33.04f, 128f + rightArmOffsetY),
             size = Size(25.92f * u, 24.2f * u),
             cornerRadius = CornerRadius(7f * u),
             style = Stroke(width = 1.3f * u)
@@ -1769,7 +1796,7 @@ fun ThinkingRobotAnimation(
         // Блик на предплечье
         drawRoundRect(
             color = whiteHighlight.copy(alpha = 0.8f),
-            topLeft = pt(53f, 132f),
+            topLeft = pt(53f, 132f + rightArmOffsetY),
             size = Size(3f * u, 15f * u),
             cornerRadius = CornerRadius(1.5f * u)
         )
@@ -1777,12 +1804,12 @@ fun ThinkingRobotAnimation(
         // ПРАВАЯ КИСТЬ
         drawOval(
             color = lightGray,
-            topLeft = pt(38f, 150f),
+            topLeft = pt(38f, 150f + rightArmOffsetY),
             size = Size(16f * u, 20f * u)
         )
         drawOval(
             color = darkGray,
-            topLeft = pt(38f, 150f),
+            topLeft = pt(38f, 150f + rightArmOffsetY),
             size = Size(16f * u, 20f * u),
             style = Stroke(width = 1.3f * u)
         )
@@ -1792,13 +1819,13 @@ fun ThinkingRobotAnimation(
             val fx = 40f + i * 4f
             drawRoundRect(
                 color = mediumGray,
-                topLeft = pt(fx, 162f),
+                topLeft = pt(fx, 162f + rightArmOffsetY),
                 size = Size(3.5f * u, 12f * u),
                 cornerRadius = CornerRadius(1.75f * u)
             )
             drawRoundRect(
                 color = darkGray,
-                topLeft = pt(fx, 162f),
+                topLeft = pt(fx, 162f + rightArmOffsetY),
                 size = Size(3.5f * u, 12f * u),
                 cornerRadius = CornerRadius(1.75f * u),
                 style = Stroke(width = 0.9f * u)
@@ -1806,25 +1833,25 @@ fun ThinkingRobotAnimation(
             drawCircle(
                 color = darkerGray,
                 radius = 0.8f * u,
-                center = pt(fx + 1.75f, 167f)
+                center = pt(fx + 1.75f, 167f + rightArmOffsetY)
             )
             drawCircle(
                 color = darkerGray,
                 radius = 0.8f * u,
-                center = pt(fx + 1.75f, 172f)
+                center = pt(fx + 1.75f, 172f + rightArmOffsetY)
             )
         }
 
         // Большой палец правой кисти
         drawRoundRect(
             color = mediumGray,
-            topLeft = pt(46f, 156f),
+            topLeft = pt(46f, 156f + rightArmOffsetY),
             size = Size(5f * u, 10f * u),
             cornerRadius = CornerRadius(2.5f * u)
         )
         drawRoundRect(
             color = darkGray,
-            topLeft = pt(46f, 156f),
+            topLeft = pt(46f, 156f + rightArmOffsetY),
             size = Size(5f * u, 10f * u),
             cornerRadius = CornerRadius(2.5f * u),
             style = Stroke(width = 0.9f * u)
@@ -2188,11 +2215,12 @@ fun ThinkingRobotAnimation(
             center = heartCenter,
             style = Stroke(width = 0.6f * u)
         )
-                // ================= НАДПИСЬ "ИИ-Друг" МЕЖДУ ЭКРАНОМ И РЕМНЁМ =================
+                       // ================= НАДПИСЬ "ИИ-Друг" МЕЖДУ ЭКРАНОМ И РЕМНЁМ =================
         val labelText = "ИИ-Друг"
+        val labelFontSize = with(LocalDensity.current) { (10f * u).toSp() }
         val labelStyle = TextStyle(
             color = Color.Black,
-            fontSize = 10.sp,
+            fontSize = labelFontSize,
             fontWeight = FontWeight.Bold
         )
         val labelLayout = textMeasurer.measure(
@@ -2204,7 +2232,7 @@ fun ThinkingRobotAnimation(
             textLayoutResult = labelLayout,
             topLeft = Offset(
                 x = size.width / 2f - labelLayout.size.width / 2f,
-                y = labelY * u
+                y = labelY * u + bobOffset
             )
         )
 
