@@ -120,6 +120,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -1260,7 +1263,8 @@ fun ThinkingRobotAnimation(
         ),
         label = "pulse"
     )
-
+    val textMeasurer = rememberTextMeasurer()
+    
     Canvas(
         modifier = modifier
             .height(height)
@@ -1910,6 +1914,48 @@ fun ThinkingRobotAnimation(
             style = Stroke(width = 1.3f * u)
         )
 
+        // ================= КЛЁПКИ НА КРЫШКЕ ЦИЛИНДРА =================
+        // 7 клёпок с равным промежутком по всему периметру крышки.
+        // Отступ от края — 3 единицы.
+        val capRivetColor = mediumGray
+        val capRivetRadius = 1f * u
+
+        drawCircle(
+            color = capRivetColor,
+            radius = capRivetRadius,
+            center = pt(0f, 73f)
+        )
+        drawCircle(
+            color = capRivetColor,
+            radius = capRivetRadius,
+            center = pt(-26.58f, 74.51f)
+        )
+        drawCircle(
+            color = capRivetColor,
+            radius = capRivetRadius,
+            center = pt(-33.15f, 77.89f)
+        )
+        drawCircle(
+            color = capRivetColor,
+            radius = capRivetRadius,
+            center = pt(-14.75f, 80.60f)
+        )
+        drawCircle(
+            color = capRivetColor,
+            radius = capRivetRadius,
+            center = pt(14.75f, 80.60f)
+        )
+        drawCircle(
+            color = capRivetColor,
+            radius = capRivetRadius,
+            center = pt(33.15f, 77.89f)
+        )
+        drawCircle(
+            color = capRivetColor,
+            radius = capRivetRadius,
+            center = pt(26.58f, 74.51f)
+        )
+
         // 7. ВНУТРЕННИЙ ЭЛЛИПС НА КРЫШКЕ (для реализма 3D)
         drawOval(
             color = lightGray,
@@ -2141,6 +2187,25 @@ fun ThinkingRobotAnimation(
             radius = sunRadius * 1.6f,
             center = heartCenter,
             style = Stroke(width = 0.6f * u)
+        )
+                // ================= НАДПИСЬ "ИИ-Друг" МЕЖДУ ЭКРАНОМ И РЕМНЁМ =================
+        val labelText = "ИИ-Друг"
+        val labelStyle = TextStyle(
+            color = Color.Black,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold
+        )
+        val labelLayout = textMeasurer.measure(
+            text = labelText,
+            style = labelStyle
+        )
+        val labelY = 130.375f
+        drawText(
+            textLayoutResult = labelLayout,
+            topLeft = Offset(
+                x = size.width / 2f - labelLayout.size.width / 2f,
+                y = labelY * u
+            )
         )
 
                 // ================= ШЕЯ (гибкое сочленение из колец) =================
