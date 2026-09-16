@@ -2890,6 +2890,7 @@ drawCircle(
     color = Color.White.copy(alpha = 0.9f),
     radius = 0.6f * u,
     center = pt(rightPupilCenterX - 0.5f, rightPupilCenterY - rightPupilHeight * 0.3f)
+    )
         
                 // ================= РОТ =================
         if (isSpeaking) {
