@@ -254,6 +254,12 @@ fun ChatScreen(
     var welcomeStarted by remember { mutableStateOf(false) }
     var welcomeTextPrinted by remember { mutableStateOf(false) }
     var pendingTextPrinted by remember { mutableStateOf(false) }
+        // Сигнал для махания рукой — устанавливается, когда нужно помахать
+    var waveSignal by remember { mutableStateOf(false) }
+        // Сигнал для полёта в центр экрана и увеличения
+    var growBigSignal by remember { mutableStateOf(false) }
+    // Сигнал для полёта в левый верхний угол и уменьшения
+    var shrinkSmallSignal by remember { mutableStateOf(false) }
 
     // Состояния для робота после приземления
     var robotIsLanded by remember { mutableStateOf(false) }
@@ -281,9 +287,9 @@ fun ChatScreen(
             if (!results.isNullOrEmpty()) {
                 val recognizedText = results[0]
                 if (recognizedText.isNotBlank()) {
-                    val command = recognizedText.trim().lowercase()
+                                        val command = recognizedText.trim().lowercase()
                     when {
-                                                command == "лети домой" -> {
+                        command == "лети домой" -> {
                             robotIsFlyingHome = true
                             robotIsFlyingHere = false
                             robotIsLanded = false
@@ -295,6 +301,15 @@ fun ChatScreen(
                             robotIsFlyingHome = false
                             robotOnOrbit = false
                             viewModel.appendSystemMessage("🤖 Робот прилетает с орбиты")
+                        }
+                                               command == "привет" || command == "махни рукой" -> {
+                            waveSignal = true
+                        }
+                        command == "стань большим" -> {
+                            growBigSignal = true
+                        }
+                        command == "стань маленьким" -> {
+                            shrinkSmallSignal = true
                         }
                         else -> {
                             viewModel.sendUserMessage(recognizedText)
@@ -550,10 +565,8 @@ fun ChatScreen(
         )
     }
 
+        
     val density = LocalDensity.current
-
-        // Сигнал для махания рукой — устанавливается, когда нужно помахать
-    var waveSignal by remember { mutableStateOf(false) }
 
         // При приветствии робота (когда он говорит "Привет друг...") — махать
     LaunchedEffect(speakStartTrigger) {
@@ -582,6 +595,50 @@ fun ChatScreen(
             delay(3000)
             waveSignal = false
         }
+    }
+        // Команда "стань большим" — плавный полёт в центр и увеличение до 3f
+    LaunchedEffect(growBigSignal) {
+        if (!growBigSignal) return@LaunchedEffect
+        if (robotIsLanded && robotScale >= 3f) {
+            // Уже большой в центре — ничего не делать
+            growBigSignal = false
+            return@LaunchedEffect
+        }
+        // Если робот на орбите или в полёте — сначала дождёмся посадки
+        if (!robotIsLanded) {
+            robotIsFlyingHere = true
+            robotOnOrbit = false
+            robotIsFlyingHome = false
+            delay(3200)
+        }
+        // Плавный полёт к центру и увеличение
+        robotIsLanded = true
+        robotOnOrbit = false
+        robotIsFlyingHere = false
+        robotIsFlyingHome = false
+        growBigSignal = false
+    }
+
+    // Команда "стань маленьким" — плавный полёт в левый верхний угол и уменьшение до 0.5f
+    LaunchedEffect(shrinkSmallSignal) {
+        if (!shrinkSmallSignal) return@LaunchedEffect
+        if (robotIsLanded && robotScale <= 0.5f && robotOffsetX == 0f && robotOffsetY == 0f) {
+            // Уже маленький в углу — ничего не делать
+            shrinkSmallSignal = false
+            return@LaunchedEffect
+        }
+        // Если робот на орбите — сначала летит на экран, потом в угол
+        if (!robotIsLanded) {
+            robotIsFlyingHere = true
+            robotOnOrbit = false
+            robotIsFlyingHome = false
+            delay(3200)
+        }
+        robotIsLanded = true
+        robotOnOrbit = false
+        robotIsFlyingHere = false
+        robotIsFlyingHome = false
+        shrinkSmallSignal = false
     }
     
     Box(
@@ -781,11 +838,11 @@ fun ChatScreen(
             PromptInput(
                 prompt = promptInput,
                 onPromptChange = { promptInput = it },
-                onGenerate = {
+                               onGenerate = {
                     keyboardController?.hide()
                     val command = promptInput.trim().lowercase()
                     when {
-                            command == "лети домой" -> {
+                        command == "лети домой" -> {
                             robotIsFlyingHome = true
                             robotIsFlyingHere = false
                             robotIsLanded = false
@@ -800,6 +857,18 @@ fun ChatScreen(
                             viewModel.appendSystemMessage("🤖 Робот прилетает с орбиты")
                             promptInput = ""
                         }
+                                                command == "привет" || command == "махни рукой" -> {
+                            waveSignal = true
+                            promptInput = ""
+                        }
+                        command == "стань большим" -> {
+                            growBigSignal = true
+                            promptInput = ""
+                        }
+                        command == "стань маленьким" -> {
+                            shrinkSmallSignal = true
+                            promptInput = ""
+                        }
                         else -> {
                             viewModel.sendUserMessage(promptInput)
                             promptInput = ""
@@ -807,6 +876,7 @@ fun ChatScreen(
                         }
                     }
                 },
+                
                 onAbort = {
                     keyboardController?.hide()
                     viewModel.abortLocal()
@@ -979,7 +1049,7 @@ fun ChatScreen(
             }
         }
 
-        // Робот на экране
+                // Робот на экране
         if (robotIsLanded && !robotOnOrbit && !robotIsFlyingHome) {
             BoxWithConstraints(
                 modifier = Modifier.fillMaxSize()
@@ -988,24 +1058,71 @@ fun ChatScreen(
                 val screenHeightPx = constraints.maxHeight.toFloat()
                 val robotSizePx = with(LocalDensity.current) { 70.dp.toPx() }
 
+                // Сигналы команд "стань большим" / "стань маленьким" имеют приоритет
+                val isCommandActive = growBigSignal || shrinkSmallSignal
+
+                // Целевые позиция и масштаб
+                val targetOffsetX = when {
+                    growBigSignal -> (screenWidthPx - robotSizePx * 3f) / 2f
+                    shrinkSmallSignal -> 0f
+                    else -> robotOffsetX
+                }
+                val targetOffsetY = when {
+                    growBigSignal -> (screenHeightPx - robotSizePx * 3f) / 2f
+                    shrinkSmallSignal -> 0f
+                    else -> robotOffsetY
+                }
+                val targetScale = when {
+                    growBigSignal -> 3f
+                    shrinkSmallSignal -> 0.5f
+                    else -> robotScale
+                }
+
+                // Плавная анимация
+                val animatedOffsetX by animateFloatAsState(
+                    targetValue = targetOffsetX,
+                    animationSpec = tween(
+                        durationMillis = if (isCommandActive) 3000 else 200,
+                        easing = if (isCommandActive) FastOutSlowInEasing else LinearOutSlowInEasing
+                    ),
+                    label = "animated_offset_x"
+                )
+                val animatedOffsetY by animateFloatAsState(
+                    targetValue = targetOffsetY,
+                    animationSpec = tween(
+                        durationMillis = if (isCommandActive) 3000 else 200,
+                        easing = if (isCommandActive) FastOutSlowInEasing else LinearOutSlowInEasing
+                    ),
+                    label = "animated_offset_y"
+                )
+                val animatedScale by animateFloatAsState(
+                    targetValue = targetScale,
+                    animationSpec = tween(
+                        durationMillis = if (isCommandActive) 3000 else 200,
+                        easing = if (isCommandActive) FastOutSlowInEasing else LinearOutSlowInEasing
+                    ),
+                    label = "animated_scale"
+                )
+
                 Box(
                     modifier = Modifier
-                        .offset(x = robotOffsetX.dp, y = robotOffsetY.dp)
+                        .offset(x = animatedOffsetX.dp, y = animatedOffsetY.dp)
                         .size(70.dp)
                         .graphicsLayer(
-                            scaleX = robotScale,
-                            scaleY = robotScale
+                            scaleX = animatedScale,
+                            scaleY = animatedScale
                         )
                         .pointerInput(Unit) {
-    detectTransformGestures { _, pan, zoom, _ ->
-        robotOffsetX = (robotOffsetX + pan.x).coerceIn(0f, screenWidthPx - robotSizePx * robotScale)
-        robotOffsetY = (robotOffsetY + pan.y).coerceIn(0f, screenHeightPx - robotSizePx * robotScale)
-        robotScale = (robotScale * zoom).coerceIn(0.5f, 3f)
-
+                            detectTransformGestures { _, pan, zoom, _ ->
+                                // Позиция — мгновенно при перетаскивании
+                                robotOffsetX = (robotOffsetX + pan.x).coerceIn(0f, screenWidthPx - robotSizePx * robotScale)
+                                robotOffsetY = (robotOffsetY + pan.y).coerceIn(0f, screenHeightPx - robotSizePx * robotScale)
+                                // Масштаб — тоже мгновенно меняется в robotScale, но отображается плавно через animatedScale
+                                robotScale = (robotScale * zoom).coerceIn(0.5f, 3f)
                             }
                         }
                 ) {
-                                        ThinkingRobotAnimation(
+                    ThinkingRobotAnimation(
                         height = 70.dp,
                         isActive = true,
                         isSpeaking = isSpeaking,
@@ -1015,10 +1132,40 @@ fun ChatScreen(
                         modifier = Modifier.fillMaxSize()
                     )
                 }
+
+                // Синхронизация robotOffsetX/Y и robotScale с анимированными значениями
+                LaunchedEffect(animatedOffsetX, animatedOffsetY, animatedScale, isCommandActive) {
+                    if (!isCommandActive) {
+                        robotOffsetX = animatedOffsetX
+                        robotOffsetY = animatedOffsetY
+                        robotScale = animatedScale
+                    }
+                }
+
+                // Завершение команд
+                LaunchedEffect(growBigSignal) {
+                    if (growBigSignal) {
+                        delay(3000)
+                        robotOffsetX = (screenWidthPx - robotSizePx * 3f) / 2f
+                        robotOffsetY = (screenHeightPx - robotSizePx * 3f) / 2f
+                        robotScale = 3f
+                        growBigSignal = false
+                    }
+                }
+                                LaunchedEffect(shrinkSmallSignal) {
+                    if (shrinkSmallSignal) {
+                        delay(3000)
+                        robotOffsetX = 0f
+                        robotOffsetY = 0f
+                        robotScale = 0.5f
+                        shrinkSmallSignal = false
+                    }
+                }
             }
         }
     }
 }
+
 @Composable
 private fun VoiceWaveAnimation(
     color: Color,
@@ -1202,7 +1349,8 @@ fun ThinkingRobotAnimation(
     isSpeaking: Boolean = false,
     isThinking: Boolean = false,
     isIdle: Boolean = false,
-    shouldWave: Boolean = false
+    shouldWave: Boolean = false,
+    commandScale: Float? = null
 ) {
     val transition = rememberInfiniteTransition(label = "robot")
 
@@ -1355,13 +1503,24 @@ fun ThinkingRobotAnimation(
         label = "wave_amount"
     )
 
-       val textMeasurer = rememberTextMeasurer()
+             val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
 
-    Canvas(
+    // Плавное изменение масштаба при командах "стань большим" / "стань маленьким"
+    val animatedScale by animateFloatAsState(
+        targetValue = commandScale ?: 1f,
+        animationSpec = tween(durationMillis = 3000, easing = FastOutSlowInEasing),
+        label = "command_scale"
+    )
+
+        Canvas(
         modifier = modifier
             .height(height)
             .width(height * 0.85f)
+            .graphicsLayer(
+                scaleX = if (commandScale != null) animatedScale else 1f,
+                scaleY = if (commandScale != null) animatedScale else 1f
+            )
     ) {
         val u = size.height / 200f
         val cx = size.width / 2f
