@@ -1264,6 +1264,16 @@ fun ThinkingRobotAnimation(
         ),
         label = "pulse"
     )
+           // Цикл спокойного состояния глаз: Обычное -> Любопытство -> Сканирование -> Обычное
+    val idleEyePhase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(8000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "idleEyePhase"
+    )
 
        val armPhase by transition.animateFloat(
         initialValue = 0f,
@@ -1275,7 +1285,7 @@ fun ThinkingRobotAnimation(
         label = "armPhase"
     )
 
-    // Состояние махания — включается периодически раз в 10 секунд на 2 секунды
+        // Состояние махания — включается периодически раз в 10 секунд
     var isWaving by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -1285,6 +1295,13 @@ fun ThinkingRobotAnimation(
             isWaving = false
         }
     }
+
+    // Плавный вход/выход из режима махания (0 = не машет, 1 = машет)
+    val waveAmount by animateFloatAsState(
+        targetValue = if (isWaving) 1f else 0f,
+        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+        label = "wave_amount"
+    )
 
        val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
@@ -1593,8 +1610,13 @@ fun ThinkingRobotAnimation(
             else -> 0f
         }
 
-        // Угол махания правой рукой — только когда isWaving = true
-        val waveAngle = if (isWaving) sin(armPhase * 2f) * 30f else 0f
+                // Углы приветствия — плавно появляются при waveAmount → 1
+        // Верхнее звено: поворот вокруг плеча на -60°
+        val shoulderWaveAngle = -60f * waveAmount
+        // Нижнее звено: поворот вокруг локтя на -50°
+        val forearmWaveAngle = -50f * waveAmount
+        // Махание кисти: колебание ±18°, частота 1 Гц
+        val handWiggle = sin(armPhase * 2f) * 18f * waveAmount
 
         // ================= РУКИ (опущены вниз по бокам) =================
         // Предплечье в 2 раза толще бицепса. Руки укорочены на 20%.
@@ -1736,8 +1758,10 @@ fun ThinkingRobotAnimation(
             style = Stroke(width = 0.9f * u)
         )
 
-                // ================= ПРАВАЯ РУКА (с маханием) =================
-        rotate(waveAngle, pivot = pt(46f, 96f)) {
+                        // ================= ПРАВАЯ РУКА (с приветственным маханием) =================
+        // Внешний rotate — верхнее звено (плечо + бицепс) вокруг плеча.
+        rotate(shoulderWaveAngle, pivot = pt(46f, 96f)) {
+
             // Плечо
             drawCircle(
                 brush = Brush.radialGradient(
@@ -1760,7 +1784,7 @@ fun ThinkingRobotAnimation(
                 center = pt(46f, 96f + rightArmOffsetY)
             )
 
-            // Бицепс — ширина 16, скругление 4, высота 21
+            // Бицепс
             drawRoundRect(
                 color = lightGray,
                 topLeft = pt(38f, 104f + rightArmOffsetY),
@@ -1774,7 +1798,6 @@ fun ThinkingRobotAnimation(
                 cornerRadius = CornerRadius(4f * u),
                 style = Stroke(width = 1.3f * u)
             )
-            // Блик на бицепсе
             drawRoundRect(
                 color = whiteHighlight.copy(alpha = 0.8f),
                 topLeft = pt(49f, 108f + rightArmOffsetY),
@@ -1782,7 +1805,7 @@ fun ThinkingRobotAnimation(
                 cornerRadius = CornerRadius(1.5f * u)
             )
 
-            // ЛОКОТЬ
+            // Локоть
             drawCircle(
                 color = mediumGray,
                 radius = 7f * u,
@@ -1795,83 +1818,86 @@ fun ThinkingRobotAnimation(
                 style = Stroke(width = 1.3f * u)
             )
 
-            // Предплечье
-            drawRoundRect(
-                color = lightGray,
-                topLeft = pt(33.04f, 128f + rightArmOffsetY),
-                size = Size(25.92f * u, 24.2f * u),
-                cornerRadius = CornerRadius(7f * u)
-            )
-            drawRoundRect(
-                color = darkGray,
-                topLeft = pt(33.04f, 128f + rightArmOffsetY),
-                size = Size(25.92f * u, 24.2f * u),
-                cornerRadius = CornerRadius(7f * u),
-                style = Stroke(width = 1.3f * u)
-            )
-            // Блик на предплечье
-            drawRoundRect(
-                color = whiteHighlight.copy(alpha = 0.8f),
-                topLeft = pt(53f, 132f + rightArmOffsetY),
-                size = Size(3f * u, 15f * u),
-                cornerRadius = CornerRadius(1.5f * u)
-            )
+            // Внутренний rotate — нижнее звено (предплечье + кисть + пальцы) вокруг локтя
+            rotate(forearmWaveAngle + handWiggle, pivot = pt(46f, 126f + rightArmOffsetY)) {
 
-            // ПРАВАЯ КИСТЬ
-            drawOval(
-                color = lightGray,
-                topLeft = pt(38f, 150f + rightArmOffsetY),
-                size = Size(16f * u, 20f * u)
-            )
-            drawOval(
-                color = darkGray,
-                topLeft = pt(38f, 150f + rightArmOffsetY),
-                size = Size(16f * u, 20f * u),
-                style = Stroke(width = 1.3f * u)
-            )
-
-            // Пальцы правой кисти
-            for (i in 0..3) {
-                val fx = 40f + i * 4f
+                // Предплечье
                 drawRoundRect(
-                    color = mediumGray,
-                    topLeft = pt(fx, 162f + rightArmOffsetY),
-                    size = Size(3.5f * u, 12f * u),
-                    cornerRadius = CornerRadius(1.75f * u)
+                    color = lightGray,
+                    topLeft = pt(33.04f, 128f + rightArmOffsetY),
+                    size = Size(25.92f * u, 24.2f * u),
+                    cornerRadius = CornerRadius(7f * u)
                 )
                 drawRoundRect(
                     color = darkGray,
-                    topLeft = pt(fx, 162f + rightArmOffsetY),
-                    size = Size(3.5f * u, 12f * u),
-                    cornerRadius = CornerRadius(1.75f * u),
+                    topLeft = pt(33.04f, 128f + rightArmOffsetY),
+                    size = Size(25.92f * u, 24.2f * u),
+                    cornerRadius = CornerRadius(7f * u),
+                    style = Stroke(width = 1.3f * u)
+                )
+                drawRoundRect(
+                    color = whiteHighlight.copy(alpha = 0.8f),
+                    topLeft = pt(53f, 132f + rightArmOffsetY),
+                    size = Size(3f * u, 15f * u),
+                    cornerRadius = CornerRadius(1.5f * u)
+                )
+
+                // Кисть
+                drawOval(
+                    color = lightGray,
+                    topLeft = pt(38f, 150f + rightArmOffsetY),
+                    size = Size(16f * u, 20f * u)
+                )
+                drawOval(
+                    color = darkGray,
+                    topLeft = pt(38f, 150f + rightArmOffsetY),
+                    size = Size(16f * u, 20f * u),
+                    style = Stroke(width = 1.3f * u)
+                )
+
+                // Пальцы
+                for (i in 0..3) {
+                    val fx = 40f + i * 4f
+                    drawRoundRect(
+                        color = mediumGray,
+                        topLeft = pt(fx, 162f + rightArmOffsetY),
+                        size = Size(3.5f * u, 12f * u),
+                        cornerRadius = CornerRadius(1.75f * u)
+                    )
+                    drawRoundRect(
+                        color = darkGray,
+                        topLeft = pt(fx, 162f + rightArmOffsetY),
+                        size = Size(3.5f * u, 12f * u),
+                        cornerRadius = CornerRadius(1.75f * u),
+                        style = Stroke(width = 0.9f * u)
+                    )
+                    drawCircle(
+                        color = darkerGray,
+                        radius = 0.8f * u,
+                        center = pt(fx + 1.75f, 167f + rightArmOffsetY)
+                    )
+                    drawCircle(
+                        color = darkerGray,
+                        radius = 0.8f * u,
+                        center = pt(fx + 1.75f, 172f + rightArmOffsetY)
+                    )
+                }
+
+                // Большой палец
+                drawRoundRect(
+                    color = mediumGray,
+                    topLeft = pt(46f, 156f + rightArmOffsetY),
+                    size = Size(5f * u, 10f * u),
+                    cornerRadius = CornerRadius(2.5f * u)
+                )
+                drawRoundRect(
+                    color = darkGray,
+                    topLeft = pt(46f, 156f + rightArmOffsetY),
+                    size = Size(5f * u, 10f * u),
+                    cornerRadius = CornerRadius(2.5f * u),
                     style = Stroke(width = 0.9f * u)
                 )
-                drawCircle(
-                    color = darkerGray,
-                    radius = 0.8f * u,
-                    center = pt(fx + 1.75f, 167f + rightArmOffsetY)
-                )
-                drawCircle(
-                    color = darkerGray,
-                    radius = 0.8f * u,
-                    center = pt(fx + 1.75f, 172f + rightArmOffsetY)
-                )
             }
-
-            // Большой палец правой кисти
-            drawRoundRect(
-                color = mediumGray,
-                topLeft = pt(46f, 156f + rightArmOffsetY),
-                size = Size(5f * u, 10f * u),
-                cornerRadius = CornerRadius(2.5f * u)
-            )
-            drawRoundRect(
-                color = darkGray,
-                topLeft = pt(46f, 156f + rightArmOffsetY),
-                size = Size(5f * u, 10f * u),
-                cornerRadius = CornerRadius(2.5f * u),
-                style = Stroke(width = 0.9f * u)
-            )
         }
         
         // ================= ТУЛОВИЩЕ (3D цилиндр) =================
@@ -1937,8 +1963,8 @@ fun ThinkingRobotAnimation(
 
         
 
-                // 5. ТЁМНАЯ ЗОНА СПРАВА (затенение для 3D) — повёрнута параллельно границе
-        rotate(-11.7f, pivot = pt(34f, 94f)) {
+                        // 5. ТЁМНАЯ ЗОНА СПРАВА (затенение для 3D) — повёрнута параллельно границе
+        rotate(11.7f, pivot = pt(34f, 94f)) {
             drawRoundRect(
                 color = darkGray.copy(alpha = 0.15f),
                 topLeft = pt(34f, 94f),
@@ -2803,198 +2829,173 @@ fun ThinkingRobotAnimation(
         }
         drawPath(glassHighlight, color = Color.White.copy(alpha = 0.3f))
 
-               // ================= ГЛАЗА (миндалевидные, выразительные) =================
-val eyeY = 28f
+                       // ================= ГЛАЗА (Стиль EVE из WALL-E) =================
+        val isBlinking = currentBlink < 0.5f
 
-val eyeRX = 5f * u
-val eyeRY = if (currentBlink < 0.5f) 1f * u else 7.5f * u
+        // Базовые размеры для широких овальных глаз (как экран)
+        val baseEyeW = 14f * u
+        val baseEyeH = 10f * u
 
-val eyeOffsetX = lookOffsetX / u
-val eyeOffsetY = lookOffsetY / u
+        // Вычисляем текущие размеры глаза в зависимости от состояния
+        val (eyeW, eyeH) = when {
+            isBlinking -> baseEyeW to 1.5f * u
+            isThinking -> baseEyeW to 7f * u
+            isSpeaking -> 15f * u to 12f * u
+            isIdle -> {
+                val p = idleEyePhase
+                when {
+                    p < 0.4f -> baseEyeW to baseEyeH
+                    p < 0.6f -> {
+                        val t = (p - 0.4f) / 0.2f
+                        (baseEyeW + 2f * u * t) to (baseEyeH + 3f * u * t)
+                    }
+                    p < 0.8f -> {
+                        val t = (p - 0.6f) / 0.2f
+                        (baseEyeW + 3f * u * t) to (baseEyeH - 6f * u * t)
+                    }
+                    else -> {
+                        val t = (p - 0.8f) / 0.2f
+                        ((baseEyeW + 3f * u) - 3f * u * t) to (4f * u + 6f * u * t)
+                    }
+                }
+            }
+            else -> baseEyeW to baseEyeH
+        }
 
-// Плавный наклон для миндалевидной формы
-val eyeTilt = 3.5f
+        // Вычисляем размеры зрачка (реагирует на эмоции)
+        val (pupilW, pupilH) = when {
+            isBlinking -> 2f * u to 1f * u
+            isThinking -> 3f * u to 5f * u
+            isSpeaking -> 6f * u to 8f * u
+            isIdle -> {
+                val p = idleEyePhase
+                when {
+                    p < 0.4f -> 5f * u to 7f * u
+                    p < 0.6f -> 6f * u to 9f * u
+                    p < 0.8f -> 8f * u to 2.5f * u
+                    else -> {
+                        val t = (p - 0.8f) / 0.2f
+                        ((8f * u) - 3f * u * t) to (2.5f * u + 4.5f * u * t)
+                    }
+                }
+            }
+            else -> 5f * u to 7f * u
+        }
 
-val eyeCornerRadius = 2f
+        // ========== ЛЕВЫЙ ГЛАЗ ==========
+        val leftEyeCenterX = -12f + lookOffsetX / u
+        val leftEyeCenterY = 28f + lookOffsetY / u
+        val leftCenter = pt(leftEyeCenterX, leftEyeCenterY)
 
-// ========== ЛЕВЫЙ ГЛАЗ ==========
-val leftEyeCenterX = -13f + eyeOffsetX
-val leftEyeCenterY = eyeY + eyeOffsetY
+        // 1. Неоновое свечение вокруг глаза (Glow)
+        drawOval(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    neonBluePulse.copy(alpha = 0.4f),
+                    neonBluePulse.copy(alpha = 0.1f),
+                    Color.Transparent
+                ),
+                radius = eyeW * 1.2f
+            ),
+            topLeft = Offset(leftCenter.x - eyeW * 0.8f, leftCenter.y - eyeH * 0.8f),
+            size = Size(eyeW * 1.6f, eyeH * 1.6f)
+        )
 
-// Внутренний край (к носу) — высокий
-val leftEyeInnerTopY = leftEyeCenterY - eyeRY / u + eyeTilt * 0.3f
-val leftEyeInnerBottomY = leftEyeCenterY + eyeRY / u + eyeTilt * 0.3f
+        // 2. Тёмная подложка глаза (экран)
+        drawOval(
+            color = Color(0xFF0A0A14),
+            topLeft = Offset(leftCenter.x - eyeW / 2f, leftCenter.y - eyeH / 2f),
+            size = Size(eyeW, eyeH)
+        )
 
-// Внешний край (наружу) — заострённый
-val leftEyeOuterTopY = leftEyeCenterY - (eyeRY * 0.5f) / u - eyeTilt * 0.2f
-val leftEyeOuterBottomY = leftEyeCenterY + (eyeRY * 0.5f) / u - eyeTilt * 0.2f
+        // 3. Основной цвет глаза (голубой градиент)
+        drawOval(
+            brush = Brush.radialGradient(
+                colors = listOf(neonBluePulse, neonBluePulse.copy(alpha = 0.7f)),
+                radius = eyeW / 2f
+            ),
+            topLeft = Offset(leftCenter.x - eyeW / 2f, leftCenter.y - eyeH / 2f),
+            size = Size(eyeW, eyeH)
+        )
 
-val leftEyeInnerX = leftEyeCenterX + eyeRX * 0.8f
-val leftEyeOuterX = leftEyeCenterX - eyeRX * 1.1f
+        // 4. Зрачок (тёмный овал внутри)
+        val pupilOffsetX = (lookOffsetX / u) * 0.3f * u
+        val pupilOffsetY = (lookOffsetY / u) * 0.3f * u
+        val leftPupilCenter = Offset(leftCenter.x + pupilOffsetX, leftCenter.y + pupilOffsetY)
 
-val leftEyePath = Path().apply {
-    // Внутренний верхний угол (к носу)
-    moveTo(pt(leftEyeInnerX, leftEyeInnerTopY).x, pt(leftEyeInnerX, leftEyeInnerTopY).y)
-    
-    // Верхняя кривая к внешнему углу
-    quadraticBezierTo(
-        pt((leftEyeInnerX + leftEyeOuterX) / 2, leftEyeInnerTopY - 2f).x,
-        pt((leftEyeInnerX + leftEyeOuterX) / 2, leftEyeInnerTopY - 2f).y,
-        pt(leftEyeOuterX, leftEyeOuterTopY).x, pt(leftEyeOuterX, leftEyeOuterTopY).y
-    )
-    
-    // Внешний угол (заострённый)
-    quadraticBezierTo(
-        pt(leftEyeOuterX - 1f, leftEyeOuterTopY + 3f).x,
-        pt(leftEyeOuterX - 1f, leftEyeOuterTopY + 3f).y,
-        pt(leftEyeOuterX, leftEyeOuterBottomY).x, pt(leftEyeOuterX, leftEyeOuterBottomY).y
-    )
-    
-    // Нижняя кривая к внутреннему углу
-    quadraticBezierTo(
-        pt((leftEyeInnerX + leftEyeOuterX) / 2, leftEyeInnerBottomY + 2f).x,
-        pt((leftEyeInnerX + leftEyeOuterX) / 2, leftEyeInnerBottomY + 2f).y,
-        pt(leftEyeInnerX, leftEyeInnerBottomY).x, pt(leftEyeInnerX, leftEyeInnerBottomY).y
-    )
-    
-    // Внутренний угол (закруглённый)
-    quadraticBezierTo(
-        pt(leftEyeInnerX + 1f, leftEyeInnerBottomY - 3f).x,
-        pt(leftEyeInnerX + 1f, leftEyeInnerBottomY - 3f).y,
-        pt(leftEyeInnerX, leftEyeInnerTopY).x, pt(leftEyeInnerX, leftEyeInnerTopY).y
-    )
-    close()
-}
+        drawOval(
+            color = Color(0xFF050510),
+            topLeft = Offset(leftPupilCenter.x - pupilW / 2f, leftPupilCenter.y - pupilH / 2f),
+            size = Size(pupilW, pupilH)
+        )
 
-// Свечение вокруг глаза
-drawPath(
-    leftEyePath,
-    brush = Brush.radialGradient(
-        colors = listOf(
-            neonBluePulse.copy(alpha = 0.3f),
-            Color.Transparent
-        ),
-        radius = 15f * u
-    )
-)
+        // 5. Блики (эффект стеклянного экрана)
+        drawOval(
+            color = Color.White.copy(alpha = 0.9f),
+            topLeft = Offset(leftPupilCenter.x - pupilW * 0.3f, leftPupilCenter.y - pupilH * 0.35f),
+            size = Size(pupilW * 0.4f, pupilH * 0.5f)
+        )
+        drawCircle(
+            color = Color.White.copy(alpha = 0.7f),
+            radius = 1.2f * u,
+            center = Offset(leftPupilCenter.x + pupilW * 0.25f, leftPupilCenter.y - pupilH * 0.25f)
+        )
 
-// Основная форма глаза
-drawPath(leftEyePath, color = Color(0xFF0A0A14))
-drawPath(leftEyePath, color = neonBluePulse)
+        // ========== ПРАВЫЙ ГЛАЗ ==========
+        val rightEyeCenterX = 12f + lookOffsetX / u
+        val rightEyeCenterY = 28f + lookOffsetY / u
+        val rightCenter = pt(rightEyeCenterX, rightEyeCenterY)
 
-// Зрачок — элегантный вертикальный овал
-val leftPupilCenterX = leftEyeCenterX + eyeRX * 0.2f
-val leftPupilCenterY = leftEyeCenterY + eyeTilt * 0.2f
+        // 1. Свечение
+        drawOval(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    neonBluePulse.copy(alpha = 0.4f),
+                    neonBluePulse.copy(alpha = 0.1f),
+                    Color.Transparent
+                ),
+                radius = eyeW * 1.2f
+            ),
+            topLeft = Offset(rightCenter.x - eyeW * 0.8f, rightCenter.y - eyeH * 0.8f),
+            size = Size(eyeW * 1.6f, eyeH * 1.6f)
+        )
 
-val leftPupilHeight = if (currentBlink > 0.5f) 0.8f * u else 5.5f * u
-val leftPupilWidth = if (currentBlink > 0.5f) 0.8f * u else 1.8f * u
+        // 2. Тёмная подложка
+        drawOval(
+            color = Color(0xFF0A0A14),
+            topLeft = Offset(rightCenter.x - eyeW / 2f, rightCenter.y - eyeH / 2f),
+            size = Size(eyeW, eyeH)
+        )
 
-drawOval(
-    color = Color(0xFF0A0A14),
-    topLeft = pt(leftPupilCenterX - leftPupilWidth / (2 * u),
-                 leftPupilCenterY - leftPupilHeight / (2 * u)),
-    size = Size(leftPupilWidth, leftPupilHeight)
-)
+        // 3. Основной цвет
+        drawOval(
+            brush = Brush.radialGradient(
+                colors = listOf(neonBluePulse, neonBluePulse.copy(alpha = 0.7f)),
+                radius = eyeW / 2f
+            ),
+            topLeft = Offset(rightCenter.x - eyeW / 2f, rightCenter.y - eyeH / 2f),
+            size = Size(eyeW, eyeH)
+        )
 
-// Блик 1 — вертикальная полоса
-drawOval(
-    color = Color.White.copy(alpha = 0.95f),
-    topLeft = pt(leftPupilCenterX - 0.4f,
-                 leftPupilCenterY - leftPupilHeight * 0.35f),
-    size = Size(0.8f * u, leftPupilHeight * 0.7f)
-)
+        // 4. Зрачок
+        val rightPupilCenter = Offset(rightCenter.x + pupilOffsetX, rightCenter.y + pupilOffsetY)
+        drawOval(
+            color = Color(0xFF050510),
+            topLeft = Offset(rightPupilCenter.x - pupilW / 2f, rightPupilCenter.y - pupilH / 2f),
+            size = Size(pupilW, pupilH)
+        )
 
-// Блик 2 — маленькая точка
-drawCircle(
-    color = Color.White.copy(alpha = 0.85f),
-    radius = 0.5f * u,
-    center = pt(leftPupilCenterX + 0.4f, leftPupilCenterY - leftPupilHeight * 0.25f)
-)
-
-// ========== ПРАВЫЙ ГЛАЗ ==========
-val rightEyeCenterX = 13f + eyeOffsetX
-val rightEyeCenterY = eyeY + eyeOffsetY
-
-// Внутренний край (к носу) — высокий
-val rightEyeInnerTopY = rightEyeCenterY - eyeRY / u + eyeTilt * 0.3f
-val rightEyeInnerBottomY = rightEyeCenterY + eyeRY / u + eyeTilt * 0.3f
-
-// Внешний край (наружу) — заострённый
-val rightEyeOuterTopY = rightEyeCenterY - (eyeRY * 0.5f) / u - eyeTilt * 0.2f
-val rightEyeOuterBottomY = rightEyeCenterY + (eyeRY * 0.5f) / u - eyeTilt * 0.2f
-
-val rightEyeInnerX = rightEyeCenterX - eyeRX * 0.8f
-val rightEyeOuterX = rightEyeCenterX + eyeRX * 1.1f
-
-val rightEyePath = Path().apply {
-    moveTo(pt(rightEyeInnerX, rightEyeInnerTopY).x, pt(rightEyeInnerX, rightEyeInnerTopY).y)
-    
-    quadraticBezierTo(
-        pt((rightEyeInnerX + rightEyeOuterX) / 2, rightEyeInnerTopY - 2f).x,
-        pt((rightEyeInnerX + rightEyeOuterX) / 2, rightEyeInnerTopY - 2f).y,
-        pt(rightEyeOuterX, rightEyeOuterTopY).x, pt(rightEyeOuterX, rightEyeOuterTopY).y
-    )
-    
-    quadraticBezierTo(
-        pt(rightEyeOuterX + 1f, rightEyeOuterTopY + 3f).x,
-        pt(rightEyeOuterX + 1f, rightEyeOuterTopY + 3f).y,
-        pt(rightEyeOuterX, rightEyeOuterBottomY).x, pt(rightEyeOuterX, rightEyeOuterBottomY).y
-    )
-    
-    quadraticBezierTo(
-        pt((rightEyeInnerX + rightEyeOuterX) / 2, rightEyeInnerBottomY + 2f).x,
-        pt((rightEyeInnerX + rightEyeOuterX) / 2, rightEyeInnerBottomY + 2f).y,
-        pt(rightEyeInnerX, rightEyeInnerBottomY).x, pt(rightEyeInnerX, rightEyeInnerBottomY).y
-    )
-    
-    quadraticBezierTo(
-        pt(rightEyeInnerX - 1f, rightEyeInnerBottomY - 3f).x,
-        pt(rightEyeInnerX - 1f, rightEyeInnerBottomY - 3f).y,
-        pt(rightEyeInnerX, rightEyeInnerTopY).x, pt(rightEyeInnerX, rightEyeInnerTopY).y
-    )
-    close()
-}
-
-drawPath(
-    rightEyePath,
-    brush = Brush.radialGradient(
-        colors = listOf(
-            neonBluePulse.copy(alpha = 0.3f),
-            Color.Transparent
-        ),
-        radius = 15f * u
-    )
-)
-
-drawPath(rightEyePath, color = Color(0xFF0A0A14))
-drawPath(rightEyePath, color = neonBluePulse)
-
-// Зрачок
-val rightPupilCenterX = rightEyeCenterX - eyeRX * 0.2f
-val rightPupilCenterY = rightEyeCenterY + eyeTilt * 0.2f
-
-val rightPupilHeight = if (currentBlink > 0.5f) 0.8f * u else 5.5f * u
-val rightPupilWidth = if (currentBlink > 0.5f) 0.8f * u else 1.8f * u
-
-drawOval(
-    color = Color(0xFF0A0A14),
-    topLeft = pt(rightPupilCenterX - rightPupilWidth / (2 * u),
-                 rightPupilCenterY - rightPupilHeight / (2 * u)),
-    size = Size(rightPupilWidth, rightPupilHeight)
-)
-
-drawOval(
-    color = Color.White.copy(alpha = 0.95f),
-    topLeft = pt(rightPupilCenterX - 0.4f,
-                 rightPupilCenterY - rightPupilHeight * 0.35f),
-    size = Size(0.8f * u, rightPupilHeight * 0.7f)
-)
-
-drawCircle(
-    color = Color.White.copy(alpha = 0.85f),
-    radius = 0.5f * u,
-    center = pt(rightPupilCenterX - 0.4f, rightPupilCenterY - rightPupilHeight * 0.25f)
-)
+        // 5. Блики
+        drawOval(
+            color = Color.White.copy(alpha = 0.9f),
+            topLeft = Offset(rightPupilCenter.x - pupilW * 0.3f, rightPupilCenter.y - pupilH * 0.35f),
+            size = Size(pupilW * 0.4f, pupilH * 0.5f)
+        )
+        drawCircle(
+            color = Color.White.copy(alpha = 0.7f),
+            radius = 1.2f * u,
+            center = Offset(rightPupilCenter.x + pupilW * 0.25f, rightPupilCenter.y - pupilH * 0.25f)
+        )
         
                 // ================= РОТ =================
         if (isSpeaking) {
