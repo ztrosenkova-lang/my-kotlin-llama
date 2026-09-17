@@ -555,21 +555,31 @@ fun ChatScreen(
         // Сигнал для махания рукой — устанавливается, когда нужно помахать
     var waveSignal by remember { mutableStateOf(false) }
 
-    // При приветствии робота (когда он говорит "Привет друг...") — махать
+        // При приветствии робота (когда он говорит "Привет друг...") — махать
     LaunchedEffect(speakStartTrigger) {
         if (speakStartTrigger) {
             waveSignal = true
             delay(2500)
             waveSignal = false
+        } else {
+            waveSignal = false
         }
     }
 
-    // При появлении слова "привет" в чате — махать
+           // При появлении слова "привет" или "махни рукой" в чате — махать
     LaunchedEffect(chatMessages.size) {
         val last = chatMessages.lastOrNull() ?: return@LaunchedEffect
-        if (last.text.contains("привет", ignoreCase = true)) {
+        val text = last.text.lowercase()
+        if (text.contains("привет") || text.contains("махни рукой")) {
             waveSignal = true
             delay(2500)
+            waveSignal = false
+        }
+    }
+        // Автосброс waveSignal на случай застревания (страховка)
+    LaunchedEffect(waveSignal) {
+        if (waveSignal) {
+            delay(3000)
             waveSignal = false
         }
     }
@@ -1637,18 +1647,18 @@ fun ThinkingRobotAnimation(
             center = pt(0f, 215f + flameFlicker)
         )
 
-                                              // ================= АНИМАЦИЯ РУК =================
+                                                    // ================= АНИМАЦИЯ РУК =================
         val armSway = sin(armPhase)
         val leftArmOffsetY = when {
-            isSpeaking -> armSway * 1.8f
-            isThinking -> armSway * 1.8f
-            isIdle -> armSway * 1.8f
+            isSpeaking -> armSway * 1.26f
+            isThinking -> armSway * 1.26f
+            isIdle -> armSway * 1.26f
             else -> 0f
         }
         val rightArmOffsetY = when {
-            isSpeaking -> sin(armPhase + PI.toFloat()) * 1.8f
-            isThinking -> sin(armPhase + PI.toFloat()) * 1.8f
-            isIdle -> sin(armPhase + PI.toFloat()) * 1.8f
+            isSpeaking -> sin(armPhase + PI.toFloat()) * 1.26f
+            isThinking -> sin(armPhase + PI.toFloat()) * 1.26f
+            isIdle -> sin(armPhase + PI.toFloat()) * 1.26f
             else -> 0f
         }
                 // Углы приветствия — плавно появляются при waveAmount → 1
@@ -2923,11 +2933,13 @@ fun ThinkingRobotAnimation(
             else -> 5f * u to 7f * u
         }
 
-        // Функция для создания трапециевидной формы глаза
-        // Длинный край к носу, короткий наружу (раскосые глаза)
-        fun createTrapezoidEyePath(centerX: Float, centerY: Float, width: Float, height: Float, isLeft: Boolean): Path {
-            val halfW = width / 2f
-            val halfH = height / 2f
+                fun createTrapezoidEyePath(centerX: Float, centerY: Float, width: Float, height: Float, isLeft: Boolean): Path {
+            // Увеличиваем размеры на 20%
+            val scaledW = width * 1.2f
+            val scaledH = height * 1.2f
+
+            val halfW = scaledW / 2f
+            val halfH = scaledH / 2f
             
             // Коэффициент сужения внешнего края (45% от внутреннего)
             val outerRatio = 0.45f
@@ -2944,8 +2956,8 @@ fun ThinkingRobotAnimation(
             val innerX = if (isLeft) centerX + halfW * 0.85f else centerX - halfW * 0.85f
             val outerX = if (isLeft) centerX - halfW else centerX + halfW
             
-            // Радиус скругления углов
-            val cornerRadius = 1.5f * u
+            // Радиус скругления углов — увеличен для плавности
+            val cornerRadius = 2.5f * u
             
             return Path().apply {
                 // Начинаем с внутреннего верхнего угла (к носу, сверху)
