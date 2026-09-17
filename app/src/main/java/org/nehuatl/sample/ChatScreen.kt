@@ -552,6 +552,28 @@ fun ChatScreen(
 
     val density = LocalDensity.current
 
+        // Сигнал для махания рукой — устанавливается, когда нужно помахать
+    var waveSignal by remember { mutableStateOf(false) }
+
+    // При приветствии робота (когда он говорит "Привет друг...") — махать
+    LaunchedEffect(speakStartTrigger) {
+        if (speakStartTrigger) {
+            waveSignal = true
+            delay(2500)
+            waveSignal = false
+        }
+    }
+
+    // При появлении слова "привет" в чате — махать
+    LaunchedEffect(chatMessages.size) {
+        val last = chatMessages.lastOrNull() ?: return@LaunchedEffect
+        if (last.text.contains("привет", ignoreCase = true)) {
+            waveSignal = true
+            delay(2500)
+            waveSignal = false
+        }
+    }
+    
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -853,12 +875,13 @@ fun ChatScreen(
                             rotationZ = (orbitAngle * 180f / PI.toFloat()) + 90f
                         )
                 ) {
-                    ThinkingRobotAnimation(
+                                        ThinkingRobotAnimation(
                         height = robotSizeDp,
                         isActive = false,
                         isSpeaking = false,
                         isThinking = false,
                         isIdle = true,
+                        shouldWave = waveSignal,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -933,12 +956,13 @@ fun ChatScreen(
                         .offset(x = offsetXDp, y = offsetYDp)
                         .size(currentSizeDp)
                 ) {
-                    ThinkingRobotAnimation(
+                                        ThinkingRobotAnimation(
                         height = currentSizeDp,
                         isActive = false,
                         isSpeaking = false,
                         isThinking = false,
                         isIdle = true,
+                        shouldWave = waveSignal,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -971,12 +995,13 @@ fun ChatScreen(
                             }
                         }
                 ) {
-                    ThinkingRobotAnimation(
+                                        ThinkingRobotAnimation(
                         height = 70.dp,
                         isActive = true,
                         isSpeaking = isSpeaking,
                         isThinking = state is GenerationState.Generating || cloudState is CloudAIState.Generating,
                         isIdle = !isSpeaking && state !is GenerationState.Generating && cloudState !is CloudAIState.Generating,
+                        shouldWave = waveSignal,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -1166,7 +1191,8 @@ fun ThinkingRobotAnimation(
     isActive: Boolean = true,
     isSpeaking: Boolean = false,
     isThinking: Boolean = false,
-    isIdle: Boolean = false
+    isIdle: Boolean = false,
+    shouldWave: Boolean = false
 ) {
     val transition = rememberInfiniteTransition(label = "robot")
 
@@ -1285,16 +1311,32 @@ fun ThinkingRobotAnimation(
         label = "armPhase"
     )
 
-        // Состояние махания — включается периодически раз в 10 секунд
-    var isWaving by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(10000)
-            isWaving = true
-            delay(2000)
-            isWaving = false
+            // Внутренний сигнал от ChatScreen — включается при приветствии
+    var externalWave by remember { mutableStateOf(false) }
+    LaunchedEffect(shouldWave) {
+        if (shouldWave) {
+            externalWave = true
+            delay(2500)
+            externalWave = false
         }
     }
+
+    // Автоматическое махание через случайные промежутки 1–4 минуты
+    // (когда нет внешнего сигнала)
+    var randomWave by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            // Случайный интервал от 60 до 240 секунд
+            val nextDelay = (60..240).random() * 1000L
+            delay(nextDelay)
+            randomWave = true
+            delay(2000)
+            randomWave = false
+        }
+    }
+
+    // Объединённое состояние махания
+    val isWaving = externalWave || randomWave
 
     // Плавный вход/выход из режима махания (0 = не машет, 1 = машет)
     val waveAmount by animateFloatAsState(
@@ -1595,21 +1637,20 @@ fun ThinkingRobotAnimation(
             center = pt(0f, 215f + flameFlicker)
         )
 
-                                      // ================= АНИМАЦИЯ РУК =================
+                                              // ================= АНИМАЦИЯ РУК =================
         val armSway = sin(armPhase)
         val leftArmOffsetY = when {
-            isSpeaking -> armSway * 10f
-            isThinking -> (sin(armPhase * 0.5f) * 4f) - 6f
-            isIdle -> armSway * 2f
+            isSpeaking -> armSway * 1.8f
+            isThinking -> armSway * 1.8f
+            isIdle -> armSway * 1.8f
             else -> 0f
         }
         val rightArmOffsetY = when {
-            isSpeaking -> sin(armPhase + PI.toFloat()) * 10f
-            isThinking -> (sin(armPhase * 0.5f + PI.toFloat()) * 4f) - 6f
-            isIdle -> sin(armPhase + PI.toFloat()) * 2f
+            isSpeaking -> sin(armPhase + PI.toFloat()) * 1.8f
+            isThinking -> sin(armPhase + PI.toFloat()) * 1.8f
+            isIdle -> sin(armPhase + PI.toFloat()) * 1.8f
             else -> 0f
         }
-
                 // Углы приветствия — плавно появляются при waveAmount → 1
         // Верхнее звено: поворот вокруг плеча на -60°
         val shoulderWaveAngle = -60f * waveAmount
@@ -2829,10 +2870,10 @@ fun ThinkingRobotAnimation(
         }
         drawPath(glassHighlight, color = Color.White.copy(alpha = 0.3f))
 
-                       // ================= ГЛАЗА (Стиль EVE из WALL-E) =================
+                      // ================= ГЛАЗА (Трапеция, длинный край к носу) =================
         val isBlinking = currentBlink < 0.5f
 
-        // Базовые размеры для широких овальных глаз (как экран)
+        // Базовые размеры
         val baseEyeW = 14f * u
         val baseEyeH = 10f * u
 
@@ -2862,7 +2903,7 @@ fun ThinkingRobotAnimation(
             else -> baseEyeW to baseEyeH
         }
 
-        // Вычисляем размеры зрачка (реагирует на эмоции)
+        // Размеры зрачка
         val (pupilW, pupilH) = when {
             isBlinking -> 2f * u to 1f * u
             isThinking -> 3f * u to 5f * u
@@ -2882,43 +2923,110 @@ fun ThinkingRobotAnimation(
             else -> 5f * u to 7f * u
         }
 
+        // Функция для создания трапециевидной формы глаза
+        // Длинный край к носу, короткий наружу (раскосые глаза)
+        fun createTrapezoidEyePath(centerX: Float, centerY: Float, width: Float, height: Float, isLeft: Boolean): Path {
+            val halfW = width / 2f
+            val halfH = height / 2f
+            
+            // Коэффициент сужения внешнего края (45% от внутреннего)
+            val outerRatio = 0.45f
+            
+            // Внутренний край (к носу) — ДЛИННЫЙ
+            val innerTopY = centerY - halfH
+            val innerBottomY = centerY + halfH
+            
+            // Внешний край (наружу) — КОРОТКИЙ
+            val outerTopY = centerY - halfH * outerRatio
+            val outerBottomY = centerY + halfH * outerRatio
+            
+            // X-координаты краёв
+            val innerX = if (isLeft) centerX + halfW * 0.85f else centerX - halfW * 0.85f
+            val outerX = if (isLeft) centerX - halfW else centerX + halfW
+            
+            // Радиус скругления углов
+            val cornerRadius = 1.5f * u
+            
+            return Path().apply {
+                // Начинаем с внутреннего верхнего угла (к носу, сверху)
+                moveTo(innerX - cornerRadius, innerTopY)
+                
+                // Верхняя сторона — к внешнему верхнему углу
+                lineTo(outerX + cornerRadius, outerTopY)
+                
+                // Скругление внешнего верхнего угла
+                quadraticBezierTo(
+                    outerX, outerTopY,
+                    outerX, outerTopY + cornerRadius
+                )
+                
+                // Внешняя вертикаль (короткая)
+                lineTo(outerX, outerBottomY - cornerRadius)
+                
+                // Скругление внешнего нижнего угла
+                quadraticBezierTo(
+                    outerX, outerBottomY,
+                    outerX - cornerRadius, outerBottomY
+                )
+                
+                // Нижняя сторона — к внутреннему нижнему углу
+                lineTo(innerX + cornerRadius, innerBottomY)
+                
+                // Скругление внутреннего нижнего угла
+                quadraticBezierTo(
+                    innerX, innerBottomY,
+                    innerX, innerBottomY - cornerRadius
+                )
+                
+                // Внутренняя вертикаль (длинная)
+                lineTo(innerX, innerTopY + cornerRadius)
+                
+                // Скругление внутреннего верхнего угла
+                quadraticBezierTo(
+                    innerX, innerTopY,
+                    innerX - cornerRadius, innerTopY
+                )
+                
+                close()
+            }
+        }
+
         // ========== ЛЕВЫЙ ГЛАЗ ==========
         val leftEyeCenterX = -12f + lookOffsetX / u
         val leftEyeCenterY = 28f + lookOffsetY / u
         val leftCenter = pt(leftEyeCenterX, leftEyeCenterY)
 
-        // 1. Неоновое свечение вокруг глаза (Glow)
-        drawOval(
+        // Создаём форму левого глаза (длинный край справа, к носу)
+        val leftEyePath = createTrapezoidEyePath(leftCenter.x, leftCenter.y, eyeW, eyeH, isLeft = true)
+
+        // 1. Неоновое свечение вокруг глаза
+        drawPath(
+            path = leftEyePath,
             brush = Brush.radialGradient(
                 colors = listOf(
                     neonBluePulse.copy(alpha = 0.4f),
                     neonBluePulse.copy(alpha = 0.1f),
                     Color.Transparent
                 ),
-                radius = eyeW * 1.2f
-            ),
-            topLeft = Offset(leftCenter.x - eyeW * 0.8f, leftCenter.y - eyeH * 0.8f),
-            size = Size(eyeW * 1.6f, eyeH * 1.6f)
+                center = leftCenter,
+                radius = eyeW * 0.8f
+            )
         )
 
-        // 2. Тёмная подложка глаза (экран)
-        drawOval(
-            color = Color(0xFF0A0A14),
-            topLeft = Offset(leftCenter.x - eyeW / 2f, leftCenter.y - eyeH / 2f),
-            size = Size(eyeW, eyeH)
-        )
+        // 2. Тёмная подложка глаза
+        drawPath(leftEyePath, color = Color(0xFF0A0A14))
 
         // 3. Основной цвет глаза (голубой градиент)
-        drawOval(
+        drawPath(
+            path = leftEyePath,
             brush = Brush.radialGradient(
                 colors = listOf(neonBluePulse, neonBluePulse.copy(alpha = 0.7f)),
-                radius = eyeW / 2f
-            ),
-            topLeft = Offset(leftCenter.x - eyeW / 2f, leftCenter.y - eyeH / 2f),
-            size = Size(eyeW, eyeH)
+                center = leftCenter,
+                radius = eyeW * 0.5f
+            )
         )
 
-        // 4. Зрачок (тёмный овал внутри)
+        // 4. Зрачок
         val pupilOffsetX = (lookOffsetX / u) * 0.3f * u
         val pupilOffsetY = (lookOffsetY / u) * 0.3f * u
         val leftPupilCenter = Offset(leftCenter.x + pupilOffsetX, leftCenter.y + pupilOffsetY)
@@ -2929,7 +3037,7 @@ fun ThinkingRobotAnimation(
             size = Size(pupilW, pupilH)
         )
 
-        // 5. Блики (эффект стеклянного экрана)
+        // 5. Блики
         drawOval(
             color = Color.White.copy(alpha = 0.9f),
             topLeft = Offset(leftPupilCenter.x - pupilW * 0.3f, leftPupilCenter.y - pupilH * 0.35f),
@@ -2946,35 +3054,34 @@ fun ThinkingRobotAnimation(
         val rightEyeCenterY = 28f + lookOffsetY / u
         val rightCenter = pt(rightEyeCenterX, rightEyeCenterY)
 
+        // Создаём форму правого глаза (длинный край слева, к носу)
+        val rightEyePath = createTrapezoidEyePath(rightCenter.x, rightCenter.y, eyeW, eyeH, isLeft = false)
+
         // 1. Свечение
-        drawOval(
+        drawPath(
+            path = rightEyePath,
             brush = Brush.radialGradient(
                 colors = listOf(
                     neonBluePulse.copy(alpha = 0.4f),
                     neonBluePulse.copy(alpha = 0.1f),
                     Color.Transparent
                 ),
-                radius = eyeW * 1.2f
-            ),
-            topLeft = Offset(rightCenter.x - eyeW * 0.8f, rightCenter.y - eyeH * 0.8f),
-            size = Size(eyeW * 1.6f, eyeH * 1.6f)
+                center = rightCenter,
+                radius = eyeW * 0.8f
+            )
         )
 
         // 2. Тёмная подложка
-        drawOval(
-            color = Color(0xFF0A0A14),
-            topLeft = Offset(rightCenter.x - eyeW / 2f, rightCenter.y - eyeH / 2f),
-            size = Size(eyeW, eyeH)
-        )
+        drawPath(rightEyePath, color = Color(0xFF0A0A14))
 
         // 3. Основной цвет
-        drawOval(
+        drawPath(
+            path = rightEyePath,
             brush = Brush.radialGradient(
                 colors = listOf(neonBluePulse, neonBluePulse.copy(alpha = 0.7f)),
-                radius = eyeW / 2f
-            ),
-            topLeft = Offset(rightCenter.x - eyeW / 2f, rightCenter.y - eyeH / 2f),
-            size = Size(eyeW, eyeH)
+                center = rightCenter,
+                radius = eyeW * 0.5f
+            )
         )
 
         // 4. Зрачок
