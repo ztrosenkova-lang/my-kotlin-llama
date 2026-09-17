@@ -302,9 +302,8 @@ fun ChatScreen(
                             robotOnOrbit = false
                             viewModel.appendSystemMessage("🤖 Робот прилетает с орбиты")
                         }
-                                               command == "привет" || command == "махни рукой" -> {
-                            waveSignal = true
-                        }
+                 command == "махни рукой" -> {waveSignal = true
+                   }
                         command == "стань большим" -> {
                             growBigSignal = true
                         }
@@ -568,77 +567,66 @@ fun ChatScreen(
         
     val density = LocalDensity.current
 
-        // При приветствии робота (когда он говорит "Привет друг...") — махать
+            // Приветствие робота — махать ОДИН РАЗ при первом запуске
+    var welcomeWaveDone by remember { mutableStateOf(false) }
     LaunchedEffect(speakStartTrigger) {
-        if (speakStartTrigger) {
+        if (speakStartTrigger && !welcomeWaveDone) {
+            welcomeWaveDone = true
             waveSignal = true
             delay(2500)
-            waveSignal = false
-        } else {
             waveSignal = false
         }
     }
 
-           // При появлении слова "привет" или "махни рукой" в чате — махать
-    LaunchedEffect(chatMessages.size) {
-        val last = chatMessages.lastOrNull() ?: return@LaunchedEffect
-        val text = last.text.lowercase()
-        if (text.contains("привет") || text.contains("махни рукой")) {
-            waveSignal = true
+           
+   
+           // Автосброс waveSignal на случай застревания (страховка)
+    LaunchedEffect(waveSignal) {
+        if (waveSignal) {
             delay(2500)
             waveSignal = false
         }
     }
-        // Автосброс waveSignal на случай застревания (страховка)
-    LaunchedEffect(waveSignal) {
-        if (waveSignal) {
-            delay(3000)
-            waveSignal = false
-        }
-    }
-        // Команда "стань большим" — плавный полёт в центр и увеличение до 3f
+            // Команда "стань большим" — переводит робота на экран, если он не там
     LaunchedEffect(growBigSignal) {
         if (!growBigSignal) return@LaunchedEffect
         if (robotIsLanded && robotScale >= 3f) {
-            // Уже большой в центре — ничего не делать
             growBigSignal = false
             return@LaunchedEffect
         }
-        // Если робот на орбите или в полёте — сначала дождёмся посадки
         if (!robotIsLanded) {
             robotIsFlyingHere = true
             robotOnOrbit = false
             robotIsFlyingHome = false
             delay(3200)
+            robotIsLanded = true
+            robotOnOrbit = false
+            robotIsFlyingHere = false
+            robotIsFlyingHome = false
         }
-        // Плавный полёт к центру и увеличение
-        robotIsLanded = true
-        robotOnOrbit = false
-        robotIsFlyingHere = false
-        robotIsFlyingHome = false
-        growBigSignal = false
+        // growBigSignal НЕ сбрасываем здесь — сброс произойдёт
+        // в блоке "Робот на экране" после завершения анимации
     }
 
-    // Команда "стань маленьким" — плавный полёт в левый верхний угол и уменьшение до 0.5f
+    // Команда "стань маленьким" — переводит робота на экран, если он не там
     LaunchedEffect(shrinkSmallSignal) {
         if (!shrinkSmallSignal) return@LaunchedEffect
         if (robotIsLanded && robotScale <= 0.5f && robotOffsetX == 0f && robotOffsetY == 0f) {
-            // Уже маленький в углу — ничего не делать
             shrinkSmallSignal = false
             return@LaunchedEffect
         }
-        // Если робот на орбите — сначала летит на экран, потом в угол
         if (!robotIsLanded) {
             robotIsFlyingHere = true
             robotOnOrbit = false
             robotIsFlyingHome = false
             delay(3200)
+            robotIsLanded = true
+            robotOnOrbit = false
+            robotIsFlyingHere = false
+            robotIsFlyingHome = false
         }
-        robotIsLanded = true
-        robotOnOrbit = false
-        robotIsFlyingHere = false
-        robotIsFlyingHome = false
-        shrinkSmallSignal = false
+        // shrinkSmallSignal НЕ сбрасываем здесь — сброс произойдёт
+        // в блоке "Робот на экране" после завершения анимации
     }
     
     Box(
@@ -857,10 +845,9 @@ fun ChatScreen(
                             viewModel.appendSystemMessage("🤖 Робот прилетает с орбиты")
                             promptInput = ""
                         }
-                                                command == "привет" || command == "махни рукой" -> {
-                            waveSignal = true
-                            promptInput = ""
-                        }
+                    command == "махни рукой" -> { waveSignal = true
+                   promptInput = ""
+}
                         command == "стань большим" -> {
                             growBigSignal = true
                             promptInput = ""
@@ -1809,15 +1796,15 @@ fun ThinkingRobotAnimation(
                                                     // ================= АНИМАЦИЯ РУК =================
         val armSway = sin(armPhase)
         val leftArmOffsetY = when {
-            isSpeaking -> armSway * 1.26f
-            isThinking -> armSway * 1.26f
-            isIdle -> armSway * 1.26f
+            isSpeaking -> armSway * 0.8f
+            isThinking -> armSway * 0.8f
+            isIdle -> armSway * 0.8f
             else -> 0f
         }
         val rightArmOffsetY = when {
-            isSpeaking -> sin(armPhase + PI.toFloat()) * 1.26f
-            isThinking -> sin(armPhase + PI.toFloat()) * 1.26f
-            isIdle -> sin(armPhase + PI.toFloat()) * 1.26f
+            isSpeaking -> sin(armPhase + PI.toFloat()) * 0.8f
+            isThinking -> sin(armPhase + PI.toFloat()) * 0.8f
+            isIdle -> sin(armPhase + PI.toFloat()) * 0.8f
             else -> 0f
         }
                 // Углы приветствия — плавно появляются при waveAmount → 1
@@ -2971,50 +2958,93 @@ fun ThinkingRobotAnimation(
         )
 
         // ================= ВИЗОР (СТЕКЛО) — лыжная маска =================
-        // Уменьшен на 10%, верхние углы скруглены на 20% сильнее
+        // Радиусы скругления: нижние углы больше, верхние меньше
+        val topRadius = 4f
+        val bottomRadius = 12.96f
+
         val visorPath = Path().apply {
-            // Левый верхний угол — сильнее скруглён
-            moveTo(pt(-29.2f, 14f).x, pt(-29.2f, 14f).y)
-            quadraticBezierTo(
-                pt(-34f, 14f).x, pt(-34f, 14f).y,
-                pt(-34f, 22.64f).x, pt(-34f, 22.64f).y
+            // Начинаем с верхней линии в точке, где закончится скругление левого верхнего угла
+            moveTo(pt(-30f + topRadius, 14f).x, pt(-30f + topRadius, 14f).y)
+
+            // Верхняя линия
+            lineTo(pt(30f - topRadius, 14f).x, pt(30f - topRadius, 14f).y)
+
+            // Правый верхний угол (радиус topRadius)
+            arcTo(
+                rect = Rect(
+                    left = pt(30f - topRadius, 14f).x,
+                    top = pt(30f - topRadius, 14f).y,
+                    right = pt(30f, 14f).x,
+                    bottom = pt(30f - topRadius + 2f * topRadius, 14f + 2f * topRadius).y
+                ),
+                startAngleDegrees = 0f,
+                sweepAngleDegrees = 90f,
+                forceMoveTo = false
             )
-            // Левая боковина вниз
-            lineTo(pt(-34f, 29.04f).x, pt(-34f, 29.04f).y)
-            // Ещё большее скругление левого нижнего угла
-            quadraticBezierTo(
-                pt(-34f, 42f).x, pt(-34f, 42f).y,
-                pt(-21.04f, 42f).x, pt(-21.04f, 42f).y
+
+            // Правая боковина вниз
+            lineTo(pt(34f, 42f - bottomRadius).x, pt(34f, 42f - bottomRadius).y)
+
+            // Правый нижний угол (радиус bottomRadius)
+            arcTo(
+                rect = Rect(
+                    left = pt(34f - 2f * bottomRadius, 42f - 2f * bottomRadius).x,
+                    top = pt(34f - 2f * bottomRadius, 42f - 2f * bottomRadius).y,
+                    right = pt(34f, 42f).x,
+                    bottom = pt(34f, 42f).y
+                ),
+                startAngleDegrees = 0f,
+                sweepAngleDegrees = 90f,
+                forceMoveTo = false
             )
-            // Плоский низ к выемке
-            lineTo(pt(-10f, 42f).x, pt(-10f, 42f).y)
-            // Выемка под нос — плавный полукруг, меньше и мягче
+
+            // Плоский низ к выемке (справа)
+            lineTo(pt(10f, 42f).x, pt(10f, 42f).y)
+
+            // Выемка под нос
             cubicTo(
-                pt(-6f, 39f).x, pt(-6f, 39f).y,
-                pt(-3f, 36f).x, pt(-3f, 36f).y,
+                pt(6f, 39f).x, pt(6f, 39f).y,
+                pt(3f, 36f).x, pt(3f, 36f).y,
                 pt(0f, 36f).x, pt(0f, 36f).y
             )
             cubicTo(
-                pt(3f, 36f).x, pt(3f, 36f).y,
-                pt(6f, 39f).x, pt(6f, 39f).y,
-                pt(10f, 42f).x, pt(10f, 42f).y
+                pt(-3f, 36f).x, pt(-3f, 36f).y,
+                pt(-6f, 39f).x, pt(-6f, 39f).y,
+                pt(-10f, 42f).x, pt(-10f, 42f).y
             )
-            // Плоский низ к правому нижнему углу
-            lineTo(pt(21.04f, 42f).x, pt(21.04f, 42f).y)
-            // Ещё большее скругление правого нижнего угла
-            quadraticBezierTo(
-                pt(34f, 42f).x, pt(34f, 42f).y,
-                pt(34f, 29.04f).x, pt(34f, 29.04f).y
+
+            // Плоский низ к левому нижнему углу
+            lineTo(pt(-34f + 2f * bottomRadius, 42f).x, pt(-34f + 2f * bottomRadius, 42f).y)
+
+            // Левый нижний угол (радиус bottomRadius)
+            arcTo(
+                rect = Rect(
+                    left = pt(-34f, 42f - 2f * bottomRadius).x,
+                    top = pt(-34f, 42f - 2f * bottomRadius).y,
+                    right = pt(-34f + 2f * bottomRadius, 42f).x,
+                    bottom = pt(-34f + 2f * bottomRadius, 42f).y
+                ),
+                startAngleDegrees = 90f,
+                sweepAngleDegrees = 90f,
+                forceMoveTo = false
             )
-            // Правая боковина вверх
-            lineTo(pt(34f, 22.64f).x, pt(34f, 22.64f).y)
-            // Сильнее скругление правого верхнего угла
-            quadraticBezierTo(
-                pt(34f, 14f).x, pt(34f, 14f).y,
-                pt(29.2f, 14f).x, pt(29.2f, 14f).y
+
+            // Левая боковина вверх
+            lineTo(pt(-34f, 14f + topRadius).x, pt(-34f, 14f + topRadius).y)
+
+            // Левый верхний угол (радиус topRadius)
+            arcTo(
+                rect = Rect(
+                    left = pt(-34f, 14f).x,
+                    top = pt(-34f, 14f).y,
+                    right = pt(-34f + 2f * topRadius, 14f).x,
+                    bottom = pt(-34f + 2f * topRadius, 14f + 2f * topRadius).y
+                ),
+                startAngleDegrees = 180f,
+                sweepAngleDegrees = 90f,
+                forceMoveTo = false
             )
-            // Прямой верх
-            lineTo(pt(-29.2f, 14f).x, pt(-29.2f, 14f).y)
+
             close()
         }
 
@@ -3028,17 +3058,7 @@ fun ThinkingRobotAnimation(
             )
         )
         drawPath(visorPath, color = darkerGray, style = Stroke(width = 1.5f * u))
-
-        // Блик на стекле — верхняя полоса
-        val glassHighlight = Path().apply {
-            moveTo(pt(-27f, 18f).x, pt(-27f, 18f).y)
-            lineTo(pt(27f, 18f).x, pt(27f, 18f).y)
-            lineTo(pt(25f, 22f).x, pt(25f, 22f).y)
-            lineTo(pt(-25f, 22f).x, pt(-25f, 22f).y)
-            close()
-        }
-        drawPath(glassHighlight, color = Color.White.copy(alpha = 0.3f))
-
+        
                       // ================= ГЛАЗА (Трапеция, длинный край к носу) =================
         val isBlinking = currentBlink < 0.5f
 
@@ -3092,72 +3112,102 @@ fun ThinkingRobotAnimation(
             else -> 5f * u to 7f * u
         }
 
-                fun createTrapezoidEyePath(centerX: Float, centerY: Float, width: Float, height: Float, isLeft: Boolean): Path {
+                       fun createTrapezoidEyePath(centerX: Float, centerY: Float, width: Float, height: Float, isLeft: Boolean): Path {
             // Увеличиваем размеры на 20%
-            val scaledW = width * 1.2f
-            val scaledH = height * 1.2f
+            val scaledW = width * 1.6f
+            val scaledH = height * 1.6f
 
             val halfW = scaledW / 2f
             val halfH = scaledH / 2f
-            
+
             // Коэффициент сужения внешнего края (45% от внутреннего)
             val outerRatio = 0.45f
-            
+
             // Внутренний край (к носу) — ДЛИННЫЙ
             val innerTopY = centerY - halfH
             val innerBottomY = centerY + halfH
-            
+
             // Внешний край (наружу) — КОРОТКИЙ
             val outerTopY = centerY - halfH * outerRatio
             val outerBottomY = centerY + halfH * outerRatio
-            
+
             // X-координаты краёв
             val innerX = if (isLeft) centerX + halfW * 0.85f else centerX - halfW * 0.85f
             val outerX = if (isLeft) centerX - halfW else centerX + halfW
-            
-            // Радиус скругления углов — увеличен для плавности
-            val cornerRadius = 2.5f * u
-            
+
+            // Радиус скругления углов
+            val cornerRadius = 2f * u
+
             return Path().apply {
-                // Начинаем с внутреннего верхнего угла (к носу, сверху)
+                // Идём по контуру ПРОТИВ часовой стрелки, начиная с внутреннего верхнего угла
+                // Внутренний верхний угол
                 moveTo(innerX - cornerRadius, innerTopY)
-                
-                // Верхняя сторона — к внешнему верхнему углу
-                lineTo(outerX + cornerRadius, outerTopY)
-                
-                // Скругление внешнего верхнего угла
-                quadraticBezierTo(
-                    outerX, outerTopY,
-                    outerX, outerTopY + cornerRadius
+                lineTo(innerX - cornerRadius, innerTopY)
+
+                // Верхняя сторона — к внешнему верхнему углу (с отступом на скругление)
+                lineTo(outerX + cornerRadius, outerTopY + cornerRadius)
+
+                // Дуга скругления внешнего верхнего угла
+                arcTo(
+                    rect = androidx.compose.ui.geometry.Rect(
+                        left = outerX,
+                        top = outerTopY,
+                        right = outerX + 2f * cornerRadius,
+                        bottom = outerTopY + 2f * cornerRadius
+                    ),
+                    startAngleDegrees = 180f,
+                    sweepAngleDegrees = 90f,
+                    forceMoveTo = false
                 )
-                
+
                 // Внешняя вертикаль (короткая)
                 lineTo(outerX, outerBottomY - cornerRadius)
-                
-                // Скругление внешнего нижнего угла
-                quadraticBezierTo(
-                    outerX, outerBottomY,
-                    outerX - cornerRadius, outerBottomY
+
+                // Дуга скругления внешнего нижнего угла
+                arcTo(
+                    rect = androidx.compose.ui.geometry.Rect(
+                        left = outerX,
+                        top = outerBottomY - 2f * cornerRadius,
+                        right = outerX + 2f * cornerRadius,
+                        bottom = outerBottomY
+                    ),
+                    startAngleDegrees = 270f,
+                    sweepAngleDegrees = 90f,
+                    forceMoveTo = false
                 )
-                
+
                 // Нижняя сторона — к внутреннему нижнему углу
-                lineTo(innerX + cornerRadius, innerBottomY)
-                
-                // Скругление внутреннего нижнего угла
-                quadraticBezierTo(
-                    innerX, innerBottomY,
-                    innerX, innerBottomY - cornerRadius
+                lineTo(innerX - cornerRadius, innerBottomY)
+
+                // Дуга скругления внутреннего нижнего угла
+                arcTo(
+                    rect = androidx.compose.ui.geometry.Rect(
+                        left = innerX - 2f * cornerRadius,
+                        top = innerBottomY - 2f * cornerRadius,
+                        right = innerX,
+                        bottom = innerBottomY
+                    ),
+                    startAngleDegrees = 0f,
+                    sweepAngleDegrees = 90f,
+                    forceMoveTo = false
                 )
-                
+
                 // Внутренняя вертикаль (длинная)
                 lineTo(innerX, innerTopY + cornerRadius)
-                
-                // Скругление внутреннего верхнего угла
-                quadraticBezierTo(
-                    innerX, innerTopY,
-                    innerX - cornerRadius, innerTopY
+
+                // Дуга скругления внутреннего верхнего угла
+                arcTo(
+                    rect = androidx.compose.ui.geometry.Rect(
+                        left = innerX - 2f * cornerRadius,
+                        top = innerTopY,
+                        right = innerX,
+                        bottom = innerTopY + 2f * cornerRadius
+                    ),
+                    startAngleDegrees = 90f,
+                    sweepAngleDegrees = 90f,
+                    forceMoveTo = false
                 )
-                
+
                 close()
             }
         }
