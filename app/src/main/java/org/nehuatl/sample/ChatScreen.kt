@@ -2957,404 +2957,508 @@ fun ThinkingRobotAnimation(
             style = Stroke(width = 1f * u, cap = StrokeCap.Round)
         )
 
-        // ================= ВИЗОР (СТЕКЛО) — лыжная маска =================
-        // Радиусы скругления: нижние углы больше, верхние меньше
-        val topRadius = 4f
-        val bottomRadius = 12.96f
+        // ================= ВИЗОР (СТЕКЛО) — лыжная маска с правильными углами =================
+val topRadius = 4f * u  // Верхние углы — маленькое скругление
+val bottomRadius = 13f * u  // Нижние углы — большое скругление
 
-        val visorPath = Path().apply {
-            // Начинаем с верхней линии в точке, где закончится скругление левого верхнего угла
-            moveTo(pt(-30f + topRadius, 14f).x, pt(-30f + topRadius, 14f).y)
+val visorPath = Path().apply {
+    // Начинаем с верхнего левого угла (после скругления)
+    moveTo(pt(-34f + topRadius, 14f).x, pt(-34f + topRadius, 14f).y)
+    
+    // Верхняя линия до правого верхнего угла
+    lineTo(pt(34f - topRadius, 14f).x, pt(34f - topRadius, 14f).y)
+    
+    // Правый верхний угол (маленькое скругление)
+    arcTo(
+        rect = Rect(
+            left = pt(34f - 2f * topRadius, 14f).x,
+            top = pt(34f - 2f * topRadius, 14f).y,
+            right = pt(34f, 14f).x,
+            bottom = pt(34f, 14f + 2f * topRadius).y
+        ),
+        startAngleDegrees = 270f,
+        sweepAngleDegrees = 90f,
+        forceMoveTo = false
+    )
+    
+    // Правая боковина вниз
+    lineTo(pt(34f, 42f - bottomRadius).x, pt(34f, 42f - bottomRadius).y)
+    
+    // Правый нижний угол (большое скругление)
+    arcTo(
+        rect = Rect(
+            left = pt(34f - 2f * bottomRadius, 42f - 2f * bottomRadius).x,
+            top = pt(34f - 2f * bottomRadius, 42f - 2f * bottomRadius).y,
+            right = pt(34f, 42f).x,
+            bottom = pt(34f, 42f).y
+        ),
+        startAngleDegrees = 0f,
+        sweepAngleDegrees = 90f,
+        forceMoveTo = false
+    )
+    
+    // Низ справа к выемке под нос
+    lineTo(pt(10f, 42f).x, pt(10f, 42f).y)
+    
+    // Выемка под нос (кривые Безье)
+    cubicTo(
+        pt(6f, 40f).x, pt(6f, 40f).y,
+        pt(3f, 37f).x, pt(3f, 37f).y,
+        pt(0f, 37f).x, pt(0f, 37f).y
+    )
+    cubicTo(
+        pt(-3f, 37f).x, pt(-3f, 37f).y,
+        pt(-6f, 40f).x, pt(-6f, 40f).y,
+        pt(-10f, 42f).x, pt(-10f, 42f).y
+    )
+    
+    // Низ слева от выемки
+    lineTo(pt(-34f + 2f * bottomRadius, 42f).x, pt(-34f + 2f * bottomRadius, 42f).y)
+    
+    // Левый нижний угол (большое скругление)
+    arcTo(
+        rect = Rect(
+            left = pt(-34f, 42f - 2f * bottomRadius).x,
+            top = pt(-34f, 42f - 2f * bottomRadius).y,
+            right = pt(-34f + 2f * bottomRadius, 42f).x,
+            bottom = pt(-34f + 2f * bottomRadius, 42f).y
+        ),
+        startAngleDegrees = 90f,
+        sweepAngleDegrees = 90f,
+        forceMoveTo = false
+    )
+    
+    // Левая боковина вверх
+    lineTo(pt(-34f, 14f + topRadius).x, pt(-34f, 14f + topRadius).y)
+    
+    // Левый верхний угол (маленькое скругление)
+    arcTo(
+        rect = Rect(
+            left = pt(-34f, 14f).x,
+            top = pt(-34f, 14f).y,
+            right = pt(-34f + 2f * topRadius, 14f).x,
+            bottom = pt(-34f + 2f * topRadius, 14f + 2f * topRadius).y
+        ),
+        startAngleDegrees = 180f,
+        sweepAngleDegrees = 90f,
+        forceMoveTo = false
+    )
+    
+    close()
+}
 
-            // Верхняя линия
-            lineTo(pt(30f - topRadius, 14f).x, pt(30f - topRadius, 14f).y)
+// Заливка визора (градиент сверху вниз)
+drawPath(
+    visorPath,
+    brush = Brush.verticalGradient(
+        colors = listOf(visorGlass, visorDark),
+        startY = pt(0f, 14f).y,
+        endY = pt(0f, 42f).y
+    )
+)
 
-            // Правый верхний угол (радиус topRadius)
-            arcTo(
-                rect = Rect(
-                    left = pt(30f - topRadius, 14f).x,
-                    top = pt(30f - topRadius, 14f).y,
-                    right = pt(30f, 14f).x,
-                    bottom = pt(30f - topRadius + 2f * topRadius, 14f + 2f * topRadius).y
-                ),
-                startAngleDegrees = 0f,
-                sweepAngleDegrees = 90f,
-                forceMoveTo = false
-            )
+// Обводка визора
+drawPath(visorPath, color = darkerGray, style = Stroke(width = 1.5f * u))
 
-            // Правая боковина вниз
-            lineTo(pt(34f, 42f - bottomRadius).x, pt(34f, 42f - bottomRadius).y)
+// ================= ГЛАЗА ХИЩНИКА (с бровями, подогнаны под визор) =================
+val isBlinking = currentBlink < 0.5f
 
-            // Правый нижний угол (радиус bottomRadius)
-            arcTo(
-                rect = Rect(
-                    left = pt(34f - 2f * bottomRadius, 42f - 2f * bottomRadius).x,
-                    top = pt(34f - 2f * bottomRadius, 42f - 2f * bottomRadius).y,
-                    right = pt(34f, 42f).x,
-                    bottom = pt(34f, 42f).y
-                ),
-                startAngleDegrees = 0f,
-                sweepAngleDegrees = 90f,
-                forceMoveTo = false
-            )
+// Базовые размеры (немного уменьшили, чтобы влезли в визор)
+val baseEyeW = 14f * u
+val baseEyeH = 7f * u
 
-            // Плоский низ к выемке (справа)
-            lineTo(pt(10f, 42f).x, pt(10f, 42f).y)
+// Анимация пульсации для thinking
+val predatorPulse = if (isThinking) {
+    1f + sin(pulse) * 0.2f
+} else {
+    1f
+}
 
-            // Выемка под нос
-            cubicTo(
-                pt(6f, 39f).x, pt(6f, 39f).y,
-                pt(3f, 36f).x, pt(3f, 36f).y,
-                pt(0f, 36f).x, pt(0f, 36f).y
-            )
-            cubicTo(
-                pt(-3f, 36f).x, pt(-3f, 36f).y,
-                pt(-6f, 39f).x, pt(-6f, 39f).y,
-                pt(-10f, 42f).x, pt(-10f, 42f).y
-            )
+// Анимация расширения для speaking
+val speakingExpand = if (isSpeaking) {
+    1.15f + sin(mouthPhase * 2f) * 0.08f
+} else {
+    1f
+}
 
-            // Плоский низ к левому нижнему углу
-            lineTo(pt(-34f + 2f * bottomRadius, 42f).x, pt(-34f + 2f * bottomRadius, 42f).y)
-
-            // Левый нижний угол (радиус bottomRadius)
-            arcTo(
-                rect = Rect(
-                    left = pt(-34f, 42f - 2f * bottomRadius).x,
-                    top = pt(-34f, 42f - 2f * bottomRadius).y,
-                    right = pt(-34f + 2f * bottomRadius, 42f).x,
-                    bottom = pt(-34f + 2f * bottomRadius, 42f).y
-                ),
-                startAngleDegrees = 90f,
-                sweepAngleDegrees = 90f,
-                forceMoveTo = false
-            )
-
-            // Левая боковина вверх
-            lineTo(pt(-34f, 14f + topRadius).x, pt(-34f, 14f + topRadius).y)
-
-            // Левый верхний угол (радиус topRadius)
-            arcTo(
-                rect = Rect(
-                    left = pt(-34f, 14f).x,
-                    top = pt(-34f, 14f).y,
-                    right = pt(-34f + 2f * topRadius, 14f).x,
-                    bottom = pt(-34f + 2f * topRadius, 14f + 2f * topRadius).y
-                ),
-                startAngleDegrees = 180f,
-                sweepAngleDegrees = 90f,
-                forceMoveTo = false
-            )
-
-            close()
+// Вычисляем размеры глаза
+val (eyeW, eyeH) = when {
+    isBlinking -> baseEyeW to 1.5f * u
+    isThinking -> (baseEyeW * 0.95f) to (baseEyeH * 0.6f)
+    isSpeaking -> (baseEyeW * speakingExpand) to (baseEyeH * 1.1f)
+    isIdle -> {
+        val p = idleEyePhase
+        when {
+            p < 0.4f -> baseEyeW to baseEyeH
+            p < 0.6f -> {
+                val t = (p - 0.4f) / 0.2f
+                (baseEyeW + 1.5f * u * t) to (baseEyeH + 1.5f * u * t)
+            }
+            p < 0.8f -> {
+                val t = (p - 0.6f) / 0.2f
+                (baseEyeW + 2f * u * t) to (baseEyeH - 3f * u * t)
+            }
+            else -> {
+                val t = (p - 0.8f) / 0.2f
+                ((baseEyeW + 2f * u) - 2f * u * t) to ((baseEyeH - 3f * u) + 3f * u * t)
+            }
         }
+    }
+    else -> baseEyeW to baseEyeH
+}
 
-        // Заливка визора
-        drawPath(
-            visorPath,
-            brush = Brush.verticalGradient(
-                colors = listOf(visorGlass, visorDark),
-                startY = pt(0f, 14f).y,
-                endY = pt(0f, 42f).y
-            )
+// Размер зрачка-шестерёнки
+val irisRadius = when {
+    isBlinking -> 1.5f * u
+    isThinking -> 3f * u * predatorPulse
+    isSpeaking -> 4.5f * u * speakingExpand
+    isIdle -> {
+        val p = idleEyePhase
+        when {
+            p < 0.4f -> 4f * u
+            p < 0.6f -> 4f * u + 1.2f * u * ((p - 0.4f) / 0.2f)
+            p < 0.8f -> 5.2f * u - 2.5f * u * ((p - 0.6f) / 0.2f)
+            else -> 2.7f * u + 1.3f * u * ((p - 0.8f) / 0.2f)
+        }
+    }
+    else -> 4f * u
+}
+
+// Функция создания трапециевидной формы глаза хищника
+fun createPredatorEyePath(centerX: Float, centerY: Float, width: Float, height: Float, isLeft: Boolean): Path {
+    val halfW = width / 2f
+    val halfH = height / 2f
+    val outerRatio = 0.3f
+    
+    val innerTopY = centerY - halfH
+    val innerBottomY = centerY + halfH
+    val outerTopY = centerY - halfH * outerRatio
+    val outerBottomY = centerY + halfH * outerRatio
+    
+    val innerX = if (isLeft) centerX + halfW * 0.9f else centerX - halfW * 0.9f
+    val outerX = if (isLeft) centerX - halfW else centerX + halfW
+    val cornerRadius = 1f * u
+    
+    return Path().apply {
+        moveTo(innerX - cornerRadius, innerTopY)
+        lineTo(outerX + cornerRadius, outerTopY)
+        quadraticBezierTo(outerX, outerTopY, outerX, outerTopY + cornerRadius)
+        lineTo(outerX, outerBottomY - cornerRadius)
+        quadraticBezierTo(outerX, outerBottomY, outerX - cornerRadius, outerBottomY)
+        quadraticBezierTo(centerX, centerY + halfH * 1.2f, innerX + cornerRadius, innerBottomY)
+        quadraticBezierTo(innerX, innerBottomY, innerX, innerBottomY - cornerRadius)
+        lineTo(innerX, innerTopY + cornerRadius)
+        quadraticBezierTo(innerX, innerTopY, innerX - cornerRadius, innerTopY)
+        close()
+    }
+}
+
+// Функция создания брови (СВЕТЛЕЕ для видимости на тёмном визоре!)
+fun createBrowPath(centerX: Float, centerY: Float, width: Float, height: Float, isLeft: Boolean): Path {
+    val halfW = width / 2f
+    val browOffsetY = height * 0.9f // Бровь выше глаза
+    
+    val innerX = if (isLeft) centerX + halfW * 0.9f else centerX - halfW * 0.9f
+    val outerX = if (isLeft) centerX - halfW * 1.1f else centerX + halfW * 1.1f
+    val innerY = centerY - browOffsetY
+    val outerY = centerY - browOffsetY - height * 0.3f
+    
+    return Path().apply {
+        moveTo(innerX, innerY)
+        quadraticBezierTo(
+            (innerX + outerX) / 2f, innerY - height * 0.15f,
+            outerX, outerY
         )
-        drawPath(visorPath, color = darkerGray, style = Stroke(width = 1.5f * u))
+    }
+}
+
+// Функция создания зрачка-шестерёнки
+fun createGearIrisPath(centerX: Float, centerY: Float, radius: Float, teethCount: Int = 8): Path {
+    val path = Path()
+    val outerRadius = radius
+    val innerRadius = radius * 0.75f
+    val angleStep = (2f * PI) / teethCount
+    var firstPoint = true
+    
+    for (i in 0 until teethCount) {
+        val angle = i * angleStep - PI / 2f
+        val outerX = centerX + cos(angle) * outerRadius
+        val outerY = centerY + sin(angle) * outerRadius
+        val nextAngle = angle + angleStep / 2f
+        val innerX = centerX + cos(nextAngle) * innerRadius
+        val innerY = centerY + sin(nextAngle) * innerRadius
         
-                      // ================= ГЛАЗА (Трапеция, длинный край к носу) =================
-        val isBlinking = currentBlink < 0.5f
-
-        // Базовые размеры
-        val baseEyeW = 14f * u
-        val baseEyeH = 10f * u
-
-        // Вычисляем текущие размеры глаза в зависимости от состояния
-        val (eyeW, eyeH) = when {
-            isBlinking -> baseEyeW to 1.5f * u
-            isThinking -> baseEyeW to 7f * u
-            isSpeaking -> 15f * u to 12f * u
-            isIdle -> {
-                val p = idleEyePhase
-                when {
-                    p < 0.4f -> baseEyeW to baseEyeH
-                    p < 0.6f -> {
-                        val t = (p - 0.4f) / 0.2f
-                        (baseEyeW + 2f * u * t) to (baseEyeH + 3f * u * t)
-                    }
-                    p < 0.8f -> {
-                        val t = (p - 0.6f) / 0.2f
-                        (baseEyeW + 3f * u * t) to (baseEyeH - 6f * u * t)
-                    }
-                    else -> {
-                        val t = (p - 0.8f) / 0.2f
-                        ((baseEyeW + 3f * u) - 3f * u * t) to (4f * u + 6f * u * t)
-                    }
-                }
-            }
-            else -> baseEyeW to baseEyeH
-        }
-
-        // Размеры зрачка
-        val (pupilW, pupilH) = when {
-            isBlinking -> 2f * u to 1f * u
-            isThinking -> 3f * u to 5f * u
-            isSpeaking -> 6f * u to 8f * u
-            isIdle -> {
-                val p = idleEyePhase
-                when {
-                    p < 0.4f -> 5f * u to 7f * u
-                    p < 0.6f -> 6f * u to 9f * u
-                    p < 0.8f -> 8f * u to 2.5f * u
-                    else -> {
-                        val t = (p - 0.8f) / 0.2f
-                        ((8f * u) - 3f * u * t) to (2.5f * u + 4.5f * u * t)
-                    }
-                }
-            }
-            else -> 5f * u to 7f * u
-        }
-
-                       fun createTrapezoidEyePath(centerX: Float, centerY: Float, width: Float, height: Float, isLeft: Boolean): Path {
-            // Увеличиваем размеры на 20%
-            val scaledW = width * 1.6f
-            val scaledH = height * 1.6f
-
-            val halfW = scaledW / 2f
-            val halfH = scaledH / 2f
-
-            // Коэффициент сужения внешнего края (45% от внутреннего)
-            val outerRatio = 0.45f
-
-            // Внутренний край (к носу) — ДЛИННЫЙ
-            val innerTopY = centerY - halfH
-            val innerBottomY = centerY + halfH
-
-            // Внешний край (наружу) — КОРОТКИЙ
-            val outerTopY = centerY - halfH * outerRatio
-            val outerBottomY = centerY + halfH * outerRatio
-
-            // X-координаты краёв
-            val innerX = if (isLeft) centerX + halfW * 0.85f else centerX - halfW * 0.85f
-            val outerX = if (isLeft) centerX - halfW else centerX + halfW
-
-            // Радиус скругления углов
-            val cornerRadius = 2f * u
-
-            return Path().apply {
-                // Идём по контуру ПРОТИВ часовой стрелки, начиная с внутреннего верхнего угла
-                // Внутренний верхний угол
-                moveTo(innerX - cornerRadius, innerTopY)
-                lineTo(innerX - cornerRadius, innerTopY)
-
-                // Верхняя сторона — к внешнему верхнему углу (с отступом на скругление)
-                lineTo(outerX + cornerRadius, outerTopY + cornerRadius)
-
-                // Дуга скругления внешнего верхнего угла
-                arcTo(
-                    rect = androidx.compose.ui.geometry.Rect(
-                        left = outerX,
-                        top = outerTopY,
-                        right = outerX + 2f * cornerRadius,
-                        bottom = outerTopY + 2f * cornerRadius
-                    ),
-                    startAngleDegrees = 180f,
-                    sweepAngleDegrees = 90f,
-                    forceMoveTo = false
-                )
-
-                // Внешняя вертикаль (короткая)
-                lineTo(outerX, outerBottomY - cornerRadius)
-
-                // Дуга скругления внешнего нижнего угла
-                arcTo(
-                    rect = androidx.compose.ui.geometry.Rect(
-                        left = outerX,
-                        top = outerBottomY - 2f * cornerRadius,
-                        right = outerX + 2f * cornerRadius,
-                        bottom = outerBottomY
-                    ),
-                    startAngleDegrees = 270f,
-                    sweepAngleDegrees = 90f,
-                    forceMoveTo = false
-                )
-
-                // Нижняя сторона — к внутреннему нижнему углу
-                lineTo(innerX - cornerRadius, innerBottomY)
-
-                // Дуга скругления внутреннего нижнего угла
-                arcTo(
-                    rect = androidx.compose.ui.geometry.Rect(
-                        left = innerX - 2f * cornerRadius,
-                        top = innerBottomY - 2f * cornerRadius,
-                        right = innerX,
-                        bottom = innerBottomY
-                    ),
-                    startAngleDegrees = 0f,
-                    sweepAngleDegrees = 90f,
-                    forceMoveTo = false
-                )
-
-                // Внутренняя вертикаль (длинная)
-                lineTo(innerX, innerTopY + cornerRadius)
-
-                // Дуга скругления внутреннего верхнего угла
-                arcTo(
-                    rect = androidx.compose.ui.geometry.Rect(
-                        left = innerX - 2f * cornerRadius,
-                        top = innerTopY,
-                        right = innerX,
-                        bottom = innerTopY + 2f * cornerRadius
-                    ),
-                    startAngleDegrees = 90f,
-                    sweepAngleDegrees = 90f,
-                    forceMoveTo = false
-                )
-
-                close()
-            }
-        }
-
-        // ========== ЛЕВЫЙ ГЛАЗ ==========
-        val leftEyeCenterX = -12f + lookOffsetX / u
-        val leftEyeCenterY = 28f + lookOffsetY / u
-        val leftCenter = pt(leftEyeCenterX, leftEyeCenterY)
-
-        // Создаём форму левого глаза (длинный край справа, к носу)
-        val leftEyePath = createTrapezoidEyePath(leftCenter.x, leftCenter.y, eyeW, eyeH, isLeft = true)
-
-        // 1. Неоновое свечение вокруг глаза
-        drawPath(
-            path = leftEyePath,
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    neonBluePulse.copy(alpha = 0.4f),
-                    neonBluePulse.copy(alpha = 0.1f),
-                    Color.Transparent
-                ),
-                center = leftCenter,
-                radius = eyeW * 0.8f
-            )
-        )
-
-        // 2. Тёмная подложка глаза
-        drawPath(leftEyePath, color = Color(0xFF0A0A14))
-
-        // 3. Основной цвет глаза (голубой градиент)
-        drawPath(
-            path = leftEyePath,
-            brush = Brush.radialGradient(
-                colors = listOf(neonBluePulse, neonBluePulse.copy(alpha = 0.7f)),
-                center = leftCenter,
-                radius = eyeW * 0.5f
-            )
-        )
-
-        // 4. Зрачок
-        val pupilOffsetX = (lookOffsetX / u) * 0.3f * u
-        val pupilOffsetY = (lookOffsetY / u) * 0.3f * u
-        val leftPupilCenter = Offset(leftCenter.x + pupilOffsetX, leftCenter.y + pupilOffsetY)
-
-        drawOval(
-            color = Color(0xFF050510),
-            topLeft = Offset(leftPupilCenter.x - pupilW / 2f, leftPupilCenter.y - pupilH / 2f),
-            size = Size(pupilW, pupilH)
-        )
-
-        // 5. Блики
-        drawOval(
-            color = Color.White.copy(alpha = 0.9f),
-            topLeft = Offset(leftPupilCenter.x - pupilW * 0.3f, leftPupilCenter.y - pupilH * 0.35f),
-            size = Size(pupilW * 0.4f, pupilH * 0.5f)
-        )
-        drawCircle(
-            color = Color.White.copy(alpha = 0.7f),
-            radius = 1.2f * u,
-            center = Offset(leftPupilCenter.x + pupilW * 0.25f, leftPupilCenter.y - pupilH * 0.25f)
-        )
-
-        // ========== ПРАВЫЙ ГЛАЗ ==========
-        val rightEyeCenterX = 12f + lookOffsetX / u
-        val rightEyeCenterY = 28f + lookOffsetY / u
-        val rightCenter = pt(rightEyeCenterX, rightEyeCenterY)
-
-        // Создаём форму правого глаза (длинный край слева, к носу)
-        val rightEyePath = createTrapezoidEyePath(rightCenter.x, rightCenter.y, eyeW, eyeH, isLeft = false)
-
-        // 1. Свечение
-        drawPath(
-            path = rightEyePath,
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    neonBluePulse.copy(alpha = 0.4f),
-                    neonBluePulse.copy(alpha = 0.1f),
-                    Color.Transparent
-                ),
-                center = rightCenter,
-                radius = eyeW * 0.8f
-            )
-        )
-
-        // 2. Тёмная подложка
-        drawPath(rightEyePath, color = Color(0xFF0A0A14))
-
-        // 3. Основной цвет
-        drawPath(
-            path = rightEyePath,
-            brush = Brush.radialGradient(
-                colors = listOf(neonBluePulse, neonBluePulse.copy(alpha = 0.7f)),
-                center = rightCenter,
-                radius = eyeW * 0.5f
-            )
-        )
-
-        // 4. Зрачок
-        val rightPupilCenter = Offset(rightCenter.x + pupilOffsetX, rightCenter.y + pupilOffsetY)
-        drawOval(
-            color = Color(0xFF050510),
-            topLeft = Offset(rightPupilCenter.x - pupilW / 2f, rightPupilCenter.y - pupilH / 2f),
-            size = Size(pupilW, pupilH)
-        )
-
-        // 5. Блики
-        drawOval(
-            color = Color.White.copy(alpha = 0.9f),
-            topLeft = Offset(rightPupilCenter.x - pupilW * 0.3f, rightPupilCenter.y - pupilH * 0.35f),
-            size = Size(pupilW * 0.4f, pupilH * 0.5f)
-        )
-        drawCircle(
-            color = Color.White.copy(alpha = 0.7f),
-            radius = 1.2f * u,
-            center = Offset(rightPupilCenter.x + pupilW * 0.25f, rightPupilCenter.y - pupilH * 0.25f)
-        )
-        
-                // ================= РОТ =================
-        if (isSpeaking) {
-            // Открытый рот при говорении
-            val mouthH = (3f + 3f * sin(mouthPhase)) * u
-            drawOval(
-                color = darkerGray,
-                topLeft = pt(-10f, 50f - mouthH / u / 2f),
-                size = Size(20f * u, mouthH * 2f)
-            )
-            drawOval(
-                color = Color(0xFF0A0A14),
-                topLeft = pt(-8f, 50f - mouthH / u / 2f + 0.5f),
-                size = Size(16f * u, mouthH * 2f - 1f * u)
-            )
+        if (firstPoint) {
+            path.moveTo(outerX, outerY)
+            firstPoint = false
         } else {
-            // Простая полукруглая линия — улыбка
-            val smilePath = Path().apply {
-                moveTo(pt(-10f, 48f).x, pt(-10f, 48f).y)
-                cubicTo(
-                    pt(-5f, 53f).x, pt(-5f, 53f).y,
-                    pt(5f, 53f).x, pt(5f, 53f).y,
-                    pt(10f, 48f).x, pt(10f, 48f).y
-                )
-            }
-            drawPath(
-                smilePath,
-                color = darkerGray,
-                style = Stroke(width = 2f * u, cap = StrokeCap.Round)
-            )
+            path.lineTo(outerX, outerY)
         }
+        path.lineTo(innerX, innerY)
+    }
+    path.close()
+    return path
+}
+
+// ========== ЛЕВЫЙ ГЛАЗ (позиция внутри визора) ==========
+val leftEyeCenterX = -12f + lookOffsetX / u
+val leftEyeCenterY = 26f + lookOffsetY / u  // Чуть выше, чтобы влезли в визор
+val leftCenter = pt(leftEyeCenterX, leftEyeCenterY)
+
+val leftEyePath = createPredatorEyePath(leftCenter.x, leftCenter.y, eyeW, eyeH, isLeft = true)
+val leftBrowPath = createBrowPath(leftCenter.x, leftCenter.y, eyeW, eyeH, isLeft = true)
+
+// Свечение глаза
+drawPath(
+    path = leftEyePath,
+    brush = Brush.radialGradient(
+        colors = listOf(
+            neonBluePulse.copy(alpha = 0.5f),
+            neonBluePulse.copy(alpha = 0.15f),
+            Color.Transparent
+        ),
+        center = leftCenter,
+        radius = eyeW * 0.7f
+    )
+)
+
+// Тёмная подложка
+drawPath(leftEyePath, color = Color(0xFF0A0A14))
+
+// Основной цвет глаза
+drawPath(
+    path = leftEyePath,
+    brush = Brush.radialGradient(
+        colors = listOf(neonBluePulse, neonBluePulse.copy(alpha = 0.6f)),
+        center = Offset(leftCenter.x + eyeW * 0.1f, leftCenter.y + eyeH * 0.2f),
+        radius = eyeW * 0.5f
+    )
+)
+
+// Зрачок-шестерёнка
+val pupilOffsetX = (lookOffsetX / u) * 0.25f * u
+val pupilOffsetY = (lookOffsetY / u) * 0.25f * u
+val leftIrisCenter = Offset(leftCenter.x + pupilOffsetX, leftCenter.y + pupilOffsetY + eyeH * 0.15f)
+
+drawCircle(
+    color = Color(0xFF050510),
+    radius = irisRadius * 1.1f,
+    center = leftIrisCenter
+)
+
+val leftGearPath = createGearIrisPath(leftIrisCenter.x, leftIrisCenter.y, irisRadius, teethCount = 8)
+drawPath(path = leftGearPath, color = Color(0xFF0A0A14))
+drawPath(
+    path = leftGearPath,
+    color = neonBluePulse.copy(alpha = 0.9f),
+    style = Stroke(width = 0.7f * u)
+)
+
+drawCircle(
+    color = Color(0xFF050510),
+    radius = irisRadius * 0.35f,
+    center = leftIrisCenter
+)
+
+// Блики
+drawOval(
+    color = Color.White.copy(alpha = 0.95f),
+    topLeft = Offset(leftIrisCenter.x - 0.4f * u, leftIrisCenter.y - irisRadius * 0.4f),
+    size = Size(0.8f * u, irisRadius * 0.8f)
+)
+drawCircle(
+    color = Color.White.copy(alpha = 0.8f),
+    radius = 0.6f * u,
+    center = Offset(leftIrisCenter.x + irisRadius * 0.3f, leftIrisCenter.y - irisRadius * 0.3f)
+)
+
+// БРОВЬ (СВЕТЛАЯ — mediumGray для видимости на тёмном визоре!)
+drawPath(
+    path = leftBrowPath,
+    color = mediumGray,  // ИСПРАВЛЕНО: было darkerGray (не видно)
+    style = Stroke(width = 2f * u, cap = StrokeCap.Round)
+)
+
+// ========== ПРАВЫЙ ГЛАЗ ==========
+val rightEyeCenterX = 12f + lookOffsetX / u
+val rightEyeCenterY = 26f + lookOffsetY / u
+val rightCenter = pt(rightEyeCenterX, rightEyeCenterY)
+
+val rightEyePath = createPredatorEyePath(rightCenter.x, rightCenter.y, eyeW, eyeH, isLeft = false)
+val rightBrowPath = createBrowPath(rightCenter.x, rightCenter.y, eyeW, eyeH, isLeft = false)
+
+// Свечение
+drawPath(
+    path = rightEyePath,
+    brush = Brush.radialGradient(
+        colors = listOf(
+            neonBluePulse.copy(alpha = 0.5f),
+            neonBluePulse.copy(alpha = 0.15f),
+            Color.Transparent
+        ),
+        center = rightCenter,
+        radius = eyeW * 0.7f
+    )
+)
+
+// Тёмная подложка
+drawPath(rightEyePath, color = Color(0xFF0A0A14))
+
+// Основной цвет
+drawPath(
+    path = rightEyePath,
+    brush = Brush.radialGradient(
+        colors = listOf(neonBluePulse, neonBluePulse.copy(alpha = 0.6f)),
+        center = Offset(rightCenter.x - eyeW * 0.1f, rightCenter.y + eyeH * 0.2f),
+        radius = eyeW * 0.5f
+    )
+)
+
+// Зрачок-шестерёнка
+val rightIrisCenter = Offset(rightCenter.x + pupilOffsetX, rightCenter.y + pupilOffsetY + eyeH * 0.15f)
+
+drawCircle(
+    color = Color(0xFF050510),
+    radius = irisRadius * 1.1f,
+    center = rightIrisCenter
+)
+
+val rightGearPath = createGearIrisPath(rightIrisCenter.x, rightIrisCenter.y, irisRadius, teethCount = 8)
+drawPath(path = rightGearPath, color = Color(0xFF0A0A14))
+drawPath(
+    path = rightGearPath,
+    color = neonBluePulse.copy(alpha = 0.9f),
+    style = Stroke(width = 0.7f * u)
+)
+
+drawCircle(
+    color = Color(0xFF050510),
+    radius = irisRadius * 0.35f,
+    center = rightIrisCenter
+)
+
+// Блики
+drawOval(
+    color = Color.White.copy(alpha = 0.95f),
+    topLeft = Offset(rightIrisCenter.x - 0.4f * u, rightIrisCenter.y - irisRadius * 0.4f),
+    size = Size(0.8f * u, irisRadius * 0.8f)
+)
+drawCircle(
+    color = Color.White.copy(alpha = 0.8f),
+    radius = 0.6f * u,
+    center = Offset(rightIrisCenter.x + irisRadius * 0.3f, rightIrisCenter.y - irisRadius * 0.3f)
+)
+
+// БРОВЬ (СВЕТЛАЯ)
+drawPath(
+    path = rightBrowPath,
+    color = mediumGray,  // ИСПРАВЛЕНО: было darkerGray
+    style = Stroke(width = 2f * u, cap = StrokeCap.Round)
+)
+        
+                // ================= РОТ (с анимациями под стиль хищника) =================
+// Позиция рта — под визором, центрирована
+val mouthY = 52f
+val mouthBaseWidth = 20f * u
+
+// Анимация для speaking — пульсация высоты
+val mouthOpenHeight = if (isSpeaking) {
+    (4f + 3f * sin(mouthPhase * 2f)) * u
+} else {
+    0f
+}
+
+// Анимация для thinking — лёгкое подрагивание
+val thinkingTwitch = if (isThinking) {
+    sin(pulse * 3f) * 0.5f
+} else {
+    0f
+}
+
+if (isSpeaking) {
+    // ========== ОТКРЫТЫЙ РОТ (говорит) ==========
+    // Внешний овал (тёмный)
+    drawOval(
+        color = darkerGray,
+        topLeft = pt(-10f, mouthY - mouthOpenHeight / u / 2f),
+        size = Size(mouthBaseWidth, mouthOpenHeight * 2f),
+    )
+    
+    // Внутренний овал (чёрный — глубина рта)
+    drawOval(
+        color = Color(0xFF050510),
+        topLeft = pt(-8f, mouthY - mouthOpenHeight / u / 2f + 0.5f),
+        size = Size(16f * u, mouthOpenHeight * 2f - 1f * u)
+    )
+    
+    // Неоновая подсветка внутри рта (эффект энергии)
+    if (mouthOpenHeight > 3f * u) {
+        drawOval(
+            color = neonBluePulse.copy(alpha = 0.3f),
+            topLeft = pt(-6f, mouthY - mouthOpenHeight / u / 2f + 2f),
+            size = Size(12f * u, mouthOpenHeight * 1.5f)
+        )
+    }
+    
+} else if (isThinking) {
+    // ========== ЗАДУМЧИВАЯ ЛИНИЯ (думает) ==========
+    // Прямая линия с лёгким подрагиванием
+    val twitchPath = Path().apply {
+        moveTo(pt(-10f, mouthY + thinkingTwitch).x, pt(-10f, mouthY + thinkingTwitch).y)
+        lineTo(pt(10f, mouthY + thinkingTwitch).x, pt(10f, mouthY + thinkingTwitch).y)
+    }
+    
+    drawPath(
+        twitchPath,
+        color = mediumGray,
+        style = Stroke(width = 1.5f * u, cap = StrokeCap.Round)
+    )
+    
+    // Лёгкое свечение для эффекта "обработки данных"
+    drawPath(
+        twitchPath,
+        color = neonBluePulse.copy(alpha = 0.4f),
+        style = Stroke(width = 0.8f * u, cap = StrokeCap.Round)
+    )
+    
+} else {
+    // ========== УЛЫБКА (спокойное состояние) ==========
+    // Основная улыбка (тёмная)
+    val smilePath = Path().apply {
+        moveTo(pt(-10f, mouthY - 2f).x, pt(-10f, mouthY - 2f).y)
+        cubicTo(
+            pt(-5f, mouthY + 3f).x, pt(-5f, mouthY + 3f).y,
+            pt(5f, mouthY + 3f).x, pt(5f, mouthY + 3f).y,
+            pt(10f, mouthY - 2f).x, pt(10f, mouthY - 2f).y
+        )
+    }
+    
+    drawPath(
+        smilePath,
+        color = darkerGray,
+        style = Stroke(width = 2f * u, cap = StrokeCap.Round)
+    )
+    
+    // Неоновая подсветка улыбки (еле заметная)
+    if (isActive) {
+        drawPath(
+            smilePath,
+            color = neonBluePulse.copy(alpha = 0.2f),
+            style = Stroke(width = 0.8f * u, cap = StrokeCap.Round)
+        )
+    }
+}
+
+// ========== ДОПОЛНИТЕЛЬНЫЕ ДЕТАЛИ (панель под ртом) ==========
+// Декоративная линия под ртом (как у хищника)
+if (!isSpeaking) {
+    drawLine(
+        color = mediumGray.copy(alpha = 0.4f),
+        start = pt(-15f, mouthY + 8f),
+        end = pt(15f, mouthY + 8f),
+        strokeWidth = 0.5f * u
+    )
+}
     }
 }
 
