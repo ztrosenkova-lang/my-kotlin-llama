@@ -1523,264 +1523,9 @@ fun ThinkingRobotAnimation(
 
         fun pt(x: Float, y: Float) = Offset(cx + x * u, y * u + bobOffset)
 
-                       // ================= СОПЛО (подогнано под новый корпус) =================
-        // Верх: ширина 44 (-22..22), низ: ширина 44.8 (-22.4..22.4) — почти цилиндр
-        val nozzlePath = Path().apply {
-            moveTo(pt(-22f, 160f).x, pt(-22f, 160f).y)
-            lineTo(pt(22f, 160f).x, pt(22f, 160f).y)
-            lineTo(pt(24f, 180f).x, pt(24f, 180f).y)
-            lineTo(pt(-24f, 180f).x, pt(-24f, 180f).y)
-            close()
-        }
+                       
 
-        // Заливка сопла
-        drawPath(
-            nozzlePath,
-            brush = Brush.verticalGradient(
-                colors = listOf(mediumGray, darkGray, darkerGray),
-                startY = pt(0f, 160f).y,
-                endY = pt(0f, 180f).y
-            )
-        )
-        drawPath(nozzlePath, color = darkerGray, style = Stroke(width = 1.4f * u))
-
-        // Горизонтальные линии-решётки на сопле
-        drawLine(darkerGray, pt(-22.5f, 165f), pt(22.5f, 165f), strokeWidth = 0.8f * u)
-        drawLine(darkerGray, pt(-23f, 170f), pt(23f, 170f), strokeWidth = 0.8f * u)
-        drawLine(darkerGray, pt(-23.5f, 175f), pt(23.5f, 175f), strokeWidth = 0.8f * u)
-
-        // Блик слева на сопле
-        drawRoundRect(
-            color = whiteHighlight.copy(alpha = 0.5f),
-            topLeft = pt(-20f, 163f),
-            size = Size(3f * u, 14f * u),
-            cornerRadius = CornerRadius(1.5f * u)
-        )
-
-        // Верхний ободок сопла
-        drawRoundRect(
-            color = mediumGray,
-            topLeft = pt(-23f, 159f),
-            size = Size(46f * u, 3f * u),
-            cornerRadius = CornerRadius(1.5f * u)
-        )
-        drawRoundRect(
-            color = darkerGray,
-            topLeft = pt(-23f, 159f),
-            size = Size(46f * u, 3f * u),
-            cornerRadius = CornerRadius(1.5f * u),
-            style = Stroke(width = 1f * u)
-        )
-
-        // Нижний ободок сопла (выход пламени)
-        drawRoundRect(
-            color = darkerGray,
-            topLeft = pt(-25f, 179f),
-            size = Size(50f * u, 3f * u),
-            cornerRadius = CornerRadius(1.5f * u)
-        )
-        drawRoundRect(
-            color = Color(0xFF0A0A14),
-            topLeft = pt(-25f, 179f),
-            size = Size(50f * u, 3f * u),
-            cornerRadius = CornerRadius(1.5f * u),
-            style = Stroke(width = 1f * u)
-        )
-
-        // ================= ПЛАМЯ РАКЕТНОГО ДВИГАТЕЛЯ (подогнано) =================
-        // Три слоя пламени + искры + свечение + дымка
-
-        val flameFlicker = sin(flamePhase * 2f) * 1.8f
-        val flameFlickerX = sin(flamePhase * 3.3f) * 1.2f
-        val flamePulse = 0.7f + 0.3f * sin(flamePhase * 5f)
-
-        // ===== СЛОЙ 0. СВЕЧЕНИЕ ВОКРУГ ПЛАМЕНИ =====
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    Color(0xFF0066FF).copy(alpha = 0.35f * flamePulse),
-                    Color(0xFF00AAFF).copy(alpha = 0.15f * flamePulse),
-                    Color.Transparent
-                ),
-                center = pt(0f, 200f).copy(x = pt(0f, 200f).x + flameFlickerX * u),
-                radius = 26f * u
-            ),
-            radius = 26f * u,
-            center = pt(0f, 200f).copy(x = pt(0f, 200f).x + flameFlickerX * u)
-        )
-
-        // ===== СЛОЙ 1. ВНЕШНЕЕ ПЛАМЯ (красно-оранжевое) =====
-        val outerFlamePath = Path().apply {
-            moveTo(pt(-18f, 182f).x, pt(-18f, 182f).y)
-            quadraticBezierTo(
-                pt(-14f + flameFlickerX, 200f + flameFlicker).x,
-                pt(-14f + flameFlickerX, 200f + flameFlicker).y,
-                pt(-5f + flameFlickerX * 0.5f, 212f + flameFlicker).x,
-                pt(-5f + flameFlickerX * 0.5f, 212f + flameFlicker).y
-            )
-            quadraticBezierTo(
-                pt(0f, 222f + flameFlicker * 1.2f).x, pt(0f, 222f + flameFlicker * 1.2f).y,
-                pt(5f + flameFlickerX * 0.5f, 212f + flameFlicker).x,
-                pt(5f + flameFlickerX * 0.5f, 212f + flameFlicker).y
-            )
-            quadraticBezierTo(
-                pt(14f + flameFlickerX, 200f + flameFlicker).x,
-                pt(14f + flameFlickerX, 200f + flameFlicker).y,
-                pt(18f, 182f).x, pt(18f, 182f).y
-            )
-        }
-        drawPath(
-            outerFlamePath,
-            brush = Brush.verticalGradient(
-                colors = listOf(
-                    Color(0xFFFF3300),
-                    Color(0xFFFF4500),
-                    Color(0xFFFF6600),
-                    Color(0xFFFF8800).copy(alpha = 0.8f)
-                ),
-                startY = pt(0f, 182f).y,
-                endY = pt(0f, 220f + flameFlicker).y
-            )
-        )
-
-        // ===== СЛОЙ 2. СРЕДНЕЕ ПЛАМЯ (оранжево-жёлтое) =====
-        val middleFlamePath = Path().apply {
-            moveTo(pt(-12f, 182f).x, pt(-12f, 182f).y)
-            quadraticBezierTo(
-                pt(-10f + flameFlickerX * 0.7f, 197f + flameFlicker * 0.9f).x,
-                pt(-10f + flameFlickerX * 0.7f, 197f + flameFlicker * 0.9f).y,
-                pt(-3f + flameFlickerX * 0.3f, 206f + flameFlicker * 0.9f).x,
-                pt(-3f + flameFlickerX * 0.3f, 206f + flameFlicker * 0.9f).y
-            )
-            quadraticBezierTo(
-                pt(0f, 213f + flameFlicker * 1.0f).x, pt(0f, 213f + flameFlicker * 1.0f).y,
-                pt(3f + flameFlickerX * 0.3f, 206f + flameFlicker * 0.9f).x,
-                pt(3f + flameFlickerX * 0.3f, 206f + flameFlicker * 0.9f).y
-            )
-            quadraticBezierTo(
-                pt(10f + flameFlickerX * 0.7f, 197f + flameFlicker * 0.9f).x,
-                pt(10f + flameFlickerX * 0.7f, 197f + flameFlicker * 0.9f).y,
-                pt(12f, 182f).x, pt(12f, 182f).y
-            )
-        }
-        drawPath(
-            middleFlamePath,
-            brush = Brush.verticalGradient(
-                colors = listOf(
-                    Color(0xFFFF8800),
-                    Color(0xFFFFAA00),
-                    Color(0xFFFFCC00),
-                    Color(0xFFFFE066).copy(alpha = 0.9f)
-                ),
-                startY = pt(0f, 182f).y,
-                endY = pt(0f, 212f + flameFlicker).y
-            )
-        )
-
-        // ===== СЛОЙ 3. ВНУТРЕННЕЕ БЕЛО-ЖЁЛТОЕ ЯДРО =====
-        val innerFlamePath = Path().apply {
-            moveTo(pt(-6f, 182f).x, pt(-6f, 182f).y)
-            quadraticBezierTo(
-                pt(-5f + flameFlickerX * 0.4f, 192f + flameFlicker * 0.7f).x,
-                pt(-5f + flameFlickerX * 0.4f, 192f + flameFlicker * 0.7f).y,
-                pt(-2f + flameFlickerX * 0.2f, 198f + flameFlicker * 0.7f).x,
-                pt(-2f + flameFlickerX * 0.2f, 198f + flameFlicker * 0.7f).y
-            )
-            quadraticBezierTo(
-                pt(0f, 203f + flameFlicker * 0.8f).x, pt(0f, 203f + flameFlicker * 0.8f).y,
-                pt(2f + flameFlickerX * 0.2f, 198f + flameFlicker * 0.7f).x,
-                pt(2f + flameFlickerX * 0.2f, 198f + flameFlicker * 0.7f).y
-            )
-            quadraticBezierTo(
-                pt(5f + flameFlickerX * 0.4f, 192f + flameFlicker * 0.7f).x,
-                pt(5f + flameFlickerX * 0.4f, 192f + flameFlicker * 0.7f).y,
-                pt(6f, 182f).x, pt(6f, 182f).y
-            )
-        }
-        drawPath(
-            innerFlamePath,
-            brush = Brush.verticalGradient(
-                colors = listOf(
-                    Color.White,
-                    Color(0xFFFFF5B0),
-                    Color(0xFFFFE066),
-                    Color(0xFFFFCC00).copy(alpha = 0.8f)
-                ),
-                startY = pt(0f, 182f).y,
-                endY = pt(0f, 200f + flameFlicker * 0.7f).y
-            )
-        )
-
-        // ===== СЛОЙ 4. ЯРКОЕ СВЕЧЕНИЕ В ЦЕНТРЕ =====
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    Color.White.copy(alpha = 0.9f * flamePulse),
-                    Color(0xFFFFF5B0).copy(alpha = 0.5f * flamePulse),
-                    Color.Transparent
-                ),
-                center = pt(0f, 190f),
-                radius = 7f * u
-            ),
-            radius = 7f * u,
-            center = pt(0f, 190f)
-        )
-
-        // ===== СЛОЙ 5. ИСКРЫ, ЛЕТЯЩИЕ ВНИЗ =====
-        val sparkCount = 8
-        for (i in 0 until sparkCount) {
-            val sparkPhase = (flamePhase * 2f + i * 0.7f) % (2f * PI.toFloat())
-            val sparkProgress = sparkPhase / (2f * PI.toFloat())
-
-            val sparkY = 182f + sparkProgress * 45f
-            val sparkX = -10f + i * 2.8f + sin(sparkPhase * 3f) * 2f
-
-            val sparkAlpha = (1f - sparkProgress) * 0.9f
-            val sparkR = (1.1f - sparkProgress * 0.75f) * u
-
-            if (sparkAlpha > 0.05f && sparkR > 0f) {
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFFFFDD00).copy(alpha = sparkAlpha * 0.7f),
-                            Color(0xFFFF8800).copy(alpha = sparkAlpha * 0.4f),
-                            Color.Transparent
-                        ),
-                        center = pt(sparkX, sparkY),
-                        radius = sparkR * 3f
-                    ),
-                    radius = sparkR * 3f,
-                    center = pt(sparkX, sparkY)
-                )
-                drawCircle(
-                    color = Color(0xFFFFEE88).copy(alpha = sparkAlpha),
-                    radius = sparkR,
-                    center = pt(sparkX, sparkY)
-                )
-                drawCircle(
-                    color = Color.White.copy(alpha = sparkAlpha * 0.9f),
-                    radius = sparkR * 0.5f,
-                    center = pt(sparkX, sparkY)
-                )
-            }
-        }
-
-        // ===== СЛОЙ 6. ТЁМНАЯ ДЫМКА ВОКРУГ КОНЧИКА =====
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    Color(0xFF333333).copy(alpha = 0.2f),
-                    Color(0xFF555555).copy(alpha = 0.1f),
-                    Color.Transparent
-                ),
-                center = pt(0f, 215f + flameFlicker),
-                radius = 12f * u
-            ),
-            radius = 12f * u,
-            center = pt(0f, 215f + flameFlicker)
-        )
-
-                                                    // ================= АНИМАЦИЯ РУК =================
+    // ================= АНИМАЦИЯ РУК =================
         val armSway = sin(armPhase)
         val leftArmOffsetY = when {
             isSpeaking -> armSway * 0.8f
@@ -2084,406 +1829,649 @@ fun ThinkingRobotAnimation(
             }
         }
         
-        // ================= ТУЛОВИЩЕ (3D цилиндр) =================
-        // Верх: 84 (-42..42), низ сужен на 20% от предыдущего: 67.2 - 20% = 53.76 (-26.88..26.88)
-        // Верхний овал виден как крышка 3D-цилиндра. Верхние углы скруглены сильнее.
+        // ================= ТУЛОВИЩЕ (сегментированное, мужская фигура) =================
 
-        // 1. ЗАДНЯЯ ЧАСТЬ ВЕРХНЕГО ОВАЛА (тёмная половина, за головой)
-        drawOval(
-            color = mediumGray,
-            topLeft = pt(-37f, 70f),
-            size = Size(74f * u, 14f * u)
-        )
+// 1. ЗАДНЯЯ ЧАСТЬ ВЕРХНЕГО ОВАЛА (тёмная половина купола)
+drawOval(
+    color = mediumGray,
+    topLeft = pt(-37f, 70f),
+    size = Size(74f * u, 14f * u)
+)
 
-        // 2. ОСНОВНОЕ ТЕЛО ЦИЛИНДРА (боковые стенки, сужаются к низу)
-        // Верхние углы скруглены радиусом 10 (было 6)
-        val cylinderPath = Path().apply {
-            // Начало — верхний левый угол (после большего скругления)
-            moveTo(pt(-32f, 77f).x, pt(-32f, 77f).y)
-            // Скругление верхнего левого угла — больше
-            quadraticBezierTo(
-                pt(-42f, 77f).x, pt(-42f, 77f).y,
-                pt(-42f, 87f).x, pt(-42f, 87f).y
-            )
-            // Левая боковина вниз (новый низ — уже)
-            lineTo(pt(-26.88f, 160f).x, pt(-26.88f, 160f).y)
-            // Низ
-            lineTo(pt(26.88f, 160f).x, pt(26.88f, 160f).y)
-            // Правая боковина вверх
-            lineTo(pt(42f, 87f).x, pt(42f, 87f).y)
-            // Скругление верхнего правого угла
-            quadraticBezierTo(
-                pt(42f, 77f).x, pt(42f, 77f).y,
-                pt(32f, 77f).x, pt(32f, 77f).y
-            )
-            close()
-        }
+// 2. 3D КУПОЛ (верхняя крышка с овальными кольцами для объёма)
+val domeTopY = 70f
+val domeBottomY = 87f
+val domeWidth = 37f
 
-                // Заливка корпуса (градиент слева-направо + сверху-вниз)
-        drawPath(
-            cylinderPath,
-            brush = Brush.horizontalGradient(
-                colors = listOf(
-                    lightGray,
-                    whiteHighlight,
-                    whiteBody,
-                    lightGray,
-                    mediumGray
-                )
-            )
-        )
-        // Второй слой градиента — вертикальный (затемнение снизу)
-        drawPath(
-            cylinderPath,
-            brush = Brush.verticalGradient(
-                colors = listOf(
-                    Color.Transparent,
-                    Color.Transparent,
-                    Color.Black.copy(alpha = 0.1f)
-                )
-            )
-        )
-        drawPath(cylinderPath, color = darkGray, style = Stroke(width = 1.4f * u))
+val domePath = Path().apply {
+    moveTo(pt(-domeWidth, domeBottomY).x, pt(-domeWidth, domeBottomY).y)
+    quadraticBezierTo(
+        pt(-domeWidth, domeTopY + 5f).x, pt(-domeWidth, domeTopY + 5f).y,
+        pt(0f, domeTopY).x, pt(0f, domeTopY).y
+    )
+    quadraticBezierTo(
+        pt(domeWidth, domeTopY + 5f).x, pt(domeWidth, domeTopY + 5f).y,
+        pt(domeWidth, domeBottomY).x, pt(domeWidth, domeBottomY).y
+    )
+    quadraticBezierTo(
+        pt(0f, domeBottomY + 7f).x, pt(0f, domeBottomY + 7f).y,
+        pt(-domeWidth, domeBottomY).x, pt(-domeWidth, domeBottomY).y
+    )
+    close()
+}
 
-        
+// Заливка купола (радиальный градиент для 3D)
+drawPath(
+    domePath,
+    brush = Brush.radialGradient(
+        colors = listOf(
+            whiteHighlight,
+            whiteBody,
+            lightGray,
+            mediumGray
+        ),
+        center = pt(0f, domeTopY + 5f),
+        radius = 40f * u
+    )
+)
+drawPath(domePath, color = darkGray, style = Stroke(width = 1.3f * u))
 
-                        // 5. ТЁМНАЯ ЗОНА СПРАВА (затенение для 3D) — повёрнута параллельно границе
-        rotate(11.7f, pivot = pt(34f, 94f)) {
-            drawRoundRect(
-                color = darkGray.copy(alpha = 0.15f),
-                topLeft = pt(34f, 94f),
-                size = Size(7f * u, 52f * u),
-                cornerRadius = CornerRadius(3.5f * u)
-            )
-        }
-                // ================= РАДИАЛЬНЫЙ ОТСВЕТ ОТ ЭКРАНА НА ГРУДИ =================
-        // Мягкое голубое свечение вокруг экрана — как будто экран подсвечивает корпус.
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    neonBlue.copy(alpha = 0.18f),
-                    neonBlue.copy(alpha = 0.08f),
-                    Color.Transparent
-                ),
-                center = pt(0f, 108f),
-                radius = 38f * u
+// ОВАЛЬНЫЕ КОЛЬЦА НА КРЫШКЕ (создают 3D эффект)
+for (i in 1..4) {
+    val ringY = domeTopY + 2f + i * 3.5f
+    val ringWidth = domeWidth - i * 4f
+    val ringHeight = 2.5f
+    
+    drawOval(
+        color = lightGray.copy(alpha = 0.7f),
+        topLeft = pt(-ringWidth, ringY),
+        size = Size(ringWidth * 2f * u, ringHeight * u)
+    )
+    drawOval(
+        color = mediumGray.copy(alpha = 0.5f),
+        topLeft = pt(-ringWidth, ringY),
+        size = Size(ringWidth * 2f * u, ringHeight * u),
+        style = Stroke(width = 0.5f * u)
+    )
+}
+
+// Блик на куполе
+drawOval(
+    color = whiteHighlight.copy(alpha = 0.6f),
+    topLeft = pt(-18f, domeTopY + 3f),
+    size = Size(22f * u, 5f * u)
+)
+
+// 3. СЕГМЕНТ 1: Верхняя часть (широкие плечи)
+val segment1Top = 87f
+val segment1Bottom = 107f
+val segment1WidthTop = 38f
+val segment1WidthBottom = 34f
+
+val segment1Path = Path().apply {
+    moveTo(pt(-segment1WidthTop, segment1Top).x, pt(-segment1WidthTop, segment1Top).y)
+    lineTo(pt(segment1WidthTop, segment1Top).x, pt(segment1WidthTop, segment1Top).y)
+    quadraticBezierTo(
+        pt(segment1WidthBottom, segment1Bottom).x, pt(segment1WidthBottom, segment1Bottom).y,
+        pt(segment1WidthBottom, segment1Bottom).x, pt(segment1WidthBottom, segment1Bottom).y
+    )
+    lineTo(pt(-segment1WidthBottom, segment1Bottom).x, pt(-segment1WidthBottom, segment1Bottom).y)
+    quadraticBezierTo(
+        pt(-segment1WidthTop, segment1Top).x, pt(-segment1WidthTop, segment1Top).y,
+        pt(-segment1WidthTop, segment1Top).x, pt(-segment1WidthTop, segment1Top).y
+    )
+    close()
+}
+
+drawPath(
+    segment1Path,
+    brush = Brush.verticalGradient(
+        colors = listOf(whiteBody, lightGray),
+        startY = pt(0f, segment1Top).y,
+        endY = pt(0f, segment1Bottom).y
+    )
+)
+drawPath(segment1Path, color = darkGray, style = Stroke(width = 1.2f * u))
+
+// Разделительная линия сегмента 1
+drawLine(
+    color = mediumGray,
+    start = pt(-segment1WidthBottom + 2f, segment1Bottom - 2f),
+    end = pt(segment1WidthBottom - 2f, segment1Bottom - 2f),
+    strokeWidth = 0.8f * u
+)
+
+// Клёпки сегмента 1
+for (i in -1..1 step 2) {
+    drawCircle(
+        color = mediumGray,
+        radius = 1f * u,
+        center = pt(i * 30f, segment1Top + 5f)
+    )
+    drawCircle(
+        color = mediumGray,
+        radius = 1f * u,
+        center = pt(i * 27f, segment1Bottom - 5f)
+    )
+}
+
+// 4. ЭКРАН НА ГРУДИ (оригинальное пульсирующее солнце)
+val screenCenterY = 97f
+
+// Внешняя рамка экрана
+drawRoundRect(
+    color = darkerGray,
+    topLeft = pt(-22f, screenCenterY - 12f),
+    size = Size(44f * u, 24f * u),
+    cornerRadius = CornerRadius(6f * u)
+)
+
+// Внутренняя тёмная панель
+drawRoundRect(
+    color = Color(0xFF0F1216),
+    topLeft = pt(-20f, screenCenterY - 10f),
+    size = Size(40f * u, 20f * u),
+    cornerRadius = CornerRadius(5f * u)
+)
+
+// Блик на верхней части экрана
+drawRoundRect(
+    color = Color.White.copy(alpha = 0.1f),
+    topLeft = pt(-18f, screenCenterY - 9f),
+    size = Size(36f * u, 4f * u),
+    cornerRadius = CornerRadius(2f * u)
+)
+
+// ПУЛЬСИРУЮЩЕЕ СОЛНЦЕ (оригинальное)
+val heartCenter = pt(0f, screenCenterY)
+val corePulse = 0.5f + 0.5f * sin(pulse * 1.5f)
+val sunRadius = 5f * u * (1f + 0.15f * corePulse)
+
+// Внешнее свечение
+drawCircle(
+    brush = Brush.radialGradient(
+        colors = listOf(
+            Color(0x0000FFFF),
+            Color(0x3000BFFF).copy(alpha = 0.4f + 0.2f * corePulse),
+            Color(0x600088FF).copy(alpha = 0.3f),
+            Color.Transparent
+        ),
+        center = heartCenter,
+        radius = sunRadius * 3.2f
+    ),
+    radius = sunRadius * 3.2f,
+    center = heartCenter
+)
+
+// Среднее свечение
+drawCircle(
+    brush = Brush.radialGradient(
+        colors = listOf(
+            Color(0xFF00FFFF).copy(alpha = (0.7f + 0.3f * corePulse) * 0.8f),
+            Color(0xFF00BFFF).copy(alpha = 0.5f),
+            Color(0xFF0044FF).copy(alpha = 0f)
+        ),
+        center = heartCenter,
+        radius = sunRadius * 1.8f
+    ),
+    radius = sunRadius * 1.8f,
+    center = heartCenter
+)
+
+// Ядро солнца
+drawCircle(
+    brush = Brush.radialGradient(
+        colors = listOf(
+            Color.White,
+            Color(0xFF00FFFF),
+            Color(0xFF00BFFF),
+            Color(0xFF0044FF)
+        ),
+        center = heartCenter,
+        radius = sunRadius
+    ),
+    radius = sunRadius,
+    center = heartCenter
+)
+
+// Частицы на орбите
+val particleCount = 12
+for (i in 0 until particleCount) {
+    val angle = (i.toFloat() / particleCount) * 2f * PI.toFloat() + pulse
+    val distance = sunRadius * (1.3f + 0.4f * sin(pulse * 2f + i * 0.8f))
+    val px = heartCenter.x + cos(angle) * distance
+    val py = heartCenter.y + sin(angle) * distance
+    val pr = (0.3f + 0.3f * sin(pulse * 3f + i)) * u
+
+    drawCircle(
+        color = Color(0xFF00FFFF).copy(alpha = 0.4f + 0.4f * sin(pulse * 4f + i)),
+        radius = pr,
+        center = Offset(px, py)
+    )
+}
+
+// Белый блик
+drawCircle(
+    color = Color.White.copy(alpha = 0.9f),
+    radius = sunRadius * 0.35f,
+    center = Offset(heartCenter.x - sunRadius * 0.2f, heartCenter.y - sunRadius * 0.2f)
+)
+
+// Кольцо-орбита
+drawCircle(
+    color = Color(0xFF00FFFF).copy(alpha = 0.3f + 0.2f * corePulse),
+    radius = sunRadius * 1.6f,
+    center = heartCenter,
+    style = Stroke(width = 0.6f * u)
+)
+
+// 5. СЕГМЕНТ 2: Средняя часть (сужение к талии)
+val segment2Top = segment1Bottom
+val segment2Bottom = 127f
+val segment2WidthTop = segment1WidthBottom
+val segment2WidthBottom = 28f
+
+val segment2Path = Path().apply {
+    moveTo(pt(-segment2WidthTop, segment2Top).x, pt(-segment2WidthTop, segment2Top).y)
+    lineTo(pt(segment2WidthTop, segment2Top).x, pt(segment2WidthTop, segment2Top).y)
+    quadraticBezierTo(
+        pt(segment2WidthBottom, segment2Bottom).x, pt(segment2WidthBottom, segment2Bottom).y,
+        pt(segment2WidthBottom, segment2Bottom).x, pt(segment2WidthBottom, segment2Bottom).y
+    )
+    lineTo(pt(-segment2WidthBottom, segment2Bottom).x, pt(-segment2WidthBottom, segment2Bottom).y)
+    quadraticBezierTo(
+        pt(-segment2WidthTop, segment2Top).x, pt(-segment2WidthTop, segment2Top).y,
+        pt(-segment2WidthTop, segment2Top).x, pt(-segment2WidthTop, segment2Top).y
+    )
+    close()
+}
+
+drawPath(
+    segment2Path,
+    brush = Brush.verticalGradient(
+        colors = listOf(lightGray, mediumGray),
+        startY = pt(0f, segment2Top).y,
+        endY = pt(0f, segment2Bottom).y
+    )
+)
+drawPath(segment2Path, color = darkGray, style = Stroke(width = 1.2f * u))
+
+// Разделительная линия сегмента 2
+drawLine(
+    color = mediumGray,
+    start = pt(-segment2WidthBottom + 2f, segment2Bottom - 2f),
+    end = pt(segment2WidthBottom - 2f, segment2Bottom - 2f),
+    strokeWidth = 0.8f * u
+)
+
+// Клёпки сегмента 2
+for (i in -1..1 step 2) {
+    drawCircle(
+        color = mediumGray,
+        radius = 1f * u,
+        center = pt(i * 24f, segment2Top + 5f)
+    )
+    drawCircle(
+        color = mediumGray,
+        radius = 1f * u,
+        center = pt(i * 20f, segment2Bottom - 5f)
+    )
+}
+
+// 6. ПОЯС С БЕГУЩИМ ИНДИКАТОРОМ (оригинальный)
+val beltCenterY = 139.25f
+val beltHeight = 5f * u
+val beltTop = beltCenterY - beltHeight / (2f * u)
+val beltWidth = 60f * u
+val beltLeft = -30f
+
+drawRoundRect(
+    color = darkerGray,
+    topLeft = pt(beltLeft, beltTop),
+    size = Size(beltWidth, beltHeight),
+    cornerRadius = CornerRadius(2f * u)
+)
+drawRoundRect(
+    color = darkGray,
+    topLeft = pt(beltLeft, beltTop),
+    size = Size(beltWidth, beltHeight),
+    cornerRadius = CornerRadius(2f * u),
+    style = Stroke(width = 1f * u)
+)
+
+// Бегущий индикатор (оригинальный)
+val chargeBarLeft = beltLeft + 2f
+val chargeBarRight = beltLeft + 30f + 28f - 2f
+val chargeBarWidth = chargeBarRight - chargeBarLeft
+val chargeBarHeight = 1.5f
+val chargeBarY = beltTop + (beltHeight / (2f * u)) - chargeBarHeight / 2f
+
+val chargeProgress = ((pulse % (2f * PI.toFloat())) / (2f * PI.toFloat())).toFloat()
+
+drawRoundRect(
+    Color(0xFF0A1520),
+    topLeft = pt(chargeBarLeft, chargeBarY),
+    size = Size(chargeBarWidth * u, chargeBarHeight * u),
+    cornerRadius = CornerRadius(0.7f * u)
+)
+
+val chargeBarTravel = chargeBarWidth * chargeProgress
+val chargeBarStart = chargeBarLeft + chargeBarTravel
+
+if (chargeBarTravel > 0.1f) {
+    drawRoundRect(
+        Brush.horizontalGradient(
+            listOf(neonBlue, neonBlueGlow, neonBlue),
+            startX = pt(chargeBarStart, chargeBarY).x,
+            endX = pt(chargeBarStart + 6f, chargeBarY).x
+        ),
+        topLeft = pt(chargeBarStart, chargeBarY),
+        size = Size(6f * u, chargeBarHeight * u),
+        cornerRadius = CornerRadius(0.7f * u)
+    )
+
+    drawCircle(
+        brush = Brush.radialGradient(
+            colors = listOf(
+                neonBlue.copy(alpha = 0.35f),
+                Color.Transparent
             ),
-            radius = 38f * u,
-            center = pt(0f, 108f)
-        )
+            center = pt(chargeBarStart + 3f, chargeBarY + chargeBarHeight / 2f),
+            radius = 3f * u
+        ),
+        radius = 3f * u,
+        center = pt(chargeBarStart + 3f, chargeBarY + chargeBarHeight / 2f)
+    )
 
-        // 6. ПЕРЕДНЯЯ ЧАСТЬ ВЕРХНЕГО ОВАЛА (светлая половина, крышка цилиндра)
-        drawOval(
-            color = whiteBody,
-            topLeft = pt(-37f, 70f),
-            size = Size(74f * u, 14f * u)
-        )
-        drawOval(
-            color = darkGray,
-            topLeft = pt(-37f, 70f),
-            size = Size(74f * u, 14f * u),
-            style = Stroke(width = 1.3f * u)
-        )
+    drawCircle(
+        color = neonBlueGlow.copy(alpha = 0.9f),
+        radius = 0.5f * u,
+        center = pt(chargeBarStart + 6f, chargeBarY + chargeBarHeight / 2f)
+    )
+}
 
-        // ================= КЛЁПКИ НА КРЫШКЕ ЦИЛИНДРА =================
-        // 7 клёпок с равным промежутком по всему периметру крышки.
-        // Отступ от края — 3 единицы.
-        val capRivetColor = mediumGray
-        val capRivetRadius = 1f * u
+// 7. СЕГМЕНТ 3: Нижняя часть (перед соплом)
+val segment3Top = beltCenterY + beltHeight / (2f * u)
+val segment3Bottom = 155f
+val segment3WidthTop = 28f
+val segment3WidthBottom = 26f
 
-        drawCircle(
-            color = capRivetColor,
-            radius = capRivetRadius,
-            center = pt(0f, 73f)
-        )
-        drawCircle(
-            color = capRivetColor,
-            radius = capRivetRadius,
-            center = pt(-26.58f, 74.51f)
-        )
-        drawCircle(
-            color = capRivetColor,
-            radius = capRivetRadius,
-            center = pt(-33.15f, 77.89f)
-        )
-        drawCircle(
-            color = capRivetColor,
-            radius = capRivetRadius,
-            center = pt(-14.75f, 80.60f)
-        )
-        drawCircle(
-            color = capRivetColor,
-            radius = capRivetRadius,
-            center = pt(14.75f, 80.60f)
-        )
-        drawCircle(
-            color = capRivetColor,
-            radius = capRivetRadius,
-            center = pt(33.15f, 77.89f)
-        )
-        drawCircle(
-            color = capRivetColor,
-            radius = capRivetRadius,
-            center = pt(26.58f, 74.51f)
-        )
+val segment3Path = Path().apply {
+    moveTo(pt(-segment3WidthTop, segment3Top).x, pt(-segment3WidthTop, segment3Top).y)
+    lineTo(pt(segment3WidthTop, segment3Top).x, pt(segment3WidthTop, segment3Top).y)
+    lineTo(pt(segment3WidthBottom, segment3Bottom).x, pt(segment3WidthBottom, segment3Bottom).y)
+    lineTo(pt(-segment3WidthBottom, segment3Bottom).x, pt(-segment3WidthBottom, segment3Bottom).y)
+    close()
+}
 
-        // 7. ВНУТРЕННИЙ ЭЛЛИПС НА КРЫШКЕ (для реализма 3D)
-        drawOval(
-            color = lightGray,
-            topLeft = pt(-27f, 73f),
-            size = Size(54f * u, 8f * u)
-        )
-        drawOval(
-            color = mediumGray,
-            topLeft = pt(-27f, 73f),
-            size = Size(54f * u, 8f * u),
-            style = Stroke(width = 0.8f * u)
-        )
+drawPath(
+    segment3Path,
+    brush = Brush.verticalGradient(
+        colors = listOf(mediumGray, darkGray),
+        startY = pt(0f, segment3Top).y,
+        endY = pt(0f, segment3Bottom).y
+    )
+)
+drawPath(segment3Path, color = darkGray, style = Stroke(width = 1.2f * u))
 
-        // 8. БЛИК НА КРЫШКЕ (овал-отражение)
-        drawOval(
-            color = whiteHighlight.copy(alpha = 0.75f),
-            topLeft = pt(-20f, 73.5f),
-            size = Size(28f * u, 4f * u)
-        )
-                // ================= КЛЁПКИ ПО ПЕРИМЕТРУ ПЕРЕДНЕЙ ПАНЕЛИ КОРПУСА =================
-        // Отступ 3 единицы внутрь от края цилиндра. Интервал как на крышке (~20).
-        val bodyRivetColor = mediumGray
-        val bodyRivetRadius = 1f * u
+// Клёпки сегмента 3
+for (i in -1..1 step 2) {
+    drawCircle(
+        color = mediumGray,
+        radius = 1f * u,
+        center = pt(i * 20f, segment3Top + 3f)
+    )
+}
 
-        // Верхняя граница (5 клёпок)
-        drawCircle(color = bodyRivetColor, radius = bodyRivetRadius, center = pt(-39f, 90f))
-        drawCircle(color = bodyRivetColor, radius = bodyRivetRadius, center = pt(-19.5f, 90f))
-        drawCircle(color = bodyRivetColor, radius = bodyRivetRadius, center = pt(0f, 90f))
-        drawCircle(color = bodyRivetColor, radius = bodyRivetRadius, center = pt(19.5f, 90f))
-        drawCircle(color = bodyRivetColor, radius = bodyRivetRadius, center = pt(39f, 90f))
+// 8. СОПЛО (колоколообразное, De Laval nozzle)
+val nozzleTop = 155f
+val nozzleThroat = 165f
+val nozzleBottom = 180f
+val nozzleTopWidth = 26f
+val nozzleThroatWidth = 16f
+val nozzleBottomWidth = 22f
 
-        // Правая боковина (3 клёпки)
-        drawCircle(color = bodyRivetColor, radius = bodyRivetRadius, center = pt(35.2f, 106.8f))
-        drawCircle(color = bodyRivetColor, radius = bodyRivetRadius, center = pt(31.4f, 123.5f))
-        drawCircle(color = bodyRivetColor, radius = bodyRivetRadius, center = pt(27.7f, 140.2f))
+val nozzlePath = Path().apply {
+    moveTo(pt(-nozzleTopWidth / 2f, nozzleTop).x, pt(-nozzleTopWidth / 2f, nozzleTop).y)
+    quadraticBezierTo(
+        pt(-nozzleThroatWidth / 2f, nozzleThroat).x, pt(-nozzleThroatWidth / 2f, nozzleThroat).y,
+        pt(-nozzleThroatWidth / 2f, nozzleThroat).x, pt(-nozzleThroatWidth / 2f, nozzleThroat).y
+    )
+    quadraticBezierTo(
+        pt(-nozzleBottomWidth / 2f, nozzleBottom).x, pt(-nozzleBottomWidth / 2f, nozzleBottom).y,
+        pt(-nozzleBottomWidth / 2f, nozzleBottom).x, pt(-nozzleBottomWidth / 2f, nozzleBottom).y
+    )
+    lineTo(pt(nozzleBottomWidth / 2f, nozzleBottom).x, pt(nozzleBottomWidth / 2f, nozzleBottom).y)
+    quadraticBezierTo(
+        pt(nozzleThroatWidth / 2f, nozzleThroat).x, pt(nozzleThroatWidth / 2f, nozzleThroat).y,
+        pt(nozzleThroatWidth / 2f, nozzleThroat).x, pt(nozzleThroatWidth / 2f, nozzleThroat).y
+    )
+    quadraticBezierTo(
+        pt(nozzleTopWidth / 2f, nozzleTop).x, pt(nozzleTopWidth / 2f, nozzleTop).y,
+        pt(nozzleTopWidth / 2f, nozzleTop).x, pt(nozzleTopWidth / 2f, nozzleTop).y
+    )
+    close()
+}
 
-        // Нижняя граница (2 клёпки)
-        drawCircle(color = bodyRivetColor, radius = bodyRivetRadius, center = pt(11.94f, 157f))
-        drawCircle(color = bodyRivetColor, radius = bodyRivetRadius, center = pt(-11.94f, 157f))
+drawPath(
+    nozzlePath,
+    brush = Brush.verticalGradient(
+        colors = listOf(darkGray, darkerGray, Color(0xFF1A1A20)),
+        startY = pt(0f, nozzleTop).y,
+        endY = pt(0f, nozzleBottom).y
+    )
+)
+drawPath(nozzlePath, color = darkerGray, style = Stroke(width = 1.3f * u))
 
-        // Левая боковина (3 клёпки)
-        drawCircle(color = bodyRivetColor, radius = bodyRivetRadius, center = pt(-27.7f, 140.2f))
-        drawCircle(color = bodyRivetColor, radius = bodyRivetRadius, center = pt(-31.4f, 123.5f))
-        drawCircle(color = bodyRivetColor, radius = bodyRivetRadius, center = pt(-35.2f, 106.8f))
+// Кольца охлаждения на сопле
+for (i in 1..5) {
+    val y = nozzleTop + i * 5f
+    val width = when {
+        y < nozzleThroat -> nozzleTopWidth - (nozzleTopWidth - nozzleThroatWidth) * (y - nozzleTop) / (nozzleThroat - nozzleTop)
+        else -> nozzleThroatWidth + (nozzleBottomWidth - nozzleThroatWidth) * (y - nozzleThroat) / (nozzleBottom - nozzleThroat)
+    }
+    
+    drawLine(
+        color = Color(0xFF0A0A14).copy(alpha = 0.5f),
+        start = pt(-width / 2f, y),
+        end = pt(width / 2f, y),
+        strokeWidth = 0.7f * u
+    )
+}
 
-                
-        // ================= РЕМЕНЬ-ОБРУЧ НА КОРПУСЕ (делит корпус 75% / 25%) =================
-        // Верх корпуса: y = 77f, низ корпуса: y = 160f. Высота = 83.
-        // 75% от 83 = 62.25. Линия ремня: y = 77 + 62.25 = 139.25f.
-        val beltCenterY = 139.25f
-        val beltHeight = 5f * u
-        val beltTop = beltCenterY - beltHeight / (2f * u)
-        val beltWidth = 60f * u
-        val beltLeft = -30f
+// Блик на сопле
+drawLine(
+    color = whiteHighlight.copy(alpha = 0.3f),
+    start = pt(-nozzleTopWidth / 2f + 3f, nozzleTop + 2f),
+    end = pt(-nozzleBottomWidth / 2f + 2f, nozzleBottom - 2f),
+    strokeWidth = 1.5f * u,
+    cap = StrokeCap.Round
+)
 
-        // Заливка ремня
-        drawRoundRect(
-            color = darkerGray,
-            topLeft = pt(beltLeft, beltTop),
-            size = Size(beltWidth, beltHeight),
-            cornerRadius = CornerRadius(2f * u)
-        )
-        // Обводка ремня
-        drawRoundRect(
-            color = darkGray,
-            topLeft = pt(beltLeft, beltTop),
-            size = Size(beltWidth, beltHeight),
-            cornerRadius = CornerRadius(2f * u),
-            style = Stroke(width = 1f * u)
-        )
+// Верхний ободок сопла
+drawRoundRect(
+    color = mediumGray,
+    topLeft = pt(-nozzleTopWidth / 2f - 1f, nozzleTop - 1f),
+    size = Size((nozzleTopWidth + 2f) * u, 3f * u),
+    cornerRadius = CornerRadius(1.5f * u)
+)
 
-        // ================= БЕГУЩИЙ ИНДИКАТОР ЗАРЯДКИ ВНУТРИ РЕМНЯ =================
-        // Индикатор: от -28f до 28f (отступ 2 единицы от краёв ремня), ширина 56f.
-        // Высота индикатора: 1.5f * u, центрирована по вертикали ремня.
-        val chargeBarLeft = beltLeft + 2f                       // -28f
-        val chargeBarRight = beltLeft + 30f + 28f - 2f          // 28f
-        val chargeBarWidth = chargeBarRight - chargeBarLeft     // 56f
-        val chargeBarHeight = 1.5f
-        val chargeBarY = beltTop + (beltHeight / (2f * u)) - chargeBarHeight / 2f
+// Нижний ободок сопла (фланец)
+drawRoundRect(
+    color = darkerGray,
+    topLeft = pt(-nozzleBottomWidth / 2f - 2f, nozzleBottom),
+    size = Size((nozzleBottomWidth + 4f) * u, 3f * u),
+    cornerRadius = CornerRadius(1.5f * u)
+)
 
-        // Прогресс бегущей полоски (используем pulse)
-        val chargeProgress = ((pulse % (2f * PI.toFloat())) / (2f * PI.toFloat())).toFloat()
+// 9. ПЛАМЯ РАКЕТНОГО ДВИГАТЕЛЯ
+val flameFlicker = sin(flamePhase * 2.5f) * 2f
+val flameFlickerX = sin(flamePhase * 3.7f) * 1.5f
+val flamePulse = 0.7f + 0.3f * sin(flamePhase * 6f)
 
-        // Фон индикатора (тёмный)
-        drawRoundRect(
-            Color(0xFF0A1520),
-            topLeft = pt(chargeBarLeft, chargeBarY),
-            size = Size(chargeBarWidth * u, chargeBarHeight * u),
-            cornerRadius = CornerRadius(0.7f * u)
-        )
+// Свечение вокруг пламени
+drawCircle(
+    brush = Brush.radialGradient(
+        colors = listOf(
+            Color(0xFF00AAFF).copy(alpha = 0.4f * flamePulse),
+            Color(0xFF0066FF).copy(alpha = 0.2f * flamePulse),
+            Color.Transparent
+        ),
+        center = pt(0f, 195f).copy(x = pt(0f, 195f).x + flameFlickerX * u),
+        radius = 25f * u
+    ),
+    radius = 25f * u,
+    center = pt(0f, 195f).copy(x = pt(0f, 195f).x + flameFlickerX * u)
+)
 
-        // Бегущая полоска (слева направо)
-        val chargeBarTravel = chargeBarWidth * chargeProgress
-        val chargeBarStart = chargeBarLeft + chargeBarTravel
+// Внешнее пламя
+val outerFlamePath = Path().apply {
+    moveTo(pt(-12f, nozzleBottom + 2f).x, pt(-12f, nozzleBottom + 2f).y)
+    quadraticBezierTo(
+        pt(-10f + flameFlickerX * 0.5f, nozzleBottom + 15f).x,
+        pt(-10f + flameFlickerX * 0.5f, nozzleBottom + 15f).y,
+        pt(-8f + flameFlickerX * 0.3f, nozzleBottom + 25f).x,
+        pt(-8f + flameFlickerX * 0.3f, nozzleBottom + 25f).y
+    )
+    quadraticBezierTo(
+        pt(0f, nozzleBottom + 30f + flameFlicker).x,
+        pt(0f, nozzleBottom + 30f + flameFlicker).y,
+        pt(8f + flameFlickerX * 0.3f, nozzleBottom + 25f).x,
+        pt(8f + flameFlickerX * 0.3f, nozzleBottom + 25f).y
+    )
+    quadraticBezierTo(
+        pt(10f + flameFlickerX * 0.5f, nozzleBottom + 15f).x,
+        pt(10f + flameFlickerX * 0.5f, nozzleBottom + 15f).y,
+        pt(12f, nozzleBottom + 2f).x, pt(12f, nozzleBottom + 2f).y
+    )
+    close()
+}
 
-        if (chargeBarTravel > 0.1f) {
-            drawRoundRect(
-                Brush.horizontalGradient(
-                    listOf(neonBlue, neonBlueGlow, neonBlue),
-                    startX = pt(chargeBarStart, chargeBarY).x,
-                    endX = pt(chargeBarStart + 6f, chargeBarY).x
-                ),
-                topLeft = pt(chargeBarStart, chargeBarY),
-                size = Size(6f * u, chargeBarHeight * u),
-                cornerRadius = CornerRadius(0.7f * u)
-            )
+drawPath(
+    outerFlamePath,
+    brush = Brush.verticalGradient(
+        colors = listOf(
+            Color(0xFFFF3300),
+            Color(0xFFFF4500),
+            Color(0xFFFF6600),
+            Color(0xFFFF8800).copy(alpha = 0.7f)
+        ),
+        startY = pt(0f, nozzleBottom).y,
+        endY = pt(0f, nozzleBottom + 30f).y
+    )
+)
 
-            // Свечение вокруг полоски
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        neonBlue.copy(alpha = 0.35f),
-                        Color.Transparent
-                    ),
-                    center = pt(chargeBarStart + 3f, chargeBarY + chargeBarHeight / 2f),
-                    radius = 3f * u
-                ),
-                radius = 3f * u,
-                center = pt(chargeBarStart + 3f, chargeBarY + chargeBarHeight / 2f)
-            )
+// Среднее пламя
+val middleFlamePath = Path().apply {
+    moveTo(pt(-7f, nozzleBottom + 3f).x, pt(-7f, nozzleBottom + 3f).y)
+    quadraticBezierTo(
+        pt(-5f, nozzleBottom + 12f).x, pt(-5f, nozzleBottom + 12f).y,
+        pt(-3f, nozzleBottom + 20f).x, pt(-3f, nozzleBottom + 20f).y
+    )
+    quadraticBezierTo(
+        pt(0f, nozzleBottom + 23f).x, pt(0f, nozzleBottom + 23f).y,
+        pt(3f, nozzleBottom + 20f).x, pt(3f, nozzleBottom + 20f).y
+    )
+    quadraticBezierTo(
+        pt(5f, nozzleBottom + 12f).x, pt(5f, nozzleBottom + 12f).y,
+        pt(7f, nozzleBottom + 3f).x, pt(7f, nozzleBottom + 3f).y
+    )
+    close()
+}
 
-            // Яркая точка в конце полоски
-            drawCircle(
-                color = neonBlueGlow.copy(alpha = 0.9f),
-                radius = 0.5f * u,
-                center = pt(chargeBarStart + 6f, chargeBarY + chargeBarHeight / 2f)
-            )
-        }
+drawPath(
+    middleFlamePath,
+    brush = Brush.verticalGradient(
+        colors = listOf(
+            Color(0xFFFF8800),
+            Color(0xFFFFAA00),
+            Color(0xFFFFCC00),
+            Color(0xFFFFE066).copy(alpha = 0.8f)
+        ),
+        startY = pt(0f, nozzleBottom).y,
+        endY = pt(0f, nozzleBottom + 25f).y
+    )
+)
 
-        // 10. ОБОДОК МЕЖДУ ЦИЛИНДРОМ И СОПЛОМ (внизу корпуса, сужен)
-        drawRoundRect(
-            color = mediumGray,
-            topLeft = pt(-28f, 158f),
-            size = Size(56f * u, 4f * u),
-            cornerRadius = CornerRadius(2f * u)
-        )
-        drawRoundRect(
-            color = darkGray,
-            topLeft = pt(-28f, 158f),
-            size = Size(56f * u, 4f * u),
-            cornerRadius = CornerRadius(2f * u),
-            style = Stroke(width = 1f * u)
-        )
-
-                // ================= ТЁМНЫЙ ЭКРАН НА ГРУДИ ПОД СОЛНЦЕ =================
-        // Опущен вниз на 20% от высоты корпуса (было y=90, стало y=108)
-        val screenBlack = Color(0xFF0F1216)
-        val screenCenterY = 108f
-
-        // Внешняя рамка экрана
-        drawRoundRect(
-            color = darkerGray,
-            topLeft = pt(-22f, screenCenterY - 12f),
-            size = Size(44f * u, 24f * u),
-            cornerRadius = CornerRadius(6f * u)
-        )
-
-        // Внутренняя тёмная панель
-        drawRoundRect(
-            color = screenBlack,
-            topLeft = pt(-20f, screenCenterY - 10f),
-            size = Size(40f * u, 20f * u),
-            cornerRadius = CornerRadius(5f * u)
-        )
-
-        // Блик на верхней части экрана
-        drawRoundRect(
-            color = Color.White.copy(alpha = 0.1f),
-            topLeft = pt(-18f, screenCenterY - 9f),
-            size = Size(36f * u, 4f * u),
-            cornerRadius = CornerRadius(2f * u)
-        )
-
-        // ================= ПУЛЬСИРУЮЩЕЕ СОЛНЦЕ НА ГРУДИ =================
-        // Уменьшено в 2 раза. Опущено вниз на 20% (y=100 → y=108).
-
-        val heartCenter = pt(0f, screenCenterY)
-        val corePulse = 0.5f + 0.5f * sin(pulse * 1.5f)
-        val sunRadius = 5f * u * (1f + 0.15f * corePulse)
-
-        // 1. Внешнее свечение вокруг солнца (большое гало)
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    Color(0x0000FFFF),
-                    Color(0x3000BFFF).copy(alpha = 0.4f + 0.2f * corePulse),
-                    Color(0x600088FF).copy(alpha = 0.3f),
-                    Color.Transparent
-                ),
-                center = heartCenter,
-                radius = sunRadius * 3.2f
+// Ромбы Маха
+for (i in 0..2) {
+    val diamondY = nozzleBottom + 8f + i * 5f
+    val diamondSize = (2.5f - i * 0.6f) * u
+    val diamondAlpha = 0.7f - i * 0.2f
+    
+    drawCircle(
+        color = Color(0xFFFFEE88).copy(alpha = diamondAlpha * flamePulse),
+        radius = diamondSize,
+        center = pt(0f, diamondY),
+        style = Stroke(width = 0.5f * u)
+    )
+    
+    drawCircle(
+        brush = Brush.radialGradient(
+            colors = listOf(
+                Color.White.copy(alpha = diamondAlpha * flamePulse),
+                Color(0xFFFFF5B0).copy(alpha = diamondAlpha * 0.5f),
+                Color.Transparent
             ),
-            radius = sunRadius * 3.2f,
-            center = heartCenter
-        )
+            center = pt(0f, diamondY),
+            radius = diamondSize * 0.6f
+        ),
+        radius = diamondSize * 0.6f,
+        center = pt(0f, diamondY)
+    )
+}
 
-        // 2. Среднее свечение (циан)
+// Внутреннее ядро
+val innerFlamePath = Path().apply {
+    moveTo(pt(-4f, nozzleBottom + 4f).x, pt(-4f, nozzleBottom + 4f).y)
+    quadraticBezierTo(
+        pt(-2f, nozzleBottom + 10f).x, pt(-2f, nozzleBottom + 10f).y,
+        pt(0f, nozzleBottom + 15f).x, pt(0f, nozzleBottom + 15f).y
+    )
+    quadraticBezierTo(
+        pt(2f, nozzleBottom + 10f).x, pt(2f, nozzleBottom + 10f).y,
+        pt(4f, nozzleBottom + 4f).x, pt(4f, nozzleBottom + 4f).y
+    )
+    close()
+}
+
+drawPath(
+    innerFlamePath,
+    brush = Brush.verticalGradient(
+        colors = listOf(
+            Color.White,
+            Color(0xFFFFF5B0),
+            Color(0xFFFFE066).copy(alpha = 0.7f)
+        ),
+        startY = pt(0f, nozzleBottom).y,
+        endY = pt(0f, nozzleBottom + 18f).y
+    )
+)
+
+// Искры
+val sparkCount = 10
+for (i in 0 until sparkCount) {
+    val sparkPhase = (flamePhase * 3f + i * 0.6f) % (2f * PI.toFloat())
+    val sparkProgress = sparkPhase / (2f * PI.toFloat())
+    
+    val sparkY = nozzleBottom + 5f + sparkProgress * 35f
+    val sparkX = -8f + i * 1.8f + sin(sparkPhase * 4f) * 2.5f
+    val sparkAlpha = (1f - sparkProgress) * 0.9f
+    val sparkR = (1f - sparkProgress * 0.7f) * u
+    
+    if (sparkAlpha > 0.05f && sparkR > 0f) {
         drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    Color(0xFF00FFFF).copy(alpha = (0.7f + 0.3f * corePulse) * 0.8f),
-                    Color(0xFF00BFFF).copy(alpha = 0.5f),
-                    Color(0xFF0044FF).copy(alpha = 0f)
-                ),
-                center = heartCenter,
-                radius = sunRadius * 1.8f
-            ),
-            radius = sunRadius * 1.8f,
-            center = heartCenter
+            color = Color(0xFFFFEE88).copy(alpha = sparkAlpha),
+            radius = sparkR,
+            center = pt(sparkX, sparkY)
         )
-
-        // 3. Основное ядро солнца (яркое, белое с голубым)
         drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    Color.White,
-                    Color(0xFF00FFFF),
-                    Color(0xFF00BFFF),
-                    Color(0xFF0044FF)
-                ),
-                center = heartCenter,
-                radius = sunRadius
-            ),
-            radius = sunRadius,
-            center = heartCenter
+            color = Color.White.copy(alpha = sparkAlpha * 0.9f),
+            radius = sparkR * 0.5f,
+            center = pt(sparkX, sparkY)
         )
-
-        // 4. Точечные частицы вокруг солнца (как на орбите)
-        val particleCount = 12
-        for (i in 0 until particleCount) {
-            val angle = (i.toFloat() / particleCount) * 2f * PI.toFloat() + pulse
-            val distance = sunRadius * (1.3f + 0.4f * sin(pulse * 2f + i * 0.8f))
-            val px = heartCenter.x + cos(angle) * distance
-            val py = heartCenter.y + sin(angle) * distance
-            val pr = (0.3f + 0.3f * sin(pulse * 3f + i)) * u
-
-            drawCircle(
-                color = Color(0xFF00FFFF).copy(alpha = 0.4f + 0.4f * sin(pulse * 4f + i)),
-                radius = pr,
-                center = Offset(px, py)
-            )
-        }
-
-        // 5. Внутренний белый блик (яркий центр)
-        drawCircle(
-            color = Color.White.copy(alpha = 0.9f),
-            radius = sunRadius * 0.35f,
-            center = Offset(heartCenter.x - sunRadius * 0.2f, heartCenter.y - sunRadius * 0.2f)
-        )
-
-        // 6. Тонкое кольцо-орбита вокруг солнца (как на картинке)
-        drawCircle(
-            color = Color(0xFF00FFFF).copy(alpha = 0.3f + 0.2f * corePulse),
-            radius = sunRadius * 1.6f,
-            center = heartCenter,
-            style = Stroke(width = 0.6f * u)
-        )
+    }
+}
                        // ================= НАДПИСЬ "ИИ-Друг" МЕЖДУ ЭКРАНОМ И РЕМНЁМ =================
         val labelText = "ИИ-Друг"
                 val labelFontSize = with(density) { (10f * u).toSp() }
@@ -3193,17 +3181,17 @@ fun createGearIrisPath(centerX: Float, centerY: Float, radius: Float, teethCount
     val path = Path()
     val outerRadius = radius
     val innerRadius = radius * 0.75f
-    val angleStep = (2f * PI) / teethCount
+    val angleStep = (2f * PI.toFloat()) / teethCount
     var firstPoint = true
-    
+
     for (i in 0 until teethCount) {
-        val angle = i * angleStep - PI / 2f
+        val angle = i * angleStep - PI.toFloat() / 2f
         val outerX = centerX + cos(angle) * outerRadius
         val outerY = centerY + sin(angle) * outerRadius
         val nextAngle = angle + angleStep / 2f
         val innerX = centerX + cos(nextAngle) * innerRadius
         val innerY = centerY + sin(nextAngle) * innerRadius
-        
+
         if (firstPoint) {
             path.moveTo(outerX, outerY)
             firstPoint = false
