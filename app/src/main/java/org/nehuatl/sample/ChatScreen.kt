@@ -3162,7 +3162,7 @@ fun createLivingBrowPath(
     // Наклон вокруг внутреннего края (центр вращения — innerX, innerY)
     val pivotX = innerX
     val pivotY = innerY
-    val rad = (tilt * PI / 180f).toFloat()
+    val rad = tilt * PI.toFloat() / 180f
     val cosA = cos(rad)
     val sinA = sin(rad)
 
@@ -3274,7 +3274,6 @@ val leftEyeCenterY = 26f + lookOffsetY / u  // Чуть выше, чтобы в�
 val leftCenter = pt(leftEyeCenterX, leftEyeCenterY)
 
 val leftEyePath = createPredatorEyePath(leftCenter.x, leftCenter.y, eyeW, eyeH, isLeft = true)
-val leftBrowPath = createBrowPath(leftCenter.x, leftCenter.y, eyeW, eyeH, isLeft = true)
 
 // Свечение глаза
 drawPath(
@@ -3379,7 +3378,6 @@ val rightEyeCenterY = 26f + lookOffsetY / u
 val rightCenter = pt(rightEyeCenterX, rightEyeCenterY)
 
 val rightEyePath = createPredatorEyePath(rightCenter.x, rightCenter.y, eyeW, eyeH, isLeft = false)
-val rightBrowPath = createBrowPath(rightCenter.x, rightCenter.y, eyeW, eyeH, isLeft = false)
 
 // Свечение
 drawPath(
