@@ -565,20 +565,7 @@ fun ChatScreen(
     }
 
         
-    val density = LocalDensity.current
-
-            // Приветствие робота — махать ОДИН РАЗ при первом запуске
-    var welcomeWaveDone by remember { mutableStateOf(false) }
-    LaunchedEffect(speakStartTrigger) {
-        if (speakStartTrigger && !welcomeWaveDone) {
-            welcomeWaveDone = true
-            waveSignal = true
-            delay(2500)
-            waveSignal = false
-        }
-    }
-
-           
+    val density = LocalDensity.current      
    
            // Автосброс waveSignal на случай застревания (страховка)
     LaunchedEffect(waveSignal) {
@@ -3153,22 +3140,51 @@ fun createPredatorEyePath(centerX: Float, centerY: Float, width: Float, height: 
     }
 }
 
-// Функция создания брови (СВЕТЛЕЕ для видимости на тёмном визоре!)
-fun createBrowPath(centerX: Float, centerY: Float, width: Float, height: Float, isLeft: Boolean): Path {
-    val halfW = width / 2f
-    val browOffsetY = height * 0.9f // Бровь выше глаза
-    
+// Функция создания брови с учётом состояния (живая бровь)
+fun createLivingBrowPath(
+    centerX: Float,
+    centerY: Float,
+    width: Float,
+    height: Float,
+    isLeft: Boolean,
+    lift: Float,        // сдвиг по Y (в px)
+    tilt: Float,        // наклон в градусах
+    stretch: Float      // масштаб по X
+): Path {
+    val halfW = width * stretch / 2f
+    val browOffsetY = height * 0.9f
+
     val innerX = if (isLeft) centerX + halfW * 0.9f else centerX - halfW * 0.9f
     val outerX = if (isLeft) centerX - halfW * 1.1f else centerX + halfW * 1.1f
-    val innerY = centerY - browOffsetY
-    val outerY = centerY - browOffsetY - height * 0.3f
-    
-    return Path().apply {
-        moveTo(innerX, innerY)
-        quadraticBezierTo(
-            (innerX + outerX) / 2f, innerY - height * 0.15f,
-            outerX, outerY
+    val innerY = centerY - browOffsetY + lift
+    val outerY = centerY - browOffsetY - height * 0.3f + lift
+
+    // Наклон вокруг внутреннего края (центр вращения — innerX, innerY)
+    val pivotX = innerX
+    val pivotY = innerY
+    val rad = (tilt * PI / 180f).toFloat()
+    val cosA = cos(rad)
+    val sinA = sin(rad)
+
+    fun rotatePoint(x: Float, y: Float): Offset {
+        val dx = x - pivotX
+        val dy = y - pivotY
+        return Offset(
+            pivotX + dx * cosA - dy * sinA,
+            pivotY + dx * sinA + dy * cosA
         )
+    }
+
+    val innerRot = rotatePoint(innerX, innerY)
+    val outerRot = rotatePoint(outerX, outerY)
+    val ctrlRot = rotatePoint(
+        (innerX + outerX) / 2f,
+        innerY - height * 0.15f
+    )
+
+    return Path().apply {
+        moveTo(innerRot.x, innerRot.y)
+        quadraticBezierTo(ctrlRot.x, ctrlRot.y, outerRot.x, outerRot.y)
     }
 }
 
@@ -3198,6 +3214,58 @@ fun createGearIrisPath(centerX: Float, centerY: Float, radius: Float, teethCount
     }
     path.close()
     return path
+}
+// ================= ЖИВЫЕ БРОВИ — РАСЧЁТ СОСТОЯНИЯ =================
+// Брови реагируют на: isThinking, isSpeaking, isIdle, isBlinking, lookOffsetX/Y
+// Каждая бровь имеет: наклон (rotation), подъём (offsetY), сжатие/растяжение (scaleX)
+
+// Базовый наклон: внутренний край выше внешнего (хищный прищур)
+// При isThinking — брови сдвигаются к центру (сосредоточенность)
+// При isSpeaking — брови поднимаются (удивление/активность)
+// При isIdle — плавное «дыхание» бровей через idleEyePhase
+
+val browPhase = if (isThinking) {
+    // Сосредоточенность: брови сдвигаются вниз и к центру
+    -0.15f + sin(pulse * 2f) * 0.05f
+} else if (isSpeaking) {
+    // Активность: брови поднимаются
+    0.25f + sin(mouthPhase * 2f) * 0.08f
+} else if (isIdle) {
+    // Спокойствие: лёгкое «дыхание» бровей
+    val p = idleEyePhase
+    when {
+        p < 0.4f -> 0f
+        p < 0.6f -> ((p - 0.4f) / 0.2f) * 0.15f          // подъём
+        p < 0.8f -> 0.15f - ((p - 0.6f) / 0.2f) * 0.3f    // сдвиг вниз (хмурость)
+        else -> -0.15f + ((p - 0.8f) / 0.2f) * 0.15f      // возврат
+    }
+} else {
+    0f
+}
+
+// Подъём бровей по Y (в единицах дизайна)
+val browLift = when {
+    isBlinking -> -0.5f * u                  // при моргании — чуть вниз
+    isThinking -> -1.2f * u                  // сосредоточенность — вниз
+    isSpeaking -> 1.5f * u                   // активность — вверх
+    isIdle -> browPhase * 3f * u             // «дыхание»
+    else -> 0f
+}
+
+// Наклон бровей (градусы): положительный — внутренний край вверх
+val browTilt = when {
+    isThinking -> 12f                        // сдвиг к центру (злой/сосредоточенный)
+    isSpeaking -> -6f                        // удивлённый подъём
+    isIdle -> browPhase * 10f                // лёгкое движение
+    else -> 0f
+}
+
+// Сжатие/растяжение бровей по X (1f = норма)
+val browStretch = when {
+    isThinking -> 0.9f                       // чуть сжаты
+    isSpeaking -> 1.1f                       // чуть растянуты
+    isIdle -> 1f + browPhase * 0.15f         // «дыхание»
+    else -> 1f
 }
 
 // ========== ЛЕВЫЙ ГЛАЗ (позиция внутри визора) ==========
@@ -3272,11 +3340,37 @@ drawCircle(
     center = Offset(leftIrisCenter.x + irisRadius * 0.3f, leftIrisCenter.y - irisRadius * 0.3f)
 )
 
-// БРОВЬ (СВЕТЛАЯ — mediumGray для видимости на тёмном визоре!)
+// ========== ЛЕВАЯ БРОВЬ — ЖИВАЯ, ВАРИАНТ B (neonBluePulse) ==========
+val leftBrowPath = createLivingBrowPath(
+    centerX = leftCenter.x,
+    centerY = leftCenter.y,
+    width = eyeW,
+    height = eyeH,
+    isLeft = true,
+    lift = browLift,
+    tilt = browTilt,
+    stretch = browStretch
+)
+
+// Свечение брови (ореол)
 drawPath(
     path = leftBrowPath,
-    color = mediumGray,  // ИСПРАВЛЕНО: было darkerGray (не видно)
+    color = neonBluePulse.copy(alpha = 0.35f),
+    style = Stroke(width = 3.5f * u, cap = StrokeCap.Round)
+)
+
+// Основная линия брови — неоновый голубой
+drawPath(
+    path = leftBrowPath,
+    color = neonBluePulse.copy(alpha = 0.95f),
     style = Stroke(width = 2f * u, cap = StrokeCap.Round)
+)
+
+// Яркое ядро (тонкая белая линия поверх) — для «живого» свечения
+drawPath(
+    path = leftBrowPath,
+    color = Color.White.copy(alpha = 0.7f),
+    style = Stroke(width = 0.7f * u, cap = StrokeCap.Round)
 )
 
 // ========== ПРАВЫЙ ГЛАЗ ==========
@@ -3349,11 +3443,37 @@ drawCircle(
     center = Offset(rightIrisCenter.x + irisRadius * 0.3f, rightIrisCenter.y - irisRadius * 0.3f)
 )
 
-// БРОВЬ (СВЕТЛАЯ)
+// ========== ПРАВАЯ БРОВЬ — ЖИВАЯ, ВАРИАНТ B (neonBluePulse) ==========
+val rightBrowPath = createLivingBrowPath(
+    centerX = rightCenter.x,
+    centerY = rightCenter.y,
+    width = eyeW,
+    height = eyeH,
+    isLeft = false,
+    lift = browLift,
+    tilt = browTilt,
+    stretch = browStretch
+)
+
+// Свечение брови (ореол)
 drawPath(
     path = rightBrowPath,
-    color = mediumGray,  // ИСПРАВЛЕНО: было darkerGray
+    color = neonBluePulse.copy(alpha = 0.35f),
+    style = Stroke(width = 3.5f * u, cap = StrokeCap.Round)
+)
+
+// Основная линия брови — неоновый голубой
+drawPath(
+    path = rightBrowPath,
+    color = neonBluePulse.copy(alpha = 0.95f),
     style = Stroke(width = 2f * u, cap = StrokeCap.Round)
+)
+
+// Яркое ядро (тонкая белая линия поверх)
+drawPath(
+    path = rightBrowPath,
+    color = Color.White.copy(alpha = 0.7f),
+    style = Stroke(width = 0.7f * u, cap = StrokeCap.Round)
 )
         
                 // ================= РОТ (с анимациями под стиль хищника) =================
