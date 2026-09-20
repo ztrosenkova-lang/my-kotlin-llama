@@ -1831,12 +1831,6 @@ fun ThinkingRobotAnimation(
         
         // ================= ТУЛОВИЩЕ (сегментированное, мужская фигура) =================
 
-// 1. ЗАДНЯЯ ЧАСТЬ ВЕРХНЕГО ОВАЛА (тёмная половина купола)
-drawOval(
-    color = mediumGray,
-    topLeft = pt(-37f, 70f),
-    size = Size(74f * u, 14f * u)
-)
 
 // 2. 3D КУПОЛ (верхняя крышка с овальными кольцами для объёма)
 val domeTopY = 70f
@@ -2117,10 +2111,54 @@ for (i in -1..1 step 2) {
         center = pt(i * 20f, segment2Bottom - 5f)
     )
 }
+val beltHeight = 5f * u
+val beltCenterY = 139.25f
+// 5.5 СЕГМЕНТ 2.5: Область между талией и поясом (под надписью "ИИ-Друг")
+val segment2_5Top = segment2Bottom                        // 127f
+val segment2_5Bottom = beltCenterY - beltHeight / (2f * u) // 136.75f
+val segment2_5WidthTop = segment2WidthBottom              // 28f
+val segment2_5WidthBottom = 30f
+
+val segment2_5Path = Path().apply {
+    moveTo(pt(-segment2_5WidthTop, segment2_5Top).x, pt(-segment2_5WidthTop, segment2_5Top).y)
+    lineTo(pt(segment2_5WidthTop, segment2_5Top).x, pt(segment2_5WidthTop, segment2_5Top).y)
+    quadraticBezierTo(
+        pt(segment2_5WidthBottom, segment2_5Bottom).x, pt(segment2_5WidthBottom, segment2_5Bottom).y,
+        pt(segment2_5WidthBottom, segment2_5Bottom).x, pt(segment2_5WidthBottom, segment2_5Bottom).y
+    )
+    lineTo(pt(-segment2_5WidthBottom, segment2_5Bottom).x, pt(-segment2_5WidthBottom, segment2_5Bottom).y)
+    quadraticBezierTo(
+        pt(-segment2_5WidthTop, segment2_5Top).x, pt(-segment2_5WidthTop, segment2_5Top).y,
+        pt(-segment2_5WidthTop, segment2_5Top).x, pt(-segment2_5WidthTop, segment2_5Top).y
+    )
+    close()
+}
+
+drawPath(
+    segment2_5Path,
+    brush = Brush.verticalGradient(
+        colors = listOf(mediumGray, mediumGray, darkGray),
+        startY = pt(0f, segment2_5Top).y,
+        endY = pt(0f, segment2_5Bottom).y
+    )
+)
+drawPath(segment2_5Path, color = darkGray, style = Stroke(width = 1.2f * u))
+
+// Клёпки на сегменте 2.5
+for (i in -1..1 step 2) {
+    drawCircle(
+        color = mediumGray,
+        radius = 1f * u,
+        center = pt(i * 22f, segment2_5Top + 3f)
+    )
+    drawCircle(
+        color = mediumGray,
+        radius = 1f * u,
+        center = pt(i * 24f, segment2_5Bottom - 3f)
+    )
+}
 
 // 6. ПОЯС С БЕГУЩИМ ИНДИКАТОРОМ (оригинальный)
-val beltCenterY = 139.25f
-val beltHeight = 5f * u
 val beltTop = beltCenterY - beltHeight / (2f * u)
 val beltWidth = 60f * u
 val beltLeft = -30f
