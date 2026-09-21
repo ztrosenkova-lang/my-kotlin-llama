@@ -1870,31 +1870,7 @@ drawPath(
 )
 drawPath(domePath, color = darkGray, style = Stroke(width = 1.3f * u))
 
-// ОВАЛЬНЫЕ КОЛЬЦА НА КРЫШКЕ (создают 3D эффект)
-for (i in 1..4) {
-    val ringY = domeTopY + 2f + i * 3.5f
-    val ringWidth = domeWidth - i * 4f
-    val ringHeight = 2.5f
-    
-    drawOval(
-        color = lightGray.copy(alpha = 0.7f),
-        topLeft = pt(-ringWidth, ringY),
-        size = Size(ringWidth * 2f * u, ringHeight * u)
-    )
-    drawOval(
-        color = mediumGray.copy(alpha = 0.5f),
-        topLeft = pt(-ringWidth, ringY),
-        size = Size(ringWidth * 2f * u, ringHeight * u),
-        style = Stroke(width = 0.5f * u)
-    )
-}
 
-// Блик на куполе
-drawOval(
-    color = whiteHighlight.copy(alpha = 0.6f),
-    topLeft = pt(-18f, domeTopY + 3f),
-    size = Size(22f * u, 5f * u)
-)
 
 // 3. СЕГМЕНТ 1: Верхняя часть (широкие плечи)
 val segment1Top = 87f
@@ -2522,7 +2498,7 @@ for (i in 0 until sparkCount) {
             text = labelText,
             style = labelStyle
         )
-                val labelCenterY = 130.375f
+               val labelCenterY = 117f
         val labelTopY = labelCenterY * u - labelLayout.size.height / 2f
         drawText(
             textLayoutResult = labelLayout,
@@ -3026,7 +3002,7 @@ val visorPath = Path().apply {
     )
     
     // Низ слева от выемки
-    lineTo(pt(-34f + 2f * bottomRadius, 42f).x, pt(-34f + 2f * bottomRadius, 42f).y)
+lineTo(pt(-34f + bottomRadius, 42f).x, pt(-34f + bottomRadius, 42f).y)
     
     // Левый нижний угол (большое скругление)
     arcTo(
