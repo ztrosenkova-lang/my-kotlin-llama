@@ -1080,7 +1080,10 @@ fun ChatScreen(
 
                 Box(
                     modifier = Modifier
-                        .offset(x = animatedOffsetX.dp, y = animatedOffsetY.dp)
+                        .offset(
+    x = with(LocalDensity.current) { animatedOffsetX.toDp() },
+    y = with(LocalDensity.current) { animatedOffsetY.toDp() }
+)
                         .size(70.dp)
                         .graphicsLayer(
                             scaleX = animatedScale,
@@ -2207,8 +2210,8 @@ if (chargeBarTravel > 0.1f) {
 // 7. СЕГМЕНТ 3: Нижняя часть (перед соплом)
 val segment3Top = beltCenterY + beltHeight / (2f * u)
 val segment3Bottom = 155f
-val segment3WidthTop = 28f
-val segment3WidthBottom = 26f
+val segment3WidthTop = 33.6f
+val segment3WidthBottom = 31.2f
 
 val segment3Path = Path().apply {
     moveTo(pt(-segment3WidthTop, segment3Top).x, pt(-segment3WidthTop, segment3Top).y)
@@ -2241,9 +2244,9 @@ for (i in -1..1 step 2) {
 val nozzleTop = 155f
 val nozzleThroat = 165f
 val nozzleBottom = 180f
-val nozzleTopWidth = 26f
-val nozzleThroatWidth = 16f
-val nozzleBottomWidth = 22f
+val nozzleTopWidth = 31.2f
+val nozzleThroatWidth = 19.2f
+val nozzleBottomWidth = 26.4f
 
 val nozzlePath = Path().apply {
     moveTo(pt(-nozzleTopWidth / 2f, nozzleTop).x, pt(-nozzleTopWidth / 2f, nozzleTop).y)
@@ -2332,31 +2335,31 @@ drawCircle(
             Color.Transparent
         ),
         center = pt(0f, 195f).copy(x = pt(0f, 195f).x + flameFlickerX * u),
-        radius = 25f * u
+        radius = 30f * u
     ),
-    radius = 25f * u,
+    radius = 30f * u,
     center = pt(0f, 195f).copy(x = pt(0f, 195f).x + flameFlickerX * u)
 )
 
 // Внешнее пламя
 val outerFlamePath = Path().apply {
-    moveTo(pt(-12f, nozzleBottom + 2f).x, pt(-12f, nozzleBottom + 2f).y)
+    moveTo(pt(-14.4f, nozzleBottom + 2f).x, pt(-14.4f, nozzleBottom + 2f).y)
     quadraticBezierTo(
-        pt(-10f + flameFlickerX * 0.5f, nozzleBottom + 15f).x,
-        pt(-10f + flameFlickerX * 0.5f, nozzleBottom + 15f).y,
-        pt(-8f + flameFlickerX * 0.3f, nozzleBottom + 25f).x,
-        pt(-8f + flameFlickerX * 0.3f, nozzleBottom + 25f).y
+        pt(-12f + flameFlickerX * 0.5f, nozzleBottom + 15f).x,
+        pt(-12f + flameFlickerX * 0.5f, nozzleBottom + 15f).y,
+        pt(-9.6f + flameFlickerX * 0.3f, nozzleBottom + 25f).x,
+        pt(-9.6f + flameFlickerX * 0.3f, nozzleBottom + 25f).y
     )
     quadraticBezierTo(
         pt(0f, nozzleBottom + 30f + flameFlicker).x,
         pt(0f, nozzleBottom + 30f + flameFlicker).y,
-        pt(8f + flameFlickerX * 0.3f, nozzleBottom + 25f).x,
-        pt(8f + flameFlickerX * 0.3f, nozzleBottom + 25f).y
+        pt(9.6f + flameFlickerX * 0.3f, nozzleBottom + 25f).x,
+        pt(9.6f + flameFlickerX * 0.3f, nozzleBottom + 25f).y
     )
     quadraticBezierTo(
-        pt(10f + flameFlickerX * 0.5f, nozzleBottom + 15f).x,
-        pt(10f + flameFlickerX * 0.5f, nozzleBottom + 15f).y,
-        pt(12f, nozzleBottom + 2f).x, pt(12f, nozzleBottom + 2f).y
+        pt(12f + flameFlickerX * 0.5f, nozzleBottom + 15f).x,
+        pt(12f + flameFlickerX * 0.5f, nozzleBottom + 15f).y,
+        pt(14.4f, nozzleBottom + 2f).x, pt(14.4f, nozzleBottom + 2f).y
     )
     close()
 }
@@ -2377,22 +2380,21 @@ drawPath(
 
 // Среднее пламя
 val middleFlamePath = Path().apply {
-    moveTo(pt(-7f, nozzleBottom + 3f).x, pt(-7f, nozzleBottom + 3f).y)
+    moveTo(pt(-8.4f, nozzleBottom + 3f).x, pt(-8.4f, nozzleBottom + 3f).y)
     quadraticBezierTo(
-        pt(-5f, nozzleBottom + 12f).x, pt(-5f, nozzleBottom + 12f).y,
-        pt(-3f, nozzleBottom + 20f).x, pt(-3f, nozzleBottom + 20f).y
+        pt(-6f, nozzleBottom + 12f).x, pt(-6f, nozzleBottom + 12f).y,
+        pt(-3.6f, nozzleBottom + 20f).x, pt(-3.6f, nozzleBottom + 20f).y
     )
     quadraticBezierTo(
         pt(0f, nozzleBottom + 23f).x, pt(0f, nozzleBottom + 23f).y,
-        pt(3f, nozzleBottom + 20f).x, pt(3f, nozzleBottom + 20f).y
+        pt(3.6f, nozzleBottom + 20f).x, pt(3.6f, nozzleBottom + 20f).y
     )
     quadraticBezierTo(
-        pt(5f, nozzleBottom + 12f).x, pt(5f, nozzleBottom + 12f).y,
-        pt(7f, nozzleBottom + 3f).x, pt(7f, nozzleBottom + 3f).y
+        pt(6f, nozzleBottom + 12f).x, pt(6f, nozzleBottom + 12f).y,
+        pt(8.4f, nozzleBottom + 3f).x, pt(8.4f, nozzleBottom + 3f).y
     )
     close()
 }
-
 drawPath(
     middleFlamePath,
     brush = Brush.verticalGradient(
@@ -2410,7 +2412,7 @@ drawPath(
 // Ромбы Маха
 for (i in 0..2) {
     val diamondY = nozzleBottom + 8f + i * 5f
-    val diamondSize = (2.5f - i * 0.6f) * u
+    val diamondSize = (3f - i * 0.72f) * u
     val diamondAlpha = 0.7f - i * 0.2f
     
     drawCircle(
@@ -2437,14 +2439,14 @@ for (i in 0..2) {
 
 // Внутреннее ядро
 val innerFlamePath = Path().apply {
-    moveTo(pt(-4f, nozzleBottom + 4f).x, pt(-4f, nozzleBottom + 4f).y)
+    moveTo(pt(-4.8f, nozzleBottom + 4f).x, pt(-4.8f, nozzleBottom + 4f).y)
     quadraticBezierTo(
-        pt(-2f, nozzleBottom + 10f).x, pt(-2f, nozzleBottom + 10f).y,
+        pt(-2.4f, nozzleBottom + 10f).x, pt(-2.4f, nozzleBottom + 10f).y,
         pt(0f, nozzleBottom + 15f).x, pt(0f, nozzleBottom + 15f).y
     )
     quadraticBezierTo(
-        pt(2f, nozzleBottom + 10f).x, pt(2f, nozzleBottom + 10f).y,
-        pt(4f, nozzleBottom + 4f).x, pt(4f, nozzleBottom + 4f).y
+        pt(2.4f, nozzleBottom + 10f).x, pt(2.4f, nozzleBottom + 10f).y,
+        pt(4.8f, nozzleBottom + 4f).x, pt(4.8f, nozzleBottom + 4f).y
     )
     close()
 }
@@ -2469,7 +2471,7 @@ for (i in 0 until sparkCount) {
     val sparkProgress = sparkPhase / (2f * PI.toFloat())
     
     val sparkY = nozzleBottom + 5f + sparkProgress * 35f
-    val sparkX = -8f + i * 1.8f + sin(sparkPhase * 4f) * 2.5f
+    val sparkX = -9.6f + i * 2.16f + sin(sparkPhase * 4f) * 3f
     val sparkAlpha = (1f - sparkProgress) * 0.9f
     val sparkR = (1f - sparkProgress * 0.7f) * u
     
