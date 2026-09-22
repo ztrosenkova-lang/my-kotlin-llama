@@ -34,6 +34,8 @@
 
     <!-- НОВОЕ: Разрешение на игнорирование оптимизации батареи -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
     <application
         android:allowBackup="true"
@@ -72,6 +74,12 @@
             android:exported="false"
             android:process=":tts"
             android:foregroundServiceType="mediaPlayback" />
+      <!-- Плавающий сервис робота -->
+        <service
+            android:name=".FloatingRobotService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
 
     </application>
 
