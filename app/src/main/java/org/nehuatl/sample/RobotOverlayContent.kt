@@ -23,7 +23,7 @@ fun RobotOverlayContent(
     val isIdle = !isSpeaking && !isThinking
 
     Box(
-        modifier = modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxHeight(),
         contentAlignment = Alignment.Center
     ) {
         ThinkingRobotAnimation(
