@@ -40,6 +40,7 @@ class MainActivity : ComponentActivity() {
         private const val PREFS_NAME = "app_security"
         private const val KEY_PASSWORD_HASH = "password_hash"
         private const val TAG = "MainActivity"
+        private const val OVERLAY_PERMISSION_REQUEST_CODE = 2001
     }
 
     private val prefs by lazy {
@@ -97,6 +98,14 @@ class MainActivity : ComponentActivity() {
         }
         if (!storageGranted) {
             Log.w("MainActivity", "Разрешение на чтение хранилища не получено")
+        }
+
+        // Проверяем уведомления
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val notifGranted = permissions[Manifest.permission.POST_NOTIFICATIONS] ?: false
+            if (!notifGranted) {
+                Log.w("MainActivity", "Разрешение на уведомления не получено")
+            }
         }
     }
 
@@ -168,7 +177,6 @@ class MainActivity : ComponentActivity() {
             setPadding(40, 20, 40, 20)
         }
 
-        // 1. Заголовок с роботом (центрируем)
         val titleView = android.widget.TextView(this).apply {
             text = "🤖 Установка пароля"
             textSize = 18f
@@ -179,7 +187,6 @@ class MainActivity : ComponentActivity() {
         }
         dialogView.addView(titleView)
 
-        // 2. Сообщение (центрируем)
         val messageView = android.widget.TextView(this).apply {
             text = "Приложение будет защищено паролем. Введите пароль дважды для подтверждения."
             textSize = 13f
@@ -190,26 +197,22 @@ class MainActivity : ComponentActivity() {
         }
         dialogView.addView(messageView)
 
-        // 3. Поля ввода
         val passwordInput = createStyledEditText("Введите пароль")
         val confirmInput = createStyledEditText("Подтвердите пароль")
         dialogView.addView(passwordInput)
         dialogView.addView(confirmInput)
 
-        // 4. Контейнер для кнопок (горизонтальный, центрированный)
         val buttonContainer = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.CENTER_HORIZONTAL
             setPadding(0, 16, 0, 0)
         }
 
-        // Создаём диалог ДО кнопок, чтобы иметь ссылку
         val dialog = AlertDialog.Builder(this)
             .setView(dialogView)
             .setCancelable(false)
             .create()
 
-        // Кнопка "Установить" с тактильной обратной связью
         val positiveButton = android.widget.Button(this).apply {
             text = "Установить"
             setBackgroundColor(android.graphics.Color.parseColor("#FF74C0FC"))
@@ -227,7 +230,6 @@ class MainActivity : ComponentActivity() {
             ).apply {
                 setMargins(10.dpToPx(), 0, 10.dpToPx(), 0)
             }
-            // Добавляем тактильную обратную связь при нажатии
             setOnTouchListener { _, _ ->
                 vibrateButton()
                 false
@@ -252,7 +254,6 @@ class MainActivity : ComponentActivity() {
         }
         buttonContainer.addView(positiveButton)
 
-        // Кнопка "Выйти" с тактильной обратной связью
         val negativeButton = android.widget.Button(this).apply {
             text = "Выйти"
             setBackgroundColor(android.graphics.Color.parseColor("#FF74C0FC"))
@@ -283,11 +284,9 @@ class MainActivity : ComponentActivity() {
 
         dialogView.addView(buttonContainer)
 
-        // Настраиваем и показываем диалог
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.show()
 
-        // Устанавливаем фон и закругления
         dialog.window?.decorView?.setBackgroundColor(android.graphics.Color.TRANSPARENT)
         val rootView = dialog.window?.decorView?.findViewById<android.widget.FrameLayout>(android.R.id.content)
 
@@ -314,7 +313,6 @@ class MainActivity : ComponentActivity() {
             setPadding(40, 20, 40, 20)
         }
 
-        // 1. Заголовок с роботом (центрируем)
         val titleView = android.widget.TextView(this).apply {
             text = "🤖 Введите пароль"
             textSize = 18f
@@ -325,7 +323,6 @@ class MainActivity : ComponentActivity() {
         }
         dialogView.addView(titleView)
 
-        // 2. Сообщение (центрируем)
         val messageView = android.widget.TextView(this).apply {
             text = "Для доступа к приложению требуется пароль."
             textSize = 13f
@@ -336,24 +333,20 @@ class MainActivity : ComponentActivity() {
         }
         dialogView.addView(messageView)
 
-        // 3. Поле ввода
         val passwordInput = createStyledEditText("Введите пароль")
         dialogView.addView(passwordInput)
 
-        // 4. Контейнер для кнопок (горизонтальный, центрированный)
         val buttonContainer = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.CENTER_HORIZONTAL
             setPadding(0, 16, 0, 0)
         }
 
-        // Создаём диалог ДО кнопок, чтобы иметь ссылку
         val dialog = AlertDialog.Builder(this)
             .setView(dialogView)
             .setCancelable(false)
             .create()
 
-        // Кнопка "Войти" с тактильной обратной связью
         val positiveButton = android.widget.Button(this).apply {
             text = "Войти"
             setBackgroundColor(android.graphics.Color.parseColor("#FF74C0FC"))
@@ -393,7 +386,6 @@ class MainActivity : ComponentActivity() {
         }
         buttonContainer.addView(positiveButton)
 
-        // Кнопка "Выйти" с тактильной обратной связью
         val negativeButton = android.widget.Button(this).apply {
             text = "Выйти"
             setBackgroundColor(android.graphics.Color.parseColor("#FF74C0FC"))
@@ -424,11 +416,9 @@ class MainActivity : ComponentActivity() {
 
         dialogView.addView(buttonContainer)
 
-        // Настраиваем и показываем диалог
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.show()
 
-        // Устанавливаем фон и закругления
         dialog.window?.decorView?.setBackgroundColor(android.graphics.Color.TRANSPARENT)
         val rootView = dialog.window?.decorView?.findViewById<android.widget.FrameLayout>(android.R.id.content)
 
@@ -454,35 +444,61 @@ class MainActivity : ComponentActivity() {
         return (this * resources.displayMetrics.density).toInt()
     }
 
-    private fun showMainContent() {
-    setContent {
-        KotlinLlamaCppTheme {
-            val viewModel: MainViewModel by viewModels {
-                object : ViewModelProvider.Factory {
-                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                        return MainViewModel(application, contentResolver) as T
-                    }
-                }
-            }
-            Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                ChatScreen(
-                    modifier = Modifier.padding(innerPadding),
-                    viewModel = viewModel,
-                    currentModelPath = modelPath,
-                    mmprojPath = mmprojPath,
-                    onPickModel = { modelPickerLauncher.launch(arrayOf("*/*")) },
-                    onPickMmproj = { mmprojPickerLauncher.launch(arrayOf("*/*")) },
-                    onPickImage = { imagePickerLauncher.launch(arrayOf("image/*")) },
-                    imagePath = imagePath,
-                    onImageUsed = { imagePath = null }
+    // ========== ПРОВЕРКА РАЗРЕШЕНИЯ OVERLAY ==========
+
+    private fun hasOverlayPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Settings.canDrawOverlays(this)
+        } else {
+            true
+        }
+    }
+
+    private fun requestOverlayPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            try {
+                val intent = Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName")
                 )
+                startActivityForResult(intent, OVERLAY_PERMISSION_REQUEST_CODE)
+            } catch (e: Exception) {
+                Log.e(TAG, "Не удалось открыть настройки overlay: ${e.message}")
+                android.widget.Toast.makeText(
+                    this,
+                    "Откройте: Настройки → Приложения → Ваше приложение → Поверх других приложений",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
             }
         }
     }
 
-    // ВРЕМЕННО для теста — запуск сервиса
-    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-        val intent = Intent(this@MainActivity, FloatingRobotService::class.java).apply {
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == OVERLAY_PERMISSION_REQUEST_CODE) {
+            if (hasOverlayPermission()) {
+                Log.d(TAG, "Overlay permission granted")
+                android.widget.Toast.makeText(
+                    this,
+                    "✅ Разрешение получено. Запускаю робота...",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+                startFloatingService()
+            } else {
+                Log.w(TAG, "Overlay permission denied")
+                android.widget.Toast.makeText(
+                    this,
+                    "⚠️ Без разрешения 'Поверх других приложений' робот не сможет отображаться",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    // ========== ЗАПУСК СЕРВИСА ==========
+
+    private fun startFloatingService() {
+        val intent = Intent(this, FloatingRobotService::class.java).apply {
             action = FloatingRobotService.ACTION_START
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -490,8 +506,46 @@ class MainActivity : ComponentActivity() {
         } else {
             startService(intent)
         }
-    }, 2000)
-}
+        Log.d(TAG, "FloatingRobotService started")
+    }
+
+    // ========== ОСНОВНОЙ КОНТЕНТ ==========
+
+    private fun showMainContent() {
+        setContent {
+            KotlinLlamaCppTheme {
+                val viewModel: MainViewModel by viewModels {
+                    object : ViewModelProvider.Factory {
+                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                            return MainViewModel(application, contentResolver) as T
+                        }
+                    }
+                }
+                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                    ChatScreen(
+                        modifier = Modifier.padding(innerPadding),
+                        viewModel = viewModel,
+                        currentModelPath = modelPath,
+                        mmprojPath = mmprojPath,
+                        onPickModel = { modelPickerLauncher.launch(arrayOf("*/*")) },
+                        onPickMmproj = { mmprojPickerLauncher.launch(arrayOf("*/*")) },
+                        onPickImage = { imagePickerLauncher.launch(arrayOf("image/*")) },
+                        imagePath = imagePath,
+                        onImageUsed = { imagePath = null }
+                    )
+                }
+            }
+        }
+
+        // Запуск плавающего робота через 2 секунды после показа UI
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            if (!hasOverlayPermission()) {
+                requestOverlayPermission()
+            } else {
+                startFloatingService()
+            }
+        }, 2000)
+    }
 
     // ========== ЖИЗНЕННЫЙ ЦИКЛ ==========
 
@@ -513,7 +567,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // УБРАНО: пароль больше не запрашивается при возврате из фона
     }
 
     private fun checkPasswordAndProceed() {
@@ -530,6 +583,11 @@ class MainActivity : ComponentActivity() {
         val permissions = mutableListOf(
             Manifest.permission.RECORD_AUDIO
         )
+
+        // НОВОЕ: уведомления для Android 13+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions.add(Manifest.permission.READ_MEDIA_IMAGES)
