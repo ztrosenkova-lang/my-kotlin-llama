@@ -2207,17 +2207,44 @@ if (chargeBarTravel > 0.1f) {
     )
 }
 
-// 7. СЕГМЕНТ 3: Нижняя часть (перед соплом)
+// 7. СЕГМЕНТ 3: Нижняя часть (перед соплом) — не шире пояса, со скруглёнными углами
 val segment3Top = beltCenterY + beltHeight / (2f * u)
 val segment3Bottom = 155f
-val segment3WidthTop = 33.6f
-val segment3WidthBottom = 31.2f
+val segment3WidthTop = 30f      // ← было 33.6f, теперь уже пояса (30f) с запасом
+val segment3WidthBottom = 30f   // ← было 31.2f, теперь одинаково с верхом
+val segment3CornerRadius = 4f   // ← радиус скругления углов
 
 val segment3Path = Path().apply {
-    moveTo(pt(-segment3WidthTop, segment3Top).x, pt(-segment3WidthTop, segment3Top).y)
-    lineTo(pt(segment3WidthTop, segment3Top).x, pt(segment3WidthTop, segment3Top).y)
-    lineTo(pt(segment3WidthBottom, segment3Bottom).x, pt(segment3WidthBottom, segment3Bottom).y)
-    lineTo(pt(-segment3WidthBottom, segment3Bottom).x, pt(-segment3WidthBottom, segment3Bottom).y)
+    // Верхний левый угол
+    moveTo(pt(-segment3WidthTop + segment3CornerRadius, segment3Top).x, pt(-segment3WidthTop + segment3CornerRadius, segment3Top).y)
+    // Верхняя линия
+    lineTo(pt(segment3WidthTop - segment3CornerRadius, segment3Top).x, pt(segment3WidthTop - segment3CornerRadius, segment3Top).y)
+    // Верхний правый угол
+    quadraticBezierTo(
+        pt(segment3WidthTop, segment3Top).x, pt(segment3WidthTop, segment3Top).y,
+        pt(segment3WidthTop, segment3Top + segment3CornerRadius).x, pt(segment3WidthTop, segment3Top + segment3CornerRadius).y
+    )
+    // Правая боковина
+    lineTo(pt(segment3WidthBottom, segment3Bottom - segment3CornerRadius).x, pt(segment3WidthBottom, segment3Bottom - segment3CornerRadius).y)
+    // Нижний правый угол
+    quadraticBezierTo(
+        pt(segment3WidthBottom, segment3Bottom).x, pt(segment3WidthBottom, segment3Bottom).y,
+        pt(segment3WidthBottom - segment3CornerRadius, segment3Bottom).x, pt(segment3WidthBottom - segment3CornerRadius, segment3Bottom).y
+    )
+    // Нижняя линия
+    lineTo(pt(-segment3WidthBottom + segment3CornerRadius, segment3Bottom).x, pt(-segment3WidthBottom + segment3CornerRadius, segment3Bottom).y)
+    // Нижний левый угол
+    quadraticBezierTo(
+        pt(-segment3WidthBottom, segment3Bottom).x, pt(-segment3WidthBottom, segment3Bottom).y,
+        pt(-segment3WidthBottom, segment3Bottom - segment3CornerRadius).x, pt(-segment3WidthBottom, segment3Bottom - segment3CornerRadius).y
+    )
+    // Левая боковина
+    lineTo(pt(-segment3WidthTop, segment3Top + segment3CornerRadius).x, pt(-segment3WidthTop, segment3Top + segment3CornerRadius).y)
+    // Верхний левый угол
+    quadraticBezierTo(
+        pt(-segment3WidthTop, segment3Top).x, pt(-segment3WidthTop, segment3Top).y,
+        pt(-segment3WidthTop + segment3CornerRadius, segment3Top).x, pt(-segment3WidthTop + segment3CornerRadius, segment3Top).y
+    )
     close()
 }
 
