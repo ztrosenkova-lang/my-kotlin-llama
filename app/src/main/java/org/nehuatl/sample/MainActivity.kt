@@ -537,14 +537,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Запуск плавающего робота через 2 секунды после показа UI
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-            if (!hasOverlayPermission()) {
-                requestOverlayPermission()
-            } else {
-                startFloatingService()
-            }
-        }, 2000)
+       
     }
 
     // ========== ЖИЗНЕННЫЙ ЦИКЛ ==========
