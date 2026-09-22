@@ -498,16 +498,41 @@ class MainActivity : ComponentActivity() {
     // ========== ЗАПУСК СЕРВИСА ==========
 
     private fun startFloatingService() {
-        val intent = Intent(this, FloatingRobotService::class.java).apply {
-            action = FloatingRobotService.ACTION_START
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
-        }
-        Log.d(TAG, "FloatingRobotService started")
+    val intent = Intent(this, FloatingRobotService::class.java).apply {
+        action = FloatingRobotService.ACTION_START
     }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        startForegroundService(intent)
+    } else {
+        startService(intent)
+    }
+    Log.d(TAG, "FloatingRobotService started")
+}
+
+// ← ВСТАВИТЬ СЮДА новый метод
+fun startFloatingWithPermissionCheck() {
+    if (FloatingRobotService.isRunning) {
+        android.widget.Toast.makeText(
+            this,
+            "🤖 Робот уже запущен",
+            android.widget.Toast.LENGTH_SHORT
+        ).show()
+        return
+    }
+
+    if (!hasOverlayPermission()) {
+        Log.d(TAG, "Requesting overlay permission")
+        requestOverlayPermission()
+    } else {
+        Log.d(TAG, "Starting FloatingRobotService")
+        startFloatingService()
+        android.widget.Toast.makeText(
+            this,
+            "🤖 Плавающий робот запущен",
+            android.widget.Toast.LENGTH_SHORT
+        ).show()
+    }
+}
 
     // ========== ОСНОВНОЙ КОНТЕНТ ==========
 
