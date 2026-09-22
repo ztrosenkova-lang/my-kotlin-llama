@@ -455,31 +455,43 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun showMainContent() {
-        setContent {
-            KotlinLlamaCppTheme {
-                val viewModel: MainViewModel by viewModels {
-                    object : ViewModelProvider.Factory {
-                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                            return MainViewModel(application, contentResolver) as T
-                        }
+    setContent {
+        KotlinLlamaCppTheme {
+            val viewModel: MainViewModel by viewModels {
+                object : ViewModelProvider.Factory {
+                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                        return MainViewModel(application, contentResolver) as T
                     }
                 }
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    ChatScreen(
-                        modifier = Modifier.padding(innerPadding),
-                        viewModel = viewModel,
-                        currentModelPath = modelPath,
-                        mmprojPath = mmprojPath,
-                        onPickModel = { modelPickerLauncher.launch(arrayOf("*/*")) },
-                        onPickMmproj = { mmprojPickerLauncher.launch(arrayOf("*/*")) },
-                        onPickImage = { imagePickerLauncher.launch(arrayOf("image/*")) },
-                        imagePath = imagePath,
-                        onImageUsed = { imagePath = null }
-                    )
-                }
+            }
+            Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                ChatScreen(
+                    modifier = Modifier.padding(innerPadding),
+                    viewModel = viewModel,
+                    currentModelPath = modelPath,
+                    mmprojPath = mmprojPath,
+                    onPickModel = { modelPickerLauncher.launch(arrayOf("*/*")) },
+                    onPickMmproj = { mmprojPickerLauncher.launch(arrayOf("*/*")) },
+                    onPickImage = { imagePickerLauncher.launch(arrayOf("image/*")) },
+                    imagePath = imagePath,
+                    onImageUsed = { imagePath = null }
+                )
             }
         }
     }
+
+    // ВРЕМЕННО для теста — запуск сервиса
+    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+        val intent = Intent(this@MainActivity, FloatingRobotService::class.java).apply {
+            action = FloatingRobotService.ACTION_START
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+    }, 2000)
+}
 
     // ========== ЖИЗНЕННЫЙ ЦИКЛ ==========
 
