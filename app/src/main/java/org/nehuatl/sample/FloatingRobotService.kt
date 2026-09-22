@@ -106,11 +106,14 @@ class FloatingRobotService : LifecycleService() {
     }
 }
 
-        val sizePx = (160 * resources.displayMetrics.density).toInt()
+        val widthPx = (220 * resources.displayMetrics.density).toInt()
+val heightPx = (300 * resources.displayMetrics.density).toInt()
 
-        val params = WindowManager.LayoutParams(
-            sizePx,
-            sizePx,
+val params = WindowManager.LayoutParams(
+    widthPx,
+    heightPx,
+    ...
+)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             else
