@@ -101,10 +101,10 @@ class FloatingRobotService : LifecycleService() {
         }
 
         val view = ComposeOverlayView(this).apply {
-            setContent {
-                RobotOverlayContent(viewModel = viewModel)
-            }
-        }
+    setOverlayContent {
+        RobotOverlayContent(viewModel = viewModel)
+    }
+}
 
         val sizePx = (160 * resources.displayMetrics.density).toInt()
 
