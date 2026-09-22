@@ -4605,6 +4605,7 @@ private fun PromptSettingsPanel(
     promptText: String,
     onPromptChange: (String) -> Unit,
     onSave: () -> Unit,
+    onStartFloating: () -> Unit,
     colors: AppColors
 ) {
     Card(
@@ -4633,11 +4634,31 @@ private fun PromptSettingsPanel(
                 )
             )
             Spacer(modifier = Modifier.height(12.dp))
-            Button(
-                onClick = onSave,
-                colors = ButtonDefaults.buttonColors(containerColor = colors.accent),
-                modifier = Modifier.align(Alignment.End)
-            ) { Text("Сохранить", color = colors.background) }
+
+Row(
+    modifier = Modifier.fillMaxWidth(),
+    horizontalArrangement = Arrangement.spacedBy(8.dp)
+) {
+    Button(
+        onClick = onStartFloating,
+        colors = ButtonDefaults.buttonColors(containerColor = colors.green),
+        modifier = Modifier.weight(1f)
+    ) {
+        Text(
+            text = "🤖 Запустить робота",
+            color = colors.background,
+            fontWeight = FontWeight.Bold
+        )
+    }
+    
+    Button(
+        onClick = onSave,
+        colors = ButtonDefaults.buttonColors(containerColor = colors.accent),
+        modifier = Modifier.weight(1f)
+    ) {
+        Text("Сохранить", color = colors.background)
+    }
+}
         }
     }
 }
