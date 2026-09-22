@@ -711,16 +711,20 @@ fun ChatScreen(
             }
 
             if (showPromptSettings) {
-                PromptSettingsPanel(
-                    promptText = tempPromptText,
-                    onPromptChange = { tempPromptText = it },
-                    onSave = {
-                        viewModel.updateSystemPrompt(tempPromptText)
-                        showPromptSettings = false
-                    },
-                    colors = colors
-                )
-            }
+    PromptSettingsPanel(
+        promptText = tempPromptText,
+        onPromptChange = { tempPromptText = it },
+        onSave = {
+            viewModel.updateSystemPrompt(tempPromptText)
+            showPromptSettings = false
+        },
+        onStartFloating = {
+            // Вызываем через Activity
+            (context as? MainActivity)?.startFloatingWithPermissionCheck()
+        },
+        colors = colors
+    )
+}
 
             StatusBar(
                 state = state,
