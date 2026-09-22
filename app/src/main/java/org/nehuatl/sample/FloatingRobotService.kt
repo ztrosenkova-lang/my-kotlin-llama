@@ -93,78 +93,75 @@ class FloatingRobotService : LifecycleService() {
 
     // ========== OVERLAY РОБОТА ==========
 
-    private fun addRobotOverlay() {
-        val viewModel = MainViewModel.instance
-        if (viewModel == null) {
-            Log.w(TAG, "MainViewModel.instance is null — robot overlay won't render")
-            return
-        }
+   private fun addRobotOverlay() {
+    val viewModel = MainViewModel.instance
+    if (viewModel == null) {
+        Log.w(TAG, "MainViewModel.instance is null — robot overlay won't render")
+        return
+    }
 
-        val view = ComposeOverlayView(this).apply {
-    setOverlayContent {
-        RobotOverlayContent(viewModel = viewModel)
+    val view = ComposeOverlayView(this).apply {
+        setOverlayContent {
+            RobotOverlayContent(viewModel = viewModel)
+        }
+    }
+
+    val widthPx = (220 * resources.displayMetrics.density).toInt()
+    val heightPx = (300 * resources.displayMetrics.density).toInt()
+
+    val params = WindowManager.LayoutParams(
+        widthPx,
+        heightPx,
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        else
+            @Suppress("DEPRECATION")
+            WindowManager.LayoutParams.TYPE_PHONE,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+        PixelFormat.TRANSLUCENT
+    ).apply {
+        gravity = Gravity.TOP or Gravity.START
+        x = 100
+        y = 300
+    }
+
+    // Перетаскивание
+    view.setOnTouchListener(object : View.OnTouchListener {
+        private var initialX = 0
+        private var initialY = 0
+        private var touchX = 0f
+        private var touchY = 0f
+
+        override fun onTouch(v: View, event: MotionEvent): Boolean {
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    initialX = params.x
+                    initialY = params.y
+                    touchX = event.rawX
+                    touchY = event.rawY
+                    return true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    params.x = initialX + (event.rawX - touchX).toInt()
+                    params.y = initialY + (event.rawY - touchY).toInt()
+                    windowManager.updateViewLayout(view, params)
+                    return true
+                }
+            }
+            return false
+        }
+    })
+
+    try {
+        windowManager.addView(view, params)
+        robotView = view
+        Log.d(TAG, "Robot overlay added")
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to add robot overlay: ${e.message}", e)
     }
 }
-
-        val widthPx = (220 * resources.displayMetrics.density).toInt()
-val heightPx = (300 * resources.displayMetrics.density).toInt()
-
-val params = WindowManager.LayoutParams(
-    widthPx,
-    heightPx,
-    ...
-)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            else
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                    or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
-                    or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = 100
-            y = 300
-        }
-
-        // Перетаскивание
-        view.setOnTouchListener(object : View.OnTouchListener {
-            private var initialX = 0
-            private var initialY = 0
-            private var touchX = 0f
-            private var touchY = 0f
-
-            override fun onTouch(v: View, event: MotionEvent): Boolean {
-                when (event.action) {
-                    MotionEvent.ACTION_DOWN -> {
-                        initialX = params.x
-                        initialY = params.y
-                        touchX = event.rawX
-                        touchY = event.rawY
-                        return true
-                    }
-                    MotionEvent.ACTION_MOVE -> {
-                        params.x = initialX + (event.rawX - touchX).toInt()
-                        params.y = initialY + (event.rawY - touchY).toInt()
-                        windowManager.updateViewLayout(view, params)
-                        return true
-                    }
-                }
-                return false
-            }
-        })
-
-        try {
-            windowManager.addView(view, params)
-            robotView = view
-            Log.d(TAG, "Robot overlay added")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to add robot overlay: ${e.message}", e)
-        }
-    }
-
     private fun removeRobotOverlay() {
         robotView?.let {
             try {
