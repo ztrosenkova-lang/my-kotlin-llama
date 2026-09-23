@@ -474,26 +474,39 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == OVERLAY_PERMISSION_REQUEST_CODE) {
-            if (hasOverlayPermission()) {
-                Log.d(TAG, "Overlay permission granted")
-                android.widget.Toast.makeText(
-                    this,
-                    "✅ Разрешение получено. Запускаю робота...",
-                    android.widget.Toast.LENGTH_SHORT
-                ).show()
-                startFloatingService()
+    super.onActivityResult(requestCode, resultCode, data)
+    if (requestCode == OVERLAY_PERMISSION_REQUEST_CODE) {
+        if (hasOverlayPermission()) {
+            Log.d(TAG, "Overlay permission granted")
+            android.widget.Toast.makeText(
+                this,
+                "✅ Разрешение получено. Запускаю робота...",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+
+            // Если сервис уже работает — перезапустить, чтобы overlay создался заново
+            if (FloatingRobotService.isRunning) {
+                val stopIntent = Intent(this, FloatingRobotService::class.java).apply {
+                    action = FloatingRobotService.ACTION_STOP
+                }
+                startService(stopIntent)
+
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    startFloatingService()
+                }, 700)
             } else {
-                Log.w(TAG, "Overlay permission denied")
-                android.widget.Toast.makeText(
-                    this,
-                    "⚠️ Без разрешения 'Поверх других приложений' робот не сможет отображаться",
-                    android.widget.Toast.LENGTH_LONG
-                ).show()
+                startFloatingService()
             }
+        } else {
+            Log.w(TAG, "Overlay permission denied")
+            android.widget.Toast.makeText(
+                this,
+                "⚠️ Без разрешения 'Поверх других приложений' робот не сможет отображаться",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
         }
     }
+}
 
     // ========== ЗАПУСК СЕРВИСА ==========
 
@@ -511,27 +524,45 @@ class MainActivity : ComponentActivity() {
 
 // ← ВСТАВИТЬ СЮДА новый метод
 fun startFloatingWithPermissionCheck() {
-    if (FloatingRobotService.isRunning) {
+    // СНАЧАЛА проверяем разрешение overlay — это главное
+    if (!hasOverlayPermission()) {
+        Log.d(TAG, "Requesting overlay permission")
         android.widget.Toast.makeText(
             this,
-            "🤖 Робот уже запущен",
-            android.widget.Toast.LENGTH_SHORT
+            "Дайте разрешение 'Поверх других приложений'",
+            android.widget.Toast.LENGTH_LONG
         ).show()
+        requestOverlayPermission()
         return
     }
 
-    if (!hasOverlayPermission()) {
-        Log.d(TAG, "Requesting overlay permission")
-        requestOverlayPermission()
-    } else {
-        Log.d(TAG, "Starting FloatingRobotService")
-        startFloatingService()
-        android.widget.Toast.makeText(
-            this,
-            "🤖 Плавающий робот запущен",
-            android.widget.Toast.LENGTH_SHORT
-        ).show()
+    // Разрешение есть. Если сервис уже запущен — перезапускаем
+    if (FloatingRobotService.isRunning) {
+        Log.d(TAG, "Service is running, restarting to recreate overlay")
+        val stopIntent = Intent(this, FloatingRobotService::class.java).apply {
+            action = FloatingRobotService.ACTION_STOP
+        }
+        startService(stopIntent)
+
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            startFloatingService()
+            android.widget.Toast.makeText(
+                this,
+                "🤖 Плавающий робот запущен",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+        }, 700)
+        return
     }
+
+    // Сервис не запущен — обычный запуск
+    Log.d(TAG, "Starting FloatingRobotService")
+    startFloatingService()
+    android.widget.Toast.makeText(
+        this,
+        "🤖 Плавающий робот запущен",
+        android.widget.Toast.LENGTH_SHORT
+    ).show()
 }
 
     // ========== ОСНОВНОЙ КОНТЕНТ ==========
