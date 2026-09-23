@@ -3113,7 +3113,7 @@ val visorPath = Path().apply {
     )
     
     // Низ слева от выемки
-lineTo(pt(-34f + 2f * bottomRadius, 42f).x, pt(-34f + 2f * bottomRadius, 42f).y)
+lineTo(pt(-34f + bottomRadius, 42f).x, pt(-34f + bottomRadius, 42f).y)
     
     // Левый нижний угол (большое скругление)
     arcTo(
