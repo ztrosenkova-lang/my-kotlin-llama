@@ -176,87 +176,79 @@ class FloatingRobotService : LifecycleService() {
 
     // ========== OVERLAY МИКРОФОНА ==========
 
-    private fun addMicOverlay() {
-        val button = ImageButton(this).apply {
-            setImageResource(android.R.drawable.ic_btn_speak_now)
-            setBackgroundColor(Color.parseColor("#CC74C0FC"))
-            contentDescription = "Голосовой ввод"
-            setPadding(24, 24, 24, 24)
+   private fun addMicOverlay() {
+    val button = ImageButton(this).apply {
+        setImageResource(android.R.drawable.ic_btn_speak_now)
+        contentDescription = "Голосовой ввод"
+        setPadding(24, 24, 24, 24)
+
+        val shape = android.graphics.drawable.GradientDrawable().apply {
+            this.shape = android.graphics.drawable.GradientDrawable.OVAL
+            setColor(Color.parseColor("#CC74C0FC"))
         }
+        background = shape
+    }
 
-        val sizePx = (72 * resources.displayMetrics.density).toInt()
+    val sizePx = (72 * resources.displayMetrics.density).toInt()
 
-        val params = WindowManager.LayoutParams(
-            sizePx,
-            sizePx,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            else
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.BOTTOM or Gravity.END
-            x = 40
-            y = 300
-        }
+    val params = WindowManager.LayoutParams(
+        sizePx,
+        sizePx,
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        else
+            @Suppress("DEPRECATION")
+            WindowManager.LayoutParams.TYPE_PHONE,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+        PixelFormat.TRANSLUCENT
+    ).apply {
+        gravity = Gravity.TOP or Gravity.START
+        x = 100
+        y = 800
+    }
 
-        // Перетаскивание + обработка клика
-        button.setOnTouchListener(object : View.OnTouchListener {
-            private var initialX = 0
-            private var initialY = 0
-            private var touchX = 0f
-            private var touchY = 0f
+    button.setOnTouchListener(object : View.OnTouchListener {
+        private var initialX = 0
+        private var initialY = 0
+        private var touchX = 0f
+        private var touchY = 0f
 
-            override fun onTouch(v: View, event: MotionEvent): Boolean {
-                when (event.action) {
-                    MotionEvent.ACTION_DOWN -> {
-                        initialX = params.x
-                        initialY = params.y
-                        touchX = event.rawX
-                        touchY = event.rawY
+        override fun onTouch(v: View, event: MotionEvent): Boolean {
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    initialX = params.x
+                    initialY = params.y
+                    touchX = event.rawX
+                    touchY = event.rawY
+                    return true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    params.x = initialX + (event.rawX - touchX).toInt()
+                    params.y = initialY + (event.rawY - touchY).toInt()
+                    windowManager.updateViewLayout(button, params)
+                    return true
+                }
+                MotionEvent.ACTION_UP -> {
+                    val dx = kotlin.math.abs(event.rawX - touchX)
+                    val dy = kotlin.math.abs(event.rawY - touchY)
+                    if (dx < 15 && dy < 15) {
+                        onMicClicked()
                         return true
-                    }
-                    MotionEvent.ACTION_MOVE -> {
-                        params.x = initialX - (event.rawX - touchX).toInt()
-                        params.y = initialY + (event.rawY - touchY).toInt()
-                        windowManager.updateViewLayout(button, params)
-                        return true
-                    }
-                    MotionEvent.ACTION_UP -> {
-                        val dx = kotlin.math.abs(event.rawX - touchX)
-                        val dy = kotlin.math.abs(event.rawY - touchY)
-                        if (dx < 15 && dy < 15) {
-                            onMicClicked()
-                            return true
-                        }
                     }
                 }
-                return false
             }
-        })
-
-        try {
-            windowManager.addView(button, params)
-            micView = button
-            Log.d(TAG, "Mic overlay added")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to add mic overlay: ${e.message}", e)
+            return false
         }
-    }
+    })
 
-    private fun removeMicOverlay() {
-        micView?.let {
-            try {
-                windowManager.removeView(it)
-                Log.d(TAG, "Mic overlay removed")
-            } catch (e: Exception) {
-                Log.w(TAG, "removeMicOverlay failed: ${e.message}")
-            }
-            micView = null
-        }
+    try {
+        windowManager.addView(button, params)
+        micView = button
+        Log.d(TAG, "Mic overlay added")
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to add mic overlay: ${e.message}", e)
     }
+}
 
     // ========== ЛОГИКА МИКРОФОНА ==========
 
@@ -272,14 +264,18 @@ class FloatingRobotService : LifecycleService() {
         voiceRecognizer?.start()
     }
 
-    private fun updateMicIcon(listening: Boolean) {
-        micView?.let {
-            it.setBackgroundColor(
-                if (listening) Color.parseColor("#FF2E7D32")   // зелёный — слушает
-                else Color.parseColor("#CC74C0FC")              // синий — ждёт
+   private fun updateMicIcon(listening: Boolean) {
+    micView?.let {
+        val shape = android.graphics.drawable.GradientDrawable().apply {
+            this.shape = android.graphics.drawable.GradientDrawable.OVAL
+            setColor(
+                if (listening) Color.parseColor("#FF2E7D32")
+                else Color.parseColor("#CC74C0FC")
             )
         }
+        it.background = shape
     }
+}
 
     // ========== NOTIFICATION ==========
 
