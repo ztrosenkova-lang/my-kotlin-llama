@@ -378,22 +378,24 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         }
                     }
                     is CloudAIEvent.Done -> {
-                        _cloudState.value = CloudAIState.Completed(event.tokenCount, event.duration)
-                        val fullText = event.fullText
-                        if (fullText.isNotEmpty()) {
-                            if (isCompressionRequest) {
-                                saveBrain(fullText)
-                                isCompressionRequest = false
-                                _isCompressing.value = false
-                                appendSystemMessage("✅ Brain.txt обновлен: беседа записана в долговременную память")
-                            } else {
-                                _cloudGeneratedText.value = fullText
-                                _pendingTextToPrint.value = fullText
-                                speakText(fullText)
-                            }
-                        }
-                        _cloudGeneratedText.value = fullText
-                    }
+    _cloudState.value = CloudAIState.Completed(event.tokenCount, event.duration)
+    val fullText = event.fullText
+    if (fullText.isNotEmpty()) {
+        if (isCompressionRequest) {
+            saveBrain(fullText)
+            appendSystemMessage("✅ Brain.txt обновлен: беседа записана в долговременную память")
+        } else {
+            _cloudGeneratedText.value = fullText
+            _pendingTextToPrint.value = fullText
+            speakText(fullText)
+        }
+    }
+    if (isCompressionRequest) {
+        isCompressionRequest = false
+        _isCompressing.value = false
+    }
+    _cloudGeneratedText.value = fullText
+}
                     is CloudAIEvent.Error -> {
                         _cloudState.value = CloudAIState.Error(event.message)
                         isCompressionRequest = false
@@ -424,22 +426,24 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         }
                     }
                     is LlamaHelper.LLMEvent.Done -> {
-                        _state.value = GenerationState.Completed(event.tokenCount, event.duration)
-                        val fullText = event.fullText
-                        if (fullText.isNotEmpty()) {
-                            if (isCompressionRequest) {
-                                saveBrain(fullText)
-                                isCompressionRequest = false
-                                _isCompressing.value = false
-                                appendSystemMessage("✅ Brain.txt обновлен: беседа записана в долговременную память")
-                            } else {
-                                _generatedText.value = fullText
-                                _pendingTextToPrint.value = fullText
-                                speakText(fullText)
-                            }
-                        }
-                        _generatedText.value = fullText
-                    }
+    _state.value = GenerationState.Completed(event.tokenCount, event.duration)
+    val fullText = event.fullText
+    if (fullText.isNotEmpty()) {
+        if (isCompressionRequest) {
+            saveBrain(fullText)
+            appendSystemMessage("✅ Brain.txt обновлен: беседа записана в долговременную память")
+        } else {
+            _generatedText.value = fullText
+            _pendingTextToPrint.value = fullText
+            speakText(fullText)
+        }
+    }
+    if (isCompressionRequest) {
+        isCompressionRequest = false
+        _isCompressing.value = false
+    }
+    _generatedText.value = fullText
+}
                     is LlamaHelper.LLMEvent.Error -> {
                         _state.value = GenerationState.Error(event.message)
                         isCompressionRequest = false
@@ -848,7 +852,18 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         if (history.size < AUTO_BRAIN_COMPRESSION_THRESHOLD) return
         if (_isCompressing.value) return
 
-        _isCompressing.value = true
+                _isCompressing.value = true
+
+        // Страховка: сбросить через 60 секунд, если ответ не пришёл
+        scope.launch {
+            delay(300000)
+            if (_isCompressing.value && isCompressionRequest) {
+                Log.w(TAG, "Compression timeout — resetting flag")
+                isCompressionRequest = false
+                _isCompressing.value = false
+                appendSystemMessage("⚠️ Сжатие беседы не удалось (таймаут)")
+            }
+        }
 
         scope.launch(Dispatchers.IO) {
             try {
