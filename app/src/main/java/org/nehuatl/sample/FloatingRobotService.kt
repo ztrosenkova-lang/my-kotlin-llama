@@ -249,6 +249,17 @@ class FloatingRobotService : LifecycleService() {
         Log.e(TAG, "Failed to add mic overlay: ${e.message}", e)
     }
 }
+   private fun removeMicOverlay() {
+    micView?.let {
+        try {
+            windowManager.removeView(it)
+            Log.d(TAG, "Mic overlay removed")
+        } catch (e: Exception) {
+            Log.w(TAG, "removeMicOverlay failed: ${e.message}")
+        }
+        micView = null
+    }
+}
 
     // ========== ЛОГИКА МИКРОФОНА ==========
 
