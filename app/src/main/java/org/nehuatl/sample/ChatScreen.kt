@@ -933,13 +933,14 @@ fun ChatScreen(
                             rotationZ = (orbitAngle * 180f / PI.toFloat()) + 90f
                         )
                 ) {
-                                        ThinkingRobotAnimation(
+                ThinkingRobotAnimation(
                         height = robotSizeDp,
                         isActive = false,
                         isSpeaking = false,
                         isThinking = false,
                         isIdle = true,
                         shouldWave = waveSignal,
+                        isAiReady = isModelLoaded || (cloudState is CloudAIState.Ready),
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -1014,13 +1015,14 @@ fun ChatScreen(
                         .offset(x = offsetXDp, y = offsetYDp)
                         .size(currentSizeDp)
                 ) {
-                                        ThinkingRobotAnimation(
+                ThinkingRobotAnimation(
                         height = currentSizeDp,
                         isActive = false,
                         isSpeaking = false,
                         isThinking = false,
                         isIdle = true,
                         shouldWave = waveSignal,
+                        isAiReady = isModelLoaded || (cloudState is CloudAIState.Ready),
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -1103,13 +1105,14 @@ fun ChatScreen(
                             }
                         }
                 ) {
-                    ThinkingRobotAnimation(
+                ThinkingRobotAnimation(
                         height = 70.dp,
                         isActive = true,
                         isSpeaking = isSpeaking,
                         isThinking = state is GenerationState.Generating || cloudState is CloudAIState.Generating,
                         isIdle = !isSpeaking && state !is GenerationState.Generating && cloudState !is CloudAIState.Generating,
                         shouldWave = waveSignal,
+                        isAiReady = isModelLoaded || (cloudState is CloudAIState.Ready),
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -1331,7 +1334,8 @@ fun ThinkingRobotAnimation(
     isThinking: Boolean = false,
     isIdle: Boolean = false,
     shouldWave: Boolean = false,
-    commandScale: Float? = null
+    commandScale: Float? = null,
+    isAiReady: Boolean = false
 ) {
     val transition = rememberInfiniteTransition(label = "robot")
 
@@ -1440,7 +1444,7 @@ fun ThinkingRobotAnimation(
         label = "idleEyePhase"
     )
 
-       val armPhase by transition.animateFloat(
+              val armPhase by transition.animateFloat(
         initialValue = 0f,
         targetValue = (2 * PI).toFloat(),
         animationSpec = infiniteRepeatable(
@@ -1448,6 +1452,16 @@ fun ThinkingRobotAnimation(
             repeatMode = RepeatMode.Restart
         ),
         label = "armPhase"
+    )
+
+    val indicatorPulse by transition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(700, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "indicator_pulse"
     )
 
             // Внутренний сигнал от ChatScreen — включается при приветствии
@@ -1819,7 +1833,7 @@ fun ThinkingRobotAnimation(
                     )
                 }
 
-                // Большой палец
+                                // Большой палец
                 drawRoundRect(
                     color = mediumGray,
                     topLeft = pt(46f, 156f + rightArmOffsetY),
@@ -1832,6 +1846,70 @@ fun ThinkingRobotAnimation(
                     size = Size(5f * u, 10f * u),
                     cornerRadius = CornerRadius(2.5f * u),
                     style = Stroke(width = 0.9f * u)
+                )
+
+                // ========== ИНДИКАТОР СОСТОЯНИЯ ИИ (часы на предплечье) ==========
+                val indicatorCenterX = 46f
+                val indicatorCenterY = 140f
+                val indicatorRadius = 4f * u
+                val indicatorAlpha = if (isAiReady) indicatorPulse else 1f
+                val indicatorColor = if (isAiReady) {
+                    Color(0xFF4CAF50).copy(alpha = indicatorAlpha)
+                } else {
+                    Color(0xFF2196F3)
+                }
+
+                // Внешний тёмный круг (фон)
+                drawCircle(
+                    color = darkerGray,
+                    radius = indicatorRadius * 1.2f,
+                    center = pt(indicatorCenterX, indicatorCenterY)
+                )
+
+                // Цветной круг
+                drawCircle(
+                    color = indicatorColor,
+                    radius = indicatorRadius,
+                    center = pt(indicatorCenterX, indicatorCenterY)
+                )
+
+                // Обводка
+                drawCircle(
+                    color = darkGray,
+                    radius = indicatorRadius,
+                    center = pt(indicatorCenterX, indicatorCenterY),
+                    style = Stroke(width = 0.6f * u)
+                )
+
+                // Часовая стрелка
+                drawLine(
+                    color = Color.White.copy(alpha = 0.9f),
+                    start = pt(indicatorCenterX, indicatorCenterY),
+                    end = Offset(
+                        pt(indicatorCenterX, indicatorCenterY).x + cos(-PI.toFloat() / 3f) * indicatorRadius * 0.5f,
+                        pt(indicatorCenterX, indicatorCenterY).y + sin(-PI.toFloat() / 3f) * indicatorRadius * 0.5f
+                    ),
+                    strokeWidth = 0.6f * u,
+                    cap = StrokeCap.Round
+                )
+
+                // Минутная стрелка
+                drawLine(
+                    color = Color.White.copy(alpha = 0.9f),
+                    start = pt(indicatorCenterX, indicatorCenterY),
+                    end = Offset(
+                        pt(indicatorCenterX, indicatorCenterY).x + cos(-PI.toFloat() / 2f) * indicatorRadius * 0.7f,
+                        pt(indicatorCenterX, indicatorCenterY).y + sin(-PI.toFloat() / 2f) * indicatorRadius * 0.7f
+                    ),
+                    strokeWidth = 0.5f * u,
+                    cap = StrokeCap.Round
+                )
+
+                // Центральная точка
+                drawCircle(
+                    color = Color.White.copy(alpha = 0.9f),
+                    radius = 0.6f * u,
+                    center = pt(indicatorCenterX, indicatorCenterY)
                 )
             }
         }
