@@ -1335,7 +1335,8 @@ fun ThinkingRobotAnimation(
     isIdle: Boolean = false,
     shouldWave: Boolean = false,
     commandScale: Float? = null,
-    isAiReady: Boolean = false
+    isAiReady: Boolean = false,
+    uDivisor: Float = 200f
 ) {
     val transition = rememberInfiniteTransition(label = "robot")
 
@@ -1517,7 +1518,7 @@ fun ThinkingRobotAnimation(
                 scaleY = if (commandScale != null) animatedScale else 1f
             )
     ) {
-        val u = size.height / 200f
+        val u = size.height / uDivisor
         val cx = size.width / 2f
         val bobOffset = if (isActive) sin(bob) * 10f * u else 0f
         val lookOffsetX = lookX * 1f * u
