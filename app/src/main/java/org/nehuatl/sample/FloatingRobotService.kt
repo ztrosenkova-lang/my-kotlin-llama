@@ -38,10 +38,11 @@ class FloatingRobotService : LifecycleService() {
     private var micView: ImageButton? = null
     private var voiceRecognizer: VoiceRecognizer? = null
 
-    override fun onCreate() {
+        override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "Service created")
         isRunning = true
+        MainViewModel.instance?.setFloatingRunning(true)
 
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
@@ -81,13 +82,14 @@ class FloatingRobotService : LifecycleService() {
         return START_STICKY
     }
 
-    override fun onDestroy() {
+        override fun onDestroy() {
         super.onDestroy()
         removeRobotOverlay()
         removeMicOverlay()
         voiceRecognizer?.destroy()
         voiceRecognizer = null
         isRunning = false
+        MainViewModel.instance?.setFloatingRunning(false)
         Log.d(TAG, "Service destroyed")
     }
 
