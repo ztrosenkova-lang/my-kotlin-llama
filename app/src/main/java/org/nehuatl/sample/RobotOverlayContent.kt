@@ -36,7 +36,7 @@ fun RobotOverlayContent(
             isIdle = isIdle,
             shouldWave = false,
             isAiReady = isModelLoaded || (cloudState is CloudAIState.Ready),
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxHeight()
         )
     }
 }
