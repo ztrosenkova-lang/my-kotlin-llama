@@ -233,6 +233,7 @@ fun ChatScreen(
     val pendingTextToPrint by viewModel.pendingTextToPrint.collectAsStateWithLifecycle(initialValue = "")
     val isDarkTheme by viewModel.isDarkTheme.collectAsStateWithLifecycle(initialValue = false)
     val showBrainEditorState by viewModel.showBrainEditor.collectAsStateWithLifecycle(initialValue = false)
+    val isFloatingRobotRunning by viewModel.floatingRobotRunning.collectAsStateWithLifecycle(initialValue = false)
 
     val colors = if (isDarkTheme) DarkColors else LightColors
 
@@ -710,7 +711,7 @@ fun ChatScreen(
                 )
             }
 
-            if (showPromptSettings) {
+                        if (showPromptSettings) {
     PromptSettingsPanel(
         promptText = tempPromptText,
         onPromptChange = { tempPromptText = it },
@@ -718,10 +719,19 @@ fun ChatScreen(
             viewModel.updateSystemPrompt(tempPromptText)
             showPromptSettings = false
         },
-        onStartFloating = {
-            // Вызываем через Activity
-            (context as? MainActivity)?.startFloatingWithPermissionCheck()
+        onToggleFloating = {
+            if (FloatingRobotService.isRunning) {
+                // Останавливаем сервис робота 2
+                val stopIntent = Intent(context, FloatingRobotService::class.java).apply {
+                    action = FloatingRobotService.ACTION_STOP
+                }
+                context.startService(stopIntent)
+            } else {
+                // Запускаем через Activity (там проверка разрешения overlay)
+                (context as? MainActivity)?.startFloatingWithPermissionCheck()
+            }
         },
+        isFloatingRunning = isFloatingRobotRunning,
         colors = colors
     )
 }
@@ -4686,7 +4696,8 @@ private fun PromptSettingsPanel(
     promptText: String,
     onPromptChange: (String) -> Unit,
     onSave: () -> Unit,
-    onStartFloating: () -> Unit,
+    onToggleFloating: () -> Unit,
+    isFloatingRunning: Boolean,
     colors: AppColors
 ) {
     Card(
@@ -4721,23 +4732,29 @@ Row(
     horizontalArrangement = Arrangement.spacedBy(8.dp)
 ) {
     Button(
-        onClick = onStartFloating,
-        colors = ButtonDefaults.buttonColors(containerColor = colors.green),
-        modifier = Modifier.weight(1f)
+        onClick = onToggleFloating,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (isFloatingRunning) colors.green else colors.accent
+        ),
+        modifier = Modifier.weight(1f),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, colors.borderGray)
     ) {
         Text(
-            text = "🤖 Запустить робота",
+            text = if (isFloatingRunning) "⏹ Остановить робота" else "🤖 Запустить робота",
             color = colors.background,
-            fontWeight = FontWeight.Bold
+            fontSize = 14.sp
         )
     }
     
     Button(
         onClick = onSave,
         colors = ButtonDefaults.buttonColors(containerColor = colors.accent),
-        modifier = Modifier.weight(1f)
+        modifier = Modifier.weight(1f),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, colors.borderGray)
     ) {
-        Text("Сохранить", color = colors.background)
+        Text("Сохранить", color = colors.background, fontSize = 14.sp)
     }
 }
         }
