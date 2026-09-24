@@ -36,8 +36,8 @@ fun RobotOverlayContent(
             isIdle = isIdle,
             shouldWave = false,
             isAiReady = isModelLoaded || (cloudState is CloudAIState.Ready),
-            uDivisor = 240f,
-            yOffsetUnits = 0f,
+            uDivisor = 320f,
+            yOffsetUnits = 24f,
             modifier = Modifier.fillMaxHeight()
         )
     }
