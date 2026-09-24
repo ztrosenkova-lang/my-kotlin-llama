@@ -1336,7 +1336,8 @@ fun ThinkingRobotAnimation(
     shouldWave: Boolean = false,
     commandScale: Float? = null,
     isAiReady: Boolean = false,
-    uDivisor: Float = 200f
+    uDivisor: Float = 200f,
+    yOffsetUnits: Float = 0f
 ) {
     val transition = rememberInfiniteTransition(label = "robot")
 
@@ -1524,6 +1525,7 @@ fun ThinkingRobotAnimation(
         val lookOffsetX = lookX * 1f * u
         val lookOffsetY = lookY * 0.8f * u
         val currentBlink = if (isActive) blink else 1f
+        val staticYOffset = yOffsetUnits * u
 
         // ================= ПАЛИТРА =================
         val whiteBody = Color(0xFFF4F6F8)
@@ -1543,7 +1545,7 @@ fun ThinkingRobotAnimation(
             neonBlue
         }
 
-        fun pt(x: Float, y: Float) = Offset(cx + x * u, y * u + bobOffset)
+    fun pt(x: Float, y: Float) = Offset(cx + x * u, y * u + bobOffset + staticYOffset)
 
                        
 
