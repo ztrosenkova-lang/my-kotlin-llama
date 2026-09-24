@@ -36,11 +36,12 @@ class MainActivity : ComponentActivity() {
     private var mmprojPath by mutableStateOf<String?>(null)
     private var imagePath by mutableStateOf<String?>(null)
 
-    companion object {
+        companion object {
         private const val PREFS_NAME = "app_security"
         private const val KEY_PASSWORD_HASH = "password_hash"
         private const val TAG = "MainActivity"
         private const val OVERLAY_PERMISSION_REQUEST_CODE = 2001
+        private const val KEY_OVERLAY_REQUESTED = "overlay_permission_requested"
     }
 
     private val prefs by lazy {
@@ -473,30 +474,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
     super.onActivityResult(requestCode, resultCode, data)
     if (requestCode == OVERLAY_PERMISSION_REQUEST_CODE) {
         if (hasOverlayPermission()) {
             Log.d(TAG, "Overlay permission granted")
             android.widget.Toast.makeText(
                 this,
-                "✅ Разрешение получено. Запускаю робота...",
+                "✅ Разрешение получено. Теперь можно запустить робота.",
                 android.widget.Toast.LENGTH_SHORT
             ).show()
-
-            // Если сервис уже работает — перезапустить, чтобы overlay создался заново
-            if (FloatingRobotService.isRunning) {
-                val stopIntent = Intent(this, FloatingRobotService::class.java).apply {
-                    action = FloatingRobotService.ACTION_STOP
-                }
-                startService(stopIntent)
-
-                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                    startFloatingService()
-                }, 700)
-            } else {
-                startFloatingService()
-            }
+            // Сервис НЕ запускаем — робот появится только по кнопке
         } else {
             Log.w(TAG, "Overlay permission denied")
             android.widget.Toast.makeText(
@@ -628,7 +616,7 @@ fun startFloatingWithPermissionCheck() {
 
     // ========== РАЗРЕШЕНИЯ ==========
 
-    private fun checkAndRequestAllPermissions() {
+        private fun checkAndRequestAllPermissions() {
         val permissions = mutableListOf(
             Manifest.permission.RECORD_AUDIO
         )
@@ -652,5 +640,36 @@ fun startFloatingWithPermissionCheck() {
         if (missingPermissions.isNotEmpty()) {
             requestPermissionLauncher.launch(missingPermissions.toTypedArray())
         }
+
+        // Overlay-разрешение запрашиваем ОТДЕЛЬНО, так как это не runtime-permission
+        requestOverlayPermissionIfNeeded()
+    }
+
+    /**
+     * Запрашивает разрешение overlay один раз при первом запуске приложения.
+     * Если разрешение уже получено или уже запрашивалось — ничего не делает.
+     */
+    private fun requestOverlayPermissionIfNeeded() {
+        if (hasOverlayPermission()) {
+            Log.d(TAG, "Overlay permission already granted")
+            return
+        }
+
+        val alreadyRequested = prefs.getBoolean(KEY_OVERLAY_REQUESTED, false)
+        if (alreadyRequested) {
+            Log.d(TAG, "Overlay permission already requested before, skipping auto-request")
+            return
+        }
+
+        Log.d(TAG, "Requesting overlay permission for the first time")
+        prefs.edit().putBoolean(KEY_OVERLAY_REQUESTED, true).apply()
+
+        android.widget.Toast.makeText(
+            this,
+            "Разрешите 'Поверх других приложений' — это нужно для робота",
+            android.widget.Toast.LENGTH_LONG
+        ).show()
+
+        requestOverlayPermission()
     }
 }
