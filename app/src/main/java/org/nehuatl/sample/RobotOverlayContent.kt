@@ -29,7 +29,7 @@ fun RobotOverlayContent(
         contentAlignment = Alignment.Center
     ) {
                 ThinkingRobotAnimation(
-            height = 90.dp,
+            height = 72.dp,
             isActive = true,
             isSpeaking = isSpeaking,
             isThinking = isThinking,
