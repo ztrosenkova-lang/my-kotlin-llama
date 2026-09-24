@@ -181,6 +181,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _currentMode.value = mode
     }
 
+    private val _floatingRobotRunning = MutableStateFlow(false)
+    val floatingRobotRunning: StateFlow<Boolean> = _floatingRobotRunning.asStateFlow()
+
+    fun setFloatingRunning(running: Boolean) {
+        _floatingRobotRunning.value = running
+    }
+
     private val _memoryInfoText = MutableStateFlow("Всего доступно: 0.0 ГБ / Занято: 0.0 ГБ")
     val memoryInfoText: StateFlow<String> = _memoryInfoText.asStateFlow()
 
@@ -213,30 +220,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     init {
-        instance = this
-                // Перезапуск FloatingRobotService, чтобы он подписался на новую ViewModel
-        try {
-            val context = getApplication<Application>()
-            android.util.Log.d(TAG, "Restarting FloatingRobotService")
+    instance = this
 
-            val stopIntent = Intent(context, FloatingRobotService::class.java).apply {
-                action = FloatingRobotService.ACTION_STOP
-            }
-            context.stopService(stopIntent)
-
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                val startIntent = Intent(context, FloatingRobotService::class.java).apply {
-                    action = FloatingRobotService.ACTION_START
-                }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(startIntent)
-                } else {
-                    context.startService(startIntent)
-                }
-            }, 1500)
-        } catch (e: Exception) {
-            android.util.Log.e(TAG, "Restart FloatingRobotService failed: ${e.message}")
-        }
+        _floatingRobotRunning.value = FloatingRobotService.isRunning
 
         _isDarkTheme.value = prefs.getBoolean(KEY_DARK_THEME, false)
         _isFirstLaunch.value = prefs.getBoolean("first_launch", true)
