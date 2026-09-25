@@ -1476,13 +1476,9 @@ fun ThinkingRobotAnimation(
         label = "indicator_pulse"
     )
 
-      val headPanelOpenAmount by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2500, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
+          val headPanelOpenAmount by animateFloatAsState(
+        targetValue = if (isThinking) 1f else 0f,
+        animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing),
         label = "head_panel_open"
     )
 
@@ -1555,7 +1551,7 @@ fun ThinkingRobotAnimation(
         val lookOffsetY = lookY * 0.8f * u
         val currentBlink = if (isActive) blink else 1f
         val staticYOffset = yOffsetUnits * u
-        val panelOpen = if (isThinking) headPanelOpenAmount else 0f
+        val panelOpen = headPanelOpenAmount
         val panelLift = panelOpen * 9f * u
         // ================= ПАЛИТРА =================
         val whiteBody = Color(0xFFF4F6F8)
@@ -3289,58 +3285,59 @@ for (i in 0 until sparkCount) {
             }
         }
 
-               val headPanelPath = Path().apply {
-            // Левый верхний угол (сдвинут вверх на panelLift)
-            moveTo(pt(-16f, -4f).x, pt(-16f, -4f).y - panelLift)
-            // Верхняя граница — дуга шлема (сдвинута вверх)
+                      val headPanelPath = Path().apply {
+            // Вся панель сдвигается ВНИЗ к визору и исчезает за ним.
+            // Верх остаётся на месте, а низ — уходит вниз (к y=14, где начинается визор).
+            // При panelOpen=1 низ панели уходит ниже y=14, верх тоже опускается.
+            moveTo(pt(-16f, -4f).x, pt(-16f, -4f).y + panelLift)
             cubicTo(
-                pt(-8f, -6f).x, pt(-8f, -6f).y - panelLift,
-                pt(8f, -6f).x, pt(8f, -6f).y - panelLift,
-                pt(16f, -4f).x, pt(16f, -4f).y - panelLift
+                pt(-8f, -6f).x, pt(-8f, -6f).y + panelLift,
+                pt(8f, -6f).x, pt(8f, -6f).y + panelLift,
+                pt(16f, -4f).x, pt(16f, -4f).y + panelLift
             )
-            // Правая линия — верх сдвинут на 60%, середина на 30%, низ на месте
             cubicTo(
-                pt(16f, 2f).x, pt(16f, 2f).y - panelLift * 0.6f,
-                pt(15.5f, 8f).x, pt(15.5f, 8f).y - panelLift * 0.3f,
-                pt(15f, 14f).x, pt(15f, 14f).y
+                pt(16f, 2f).x, pt(16f, 2f).y + panelLift,
+                pt(15.5f, 8f).x, pt(15.5f, 8f).y + panelLift,
+                pt(15f, 14f).x, pt(15f, 14f).y + panelLift
             )
-            // Нижняя граница — прямая (остаётся на месте)
-            lineTo(pt(-15f, 14f).x, pt(-15f, 14f).y)
-            // Левая линия — низ на месте, середина и верх сдвинуты
+            lineTo(pt(-15f, 14f).x, pt(-15f, 14f).y + panelLift)
             cubicTo(
-                pt(-15.5f, 8f).x, pt(-15.5f, 8f).y - panelLift * 0.3f,
-                pt(-16f, 2f).x, pt(-16f, 2f).y - panelLift * 0.6f,
-                pt(-16f, -4f).x, pt(-16f, -4f).y - panelLift
+                pt(-15.5f, 8f).x, pt(-15.5f, 8f).y + panelLift,
+                pt(-16f, 2f).x, pt(-16f, 2f).y + panelLift,
+                pt(-16f, -4f).x, pt(-16f, -4f).y + panelLift
             )
             close()
         }
-
-        // Заливка светло-серым градиентом
-        drawPath(
-            headPanelPath,
-            brush = Brush.verticalGradient(
-                colors = listOf(
-                    Color(0xFFEDEFF2),
-                    Color(0xFFD9DEE3),
-                    Color(0xFFC4CAD1)
-                ),
-                startY = pt(0f, -4f).y,
-                endY = pt(0f, 14f).y
+               // Заливка — рисуется только пока панель не уехала полностью
+        if (panelOpen < 0.85f) {
+            drawPath(
+                headPanelPath,
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFFEDEFF2),
+                        Color(0xFFD9DEE3),
+                        Color(0xFFC4CAD1)
+                    ),
+                    startY = pt(0f, -4f).y,
+                    endY = pt(0f, 14f).y
+                )
             )
-        )
-
-                // Блик — вертикальная полоса слева (едет вместе с панелью)
-        val headPanelHighlight = Path().apply {
-            moveTo(pt(-9f, -2f).x, pt(-9f, -2f).y - panelLift)
-            lineTo(pt(-4f, -2f).x, pt(-4f, -2f).y - panelLift)
-            lineTo(pt(-4f, 12f).x, pt(-4f, 12f).y - panelLift * 0.3f)
-            lineTo(pt(-9f, 12f).x, pt(-9f, 12f).y - panelLift * 0.3f)
-            close()
         }
-        drawPath(
-            headPanelHighlight,
-            color = Color.White.copy(alpha = 0.5f)
-        )
+
+                       // Блик — вертикальная полоса слева (едет вместе с панелью)
+        if (panelOpen < 0.85f) {
+            val headPanelHighlight = Path().apply {
+                moveTo(pt(-9f, -2f).x, pt(-9f, -2f).y + panelLift)
+                lineTo(pt(-4f, -2f).x, pt(-4f, -2f).y + panelLift)
+                lineTo(pt(-4f, 12f).x, pt(-4f, 12f).y + panelLift)
+                lineTo(pt(-9f, 12f).x, pt(-9f, 12f).y + panelLift)
+                close()
+            }
+            drawPath(
+                headPanelHighlight,
+                color = Color.White.copy(alpha = 0.5f)
+            )
+        }
         
                 // ================= ДВЕ ЛИНИИ НА ГОЛОВЕ (от верхнего края шлема до визора) =================
         // Левая линия — идёт по дуге шлема сверху вниз до верхней кромки визора (y = 14)
@@ -3352,11 +3349,13 @@ for (i in 0 until sparkCount) {
                 pt(-15f, 14f).x, pt(-15f, 14f).y
             )
         }
-        drawPath(
-            leftHeadLinePath,
-            color = darkGray,
-            style = Stroke(width = 1f * u, cap = StrokeCap.Round)
-        )
+                        if (panelOpen < 0.85f) {
+            drawPath(
+                leftHeadLinePath,
+                color = darkGray,
+                style = Stroke(width = 1f * u, cap = StrokeCap.Round)
+            )
+        }
 
         // Правая линия — симметрично
         val rightHeadLinePath = Path().apply {
@@ -3367,12 +3366,13 @@ for (i in 0 until sparkCount) {
                 pt(15f, 14f).x, pt(15f, 14f).y
             )
         }
-        drawPath(
-            rightHeadLinePath,
-            color = darkGray,
-            style = Stroke(width = 1f * u, cap = StrokeCap.Round)
-        )
-
+                if (panelOpen < 0.85f) {
+            drawPath(
+                rightHeadLinePath,
+                color = darkGray,
+                style = Stroke(width = 1f * u, cap = StrokeCap.Round)
+            )
+        }
         // ================= ВИЗОР (СТЕКЛО) — лыжная маска с правильными углами =================
 val topRadius = 4f * u  // Верхние углы — маленькое скругление
 val bottomRadius = 13f * u  // Нижние углы — большое скругление
