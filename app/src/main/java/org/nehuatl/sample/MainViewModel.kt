@@ -919,7 +919,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    private fun determineCategory(text: String): String {
+        private fun determineCategory(text: String): String {
         val lowerText = text.lowercase()
 
         val hasPrice = Regex("\\d+[.,]?\\d*\\s*(р|руб|₽)").containsMatchIn(lowerText) ||
@@ -931,6 +931,25 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 lowerText.contains("р/т")
 
         if (hasPrice) return "[ПРАЙС]"
+
+        // Прайс-слова: если в запросе есть и материал/изделие, и цифры-размеры — это прайс
+        val priceKeywords = listOf(
+            "труба", "труб", "лист", "листов", "уголок", "швеллер", "арматура",
+            "профиль", "профнастил", "металл", "сталь", "нержавейка",
+            "круг", "квадрат", "полоса", "балка", "рельс", "сетка",
+            "профтруба", "вгп", "электросвар", "бесшовн",
+            "плитка", "кафель", "керамогранит", "мозаик", "керамик",
+            "краска", "грунтовка", "штукатурка", "шпаклевка", "эмаль", "лак",
+            "бетон", "цемент", "песок", "щебень", "кирпич", "газоблок", "пеноблок",
+            "гипсокартон", "утеплитель", "минвата", "пенопласт", "профлист",
+            "кабель", "провод", "гофра", "трубка", "фитинг", "муфта", "фланец",
+            "кран", "задвижка", "вентиль", "счетчик", "насос", "котел"
+        )
+
+        val hasPriceKeyword = priceKeywords.any { lowerText.contains(it) }
+        val hasDigits = Regex("\\d").containsMatchIn(lowerText)
+
+        if (hasPriceKeyword && hasDigits) return "[ПРАЙС]"
 
         val categories = mapOf(
             "[ПАРОЛЬ]" to listOf("пароль", "логин", "доступ", "код", "пин", "секрет", "ключ"),
@@ -1125,22 +1144,15 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         append("Пользователь просит вспомнить информацию, но сжатой истории пока нет. Честно скажи об этом.")
                     }
                 }
-                else -> {
-                    val queryCategory = determineCategory(prompt)
-                    val filteredMemory = searchMemory(prompt, queryCategory)
-
-                    if (filteredMemory.isEmpty()) {
-                        val allMemory = searchMemory(prompt, null)
-                        if (allMemory.isNotEmpty()) {
-                            append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ (все категории):\n$allMemory\n\n")
-                            append("Пользователь просит найти информацию в базе знаний. Изучи найденные факты выше и используй их для ответа.")
-                        } else {
-                            append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ: подходящих фактов не найдено.\n\n")
-                            append("Честно скажи, что в базе знаний нет информации по запросу, и попроси пользователя перефразировать запрос.")
-                        }
-                    } else {
-                        append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ (категория $queryCategory):\n$filteredMemory\n\n")
+                                else -> {
+                    // Ищем сразу по всем категориям — как в Word, без фильтрации
+                    val allMemory = searchMemory(prompt, null)
+                    if (allMemory.isNotEmpty()) {
+                        append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ:\n$allMemory\n\n")
                         append("Пользователь просит найти информацию в базе знаний. Изучи найденные факты выше и используй их для ответа.")
+                    } else {
+                        append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ: подходящих фактов не найдено.\n\n")
+                        append("Честно скажи, что в базе знаний нет информации по запросу, и попроси пользователя перефразировать запрос.")
                     }
                 }
             }
@@ -1184,21 +1196,32 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 handleAlarmCommand(text)
                 return
             }
-            lowerText.contains(RECALL_COMMAND) || lowerText.contains(FIND_COMMAND) || lowerText.contains(SEARCH_COMMAND) || lowerText.contains(CHAT_LOOKUP_COMMAND) -> {
+                       lowerText.contains(RECALL_COMMAND) || lowerText.contains(FIND_COMMAND) || lowerText.contains(SEARCH_COMMAND) || lowerText.contains(CHAT_LOOKUP_COMMAND) -> {
                 if (_currentMode.value == AIMode.NEUTRAL) {
-                    if (lowerText.contains(RECALL_COMMAND)) {
-                        val brainData = searchBrain(text)
-                        if (brainData.isNotEmpty()) {
-                            appendSystemMessage("🧠 Найдено в Brain.txt:\n$brainData")
-                        } else {
-                            appendSystemMessage("🧠 В Brain.txt ничего не найдено")
+                    when {
+                        lowerText.contains(CHAT_LOOKUP_COMMAND) -> {
+                            val chatData = searchChat(text)
+                            if (chatData.isNotEmpty()) {
+                                appendSystemMessage("💬 Найдено в истории чата:\n$chatData")
+                            } else {
+                                appendSystemMessage("💬 В истории чата ничего не найдено")
+                            }
                         }
-                    } else {
-                        val memoryData = searchMemory(text, null)
-                        if (memoryData.isNotEmpty()) {
-                            appendSystemMessage("🔍 Найдено в базе знаний:\n$memoryData")
-                        } else {
-                            appendSystemMessage("🔍 Ничего не найдено. Перефразируйте запрос.")
+                        lowerText.contains(RECALL_COMMAND) -> {
+                            val brainData = searchBrain(text)
+                            if (brainData.isNotEmpty()) {
+                                appendSystemMessage("🧠 Найдено в Brain.txt:\n$brainData")
+                            } else {
+                                appendSystemMessage("🧠 В Brain.txt ничего не найдено")
+                            }
+                        }
+                        else -> {
+                            val memoryData = searchMemory(text, null)
+                            if (memoryData.isNotEmpty()) {
+                                appendSystemMessage("🔍 Найдено в базе знаний:\n$memoryData")
+                            } else {
+                                appendSystemMessage("🔍 Ничего не найдено. Перефразируйте запрос.")
+                            }
                         }
                     }
                     return
@@ -1834,12 +1857,15 @@ class MemorySearchEngine(private val memoryFile: File) {
         return log10(docCount.toDouble() / matchingDocs) + 1.0
     }
 
-    private fun tokenize(text: String): List<String> {
+       private fun tokenize(text: String): List<String> {
         return text.lowercase()
+            // Сначала заменяем "х", "x", "*" между цифрами на пробел (60х40х4 → 60 40 4)
+            .replace(Regex("(?<=\\d)\\s*[хxX*×]\\s*(?=\\d)"), " ")
+            // Потом убираем всё, кроме букв, цифр и пробелов
             .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
             .split(Regex("\\s+"))
             .map { it.trim() }
-            .filter { it.length > 2 }
+            .filter { it.length > 1 }
             .filter { it !in STOP_WORDS }
             .map { extractRussianRoot(it) }
             .distinct()
