@@ -844,8 +844,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
                 _isCompressing.value = true
 
-        // Страховка: сбросить через 60 секунд, если ответ не пришёл
-                scope.launch {
+        
+            scope.launch {
             delay(900000)
             if (_isCompressing.value && isCompressionRequest) {
                 Log.w(TAG, "Compression timeout — resetting flag")
