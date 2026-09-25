@@ -363,7 +363,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             _cloudState.value = currentState.copy(tokensGenerated = event.tokenCount)
                         }
                     }
-                    is CloudAIEvent.Done -> {
+                                        is CloudAIEvent.Done -> {
     _cloudState.value = CloudAIState.Completed(event.tokenCount, event.duration)
     val fullText = event.fullText
     if (fullText.isNotEmpty()) {
@@ -380,10 +380,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         isCompressionRequest = false
         _isCompressing.value = false
     }
-    _cloudGeneratedText.value = fullText
 }
-                    is CloudAIEvent.Error -> {
+                                        is CloudAIEvent.Error -> {
                         _cloudState.value = CloudAIState.Error(event.message)
+                        if (isCompressionRequest) {
+                            appendSystemMessage("⚠️ Сжатие беседы не удалось: ${event.message}")
+                        }
                         isCompressionRequest = false
                         _isCompressing.value = false
                         Log.e(TAG, "Ошибка облачного ИИ: ${event.message}")
@@ -411,7 +413,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             _state.value = currentState.copy(tokensGenerated = event.tokenCount)
                         }
                     }
-                    is LlamaHelper.LLMEvent.Done -> {
+                                       is LlamaHelper.LLMEvent.Done -> {
     _state.value = GenerationState.Completed(event.tokenCount, event.duration)
     val fullText = event.fullText
     if (fullText.isNotEmpty()) {
@@ -428,10 +430,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         isCompressionRequest = false
         _isCompressing.value = false
     }
-    _generatedText.value = fullText
 }
-                    is LlamaHelper.LLMEvent.Error -> {
+                                        is LlamaHelper.LLMEvent.Error -> {
                         _state.value = GenerationState.Error(event.message)
+                        if (isCompressionRequest) {
+                            appendSystemMessage("⚠️ Сжатие беседы не удалось (локально): ${event.message}")
+                        }
                         isCompressionRequest = false
                         _isCompressing.value = false
                         Log.e(TAG, "Ошибка локального ИИ: ${event.message}")
@@ -841,13 +845,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 _isCompressing.value = true
 
         // Страховка: сбросить через 60 секунд, если ответ не пришёл
-        scope.launch {
-            delay(300000)
+                scope.launch {
+            delay(900000)
             if (_isCompressing.value && isCompressionRequest) {
                 Log.w(TAG, "Compression timeout — resetting flag")
                 isCompressionRequest = false
                 _isCompressing.value = false
-                appendSystemMessage("⚠️ Сжатие беседы не удалось (таймаут)")
+                appendSystemMessage("⚠️ Сжатие беседы не удалось (таймаут 15 минут)")
             }
         }
 
