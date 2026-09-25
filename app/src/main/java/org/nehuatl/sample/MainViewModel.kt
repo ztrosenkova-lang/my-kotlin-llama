@@ -375,7 +375,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         }
                     }
                                         is CloudAIEvent.Done -> {
-                                           is CloudAIEvent.Done -> {
     _cloudState.value = CloudAIState.Completed(event.tokenCount, event.duration)
     val fullText = event.fullText
     if (fullText.isNotEmpty()) {
@@ -419,7 +418,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 }
-                                                                               is CloudAIEvent.Error -> {
+            is CloudAIEvent.Error -> {
                         _cloudState.value = CloudAIState.Error(event.message)
                         if (isCompressionRequest) {
                             compressionDotsJob?.cancel()
