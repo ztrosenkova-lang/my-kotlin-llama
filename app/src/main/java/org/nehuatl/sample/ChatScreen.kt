@@ -234,6 +234,7 @@ fun ChatScreen(
     val isDarkTheme by viewModel.isDarkTheme.collectAsStateWithLifecycle(initialValue = false)
     val showBrainEditorState by viewModel.showBrainEditor.collectAsStateWithLifecycle(initialValue = false)
     val isFloatingRobotRunning by viewModel.floatingRobotRunning.collectAsStateWithLifecycle(initialValue = false)
+    val isCompressing by viewModel.isCompressing.collectAsStateWithLifecycle(initialValue = false)
 
     val colors = if (isDarkTheme) DarkColors else LightColors
 
@@ -885,6 +886,7 @@ fun ChatScreen(
                 remainingTimeText = remainingTimeText,
                 isPermanentlyUnlocked = isPermanentlyUnlocked,
                 currentMode = currentMode,
+                isCompressing = isCompressing,
                 modifier = Modifier.padding(8.dp),
                 colors = colors,
                 isDarkTheme = isDarkTheme
@@ -5731,6 +5733,7 @@ private fun PromptInput(
     remainingTimeText: String,
     isPermanentlyUnlocked: Boolean,
     currentMode: AIMode,
+    isCompressing: Boolean,
     modifier: Modifier = Modifier,
     colors: AppColors,
     isDarkTheme: Boolean
@@ -5914,14 +5917,20 @@ private fun PromptInput(
                     }
                 }
 
-                OutlinedTextField(
+                                OutlinedTextField(
                     value = prompt,
                     onValueChange = onPromptChange,
                     modifier = Modifier
                         .weight(1f)
                         .focusRequester(focusRequester),
-                    enabled = enabled && !isGenerating && !isSpeaking,
-                    placeholder = { Text("Введите запрос...", color = colors.text.copy(alpha = 0.5f)) },
+                    enabled = enabled && !isGenerating && !isSpeaking && !isCompressing,
+                    placeholder = {
+                        Text(
+                            if (isCompressing) "⏳ Сжатие беседы..."
+                            else "Введите запрос...",
+                            color = colors.text.copy(alpha = 0.5f)
+                        )
+                    },
                     maxLines = 3,
                     singleLine = false,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -5946,7 +5955,7 @@ private fun PromptInput(
                             .border(1.dp, colors.borderGray, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        IconButton(
+                                               IconButton(
                             onClick = {
                                 if (ContextCompat.checkSelfPermission(
                                         context,
@@ -5963,13 +5972,17 @@ private fun PromptInput(
                                 }
                                 speechRecognizerLauncher.launch(intent)
                             },
-                            enabled = true,
+                            enabled = !isGenerating && !isSpeaking && !isCompressing,
                             modifier = Modifier.size(41.dp)
                         ) {
-                            Icon(
+                                                        Icon(
                                 imageVector = Icons.Default.Mic,
                                 contentDescription = "Распознать речь",
-                                tint = if (isTtsReady) colors.accent else colors.text.copy(alpha = 0.4f)
+                                tint = if (!isGenerating && !isSpeaking && !isCompressing) {
+                                    colors.accent
+                                } else {
+                                    colors.text.copy(alpha = 0.4f)
+                                }
                             )
                         }
                     }
@@ -5992,10 +6005,10 @@ private fun PromptInput(
                                     tint = colors.accent
                                 )
                             }
-                        } else {
+                                               } else {
                             IconButton(
                                 onClick = onGenerate,
-                                enabled = enabled,
+                                enabled = enabled && !isCompressing,
                                 modifier = Modifier.size(41.dp)
                             ) {
                                 Icon(
