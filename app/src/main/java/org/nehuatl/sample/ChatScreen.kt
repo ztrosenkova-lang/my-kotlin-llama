@@ -5036,19 +5036,22 @@ Row(
     modifier = Modifier.fillMaxWidth(),
     horizontalArrangement = Arrangement.spacedBy(8.dp)
 ) {
-    Button(
+       Button(
         onClick = onToggleFloating,
         colors = ButtonDefaults.buttonColors(
             containerColor = if (isFloatingRunning) colors.green else colors.accent
         ),
         modifier = Modifier.weight(1f),
         shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, colors.borderGray)
+        border = BorderStroke(1.dp, colors.borderGray),
+        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
     ) {
         Text(
-            text = if (isFloatingRunning) "⏹ Остановить робота" else "🤖 Запустить робота",
+            text = if (isFloatingRunning) "Остановить робота" else "Запустить робота",
             color = colors.background,
-            fontSize = 14.sp
+            fontSize = 10.sp,
+            maxLines = 1,
+            softWrap = false
         )
     }
     
