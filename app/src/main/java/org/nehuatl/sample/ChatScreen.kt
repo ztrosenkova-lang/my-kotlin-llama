@@ -3180,12 +3180,12 @@ for (i in 0 until sparkCount) {
             )
         )
 
-        // Блик — вертикальная полоса слева
+                // Блик — вертикальная полоса слева (едет вместе с панелью)
         val headPanelHighlight = Path().apply {
-            moveTo(pt(-9f, -2f).x, pt(-9f, -2f).y)
-            lineTo(pt(-4f, -2f).x, pt(-4f, -2f).y)
-            lineTo(pt(-4f, 12f).x, pt(-4f, 12f).y)
-            lineTo(pt(-9f, 12f).x, pt(-9f, 12f).y)
+            moveTo(pt(-9f, -2f).x, pt(-9f, -2f).y - panelLift)
+            lineTo(pt(-4f, -2f).x, pt(-4f, -2f).y - panelLift)
+            lineTo(pt(-4f, 12f).x, pt(-4f, 12f).y - panelLift * 0.3f)
+            lineTo(pt(-9f, 12f).x, pt(-9f, 12f).y - panelLift * 0.3f)
             close()
         }
         drawPath(
