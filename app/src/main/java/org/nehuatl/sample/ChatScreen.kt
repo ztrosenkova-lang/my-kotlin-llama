@@ -2612,7 +2612,7 @@ for (i in 0 until sparkCount) {
 }
                        // ================= НАДПИСЬ "ИИ-Друг" МЕЖДУ ЭКРАНОМ И РЕМНЁМ =================
         val labelText = "ИИ-Друг"
-                val labelFontSize = with(density) { (10f * u).toSp() }
+        val labelFontSize = with(density) { (10f * u).toSp() }
         val labelStyle = TextStyle(
             color = Color.Black,
             fontSize = labelFontSize,
@@ -2623,12 +2623,12 @@ for (i in 0 until sparkCount) {
             style = labelStyle
         )
                val labelCenterY = 117f
-        val labelTopY = labelCenterY * u - labelLayout.size.height / 2f
+        val labelCenterPos = pt(0f, labelCenterY)
         drawText(
             textLayoutResult = labelLayout,
             topLeft = Offset(
                 x = size.width / 2f - labelLayout.size.width / 2f,
-                y = labelTopY + bobOffset
+                y = labelCenterPos.y - labelLayout.size.height / 2f
             )
         )
 
