@@ -1480,7 +1480,7 @@ fun ThinkingRobotAnimation(
 
           val headPanelOpenAmount by animateFloatAsState(
         targetValue = if (isThinking) 1f else 0f,
-        animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 2000, easing = FastOutSlowInEasing),
         label = "head_panel_open"
     )
 
@@ -1699,7 +1699,7 @@ fun ThinkingRobotAnimation(
         // ========== ТРИ ГОРИЗОНТАЛЬНЫЕ ПОЛОСКИ НА ЛЕВОМ ПРЕДПЛЕЧЬЕ ==========
         // Индикатор активности: покой — синие, думы — по очереди зелёные, выгружено — тускло-синие
         val barsCenterX = -46f
-        val barsCenterY = 140f
+        val barsCenterY = 140f + leftArmOffsetY
         val barWidth = 6f * u          // длина по горизонтали
         val barHeight = 1.6f * u       // толщина
         val barGap = 1.4f * u          // зазор между полосками
@@ -1971,7 +1971,7 @@ fun ThinkingRobotAnimation(
                 val clockW = indicatorRadius * 1.9f   // ширина часов
                 val clockH = indicatorRadius * 1.5f   // высота часов
                 val clockCorner = 1.2f * u            // радиус скругления углов
-                val clockCenter = pt(indicatorCenterX, indicatorCenterY)
+                val clockCenter = pt(indicatorCenterX, indicatorCenterY + rightArmOffsetY)
                 val clockTopLeft = Offset(
                     clockCenter.x - clockW / 2f,
                     clockCenter.y - clockH / 2f
@@ -3147,24 +3147,19 @@ for (i in 0 until sparkCount) {
 
         // ================= МОЗГ ПОД ПАНЕЛЬЮ (виден, когда панель открыта) =================
         if (panelOpen > 0.05f) {
-            val brainClipPath = Path().apply {
-                moveTo(pt(-15f, -3f).x, pt(-15f, -3f).y)
+                val brainClipPath = Path().apply {
+                moveTo(pt(-15f, 14f).x, pt(-15f, 14f).y)
                 cubicTo(
-                    pt(-8f, -5f).x, pt(-8f, -5f).y,
-                    pt(8f, -5f).x, pt(8f, -5f).y,
-                    pt(15f, -3f).x, pt(15f, -3f).y
+                    pt(-15f, 2f).x, pt(-15f, 2f).y,
+                    pt(-10f, -5f).x, pt(-10f, -5f).y,
+                    pt(0f, -5f).x, pt(0f, -5f).y
                 )
                 cubicTo(
-                    pt(15f, 3f).x, pt(15f, 3f).y,
-                    pt(14.5f, 9f).x, pt(14.5f, 9f).y,
-                    pt(14f, 13f).x, pt(14f, 13f).y
+                    pt(10f, -5f).x, pt(10f, -5f).y,
+                    pt(15f, 2f).x, pt(15f, 2f).y,
+                    pt(15f, 14f).x, pt(15f, 14f).y
                 )
-                lineTo(pt(-14f, 13f).x, pt(-14f, 13f).y)
-                cubicTo(
-                    pt(-14.5f, 9f).x, pt(-14.5f, 9f).y,
-                    pt(-15f, 3f).x, pt(-15f, 3f).y,
-                    pt(-15f, -3f).x, pt(-15f, -3f).y
-                )
+                lineTo(pt(-15f, 14f).x, pt(-15f, 14f).y)
                 close()
             }
 
