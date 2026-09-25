@@ -134,8 +134,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _isFirstLaunch = MutableStateFlow(false)
     val isFirstLaunch: StateFlow<Boolean> = _isFirstLaunch.asStateFlow()
 
-    private val _isCompressing = MutableStateFlow(false)
+        private val _isCompressing = MutableStateFlow(false)
     val isCompressing: StateFlow<Boolean> = _isCompressing.asStateFlow()
+
+    // Отложенное сообщение пользователя — отправляется после завершения сжатия
+    private val _pendingUserMessage = MutableStateFlow<String?>(null)
+
+    // Job для анимации бегущих точек в сообщении о сжатии
+    private var compressionDotsJob: Job? = null
 
     private val _showBrainEditor = MutableStateFlow(false)
     val showBrainEditor: StateFlow<Boolean> = _showBrainEditor.asStateFlow()
@@ -219,8 +225,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         )
     }
 
-    init {
+        init {
     instance = this
+
+        // Сброс возможного зависшего флага сжатия при перезапуске приложения
+        _isCompressing.value = false
+        isCompressionRequest = false
+        _pendingUserMessage.value = null
 
         _floatingRobotRunning.value = FloatingRobotService.isRunning
 
@@ -364,30 +375,71 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         }
                     }
                                         is CloudAIEvent.Done -> {
+                                           is CloudAIEvent.Done -> {
     _cloudState.value = CloudAIState.Completed(event.tokenCount, event.duration)
     val fullText = event.fullText
     if (fullText.isNotEmpty()) {
         if (isCompressionRequest) {
             saveBrain(fullText)
-            appendSystemMessage("✅ Brain.txt обновлен: беседа записана в долговременную память")
+            compressionDotsJob?.cancel()
+            updateLastSystemMessage("✅ Беседа сжата и записана в память")
+            isCompressionRequest = false
+            _isCompressing.value = false
+
+            // Пауза 3 сек, затем отправляем отложенное сообщение пользователя
+            scope.launch {
+                delay(3000)
+                val pending = _pendingUserMessage.value
+                if (pending != null) {
+                    _pendingUserMessage.value = null
+                    sendUserMessage(pending)
+                }
+            }
         } else {
             _cloudGeneratedText.value = fullText
             _pendingTextToPrint.value = fullText
             speakText(fullText)
         }
-    }
-    if (isCompressionRequest) {
-        isCompressionRequest = false
-        _isCompressing.value = false
+    } else {
+        // Пустой ответ — не сжатие завершилось успешно
+        if (isCompressionRequest) {
+            compressionDotsJob?.cancel()
+            updateLastSystemMessage("⚠️ Сжатие не удалось: пустой ответ")
+            isCompressionRequest = false
+            _isCompressing.value = false
+
+            scope.launch {
+                delay(3000)
+                val pending = _pendingUserMessage.value
+                if (pending != null) {
+                    _pendingUserMessage.value = null
+                    sendUserMessage(pending)
+                }
+            }
+        }
     }
 }
-                                        is CloudAIEvent.Error -> {
+                                                                               is CloudAIEvent.Error -> {
                         _cloudState.value = CloudAIState.Error(event.message)
                         if (isCompressionRequest) {
-                            appendSystemMessage("⚠️ Сжатие беседы не удалось: ${event.message}")
+                            compressionDotsJob?.cancel()
+                            updateLastSystemMessage("⚠️ Сжатие не удалось: ${event.message}")
+                            isCompressionRequest = false
+                            _isCompressing.value = false
+
+                            // Всё равно отправляем отложенное сообщение
+                            scope.launch {
+                                delay(3000)
+                                val pending = _pendingUserMessage.value
+                                if (pending != null) {
+                                    _pendingUserMessage.value = null
+                                    sendUserMessage(pending)
+                                }
+                            }
+                        } else {
+                            isCompressionRequest = false
+                            _isCompressing.value = false
                         }
-                        isCompressionRequest = false
-                        _isCompressing.value = false
                         Log.e(TAG, "Ошибка облачного ИИ: ${event.message}")
                     }
                     is CloudAIEvent.TokenReceived -> {
@@ -413,31 +465,68 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             _state.value = currentState.copy(tokensGenerated = event.tokenCount)
                         }
                     }
-                                       is LlamaHelper.LLMEvent.Done -> {
+                                                                              is LlamaHelper.LLMEvent.Done -> {
     _state.value = GenerationState.Completed(event.tokenCount, event.duration)
     val fullText = event.fullText
     if (fullText.isNotEmpty()) {
         if (isCompressionRequest) {
             saveBrain(fullText)
-            appendSystemMessage("✅ Brain.txt обновлен: беседа записана в долговременную память")
+            compressionDotsJob?.cancel()
+            updateLastSystemMessage("✅ Беседа сжата и записана в память")
+            isCompressionRequest = false
+            _isCompressing.value = false
+
+            scope.launch {
+                delay(3000)
+                val pending = _pendingUserMessage.value
+                if (pending != null) {
+                    _pendingUserMessage.value = null
+                    sendUserMessage(pending)
+                }
+            }
         } else {
             _generatedText.value = fullText
             _pendingTextToPrint.value = fullText
             speakText(fullText)
         }
-    }
-    if (isCompressionRequest) {
-        isCompressionRequest = false
-        _isCompressing.value = false
+    } else {
+        if (isCompressionRequest) {
+            compressionDotsJob?.cancel()
+            updateLastSystemMessage("⚠️ Сжатие не удалось: пустой ответ")
+            isCompressionRequest = false
+            _isCompressing.value = false
+
+            scope.launch {
+                delay(3000)
+                val pending = _pendingUserMessage.value
+                if (pending != null) {
+                    _pendingUserMessage.value = null
+                    sendUserMessage(pending)
+                }
+            }
+        }
     }
 }
-                                        is LlamaHelper.LLMEvent.Error -> {
+                                                                               is LlamaHelper.LLMEvent.Error -> {
                         _state.value = GenerationState.Error(event.message)
                         if (isCompressionRequest) {
-                            appendSystemMessage("⚠️ Сжатие беседы не удалось (локально): ${event.message}")
+                            compressionDotsJob?.cancel()
+                            updateLastSystemMessage("⚠️ Сжатие не удалось: ${event.message}")
+                            isCompressionRequest = false
+                            _isCompressing.value = false
+
+                            scope.launch {
+                                delay(3000)
+                                val pending = _pendingUserMessage.value
+                                if (pending != null) {
+                                    _pendingUserMessage.value = null
+                                    sendUserMessage(pending)
+                                }
+                            }
+                        } else {
+                            isCompressionRequest = false
+                            _isCompressing.value = false
                         }
-                        isCompressionRequest = false
-                        _isCompressing.value = false
                         Log.e(TAG, "Ошибка локального ИИ: ${event.message}")
                         _isModelLoaded.value = false
                     }
@@ -931,22 +1020,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         return if (word.length < 2) lowerWord else word
     }
 
-    private fun triggerBackgroundDialogueCompression(history: List<ChatMessage>) {
+        private fun triggerBackgroundDialogueCompression(history: List<ChatMessage>) {
         if (history.size < AUTO_BRAIN_COMPRESSION_THRESHOLD) return
         if (_isCompressing.value) return
 
-                _isCompressing.value = true
-
-        
-            scope.launch {
-            delay(900000)
-            if (_isCompressing.value && isCompressionRequest) {
-                Log.w(TAG, "Compression timeout — resetting flag")
-                isCompressionRequest = false
-                _isCompressing.value = false
-                appendSystemMessage("⚠️ Сжатие беседы не удалось (таймаут 15 минут)")
-            }
-        }
+        _isCompressing.value = true
 
         scope.launch(Dispatchers.IO) {
             try {
@@ -963,7 +1041,19 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
                 isCompressionRequest = true
 
-                appendSystemMessage("🧠 ИИ сжимает нашу беседу для долговременной памяти...")
+                // Системное сообщение с бегущими точками
+                appendSystemMessage("🧠 ИИ сжимает беседу")
+
+                // Запускаем анимацию бегущих точек каждые 500 мс
+                compressionDotsJob = scope.launch {
+                    var dotsCount = 0
+                    while (true) {
+                        delay(500)
+                        dotsCount = (dotsCount + 1) % 4
+                        val dots = ".".repeat(dotsCount)
+                        updateLastSystemMessage("🧠 ИИ сжимает беседу$dots")
+                    }
+                }
 
                 if (_isModelLoaded.value && llamaHelper.getContextId() != null) {
                     llamaHelper.predict(
@@ -980,11 +1070,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         maxTokens = maxTokens.value
                     )
                 } else {
+                    compressionDotsJob?.cancel()
                     isCompressionRequest = false
                     _isCompressing.value = false
                     appendSystemMessage("⚠️ Нет активного ИИ для сжатия беседы")
                 }
             } catch (e: Exception) {
+                compressionDotsJob?.cancel()
                 isCompressionRequest = false
                 _isCompressing.value = false
                 Log.e(TAG, "Background compression failed: ${e.message}")
@@ -1252,7 +1344,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    fun sendUserMessage(text: String) {
+       fun sendUserMessage(text: String) {
         if (_isCompressing.value) {
             appendSystemMessage("⏳ ИИ сжимает беседу, подождите...")
             return
@@ -1265,7 +1357,15 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         if (userMessageCount >= AUTO_BRAIN_COMPRESSION_THRESHOLD) {
             userMessageCount = 0
+
+            // Сохраняем сообщение — отправим его после завершения сжатия
+            _pendingUserMessage.value = text
+
+            // Запускаем сжатие
             triggerBackgroundDialogueCompression(_chatHistory.value)
+
+            // Возвращаемся — вопрос не отправляем, пока сжатие не завершится
+            return
         }
 
         val lowerText = text.lowercase()
