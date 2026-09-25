@@ -3318,10 +3318,8 @@ for (i in 0 until sparkCount) {
                 endY = pt(0f, 14f).y
             )
         )
-        
-     }
 
-                               // Блик — вертикальная полоса слева (едет вместе с панелью)
+      // Блик — вертикальная полоса слева (едет вместе с панелью)
         val headPanelHighlight = Path().apply {
             moveTo(pt(-9f, -2f).x, pt(-9f, -2f).y + panelLift)
             lineTo(pt(-4f, -2f).x, pt(-4f, -2f).y + panelLift)
@@ -3334,9 +3332,8 @@ for (i in 0 until sparkCount) {
             color = Color.White.copy(alpha = 0.5f)
         )
         
-    }
         
-                // ================= ДВЕ ЛИНИИ НА ГОЛОВЕ (от верхнего края шлема до визора) =================
+// ================= ДВЕ ЛИНИИ НА ГОЛОВЕ (от верхнего края шлема до визора) =================
         // Левая линия — идёт по дуге шлема сверху вниз до верхней кромки визора (y = 14)
         val leftHeadLinePath = Path().apply {
             moveTo(pt(-16f, -4f).x, pt(-16f, -4f).y)
@@ -3351,7 +3348,6 @@ for (i in 0 until sparkCount) {
             color = darkGray,
             style = Stroke(width = 1f * u, cap = StrokeCap.Round)
         )
-        }
 
         // Правая линия — симметрично
         val rightHeadLinePath = Path().apply {
@@ -3367,8 +3363,7 @@ for (i in 0 until sparkCount) {
             color = darkGray,
             style = Stroke(width = 1f * u, cap = StrokeCap.Round)
         )
-        }
-        // ================= ВИЗОР (СТЕКЛО) — лыжная маска с правильными углами =================
+// ================= ВИЗОР (СТЕКЛО) — лыжная маска с правильными углами =================
 val topRadius = 4f * u  // Верхние углы — маленькое скругление
 val bottomRadius = 13f * u  // Нижние углы — большое скругление
 
