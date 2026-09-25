@@ -820,22 +820,115 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         Log.d(TAG, "Cloud state set to Ready for model: $modelId")
     }
 
+        /**
+     * Стеммер Портера (Snowball) для русского языка.
+     * Приводит слово к псевдо-корню, чтобы "штукатурка", "штукатурные",
+     * "штукатурить" давали один и тот же стем.
+     * Реализация портирована с http://snowball.tartarus.org/algorithms/russian/stemmer.html
+     * Работает с кириллицей, для латиницы/цифр возвращает слово без изменений.
+     */
     private fun extractRussianRoot(word: String): String {
         val lowerWord = word.lowercase()
-        val suffixes = listOf(
-            "ами", "ые", "ой", "ых", "ого", "его", "ому", "ему", "им", "ым",
-            "ая", "яя", "ое", "ее", "ие", "ые", "ий", "ый", "ой", "ей",
-            "ам", "ям", "ом", "ем", "ах", "ях", "ов", "ев", "ин", "ын",
-            "а", "я", "о", "е", "и", "ы", "у", "ю"
+        // Работаем только с русскими словами. Латиница, цифры, смешанное — возвращаем как есть.
+        if (!lowerWord.any { it in 'а'..'я' || it == 'ё' }) return lowerWord
+
+        var word = lowerWord.replace('ё', 'е')
+
+        // Защита коротких слов
+        if (word.length < 3) return word
+
+        val vowels = "аеиоуыэюя"
+        fun isVowel(c: Char): Boolean = c in vowels
+
+        // Шаг 1: RV, R1, R2
+        // RV — область после первой гласной
+        // R1 — область после первой согласной, идущей после гласной
+        // R2 — область после второй такой согласной (относительно начала R1)
+        fun findRVRegion(w: String): Int {
+            for (i in w.indices) {
+                if (isVowel(w[i])) return i + 1
+            }
+            return w.length
+        }
+
+        fun findRRegion(w: String, start: Int): Int {
+            var i = start
+            while (i < w.length - 1) {
+                if (!isVowel(w[i]) && isVowel(w[i + 1])) {
+                    return i + 2
+                }
+                i++
+            }
+            return w.length
+        }
+
+        val rvStart = findRVRegion(word)
+        val r1Start = findRRegion(word, 0)
+        val r2Start = findRRegion(word, r1Start)
+
+        // Шаг 2: удаление окончаний (в области RV)
+        val endings = listOf(
+            "иями", "ями", "ами", "ией", "иям", "ием", "иях", "ию",
+            "ью", "ия", "ья", "ев", "ов", "ие", "ье", "еи", "ии",
+            "ей", "ой", "ий", "йм", "ием", "ым", "ом", "его", "ого",
+            "ему", "ому", "их", "ых", "ую", "юю", "ая", "яя", "ою", "ею",
+            "ах", "ях", "ам", "ям", "ий", "ый", "ой", "ей", "ою", "ею",
+            "и", "ы", "а", "я", "о", "е", "у", "ю", "й", "ь"
         )
-        var stem = lowerWord
-        for (suffix in suffixes) {
-            if (stem.endsWith(suffix) && stem.length > suffix.length + 1) {
-                stem = stem.substring(0, stem.length - suffix.length)
+
+        for (ending in endings) {
+            if (word.length - rvStart >= ending.length &&
+                word.endsWith(ending) &&
+                word.length - ending.length >= rvStart) {
+                word = word.substring(0, word.length - ending.length)
                 break
             }
         }
-        return if (stem.length < 2) lowerWord else stem
+
+        // Шаг 3: удаление суффиксов из R2 (приоритет) и R1
+        val suffixesR2 = listOf(
+            "иями", "ями", "ами", "ейше", "ейш", "нн",
+            "ость", "ост", "ей", "ий"
+        )
+        for (suffix in suffixesR2) {
+            if (word.length - r2Start >= suffix.length && word.endsWith(suffix)) {
+                word = word.substring(0, word.length - suffix.length)
+                break
+            }
+        }
+
+        val suffixesR1 = listOf(
+            "иями", "ями", "ами", "еи", "ии", "ей",
+            "ием", "иям", "иях", "ию", "ью", "ия", "ья",
+            "ев", "ов", "ие", "ье",
+            "ейше", "ейш", "нн",
+            "ость", "ост",
+            "ивш", "ывш", "ующ", "ся", "сь",
+            "его", "ого", "ему", "ому",
+            "их", "ых", "ую", "юю",
+            "ая", "яя", "ою", "ею",
+            "ах", "ях", "ам", "ям",
+            "ом", "ем", "ой", "ый", "ий",
+            "у", "ю", "а", "я", "о", "е", "и", "ы", "ь", "й",
+            "ав", "ыв", "ив", "ов", "ев", "уй",
+            "нн", "вш", "н", "в"
+        )
+        for (suffix in suffixesR1) {
+            if (word.length - r1Start >= suffix.length && word.endsWith(suffix)) {
+                word = word.substring(0, word.length - suffix.length)
+                break
+            }
+        }
+
+        // Шаг 4: удаление "ь" в конце
+        if (word.endsWith("ь")) {
+            word = word.substring(0, word.length - 1)
+        }
+
+        // Шаг 5: двойные "н" → одиночная "н"
+        word = word.replace(Regex("нн$"), "н")
+
+        return if (word.length < 2) lowerWord else word
     }
 
     private fun triggerBackgroundDialogueCompression(history: List<ChatMessage>) {
@@ -1657,7 +1750,7 @@ class MemorySearchEngine(private val memoryFile: File) {
         private const val K1 = 1.5
         private const val B = 0.75
 
-        private val STOP_WORDS = setOf(
+               private val STOP_WORDS = setOf(
             "и", "в", "во", "не", "что", "он", "на", "я", "с", "со", "как", "а", "то", "все",
             "она", "так", "его", "но", "да", "ты", "к", "у", "же", "вы", "за", "бы", "по",
             "только", "ее", "мне", "было", "вот", "от", "меня", "еще", "нет", "о", "из",
@@ -1673,34 +1766,183 @@ class MemorySearchEngine(private val memoryFile: File) {
             "тот", "через", "эти", "нас", "про", "всего", "них", "какая", "много",
             "разве", "три", "эту", "моя", "впрочем", "хорошо", "свою", "этой", "перед",
             "иногда", "лучше", "чуть", "том", "нельзя", "такой", "им", "более", "всегда",
-            "конечно", "всю", "между"
+            "конечно", "всю", "между",
+            // Команды приложения — не должны попадать в поисковые токены
+            "найди", "поищи", "вспомни", "посмотри", "чате", "запомни", "напомни",
+            "будильник", "покажи", "пожалуйста"
         )
 
-        private val SYNONYMS = mapOf(
+                       private val SYNONYMS = mapOf(
             "телефон" to listOf("номер", "мобильный", "тел", "звонить", "вызов", "сотовый"),
             "пароль" to listOf("код", "пин", "логин", "доступ", "секрет", "ключ", "auth"),
             "адрес" to listOf("улица", "дом", "квартира", "место", "локация", "где"),
-            "цена" to listOf("стоимость", "прайс", "руб", "деньги", "оплата", "тариф"),
-            "время" to listOf("дата", "час", "когда", "срок", "дедлайн", "встреча"),
-            "работа" to listOf("задача", "дело", "проект", "обязанность"),
-            "человек" to listOf("личность", "персона", "клиент", "партнер"),
+            "цена" to listOf("стоимость", "прайс", "руб", "деньги", "оплата", "тариф", "сколько", "стоит"),
+            "время" to listOf("дата", "час", "когда", "срок", "дедлайн", "встреча", "начало"),
+            "работа" to listOf("задача", "дело", "проект", "обязанность", "заказ"),
+            "человек" to listOf("личность", "персона", "клиент", "партнер", "заказчик"),
             "компания" to listOf("фирма", "организация", "бизнес", "предприятие"),
-            "машина" to listOf("авто", "автомобиль", "транспорт", "тачка"),
-            "дом" to listOf("квартира", "жилье", "недвижимость"),
-            "еда" to listOf("питание", "продукты", "обед", "ужин", "завтрак"),
+            "машина" to listOf("авто", "автомобиль", "транспорт", "тачка", "автосервис"),
             "плитк" to listOf("плитк", "кафел", "керамогранит", "мозаик", "керамик"),
-            "покраск" to listOf("покраск", "окраск", "малярн", "краск"),
-            "труб" to listOf("труб", "вгп", "э/с", "профильн", "трубопровод"),
-            "лист" to listOf("лист", "листов", "пластин"),
-            "металл" to listOf("металл", "стальн", "желез", "сплав"),
+            "покраск" to listOf("покраск", "окраск", "малярн", "краск", "побелк"),
+            "труб" to listOf("труб", "вгп", "э/с", "профильн", "трубопровод", "профтруб"),
+            "лист" to listOf("лист", "листов", "пластин", "профлист", "профнастил"),
+            "металл" to listOf("металл", "стальн", "желез", "сплав", "прокат", "металлопрокат"),
             "укладк" to listOf("укладк", "монтаж", "установк", "инсталляц"),
-            "ремонт" to listOf("ремонт", "починк", "восстановлен", "исправлен"),
-            "строительств" to listOf("строительств", "стройк", "возведен"),
-            "материал" to listOf("материал", "сырье", "ресурс", "товар")
+            "ремонт" to listOf("ремонт", "починк", "восстановлен", "исправлен", "переделка"),
+            "строительств" to listOf("строительств", "стройк", "возведен", "монтаж"),
+            "материал" to listOf("материал", "сырье", "ресурс", "товар", "продукция"),
+            "работ" to listOf("работ", "услуг", "выполнить", "сделать"),
+            "руб" to listOf("рублей", "стоимость", "цена", "р.", "р", "rub", "денег"),
+            "стоимость" to listOf("цена", "руб", "сколько", "стоит", "прайс"),
+            "скидк" to listOf("скидка", "акция", "распродажа", "уценка"),
+            "дом" to listOf("квартира", "жилье", "недвижимость", "коттедж", "дача"),
+            "еда" to listOf("питание", "продукты", "обед", "ужин", "завтрак", "блюдо"),
+            "ремонт_квартир" to listOf("отделка", "шпаклевка", "штукатурка", "грунтовка", "обои"),
+            "кабель" to listOf("провод", "кабел", "электропровод", "ввг", "nyy"),
+            "насос" to listOf("помпа", "водоснабжен", "откачк", "циркуляц"),
+            "котел" to listOf("бойлер", "колонка", "отоплен", "обогрев", "водонагрев"),
+            "карбюратор" to listOf("карб", "жиклер", "жиклёр", "поплавков", "дроссел"),
+            "двигатель" to listOf("мотор", "двс", "силов", "агрегат"),
+            "запчаст" to listOf("запчасть", "деталь", "комплектующ"),
+            "масло" to listOf("смазка", "жидкость", "машинное")
         )
+
+        /**
+         * Нормализованный словарь синонимов.
+         * Ключи и значения прогнаны через extractRussianRoot, чтобы совпадать
+         * со стемами, которые получаются при токенизации.
+         *
+         * Строится ЛЕНИВО при первом обращении.
+         * Например, ключ "покраск" после стемминга становится "покрас",
+         * значение "штукатурка" → "штукатур" и т.д.
+         */
+               private val SYNONYMS_NORMALIZED: Map<String, List<String>> by lazy {
+            val result = mutableMapOf<String, MutableList<String>>()
+
+            for ((rawKey, rawValues) in SYNONYMS) {
+                val normalizedKey = stem(rawKey)
+
+                // Нормализуем значения
+                val normalizedValues = rawValues
+                    .flatMap { value ->
+                        // Разбиваем значения с пробелами (например, "водонагрев 1 м.кв.")
+                        value.split(Regex("[\\s,.;:!?]+"))
+                    }
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .map { stem(it) }
+                    .distinct()
+
+                // Ключ кладём в индекс, + все значения тоже могут быть ключами
+                if (!result.containsKey(normalizedKey)) {
+                    result[normalizedKey] = mutableListOf()
+                }
+                result[normalizedKey]!!.addAll(normalizedValues)
+
+                // И сам ключ как синоним значений — чтобы работало в обе стороны
+                for (normValue in normalizedValues) {
+                    if (!result.containsKey(normValue)) {
+                        result[normValue] = mutableListOf()
+                    }
+                    result[normValue]!!.add(normalizedKey)
+                    result[normValue]!!.addAll(normalizedValues.filter { it != normValue })
+                }
+            }
+
+                       // Убираем дубли
+            result.mapValues { (_, values) -> values.distinct() }
+        }
+
+        /**
+         * Портер (Snowball) для русского. Статический — доступен и из companion,
+         * и из instance-методов класса.
+         */
+        internal fun stem(word: String): String {
+            val lowerWord = word.lowercase()
+            if (!lowerWord.any { it in 'а'..'я' || it == 'ё' }) return lowerWord
+            var w = lowerWord.replace('ё', 'е')
+            if (w.length < 3) return w
+
+            val vowels = "аеиоуыэюя"
+            fun isVowel(c: Char): Boolean = c in vowels
+
+            fun findRVRegion(s: String): Int {
+                for (i in s.indices) if (isVowel(s[i])) return i + 1
+                return s.length
+            }
+
+            fun findRRegion(s: String, start: Int): Int {
+                var i = start
+                while (i < s.length - 1) {
+                    if (!isVowel(s[i]) && isVowel(s[i + 1])) return i + 2
+                    i++
+                }
+                return s.length
+            }
+
+            val rvStart = findRVRegion(w)
+            val r1Start = findRRegion(w, 0)
+            val r2Start = findRRegion(w, r1Start)
+
+            val endings = listOf(
+                "иями", "ями", "ами", "ией", "иям", "ием", "иях", "ию",
+                "ью", "ия", "ья", "ев", "ов", "ие", "ье", "еи", "ии",
+                "ей", "ой", "ий", "йм", "ым", "ом", "его", "ого",
+                "ему", "ому", "их", "ых", "ую", "юю", "ая", "яя", "ою", "ею",
+                "ах", "ях", "ам", "ям", "ий", "ый", "ой", "ей",
+                "и", "ы", "а", "я", "о", "е", "у", "ю", "й", "ь"
+            )
+            for (ending in endings) {
+                if (w.length - rvStart >= ending.length &&
+                    w.endsWith(ending) &&
+                    w.length - ending.length >= rvStart) {
+                    w = w.substring(0, w.length - ending.length)
+                    break
+                }
+            }
+
+            val suffixesR2 = listOf(
+                "иями", "ями", "ами", "ейше", "ейш", "нн",
+                "ость", "ост", "ей", "ий"
+            )
+            for (suffix in suffixesR2) {
+                if (w.length - r2Start >= suffix.length && w.endsWith(suffix)) {
+                    w = w.substring(0, w.length - suffix.length)
+                    break
+                }
+            }
+
+            val suffixesR1 = listOf(
+                "иями", "ями", "ами", "еи", "ии", "ей",
+                "ием", "иям", "иях", "ию", "ью", "ия", "ья",
+                "ев", "ов", "ие", "ье",
+                "ейше", "ейш", "нн",
+                "ость", "ост",
+                "ивш", "ывш", "ующ", "ся", "сь",
+                "его", "ого", "ему", "ому",
+                "их", "ых", "ую", "юю",
+                "ая", "яя", "ою", "ею",
+                "ах", "ях", "ам", "ям",
+                "ом", "ем", "ой", "ый", "ий",
+                "у", "ю", "а", "я", "о", "е", "и", "ы", "ь", "й",
+                "ав", "ыв", "ив", "ов", "ев", "уй",
+                "нн", "вш", "н", "в"
+            )
+            for (suffix in suffixesR1) {
+                if (w.length - r1Start >= suffix.length && w.endsWith(suffix)) {
+                    w = w.substring(0, w.length - suffix.length)
+                    break
+                }
+            }
+
+            if (w.endsWith("ь")) w = w.substring(0, w.length - 1)
+            w = w.replace(Regex("нн$"), "н")
+
+            return if (w.length < 2) lowerWord else w
+        }
     }
 
-    data class SearchResult(
+       data class SearchResult(
         val category: String,
         val text: String,
         val score: Double,
@@ -1741,13 +1983,25 @@ class MemorySearchEngine(private val memoryFile: File) {
             index
         }
 
-        val scoredResults = documents.map { doc ->
+                val scoredResults = documents.map { doc ->
             val score = computeBM25(doc, queryTokens, queryNumbers, idfMap, avgDocLength)
             SearchResult(doc.category, doc.text, score, doc.timestamp)
         }
         .filter { it.score > 0.0 }
         .sortedByDescending { it.score }
-        .take(50)
+        .let { results ->
+            // Лимит по объёму текста (в символах), а не по количеству записей.
+            // ~8000 символов ≈ 2000 токенов — безопасно для контекста модели.
+            val maxChars = 8000
+            var totalChars = 0
+            val limited = mutableListOf<SearchResult>()
+            for (result in results) {
+                if (totalChars + result.text.length > maxChars && limited.isNotEmpty()) break
+                totalChars += result.text.length
+                limited.add(result)
+            }
+            limited
+        }
 
         if (scoredResults.isEmpty()) return ""
 
@@ -1798,7 +2052,8 @@ class MemorySearchEngine(private val memoryFile: File) {
                 score += fuzzyMatches * 0.8
             }
 
-            val synonyms = SYNONYMS[extractRussianRoot(queryToken)] ?: emptyList()
+                       val normalizedQuery = extractRussianRoot(queryToken)
+            val synonyms = SYNONYMS_NORMALIZED[normalizedQuery] ?: emptyList()
             for (synonym in synonyms) {
                 val synFreq = doc.tokenFreqs[synonym] ?: 0
                 if (synFreq > 0) {
@@ -1815,8 +2070,40 @@ class MemorySearchEngine(private val memoryFile: File) {
             }
         }
 
-        val phraseBonus = computePhraseBonus(doc, queryTokens)
+                val phraseBonus = computePhraseBonus(doc, queryTokens)
         score += phraseBonus
+
+        // Бонус за полное покрытие — если все токены запроса найдены в записи
+        val coveredTokens = queryTokens.count { queryToken ->
+            doc.tokens.any { docToken ->
+                extractRussianRoot(docToken) == extractRussianRoot(queryToken) ||
+                levenshteinDistance(docToken, queryToken) <= 2
+            }
+        }
+        if (queryTokens.isNotEmpty() && coveredTokens == queryTokens.size) {
+            score += 20.0
+        }
+
+        // Бонус за свежесть записи
+        if (doc.timestamp.isNotEmpty()) {
+            try {
+                val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
+                val docDate = dateFormat.parse(doc.timestamp)
+                if (docDate != null) {
+                    val ageMs = System.currentTimeMillis() - docDate.time
+                    val ageDays = ageMs / 86400000.0
+                    val freshnessMultiplier = when {
+                        ageDays <= 7 -> 1.5
+                        ageDays <= 30 -> 1.2
+                        ageDays <= 90 -> 1.0
+                        else -> 0.8
+                    }
+                    score *= freshnessMultiplier
+                }
+            } catch (e: Exception) {
+                // Если не удалось распарсить дату — не меняем score
+            }
+        }
 
         return score
     }
@@ -1857,7 +2144,7 @@ class MemorySearchEngine(private val memoryFile: File) {
         return log10(docCount.toDouble() / matchingDocs) + 1.0
     }
 
-       private fun tokenize(text: String): List<String> {
+        private fun tokenize(text: String): List<String> {
         return text.lowercase()
             // Сначала заменяем "х", "x", "*" между цифрами на пробел (60х40х4 → 60 40 4)
             .replace(Regex("(?<=\\d)\\s*[хxX*×]\\s*(?=\\d)"), " ")
@@ -1871,25 +2158,9 @@ class MemorySearchEngine(private val memoryFile: File) {
             .distinct()
     }
 
-    private fun extractRussianRoot(word: String): String {
-        val lowerWord = word.lowercase()
-
-        val suffixes = listOf(
-            "ами", "ями", "ого", "его", "ому", "ему", "ими", "ыми",
-            "ая", "яя", "ое", "ее", "ие", "ые", "ий", "ый", "ой", "ей",
-            "ам", "ям", "ом", "ем", "ах", "ях", "ов", "ев", "ин", "ын",
-            "а", "я", "о", "е", "и", "ы", "у", "ю", "ь"
-        )
-
-        var stem = lowerWord
-        for (suffix in suffixes) {
-            if (stem.endsWith(suffix) && stem.length > suffix.length + 2) {
-                stem = stem.substring(0, stem.length - suffix.length)
-                break
-            }
-        }
-
-        return if (stem.length < 2) lowerWord else stem
+          private fun extractRussianRoot(word: String): String {
+        // Делегируем в статический стеммер из companion object.
+        return stem(word)
     }
 
     private fun levenshteinDistance(s1: String, s2: String): Int {
