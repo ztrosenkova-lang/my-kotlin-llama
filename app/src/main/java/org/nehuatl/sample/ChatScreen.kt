@@ -1476,7 +1476,7 @@ fun ThinkingRobotAnimation(
         label = "indicator_pulse"
     )
 
-    val headPanelOpenAmount by transition.animateFloat(
+      val headPanelOpenAmount by transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
@@ -1486,6 +1486,15 @@ fun ThinkingRobotAnimation(
         label = "head_panel_open"
     )
 
+    val leftBarsPhase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 3f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "left_bars_phase"
+    )
             // Внутренний сигнал от ChatScreen — включается при приветствии
     var externalWave by remember { mutableStateOf(false) }
     LaunchedEffect(shouldWave) {
@@ -1676,7 +1685,7 @@ fun ThinkingRobotAnimation(
             cornerRadius = CornerRadius(1.5f * u)
         )
 
-        // ЛЕВАЯ КИСТЬ
+                // ЛЕВАЯ КИСТЬ
         drawOval(
             color = lightGray,
             topLeft = pt(-54f, 150f + leftArmOffsetY),
@@ -1688,6 +1697,84 @@ fun ThinkingRobotAnimation(
             size = Size(16f * u, 20f * u),
             style = Stroke(width = 1.3f * u)
         )
+
+        // ========== ТРИ ГОРИЗОНТАЛЬНЫЕ ПОЛОСКИ НА ЛЕВОМ ПРЕДПЛЕЧЬЕ ==========
+        // Индикатор активности: покой — синие, думы — по очереди зелёные, выгружено — тускло-синие
+        val barsCenterX = -46f
+        val barsCenterY = 140f
+        val barWidth = 6f * u          // длина по горизонтали
+        val barHeight = 1.6f * u       // толщина
+        val barGap = 1.4f * u          // зазор между полосками
+        val barsTotalHeight = barHeight * 3 + barGap * 2
+
+        for (i in 0..2) {
+            // Позиция полоски i (сверху вниз)
+            val barY = barsCenterY - barsTotalHeight / 2f + barHeight / 2f + i * (barHeight + barGap)
+            val barTopLeft = pt(barsCenterX - barWidth / 2f, barY - barHeight / 2f)
+            val barSize = Size(barWidth, barHeight)
+
+            // Вспыхивает ли эта полоска прямо сейчас
+            val isBarActive = isThinking && (leftBarsPhase.toInt() == i)
+
+            // Цвет полоски
+            val barColor = when {
+                isBarActive -> Color(0xFF00E676)                  // ярко-зелёный — активная
+                isThinking -> Color(0xFF1E88E5)                    // синий — ждёт очереди
+                isAiReady -> Color(0xFF1E88E5)                     // синий — модель готова, покой/говор
+                else -> Color(0xFF1565C0).copy(alpha = 0.5f)       // тускло-синий — модель выгружена
+            }
+
+            // Ореол вокруг активной полоски
+            if (isBarActive) {
+                val barCenter = pt(barsCenterX, barY)
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFF69F0AE).copy(alpha = 0.7f),
+                            Color(0xFF00E676).copy(alpha = 0.3f),
+                            Color.Transparent
+                        ),
+                        center = barCenter,
+                        radius = barHeight * 5f
+                    ),
+                    radius = barHeight * 5f,
+                    center = barCenter
+                )
+            }
+
+            // Тёмная подложка полоски
+            drawRoundRect(
+                color = Color(0xFF1A1A20).copy(alpha = 0.85f),
+                topLeft = Offset(barTopLeft.x - 0.3f * u, barTopLeft.y - 0.3f * u),
+                size = Size(barSize.width + 0.6f * u, barSize.height + 0.6f * u),
+                cornerRadius = CornerRadius(0.9f * u)
+            )
+
+            // Сама полоска
+            drawRoundRect(
+                color = barColor,
+                topLeft = barTopLeft,
+                size = barSize,
+                cornerRadius = CornerRadius(0.8f * u)
+            )
+
+            // Обводка
+            drawRoundRect(
+                color = if (isBarActive) Color(0xFFB9F6CA) else darkGray,
+                topLeft = barTopLeft,
+                size = barSize,
+                cornerRadius = CornerRadius(0.8f * u),
+                style = Stroke(width = if (isBarActive) 0.6f * u else 0.4f * u)
+            )
+
+            // Внутренний блик сверху
+            drawRoundRect(
+                color = Color.White.copy(alpha = if (isBarActive) 0.5f else 0.2f),
+                topLeft = Offset(barTopLeft.x + 0.3f * u, barTopLeft.y + 0.2f * u),
+                size = Size(barSize.width - 0.6f * u, barSize.height * 0.35f),
+                cornerRadius = CornerRadius(0.5f * u)
+            )
+        }
 
         // Пальцы левой кисти
         for (i in 0..3) {
@@ -1872,68 +1959,130 @@ fun ThinkingRobotAnimation(
                     style = Stroke(width = 0.9f * u)
                 )
 
-                // ========== ИНДИКАТОР СОСТОЯНИЯ ИИ (часы на предплечье) ==========
+                                // ========== ИНДИКАТОР СОСТОЯНИЯ ИИ (часы на предплечье) ==========
                 val indicatorCenterX = 46f
                 val indicatorCenterY = 140f
                 val indicatorRadius = 4f * u
-                val indicatorAlpha = if (isAiReady) indicatorPulse else 1f
+                val indicatorAlpha = if (isAiReady) (0.6f + 0.4f * indicatorPulse) else 1f
                 val indicatorColor = if (isAiReady) {
                     Color(0xFF4CAF50).copy(alpha = indicatorAlpha)
                 } else {
                     Color(0xFF2196F3)
                 }
 
-                // Внешний тёмный круг (фон)
-                drawCircle(
+                val clockW = indicatorRadius * 1.9f   // ширина часов
+                val clockH = indicatorRadius * 1.5f   // высота часов
+                val clockCorner = 1.2f * u            // радиус скругления углов
+                val clockCenter = pt(indicatorCenterX, indicatorCenterY)
+                val clockTopLeft = Offset(
+                    clockCenter.x - clockW / 2f,
+                    clockCenter.y - clockH / 2f
+                )
+                val clockSize = Size(clockW, clockH)
+
+                // ========== ОРЕОЛ (когда модель загружена) ==========
+                if (isAiReady) {
+                    val glowPulse = 0.5f + 0.5f * indicatorPulse
+
+                    // Большое мягкое свечение
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFF4CAF50).copy(alpha = 0.55f * glowPulse),
+                                Color(0xFF4CAF50).copy(alpha = 0.25f * glowPulse),
+                                Color(0xFF4CAF50).copy(alpha = 0.0f)
+                            ),
+                            center = clockCenter,
+                            radius = indicatorRadius * 2.8f
+                        ),
+                        radius = indicatorRadius * 2.8f,
+                        center = clockCenter
+                    )
+
+                    // Яркое среднее свечение
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFF81F78B).copy(alpha = 0.7f * glowPulse),
+                                Color(0xFF4CAF50).copy(alpha = 0.0f)
+                            ),
+                            center = clockCenter,
+                            radius = indicatorRadius * 1.8f
+                        ),
+                        radius = indicatorRadius * 1.8f,
+                        center = clockCenter
+                    )
+                }
+
+                // Внешний тёмный фон (прямоугольник со скруглёнными углами)
+                drawRoundRect(
                     color = darkerGray,
-                    radius = indicatorRadius * 1.2f,
-                    center = pt(indicatorCenterX, indicatorCenterY)
-                )
-
-                // Цветной круг
-                drawCircle(
-                    color = indicatorColor,
-                    radius = indicatorRadius,
-                    center = pt(indicatorCenterX, indicatorCenterY)
-                )
-
-                // Обводка
-                drawCircle(
-                    color = darkGray,
-                    radius = indicatorRadius,
-                    center = pt(indicatorCenterX, indicatorCenterY),
-                    style = Stroke(width = 0.6f * u)
-                )
-
-                // Часовая стрелка
-                drawLine(
-                    color = Color.White.copy(alpha = 0.9f),
-                    start = pt(indicatorCenterX, indicatorCenterY),
-                    end = Offset(
-                        pt(indicatorCenterX, indicatorCenterY).x + cos(-PI.toFloat() / 3f) * indicatorRadius * 0.5f,
-                        pt(indicatorCenterX, indicatorCenterY).y + sin(-PI.toFloat() / 3f) * indicatorRadius * 0.5f
+                    topLeft = Offset(
+                        clockTopLeft.x - 0.6f * u,
+                        clockTopLeft.y - 0.6f * u
                     ),
-                    strokeWidth = 0.6f * u,
+                    size = Size(clockW + 1.2f * u, clockH + 1.2f * u),
+                    cornerRadius = CornerRadius(clockCorner * 1.3f)
+                )
+
+                // Цветной прямоугольник
+                drawRoundRect(
+                    color = indicatorColor,
+                    topLeft = clockTopLeft,
+                    size = clockSize,
+                    cornerRadius = CornerRadius(clockCorner)
+                )
+
+                // Обводка (ярче при активном)
+                drawRoundRect(
+                    color = if (isAiReady) {
+                        Color(0xFFB9F6CA).copy(alpha = 0.9f)
+                    } else {
+                        darkGray
+                    },
+                    topLeft = clockTopLeft,
+                    size = clockSize,
+                    cornerRadius = CornerRadius(clockCorner),
+                    style = Stroke(width = 0.7f * u)
+                )
+
+                // Внутренний блик сверху (стекло)
+                drawRoundRect(
+                    color = Color.White.copy(alpha = 0.25f),
+                    topLeft = Offset(clockTopLeft.x + 0.5f * u, clockTopLeft.y + 0.4f * u),
+                    size = Size(clockW - 1f * u, clockH * 0.35f),
+                    cornerRadius = CornerRadius(clockCorner * 0.6f)
+                )
+
+                // Часовая стрелка (от центра к верху-влево)
+                drawLine(
+                    color = Color.White.copy(alpha = 0.95f),
+                    start = clockCenter,
+                    end = Offset(
+                        clockCenter.x + cos(-PI.toFloat() / 3f) * indicatorRadius * 0.55f,
+                        clockCenter.y + sin(-PI.toFloat() / 3f) * indicatorRadius * 0.55f
+                    ),
+                    strokeWidth = 0.65f * u,
                     cap = StrokeCap.Round
                 )
 
-                // Минутная стрелка
+                // Минутная стрелка (от центра вверх)
                 drawLine(
-                    color = Color.White.copy(alpha = 0.9f),
-                    start = pt(indicatorCenterX, indicatorCenterY),
+                    color = Color.White.copy(alpha = 0.95f),
+                    start = clockCenter,
                     end = Offset(
-                        pt(indicatorCenterX, indicatorCenterY).x + cos(-PI.toFloat() / 2f) * indicatorRadius * 0.7f,
-                        pt(indicatorCenterX, indicatorCenterY).y + sin(-PI.toFloat() / 2f) * indicatorRadius * 0.7f
+                        clockCenter.x + cos(-PI.toFloat() / 2f) * indicatorRadius * 0.75f,
+                        clockCenter.y + sin(-PI.toFloat() / 2f) * indicatorRadius * 0.75f
                     ),
-                    strokeWidth = 0.5f * u,
+                    strokeWidth = 0.55f * u,
                     cap = StrokeCap.Round
                 )
 
                 // Центральная точка
                 drawCircle(
-                    color = Color.White.copy(alpha = 0.9f),
-                    radius = 0.6f * u,
-                    center = pt(indicatorCenterX, indicatorCenterY)
+                    color = Color.White.copy(alpha = 0.95f),
+                    radius = 0.65f * u,
+                    center = clockCenter
                 )
             }
         }
