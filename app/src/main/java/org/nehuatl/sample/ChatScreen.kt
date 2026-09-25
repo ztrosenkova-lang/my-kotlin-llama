@@ -1466,7 +1466,7 @@ fun ThinkingRobotAnimation(
         label = "armPhase"
     )
 
-    val indicatorPulse by transition.animateFloat(
+        val indicatorPulse by transition.animateFloat(
         initialValue = 0.3f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
@@ -1474,6 +1474,16 @@ fun ThinkingRobotAnimation(
             repeatMode = RepeatMode.Reverse
         ),
         label = "indicator_pulse"
+    )
+
+    val headPanelOpenAmount by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "head_panel_open"
     )
 
             // Внутренний сигнал от ChatScreen — включается при приветствии
@@ -1529,14 +1539,15 @@ fun ThinkingRobotAnimation(
                 scaleY = if (commandScale != null) animatedScale else 1f
             )
     ) {
-        val u = size.height / uDivisor
+                val u = size.height / uDivisor
         val cx = size.width / 2f
         val bobOffset = if (isActive) sin(bob) * 10f * u else 0f
         val lookOffsetX = lookX * 1f * u
         val lookOffsetY = lookY * 0.8f * u
         val currentBlink = if (isActive) blink else 1f
         val staticYOffset = yOffsetUnits * u
-
+        val panelOpen = if (isThinking) headPanelOpenAmount else 0f
+        val panelLift = panelOpen * 9f * u
         // ================= ПАЛИТРА =================
         val whiteBody = Color(0xFFF4F6F8)
         val whiteHighlight = Color(0xFFFFFFFF)
@@ -2983,31 +2994,174 @@ for (i in 0 until sparkCount) {
             radius = rivetRadius,
             center = pt(38.25f, 52.42f)
         )
-                // ================= ОБЛАСТЬ МЕЖДУ ЛИНИЯМИ НА ГОЛОВЕ =================
+                                // ================= ОБЛАСТЬ МЕЖДУ ЛИНИЯМИ НА ГОЛОВЕ =================
         // Верх — дуга шлема, низ — верхняя кромка визора,
         // бока — leftHeadLinePath и rightHeadLinePath.
-        val headPanelPath = Path().apply {
-            // Левый верхний угол
-            moveTo(pt(-16f, -4f).x, pt(-16f, -4f).y)
-            // Верхняя граница — дуга шлема к правому верхнему углу
-            cubicTo(
-                pt(-8f, -6f).x, pt(-8f, -6f).y,
-                pt(8f, -6f).x, pt(8f, -6f).y,
-                pt(16f, -4f).x, pt(16f, -4f).y
+
+        // ================= МОЗГ ПОД ПАНЕЛЬЮ (виден, когда панель открыта) =================
+        if (panelOpen > 0.05f) {
+            val brainClipPath = Path().apply {
+                moveTo(pt(-15f, -3f).x, pt(-15f, -3f).y)
+                cubicTo(
+                    pt(-8f, -5f).x, pt(-8f, -5f).y,
+                    pt(8f, -5f).x, pt(8f, -5f).y,
+                    pt(15f, -3f).x, pt(15f, -3f).y
+                )
+                cubicTo(
+                    pt(15f, 3f).x, pt(15f, 3f).y,
+                    pt(14.5f, 9f).x, pt(14.5f, 9f).y,
+                    pt(14f, 13f).x, pt(14f, 13f).y
+                )
+                lineTo(pt(-14f, 13f).x, pt(-14f, 13f).y)
+                cubicTo(
+                    pt(-14.5f, 9f).x, pt(-14.5f, 9f).y,
+                    pt(-15f, 3f).x, pt(-15f, 3f).y,
+                    pt(-15f, -3f).x, pt(-15f, -3f).y
+                )
+                close()
+            }
+
+            drawPath(
+                brainClipPath,
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF1A0A2E),
+                        Color(0xFF0A0518),
+                        Color(0xFF000000)
+                    ),
+                    center = pt(0f, 5f),
+                    radius = 20f * u
+                )
             )
-            // Правая линия — сверху вниз (обратный порядок rightHeadLinePath)
+
+            val brainPulse = 0.7f + 0.3f * sin(pulse * 2f)
+            val brainColor1 = Color(0xFFFF4FC3).copy(alpha = 0.8f * brainPulse)
+            val brainColor2 = Color(0xFF9C27B0).copy(alpha = 0.7f * brainPulse)
+            val brainColor3 = Color(0xFF00D9FF).copy(alpha = 0.5f * brainPulse)
+
+            drawOval(
+                brush = Brush.radialGradient(
+                    colors = listOf(brainColor1, brainColor2, Color.Transparent),
+                    center = pt(-6f, 4f),
+                    radius = 8f * u
+                ),
+                topLeft = pt(-12f, -1f),
+                size = Size(12f * u, 12f * u)
+            )
+
+            drawOval(
+                brush = Brush.radialGradient(
+                    colors = listOf(brainColor1, brainColor2, Color.Transparent),
+                    center = pt(6f, 4f),
+                    radius = 8f * u
+                ),
+                topLeft = pt(0f, -1f),
+                size = Size(12f * u, 12f * u)
+            )
+
+            drawLine(
+                color = Color(0xFF3A1A5C),
+                start = pt(0f, -2f),
+                end = pt(0f, 12f),
+                strokeWidth = 0.8f * u,
+                cap = StrokeCap.Round
+            )
+
+            for (i in 0..4) {
+                val phase = i * 0.7f + pulse * 1.5f
+                val amplitude = 2f + sin(phase) * 0.5f
+                val yStart = -1f + i * 3f
+
+                val wrinklePath = Path().apply {
+                    moveTo(pt(-11f, yStart).x, pt(-11f, yStart).y)
+                    cubicTo(
+                        pt(-7f, yStart - amplitude).x, pt(-7f, yStart - amplitude).y,
+                        pt(-3f, yStart + amplitude).x, pt(-3f, yStart + amplitude).y,
+                        pt(0f, yStart).x, pt(0f, yStart).y
+                    )
+                    cubicTo(
+                        pt(3f, yStart - amplitude).x, pt(3f, yStart - amplitude).y,
+                        pt(7f, yStart + amplitude).x, pt(7f, yStart + amplitude).y,
+                        pt(11f, yStart).x, pt(11f, yStart).y
+                    )
+                }
+                drawPath(
+                    wrinklePath,
+                    color = brainColor3.copy(alpha = 0.4f + 0.3f * sin(phase)),
+                    style = Stroke(width = 0.6f * u, cap = StrokeCap.Round)
+                )
+            }
+
+            val orbitCount = 3
+            for (orbit in 0 until orbitCount) {
+                val orbitPhase = orbit * 2.1f
+                val orbitTilt = orbit * 30f
+
+                rotate(orbitTilt, pivot = pt(0f, 5f)) {
+                    drawOval(
+                        color = brainColor3.copy(alpha = 0.2f),
+                        topLeft = pt(-(6f + orbit * 2f), 5f - (4f + orbit * 1.5f)),
+                        size = Size(
+                            (12f + orbit * 4f) * u,
+                            (8f + orbit * 3f) * u
+                        ),
+                        style = Stroke(width = 0.3f * u)
+                    )
+
+                    val ballCount = 2 + orbit
+                    for (ball in 0 until ballCount) {
+                        val angle = pulse * (1.5f + orbit * 0.5f) + ball * (2f * PI.toFloat() / ballCount) + orbitPhase
+                        val bx = cos(angle) * (6f + orbit * 2f)
+                        val by = 5f + sin(angle) * (4f + orbit * 1.5f)
+
+                        val ballAlpha = 0.6f + 0.4f * sin(pulse * 3f + ball)
+
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = ballAlpha * 0.8f),
+                                    Color(0xFF00D9FF).copy(alpha = ballAlpha * 0.6f),
+                                    Color.Transparent
+                                ),
+                                center = pt(bx, by),
+                                radius = 2.5f * u
+                            ),
+                            radius = 2.5f * u,
+                            center = pt(bx, by)
+                        )
+
+                        drawCircle(
+                            color = Color.White.copy(alpha = ballAlpha),
+                            radius = 0.8f * u,
+                            center = pt(bx, by)
+                        )
+                    }
+                }
+            }
+        }
+
+               val headPanelPath = Path().apply {
+            // Левый верхний угол (сдвинут вверх на panelLift)
+            moveTo(pt(-16f, -4f).x, pt(-16f, -4f).y - panelLift)
+            // Верхняя граница — дуга шлема (сдвинута вверх)
             cubicTo(
-                pt(16f, 2f).x, pt(16f, 2f).y,
-                pt(15.5f, 8f).x, pt(15.5f, 8f).y,
+                pt(-8f, -6f).x, pt(-8f, -6f).y - panelLift,
+                pt(8f, -6f).x, pt(8f, -6f).y - panelLift,
+                pt(16f, -4f).x, pt(16f, -4f).y - panelLift
+            )
+            // Правая линия — верх сдвинут на 60%, середина на 30%, низ на месте
+            cubicTo(
+                pt(16f, 2f).x, pt(16f, 2f).y - panelLift * 0.6f,
+                pt(15.5f, 8f).x, pt(15.5f, 8f).y - panelLift * 0.3f,
                 pt(15f, 14f).x, pt(15f, 14f).y
             )
-            // Нижняя граница — прямая к левому нижнему углу
+            // Нижняя граница — прямая (остаётся на месте)
             lineTo(pt(-15f, 14f).x, pt(-15f, 14f).y)
-            // Левая линия — снизу вверх (обратный порядок leftHeadLinePath)
+            // Левая линия — низ на месте, середина и верх сдвинуты
             cubicTo(
-                pt(-15.5f, 8f).x, pt(-15.5f, 8f).y,
-                pt(-16f, 2f).x, pt(-16f, 2f).y,
-                pt(-16f, -4f).x, pt(-16f, -4f).y
+                pt(-15.5f, 8f).x, pt(-15.5f, 8f).y - panelLift * 0.3f,
+                pt(-16f, 2f).x, pt(-16f, 2f).y - panelLift * 0.6f,
+                pt(-16f, -4f).x, pt(-16f, -4f).y - panelLift
             )
             close()
         }
