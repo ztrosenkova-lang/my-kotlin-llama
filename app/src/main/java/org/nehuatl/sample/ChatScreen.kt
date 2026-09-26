@@ -3146,20 +3146,25 @@ for (i in 0 until sparkCount) {
         // бока — leftHeadLinePath и rightHeadLinePath.
 
         // ================= МОЗГ ПОД ПАНЕЛЬЮ (виден, когда панель открыта) =================
-        if (panelOpen > 0.05f) {
+                if (panelOpen > 0.05f) {
                 val brainClipPath = Path().apply {
-                moveTo(pt(-15f, 14f).x, pt(-15f, 14f).y)
+                moveTo(pt(-16f, -4f).x, pt(-16f, -4f).y)
                 cubicTo(
-                    pt(-15f, 2f).x, pt(-15f, 2f).y,
-                    pt(-10f, -5f).x, pt(-10f, -5f).y,
-                    pt(0f, -5f).x, pt(0f, -5f).y
+                    pt(-8f, -6f).x, pt(-8f, -6f).y,
+                    pt(8f, -6f).x, pt(8f, -6f).y,
+                    pt(16f, -4f).x, pt(16f, -4f).y
                 )
                 cubicTo(
-                    pt(10f, -5f).x, pt(10f, -5f).y,
-                    pt(15f, 2f).x, pt(15f, 2f).y,
+                    pt(16f, 2f).x, pt(16f, 2f).y,
+                    pt(15.5f, 8f).x, pt(15.5f, 8f).y,
                     pt(15f, 14f).x, pt(15f, 14f).y
                 )
                 lineTo(pt(-15f, 14f).x, pt(-15f, 14f).y)
+                cubicTo(
+                    pt(-15.5f, 8f).x, pt(-15.5f, 8f).y,
+                    pt(-16f, 2f).x, pt(-16f, 2f).y,
+                    pt(-16f, -4f).x, pt(-16f, -4f).y
+                )
                 close()
             }
 
@@ -5037,7 +5042,7 @@ Row(
         Text(
             text = if (isFloatingRunning) "Остановить робота" else "Запустить робота",
             color = colors.background,
-            fontSize = 10.sp,
+            fontSize = 12.sp,
             maxLines = 1,
             softWrap = false
         )
