@@ -638,16 +638,18 @@ fun startFloatingWithPermissionCheck() {
             permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
         }
 
-        val missingPermissions = permissions.filter {
+            val missingPermissions = permissions.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
 
         if (missingPermissions.isNotEmpty()) {
+            // Runtime-разрешения — overlay запросим ПОСЛЕ закрытия этого диалога,
+            // в колбэке requestPermissionLauncher
             requestPermissionLauncher.launch(missingPermissions.toTypedArray())
+        } else {
+            // Runtime-разрешения уже есть — сразу запрашиваем overlay
+            requestOverlayPermissionIfNeeded()
         }
-
-        // Overlay-разрешение запрашиваем ОТДЕЛЬНО, так как это не runtime-permission
-        requestOverlayPermissionIfNeeded()
     }
 
     /**
