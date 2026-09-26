@@ -304,13 +304,26 @@ fun ChatScreen(
                             robotOnOrbit = false
                             viewModel.appendSystemMessage("🤖 Робот прилетает с орбиты")
                         }
-                 command == "махни рукой" -> {waveSignal = true
+                                  command == "махни рукой" -> {waveSignal = true
                    }
                         command == "стань большим" -> {
                             growBigSignal = true
                         }
                         command == "стань маленьким" -> {
                             shrinkSmallSignal = true
+                        }
+                        command == "выйди из матрицы" || command == "уйди" -> {
+                            if (!FloatingRobotService.isRunning) {
+                                (context as? MainActivity)?.startFloatingWithPermissionCheck()
+                            }
+                        }
+                        command == "зайди обратно в матрицу" -> {
+                            if (FloatingRobotService.isRunning) {
+                                val stopIntent = Intent(context, FloatingRobotService::class.java).apply {
+                                    action = FloatingRobotService.ACTION_STOP
+                                }
+                                context.startService(stopIntent)
+                            }
                         }
                         else -> {
                             viewModel.sendUserMessage(recognizedText)
@@ -713,26 +726,13 @@ fun ChatScreen(
             }
 
                         if (showPromptSettings) {
-    PromptSettingsPanel(
+       PromptSettingsPanel(
         promptText = tempPromptText,
         onPromptChange = { tempPromptText = it },
         onSave = {
             viewModel.updateSystemPrompt(tempPromptText)
             showPromptSettings = false
         },
-        onToggleFloating = {
-            if (FloatingRobotService.isRunning) {
-                // Останавливаем сервис робота 2
-                val stopIntent = Intent(context, FloatingRobotService::class.java).apply {
-                    action = FloatingRobotService.ACTION_STOP
-                }
-                context.startService(stopIntent)
-            } else {
-                // Запускаем через Activity (там проверка разрешения overlay)
-                (context as? MainActivity)?.startFloatingWithPermissionCheck()
-            }
-        },
-        isFloatingRunning = isFloatingRobotRunning,
         colors = colors
     )
 }
@@ -847,7 +847,7 @@ fun ChatScreen(
                             viewModel.appendSystemMessage("🤖 Робот прилетает с орбиты")
                             promptInput = ""
                         }
-                    command == "махни рукой" -> { waveSignal = true
+                                       command == "махни рукой" -> { waveSignal = true
                    promptInput = ""
 }
                         command == "стань большим" -> {
@@ -856,6 +856,21 @@ fun ChatScreen(
                         }
                         command == "стань маленьким" -> {
                             shrinkSmallSignal = true
+                            promptInput = ""
+                        }
+                        command == "выйди из матрицы" || command == "уйди" -> {
+                            if (!FloatingRobotService.isRunning) {
+                                (context as? MainActivity)?.startFloatingWithPermissionCheck()
+                            }
+                            promptInput = ""
+                        }
+                        command == "зайди обратно в матрицу" -> {
+                            if (FloatingRobotService.isRunning) {
+                                val stopIntent = Intent(context, FloatingRobotService::class.java).apply {
+                                    action = FloatingRobotService.ACTION_STOP
+                                }
+                                context.startService(stopIntent)
+                            }
                             promptInput = ""
                         }
                         else -> {
@@ -4994,8 +5009,6 @@ private fun PromptSettingsPanel(
     promptText: String,
     onPromptChange: (String) -> Unit,
     onSave: () -> Unit,
-    onToggleFloating: () -> Unit,
-    isFloatingRunning: Boolean,
     colors: AppColors
 ) {
     Card(
@@ -5025,38 +5038,14 @@ private fun PromptSettingsPanel(
             )
             Spacer(modifier = Modifier.height(12.dp))
 
-Row(
+Button(
+    onClick = onSave,
+    colors = ButtonDefaults.buttonColors(containerColor = colors.accent),
     modifier = Modifier.fillMaxWidth(),
-    horizontalArrangement = Arrangement.spacedBy(8.dp)
+    shape = RoundedCornerShape(12.dp),
+    border = BorderStroke(1.dp, colors.borderGray)
 ) {
-       Button(
-        onClick = onToggleFloating,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (isFloatingRunning) colors.green else colors.accent
-        ),
-        modifier = Modifier.weight(1f),
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, colors.borderGray),
-        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
-    ) {
-        Text(
-            text = if (isFloatingRunning) "Остановить робота" else "Запустить робота",
-            color = colors.background,
-            fontSize = 12.sp,
-            maxLines = 1,
-            softWrap = false
-        )
-    }
-    
-    Button(
-        onClick = onSave,
-        colors = ButtonDefaults.buttonColors(containerColor = colors.accent),
-        modifier = Modifier.weight(1f),
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, colors.borderGray)
-    ) {
-        Text("Сохранить", color = colors.background, fontSize = 14.sp)
-    }
+    Text("Сохранить", color = colors.background, fontSize = 14.sp)
 }
         }
     }
