@@ -84,7 +84,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private val requestPermissionLauncher = registerForActivityResult(
+        private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         val audioGranted = permissions[Manifest.permission.RECORD_AUDIO] ?: false
@@ -108,6 +108,9 @@ class MainActivity : ComponentActivity() {
                 Log.w("MainActivity", "Разрешение на уведомления не получено")
             }
         }
+
+        // Runtime-диалог закрыт — теперь запрашиваем overlay
+        requestOverlayPermissionIfNeeded()
     }
 
     // ========== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ВИБРАЦИИ ==========
