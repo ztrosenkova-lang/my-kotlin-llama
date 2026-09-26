@@ -312,18 +312,19 @@ fun ChatScreen(
                         command == "стань маленьким" -> {
                             shrinkSmallSignal = true
                         }
-                        command == "выйди из матрицы" || command == "уйди" -> {
+                                                command == "выйди из матрицы" -> {
                             if (!FloatingRobotService.isRunning) {
                                 (context as? MainActivity)?.startFloatingWithPermissionCheck()
                             }
                         }
-                        command == "зайди обратно в матрицу" -> {
+                        command == "уйди" -> {
                             if (FloatingRobotService.isRunning) {
                                 val stopIntent = Intent(context, FloatingRobotService::class.java).apply {
                                     action = FloatingRobotService.ACTION_STOP
                                 }
                                 context.startService(stopIntent)
                             }
+                        
                         }
                         else -> {
                             viewModel.sendUserMessage(recognizedText)
@@ -858,13 +859,13 @@ fun ChatScreen(
                             shrinkSmallSignal = true
                             promptInput = ""
                         }
-                        command == "выйди из матрицы" || command == "уйди" -> {
+                                               command == "выйди из матрицы" -> {
                             if (!FloatingRobotService.isRunning) {
                                 (context as? MainActivity)?.startFloatingWithPermissionCheck()
                             }
                             promptInput = ""
                         }
-                        command == "зайди обратно в матрицу" -> {
+                        command == "уйди" -> {
                             if (FloatingRobotService.isRunning) {
                                 val stopIntent = Intent(context, FloatingRobotService::class.java).apply {
                                     action = FloatingRobotService.ACTION_STOP
