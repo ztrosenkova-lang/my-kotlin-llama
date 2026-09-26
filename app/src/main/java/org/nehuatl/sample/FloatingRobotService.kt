@@ -58,9 +58,15 @@ class FloatingRobotService : LifecycleService() {
                 if (vm == null) {
                     Log.w(TAG, "MainViewModel.instance is null, cannot send message")
                 } else {
-                    val command = text.trim().lowercase()
+             val command = text.trim().lowercase()
                     when (command) {
                         "махни рукой" -> vm.triggerOverlayWave()
+                        "зайди обратно в матрицу" -> {
+                            val stopIntent = Intent(this@FloatingRobotService, FloatingRobotService::class.java).apply {
+                                action = ACTION_STOP
+                            }
+                            startService(stopIntent)
+                        }
                         else -> vm.sendUserMessage(text)
                     }
                 }
