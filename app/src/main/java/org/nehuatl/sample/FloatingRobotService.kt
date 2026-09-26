@@ -52,10 +52,18 @@ class FloatingRobotService : LifecycleService() {
         // Инициализируем распознавание речи
         voiceRecognizer = VoiceRecognizer(
             context = applicationContext,
-            onResult = { text ->
+                        onResult = { text ->
                 Log.d(TAG, "Voice result: $text")
-                MainViewModel.instance?.sendUserMessage(text)
-                    ?: Log.w(TAG, "MainViewModel.instance is null, cannot send message")
+                val vm = MainViewModel.instance
+                if (vm == null) {
+                    Log.w(TAG, "MainViewModel.instance is null, cannot send message")
+                } else {
+                    val command = text.trim().lowercase()
+                    when (command) {
+                        "махни рукой" -> vm.triggerOverlayWave()
+                        else -> vm.sendUserMessage(text)
+                    }
+                }
                 updateMicIcon(listening = false)
             },
             onError = { error ->
