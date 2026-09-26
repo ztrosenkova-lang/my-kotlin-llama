@@ -60,9 +60,9 @@ class FloatingRobotService : LifecycleService() {
                 } else {
              val command = text.trim().lowercase()
                     when (command) {
-                        "махни рукой" -> vm.triggerOverlayWave()
-                        "зайди обратно в матрицу" -> {
-                            val stopIntent = Intent(this@FloatingRobotService, FloatingRobotService::class.java).apply {
+            "махни рукой" -> vm.triggerOverlayWave()
+            "уйди" -> {
+            val stopIntent = Intent(this@FloatingRobotService, FloatingRobotService::class.java).apply {
                                 action = ACTION_STOP
                             }
                             startService(stopIntent)
