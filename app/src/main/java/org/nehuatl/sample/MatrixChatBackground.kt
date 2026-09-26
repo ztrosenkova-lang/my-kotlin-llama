@@ -20,7 +20,13 @@ class MatrixChatBackground @JvmOverloads constructor(
     private val speed = 2.5f
     private val maxLines = 30
     private val maxPoolSize = 60
-    private val words = arrayOf("Нео", "Батя", "Меч Правды", "Ковчег", "Иди за белым кроликом")
+    private val words = arrayOf(
+        "Нео", "Меч Правды",  "Иди за чёрным котиком",
+        "Скажи ему лети домой", "Скажи ему лети сюда", "Скажи ему махни рукой",
+        "Скажи ему стань большим","Батя", "Скажи ему стань маленьким",
+        "Скажи ему выйди из матрицы","Ковчег", "уйди",
+        "Скажи ему умный режим","Иди за чёрным котиком", "режим калькулятора"
+    )
 
         private val paint = Paint().apply {
         color = Color.parseColor("#21A038")
@@ -57,7 +63,7 @@ class MatrixChatBackground @JvmOverloads constructor(
     }
 
     private fun generateLine(): String {
-        return if (Random.nextFloat() < 0.15f) {
+        return if (Random.nextFloat() < 0.30f) {
             words[Random.nextInt(words.size)]
         } else {
             CharArray(columns) { if (Random.nextFloat() > 0.5f) '0' else '1' }.joinToString("")
