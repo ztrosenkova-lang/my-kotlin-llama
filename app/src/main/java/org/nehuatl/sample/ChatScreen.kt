@@ -235,6 +235,7 @@ fun ChatScreen(
     val showBrainEditorState by viewModel.showBrainEditor.collectAsStateWithLifecycle(initialValue = false)
     val isFloatingRobotRunning by viewModel.floatingRobotRunning.collectAsStateWithLifecycle(initialValue = false)
     val isCompressing by viewModel.isCompressing.collectAsStateWithLifecycle(initialValue = false)
+    val isSmartMode by viewModel.isSmartMode.collectAsStateWithLifecycle(initialValue = false)
 
     val colors = if (isDarkTheme) DarkColors else LightColors
 
@@ -317,14 +318,19 @@ fun ChatScreen(
                                 (context as? MainActivity)?.startFloatingWithPermissionCheck()
                             }
                         }
-                        command == "уйди" -> {
+                                command == "уйди" -> {
                             if (FloatingRobotService.isRunning) {
                                 val stopIntent = Intent(context, FloatingRobotService::class.java).apply {
                                     action = FloatingRobotService.ACTION_STOP
                                 }
                                 context.startService(stopIntent)
                             }
-                        
+                        }
+                        command == "умный режим" -> {
+                            viewModel.enableSmartMode()
+                        }
+                        command == "режим калькулятора" -> {
+                            viewModel.disableSmartMode()
                         }
                         else -> {
                             viewModel.sendUserMessage(recognizedText)
@@ -743,6 +749,7 @@ fun ChatScreen(
                 cloudState = cloudState,
                 currentMode = currentMode,
                 currentModel = if (isModelLoaded) currentModelPath else null,
+                isSmartMode = isSmartMode,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 colors = colors
             )
@@ -865,13 +872,21 @@ fun ChatScreen(
                             }
                             promptInput = ""
                         }
-                        command == "уйди" -> {
+                                               command == "уйди" -> {
                             if (FloatingRobotService.isRunning) {
                                 val stopIntent = Intent(context, FloatingRobotService::class.java).apply {
                                     action = FloatingRobotService.ACTION_STOP
                                 }
                                 context.startService(stopIntent)
                             }
+                            promptInput = ""
+                        }
+                        command == "умный режим" -> {
+                            viewModel.enableSmartMode()
+                            promptInput = ""
+                        }
+                        command == "режим калькулятора" -> {
+                            viewModel.disableSmartMode()
                             promptInput = ""
                         }
                         else -> {
@@ -5429,6 +5444,7 @@ private fun StatusBar(
     cloudState: CloudAIState,
     currentMode: AIMode,
     currentModel: String?,
+    isSmartMode: Boolean = false,
     modifier: Modifier = Modifier,
     colors: AppColors
 ) {
@@ -5527,8 +5543,8 @@ private fun StatusBar(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
-            Text(
-                text = statusText,
+                Text(
+                text = if (isSmartMode) "🧠 $statusText" else statusText,
                 color = colors.text,
                 fontSize = 8.sp
             )
