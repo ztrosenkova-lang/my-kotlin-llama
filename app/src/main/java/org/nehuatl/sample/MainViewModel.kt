@@ -209,20 +209,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    // Сигнал махания для робота в overlay (робот 2)
-    private val _overlayWaveSignal = MutableStateFlow(false)
-    val overlayWaveSignal: StateFlow<Boolean> = _overlayWaveSignal.asStateFlow()
-
-    private var overlayWaveResetJob: Job? = null
-
-    fun triggerOverlayWave() {
-        overlayWaveResetJob?.cancel()
-        _overlayWaveSignal.value = true
-        overlayWaveResetJob = scope.launch {
-            delay(2500)
-            _overlayWaveSignal.value = false
-        }
-    }
+    
 
     private val _memoryInfoText = MutableStateFlow("Всего доступно: 0.0 ГБ / Занято: 0.0 ГБ")
     val memoryInfoText: StateFlow<String> = _memoryInfoText.asStateFlow()
