@@ -510,7 +510,6 @@ class MainActivity : ComponentActivity() {
     Log.d(TAG, "FloatingRobotService started")
 }
 
-// ← ВСТАВИТЬ СЮДА новый метод
 fun startFloatingWithPermissionCheck() {
     // СНАЧАЛА проверяем разрешение overlay — это главное
     if (!hasOverlayPermission()) {
@@ -524,7 +523,7 @@ fun startFloatingWithPermissionCheck() {
         return
     }
 
-    // Разрешение есть. Если сервис уже запущен — перезапускаем
+    // Разрешение есть. Если сервис уже запущен — перезапускаем (не сворачиваем)
     if (FloatingRobotService.isRunning) {
         Log.d(TAG, "Service is running, restarting to recreate overlay")
         val stopIntent = Intent(this, FloatingRobotService::class.java).apply {
@@ -543,7 +542,7 @@ fun startFloatingWithPermissionCheck() {
         return
     }
 
-    // Сервис не запущен — обычный запуск
+    // Сервис не запущен — обычный запуск + сворачиваем приложение
     Log.d(TAG, "Starting FloatingRobotService")
     startFloatingService()
     android.widget.Toast.makeText(
@@ -551,6 +550,9 @@ fun startFloatingWithPermissionCheck() {
         "🤖 Плавающий робот запущен",
         android.widget.Toast.LENGTH_SHORT
     ).show()
+
+    // Сворачиваем приложение в фон
+    moveTaskToBack(true)
 }
 
     // ========== ОСНОВНОЙ КОНТЕНТ ==========
