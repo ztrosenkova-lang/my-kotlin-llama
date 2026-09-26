@@ -59,7 +59,7 @@ class FloatingRobotService : LifecycleService() {
                     Log.w(TAG, "MainViewModel.instance is null, cannot send message")
                 } else {
              val command = text.trim().lowercase()
-                    when (command) {
+                                        when (command) {
             "махни рукой" -> vm.triggerOverlayWave()
             "уйди" -> {
             val stopIntent = Intent(this@FloatingRobotService, FloatingRobotService::class.java).apply {
@@ -67,6 +67,8 @@ class FloatingRobotService : LifecycleService() {
                             }
                             startService(stopIntent)
                         }
+                        "умный режим" -> vm.enableSmartMode()
+                        "режим калькулятора" -> vm.disableSmartMode()
                         else -> vm.sendUserMessage(text)
                     }
                 }
