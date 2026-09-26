@@ -64,6 +64,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         private const val ONE_DAY_MS = 86400000L
 
         private const val KEY_DARK_THEME = "dark_theme"
+        private const val KEY_SMART_MODE = "smart_mode"
+        private const val SMART_MODE_MAX_CHARS = 8000
 
         private val CATEGORIES = listOf("[ПАРОЛЬ]", "[КОНТАКТ]", "[ПРАЙС]", "[ИНСТРУКЦИЯ]", "[АДРЕС]", "[ДАТА]", "[ОБЩЕЕ]")
     }
@@ -187,11 +189,95 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _currentMode.value = mode
     }
 
-            private val _floatingRobotRunning = MutableStateFlow(false)
+                private val _floatingRobotRunning = MutableStateFlow(false)
     val floatingRobotRunning: StateFlow<Boolean> = _floatingRobotRunning.asStateFlow()
 
     fun setFloatingRunning(running: Boolean) {
         _floatingRobotRunning.value = running
+    }
+
+    // ========== УМНЫЙ РЕЖИМ ==========
+    // При включении в каждый запрос к локальной модели добавляется
+    // последнее сообщение пользователя + хвост истории чата (до 8000 символов).
+    private val _isSmartMode = MutableStateFlow(false)
+    val isSmartMode: StateFlow<Boolean> = _isSmartMode.asStateFlow()
+
+    fun enableSmartMode() {
+        if (_isSmartMode.value) {
+            appendSystemMessage("🧠 Умный режим уже включён")
+            return
+        }
+        _isSmartMode.value = true
+        prefs.edit().putBoolean(KEY_SMART_MODE, true).apply()
+        appendSystemMessage("🧠 Умный режим включён: в каждый запрос добавляется история чата")
+    }
+
+    fun disableSmartMode() {
+        if (!_isSmartMode.value) {
+            appendSystemMessage("🧮 Режим калькулятора уже активен")
+            return
+        }
+        _isSmartMode.value = false
+        prefs.edit().putBoolean(KEY_SMART_MODE, false).apply()
+        appendSystemMessage("🧮 Режим калькулятора включён: запросы идут как обычно")
+    }
+
+    /**
+     * Собирает systemPrompt для локальной модели в умном режиме:
+     * системный промпт → последнее сообщение → хвост истории (без последнего).
+     *
+     * Хвост обрезается по SMART_MODE_MAX_CHARS символам снизу.
+     * Последнее сообщение пользователя исключено из хвоста, чтобы не дублировалось.
+     */
+    private fun buildSmartSystemPrompt(): String {
+        val basePrompt = _systemPrompt.value
+        val history = _chatHistory.value
+
+        // Последнее сообщение пользователя — если оно есть
+        val lastUserMessage = history.lastOrNull { it.role == "user" }
+
+        // Хвост чата без последнего сообщения пользователя
+        val historyWithoutLast = if (lastUserMessage != null) {
+            history.dropLastWhile { it === lastUserMessage }
+        } else {
+            history
+        }
+
+        // Собираем хвост снизу вверх, пока не наберём SMART_MODE_MAX_CHARS символов
+        val tailBuilder = StringBuilder()
+        var totalChars = 0
+        for (message in historyWithoutLast.asReversed()) {
+            val prefix = when (message.role) {
+                "user" -> "Пользователь: "
+                "assistant" -> "Ассистент: "
+                else -> "Система: "
+            }
+            val line = prefix + message.text + "\n"
+            if (totalChars + line.length > SMART_MODE_MAX_CHARS && tailBuilder.isNotEmpty()) {
+                break
+            }
+            tailBuilder.insert(0, line)
+            totalChars += line.length
+        }
+        val tail = tailBuilder.toString().trim()
+
+        return buildString {
+            append(basePrompt)
+
+            if (lastUserMessage != null) {
+                append("\n\nПОСЛЕДНЕЕ СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ: ")
+                append(lastUserMessage.text)
+            }
+
+            if (tail.isNotEmpty()) {
+                append("\n\nИСТОРИЯ ЧАТА (последние ~")
+                append(SMART_MODE_MAX_CHARS)
+                append(" символов):\n")
+                append(tail)
+            }
+
+            append("\n\nОТВЕЧАЙ С УЧЁТОМ ЭТОЙ ИСТОРИИ И ПОСЛЕДНЕГО СООБЩЕНИЯ.")
+        }
     }
 
     // Сигнал махания для робота в overlay (робот 2)
@@ -253,6 +339,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _floatingRobotRunning.value = FloatingRobotService.isRunning
 
         _isDarkTheme.value = prefs.getBoolean(KEY_DARK_THEME, false)
+        _isSmartMode.value = prefs.getBoolean(KEY_SMART_MODE, false)
         _isFirstLaunch.value = prefs.getBoolean("first_launch", true)
         if (_isFirstLaunch.value) {
             prefs.edit().putBoolean("first_launch", false).apply()
@@ -1611,8 +1698,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     effectivePrompt.contains(CHAT_LOOKUP_COMMAND, ignoreCase = true)
         }
 
-        val fullSystemPrompt = if (isSearchCommand) {
+         val fullSystemPrompt = if (isSearchCommand) {
             buildSystemPrompt("search", effectivePrompt)
+        } else if (_isSmartMode.value) {
+            buildSmartSystemPrompt()
         } else {
             _systemPrompt.value
         }
