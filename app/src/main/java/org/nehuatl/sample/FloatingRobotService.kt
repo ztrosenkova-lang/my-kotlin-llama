@@ -145,12 +145,14 @@ class FloatingRobotService : LifecycleService() {
         y = 300
     }
 
-    // Перетаскивание
+        // Перетаскивание + двойной тап для поднятия приложения из фона
     view.setOnTouchListener(object : View.OnTouchListener {
         private var initialX = 0
         private var initialY = 0
         private var touchX = 0f
         private var touchY = 0f
+        private var downTime = 0L
+        private var lastTapTime = 0L
 
         override fun onTouch(v: View, event: MotionEvent): Boolean {
             when (event.action) {
@@ -159,12 +161,39 @@ class FloatingRobotService : LifecycleService() {
                     initialY = params.y
                     touchX = event.rawX
                     touchY = event.rawY
+                    downTime = System.currentTimeMillis()
                     return true
                 }
                 MotionEvent.ACTION_MOVE -> {
                     params.x = initialX + (event.rawX - touchX).toInt()
                     params.y = initialY + (event.rawY - touchY).toInt()
                     windowManager.updateViewLayout(view, params)
+                    return true
+                }
+                MotionEvent.ACTION_UP -> {
+                    val dx = kotlin.math.abs(event.rawX - touchX)
+                    val dy = kotlin.math.abs(event.rawY - touchY)
+                    val dt = System.currentTimeMillis() - downTime
+
+                    // Считаем тапом только если не двигали и быстро отпустили
+                    if (dx < 15 && dy < 15 && dt < 300) {
+                        val now = System.currentTimeMillis()
+                        if (now - lastTapTime < 400) {
+                            // Двойной тап — поднимаем приложение из фона
+                            lastTapTime = 0L
+                            try {
+                                val intent = Intent(this@FloatingRobotService, MainActivity::class.java).apply {
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                                            Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                                }
+                                startActivity(intent)
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Failed to bring MainActivity to front: ${e.message}")
+                            }
+                        } else {
+                            lastTapTime = now
+                        }
+                    }
                     return true
                 }
             }
