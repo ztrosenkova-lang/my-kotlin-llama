@@ -1698,12 +1698,21 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     effectivePrompt.contains(CHAT_LOOKUP_COMMAND, ignoreCase = true)
         }
 
-         val fullSystemPrompt = if (isSearchCommand) {
+                  val fullSystemPrompt = if (isSearchCommand) {
             buildSystemPrompt("search", effectivePrompt)
-        } else if (_isSmartMode.value) {
-            buildSmartSystemPrompt()
         } else {
             _systemPrompt.value
+        }
+
+        // В умном режиме — передаём историю чата отдельно, как список реплик.
+        // В обычном — пустой список, работает как раньше.
+        val historyForPredict: List<Pair<String, String>> = if (_isSmartMode.value) {
+            val history = _chatHistory.value
+            // Исключаем последнее сообщение пользователя (оно передаётся как prompt)
+            val withoutLast = history.dropLastWhile { it.role == "user" && it.text == effectivePrompt }
+            withoutLast.map { it.role to it.text }
+        } else {
+            emptyList()
         }
 
         _generatedText.value = ""
@@ -1711,7 +1720,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         scope.launch {
             try {
-                llamaHelper.predict(effectivePrompt, imagePath, fullSystemPrompt, maxTokens.value)
+                llamaHelper.predict(
+                    prompt = effectivePrompt,
+                    imagePath = imagePath,
+                    systemPrompt = fullSystemPrompt,
+                    maxTokens = maxTokens.value,
+                    chatHistory = historyForPredict
+                )
             } catch (e: Exception) {
                 _state.value = GenerationState.Error(e.message ?: "Unknown error")
                 _isModelLoaded.value = false
