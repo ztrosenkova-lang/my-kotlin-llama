@@ -1447,13 +1447,31 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-       fun sendUserMessage(text: String) {
+              fun sendUserMessage(text: String, imagePath: String? = null) {
         if (_isCompressing.value) {
             appendSystemMessage("⏳ ИИ сжимает беседу, подождите...")
             return
         }
 
-        if (text.isBlank()) return
+        if (text.isBlank() && imagePath == null) return
+
+               // Если есть картинка без текста — не пишем пустое сообщение в чат,
+        // а сразу отправляем в модель
+        if (text.isBlank() && imagePath != null) {
+            when (_currentMode.value) {
+                AIMode.LOCAL -> {
+                    if (_isModelLoaded.value) {
+                        generateLocal("", imagePath)
+                    } else {
+                        appendSystemMessage("⚠️ Локальная модель не загружена. Загрузите модель через 'движок'.")
+                    }
+                }
+                else -> {
+                    appendSystemMessage("⚠️ Анализ изображений доступен только в локальном режиме")
+                }
+            }
+            return
+        }
 
         _chatHistory.value = _chatHistory.value + ChatMessage("user", text)
         userMessageCount++
@@ -1525,16 +1543,18 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
 
-        when (_currentMode.value) {
+                when (_currentMode.value) {
             AIMode.LOCAL -> {
                 if (_isModelLoaded.value) {
-                    generateLocal(text, null)
+                    generateLocal(text, imagePath)
                 } else {
                     appendSystemMessage("⚠️ Локальная модель не загружена. Загрузите модель через 'движок'.")
                 }
             }
-            AIMode.CLOUD -> {
-                if (isCloudConfigured()) {
+                       AIMode.CLOUD -> {
+                if (imagePath != null) {
+                    appendSystemMessage("⚠️ Облачный ИИ не поддерживает анализ изображений")
+                } else if (isCloudConfigured()) {
                     generateCloud(text)
                 } else {
                     appendSystemMessage("⚠️ Облачный ИИ не настроен. Настройте через 'облачный ии'.")
