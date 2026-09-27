@@ -588,8 +588,7 @@ class LlamaHelper(
             }
         }
     }
-    }
-
+    
     private fun getStopWords(): List<String> {
         return when (currentModelFormat) {
             ModelFormat.LLAMA2 -> listOf("</s>", "<|endoftext|>", "<|eot_id|>", "<|im_end|>")
