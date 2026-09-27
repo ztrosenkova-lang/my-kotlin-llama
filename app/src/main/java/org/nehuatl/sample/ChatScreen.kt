@@ -889,8 +889,8 @@ fun ChatScreen(
                             viewModel.disableSmartMode()
                             promptInput = ""
                         }
-                        else -> {
-                            viewModel.sendUserMessage(promptInput)
+                                               else -> {
+                            viewModel.sendUserMessage(promptInput, imagePath)
                             promptInput = ""
                             onImageUsed()
                         }
