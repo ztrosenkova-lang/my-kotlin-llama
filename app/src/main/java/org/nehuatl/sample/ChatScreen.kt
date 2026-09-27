@@ -1525,11 +1525,11 @@ fun ThinkingRobotAnimation(
         label = "left_bars_phase"
     )
             // Внутренний сигнал от ChatScreen — включается при приветствии
-    var externalWave by remember { mutableStateOf(false) }
+        var externalWave by remember { mutableStateOf(false) }
     LaunchedEffect(shouldWave) {
         if (shouldWave) {
             externalWave = true
-            delay(2500)
+        } else {
             externalWave = false
         }
     }
