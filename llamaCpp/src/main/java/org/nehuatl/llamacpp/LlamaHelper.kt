@@ -181,12 +181,11 @@ class LlamaHelper(
         }
     }
 
-       fun predict(
+             fun predict(
         prompt: String,
         imagePath: String? = null,
         systemPrompt: String? = null,
-        maxTokens: Int = 512,
-        chatHistory: List<Pair<String, String>> = emptyList()
+        maxTokens: Int = 512
     ) {
         val context = currentContext ?: throw Exception("Model was not loaded yet")
         val startTime = System.currentTimeMillis()
@@ -194,7 +193,7 @@ class LlamaHelper(
         allText = ""
 
         // Формируем промпт в зависимости от формата модели
-        val fullPrompt = buildPrompt(prompt, systemPrompt, chatHistory)
+        val fullPrompt = buildPrompt(prompt, systemPrompt)
         
         Log.d("LlamaHelper", "=== predict: modelFormat = $currentModelFormat")
         Log.d("LlamaHelper", "=== predict: fullPrompt length = ${fullPrompt.length}")
@@ -242,235 +241,11 @@ class LlamaHelper(
         }
     }
 
-       private fun buildPrompt(
+             private fun buildPrompt(
         prompt: String,
-        systemPrompt: String?,
-        chatHistory: List<Pair<String, String>> = emptyList()
+        systemPrompt: String?
     ): String {
-        // Если истории нет — работаем как раньше (одна реплика)
-        if (chatHistory.isEmpty()) {
-            return buildSingleTurnPrompt(prompt, systemPrompt)
-        }
-
-        // С историей — собираем многосекционный промпт в формате модели
-        return when (currentModelFormat) {
-            ModelFormat.LLAMA3 -> buildString {
-                append("<|begin_of_text|>")
-                if (!systemPrompt.isNullOrEmpty()) {
-                    append("<|start_header_id|>system<|end_header_id|>\n\n")
-                    append(systemPrompt)
-                    append("<|eot_id|>")
-                }
-                for ((role, text) in chatHistory) {
-                    if (role == "system") continue
-                    val headerRole = if (role == "user") "user" else "assistant"
-                    append("<|start_header_id|>")
-                    append(headerRole)
-                    append("<|end_header_id|>\n\n")
-                    append(text)
-                    append("<|eot_id|>")
-                }
-                append("<|start_header_id|>assistant<|end_header_id|>\n\n")
-            }
-            ModelFormat.LLAMA2 -> buildString {
-                append("[INST] ")
-                if (!systemPrompt.isNullOrEmpty()) {
-                    append("<<SYS>>\n")
-                    append(systemPrompt)
-                    append("\n<</SYS>>\n\n")
-                }
-                for ((role, text) in chatHistory) {
-                    if (role == "system") continue
-                    if (role == "user") {
-                        append(text)
-                        append(" [/INST] ")
-                    } else {
-                        append(text)
-                        append(" </s><s>[INST] ")
-                    }
-                }
-            }
-            ModelFormat.MISTRAL, ModelFormat.ZEPHYR -> buildString {
-                append("<s>")
-                if (!systemPrompt.isNullOrEmpty()) {
-                    append("[INST] ")
-                    append(systemPrompt)
-                    append(" [/INST]</s>\n")
-                }
-                for ((role, text) in chatHistory) {
-                    if (role == "system") continue
-                    if (role == "user") {
-                        append("[INST] ")
-                        append(text)
-                        append(" [/INST]")
-                    } else {
-                        append(text)
-                        append("</s>\n")
-                    }
-                }
-            }
-            ModelFormat.GEMMA -> buildString {
-                append("<bos>")
-                if (!systemPrompt.isNullOrEmpty()) {
-                    append("<start_of_turn>user\n")
-                    append(systemPrompt)
-                    append("\n\n")
-                }
-                var firstUser = true
-                for ((role, text) in chatHistory) {
-                    if (role == "system") continue
-                    if (role == "user") {
-                        if (firstUser && !systemPrompt.isNullOrEmpty()) {
-                            append(text)
-                            append("<end_of_turn>\n")
-                            firstUser = false
-                        } else {
-                            append("<start_of_turn>user\n")
-                            append(text)
-                            append("<end_of_turn>\n")
-                        }
-                    } else {
-                        append("<start_of_turn>model\n")
-                        append(text)
-                        append("<end_of_turn>\n")
-                    }
-                }
-                append("<start_of_turn>model\n")
-            }
-            ModelFormat.PHI -> buildString {
-                if (!systemPrompt.isNullOrEmpty()) {
-                    append("<|system|>\n")
-                    append(systemPrompt)
-                    append("<|end|>\n")
-                }
-                for ((role, text) in chatHistory) {
-                    if (role == "system") continue
-                    val tag = if (role == "user") "user" else "assistant"
-                    append("<|")
-                    append(tag)
-                    append("|>\n")
-                    append(text)
-                    append("<|end|>\n")
-                }
-                append("<|assistant|>\n")
-            }
-            ModelFormat.QWEN, ModelFormat.YI, ModelFormat.CHATML, ModelFormat.MP -> buildString {
-                if (!systemPrompt.isNullOrEmpty()) {
-                    append("<|im_start|>system\n")
-                    append(systemPrompt)
-                    append("<|im_end|>\n")
-                }
-                for ((role, text) in chatHistory) {
-                    if (role == "system") continue
-                    val tag = if (role == "user") "user" else "assistant"
-                    append("<|im_start|>")
-                    append(tag)
-                    append("\n")
-                    append(text)
-                    append("<|im_end|>\n")
-                }
-                append("<|im_start|>assistant\n")
-            }
-            ModelFormat.DEEPSEEK -> buildString {
-                append("<|begin_of_sentence|>")
-                if (!systemPrompt.isNullOrEmpty()) {
-                    append("System: ")
-                    append(systemPrompt)
-                    append("\n\n")
-                }
-                for ((role, text) in chatHistory) {
-                    if (role == "system") continue
-                    val tag = if (role == "user") "User" else "Assistant"
-                    append(tag)
-                    append(": ")
-                    append(text)
-                    append("\n\n")
-                }
-                append("Assistant:")
-            }
-            ModelFormat.COMMAND_R -> buildString {
-                append("<BOS_TOKEN>")
-                if (!systemPrompt.isNullOrEmpty()) {
-                    append("<|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|>")
-                    append(systemPrompt)
-                    append("<|END_OF_TURN_TOKEN|>")
-                }
-                for ((role, text) in chatHistory) {
-                    if (role == "system") continue
-                    val tag = if (role == "user") "<|USER_TOKEN|>" else "<|CHATBOT_TOKEN|>"
-                    append("<|START_OF_TURN_TOKEN|>")
-                    append(tag)
-                    append(text)
-                    append("<|END_OF_TURN_TOKEN|>")
-                }
-                append("<|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>")
-            }
-            ModelFormat.VICUNA -> buildString {
-                if (!systemPrompt.isNullOrEmpty()) {
-                    append("SYSTEM: ")
-                    append(systemPrompt)
-                    append("\n")
-                }
-                for ((role, text) in chatHistory) {
-                    if (role == "system") continue
-                    val tag = if (role == "user") "USER" else "ASSISTANT"
-                    append(tag)
-                    append(": ")
-                    append(text)
-                    append("\n")
-                }
-                append("ASSISTANT:")
-            }
-            ModelFormat.ALPACA -> buildString {
-                if (!systemPrompt.isNullOrEmpty()) {
-                    append("### System:\n")
-                    append(systemPrompt)
-                    append("\n\n")
-                }
-                for ((role, text) in chatHistory) {
-                    if (role == "system") continue
-                    val tag = if (role == "user") "User" else "Assistant"
-                    append("### ")
-                    append(tag)
-                    append(":\n")
-                    append(text)
-                    append("\n\n")
-                }
-                append("### Assistant:\n")
-            }
-            ModelFormat.FALCON -> buildString {
-                if (!systemPrompt.isNullOrEmpty()) {
-                    append("System: ")
-                    append(systemPrompt)
-                    append("\n")
-                }
-                for ((role, text) in chatHistory) {
-                    if (role == "system") continue
-                    val tag = if (role == "user") "User" else "Falcon"
-                    append(tag)
-                    append(": ")
-                    append(text)
-                    append("\n")
-                }
-                append("Falcon:")
-            }
-            ModelFormat.NEUTRAL -> buildString {
-                if (!systemPrompt.isNullOrEmpty()) {
-                    append("System: ")
-                    append(systemPrompt)
-                    append("\n\n")
-                }
-                for ((role, text) in chatHistory) {
-                    if (role == "system") continue
-                    val tag = if (role == "user") "User" else "Assistant"
-                    append(tag)
-                    append(": ")
-                    append(text)
-                    append("\n\n")
-                }
-                append("Assistant:")
-            }
-        }
+        return buildSingleTurnPrompt(prompt, systemPrompt)
     }
            private fun buildSingleTurnPrompt(prompt: String, systemPrompt: String?): String {
         return when (currentModelFormat) {
