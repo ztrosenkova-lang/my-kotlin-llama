@@ -385,8 +385,12 @@ class LlamaHelper(
         }
     }
 
-    private fun cleanResponse(text: String): String {
+        private fun cleanResponse(text: String): String {
         return text
+            // Убираем блоки размышлений reasoning-моделей
+            .replace(Regex("<think>[\\s\\S]*?</think>", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("<thinking>[\\s\\S]*?</thinking>", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("<reasoning>[\\s\\S]*?</reasoning>", RegexOption.IGNORE_CASE), "")
             .replace(Regex("\\[/?INST\\]"), "")
             .replace(Regex("</?s>"), "")
             .replace(Regex("<<SYS>>"), "")
