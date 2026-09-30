@@ -242,7 +242,7 @@ class LlamaHelper(
         }
     }
 
-                   private fun buildPrompt(
+                      private fun buildPrompt(
         prompt: String,
         systemPrompt: String?,
         chatHistory: List<Pair<String, String>> = emptyList()
@@ -252,29 +252,141 @@ class LlamaHelper(
             return buildSingleTurnPrompt(prompt, systemPrompt)
         }
 
-        // ChatML с полной историей и текущим prompt в конце
-        return buildString {
-            if (!systemPrompt.isNullOrEmpty()) {
-                append("<|im_start|>system\n")
-                append(systemPrompt)
-                append("<|im_end|>\n")
+        // С историей — многосекционная сборка в формате конкретной модели
+        return when (currentModelFormat) {
+            ModelFormat.CHATML, ModelFormat.QWEN, ModelFormat.YI, ModelFormat.MP -> buildString {
+                if (!systemPrompt.isNullOrEmpty()) {
+                    append("<|im_start|>system\n")
+                    append(systemPrompt)
+                    append("<|im_end|>\n")
+                }
+                for ((role, text) in chatHistory) {
+                    if (role == "system") continue
+                    val tag = if (role == "user") "user" else "assistant"
+                    append("<|im_start|>")
+                    append(tag)
+                    append("\n")
+                    append(text)
+                    append("<|im_end|>\n")
+                }
+                if (prompt.isNotBlank()) {
+                    append("<|im_start|>user\n")
+                    append(prompt)
+                    append("<|im_end|>\n")
+                }
+                append("<|im_start|>assistant\n")
             }
-            for ((role, text) in chatHistory) {
-                if (role == "system") continue
-                val tag = if (role == "user") "user" else "assistant"
-                append("<|im_start|>")
-                append(tag)
-                append("\n")
-                append(text)
-                append("<|im_end|>\n")
+
+            ModelFormat.LLAMA3 -> buildString {
+                append("<|begin_of_text|>")
+                if (!systemPrompt.isNullOrEmpty()) {
+                    append("<|start_header_id|>system<|end_header_id|>\n\n")
+                    append(systemPrompt)
+                    append("<|eot_id|>")
+                }
+                for ((role, text) in chatHistory) {
+                    if (role == "system") continue
+                    val headerRole = if (role == "user") "user" else "assistant"
+                    append("<|start_header_id|>")
+                    append(headerRole)
+                    append("<|end_header_id|>\n\n")
+                    append(text)
+                    append("<|eot_id|>")
+                }
+                if (prompt.isNotBlank()) {
+                    append("<|start_header_id|>user<|end_header_id|>\n\n")
+                    append(prompt)
+                    append("<|eot_id|>")
+                }
+                append("<|start_header_id|>assistant<|end_header_id|>\n\n")
             }
-            // ТЕКУЩИЙ ВОПРОС — в конце, перед маркером ассистента
-            if (prompt.isNotBlank()) {
-                append("<|im_start|>user\n")
-                append(prompt)
-                append("<|im_end|>\n")
+
+            ModelFormat.GEMMA -> buildString {
+                if (!systemPrompt.isNullOrEmpty()) {
+                    append("<bos><start_of_turn>user\n")
+                    append(systemPrompt)
+                    append("\n\n")
+                }
+                var firstUser = true
+                for ((role, text) in chatHistory) {
+                    if (role == "system") continue
+                    if (role == "user") {
+                        if (firstUser && !systemPrompt.isNullOrEmpty()) {
+                            append(text)
+                            append("<end_of_turn>\n")
+                            firstUser = false
+                        } else {
+                            append("<start_of_turn>user\n")
+                            append(text)
+                            append("<end_of_turn>\n")
+                        }
+                    } else {
+                        append("<start_of_turn>model\n")
+                        append(text)
+                        append("<end_of_turn>\n")
+                    }
+                }
+                if (prompt.isNotBlank()) {
+                    append("<start_of_turn>user\n")
+                    append(prompt)
+                    append("<end_of_turn>\n")
+                }
+                append("<start_of_turn>model\n")
             }
-            append("<|im_start|>assistant\n")
+
+                        ModelFormat.MISTRAL -> buildString {
+                append("<s>")
+                if (!systemPrompt.isNullOrEmpty()) {
+                    append("[INST] ")
+                    append(systemPrompt)
+                    append(" [/INST]</s>\n")
+                }
+                for ((role, text) in chatHistory) {
+                    if (role == "system") continue
+                    if (role == "user") {
+                        append("[INST] ")
+                        append(text)
+                        append(" [/INST]")
+                    } else {
+                        append(text)
+                        append("</s>\n")
+                    }
+                }
+                if (prompt.isNotBlank()) {
+                    append("[INST] ")
+                    append(prompt)
+                    append(" [/INST]")
+                }
+            }
+
+            ModelFormat.DEEPSEEK -> buildString {
+                // DeepSeek использует специальные токены <｜User｜> и <｜Assistant｜>
+                // с полноширинными вертикальными чертами
+                if (!systemPrompt.isNullOrEmpty()) {
+                    append(systemPrompt)
+                    append("\n")
+                }
+                for ((role, text) in chatHistory) {
+                    if (role == "system") continue
+                    if (role == "user") {
+                        append("<｜User｜>")
+                        append(text)
+                    } else {
+                        append("<｜Assistant｜>")
+                        append(text)
+                        append("<｜end▁of▁sentence｜>")
+                    }
+                }
+                if (prompt.isNotBlank()) {
+                    append("<｜User｜>")
+                    append(prompt)
+                }
+                append("<｜Assistant｜>")
+            }
+
+            // Для остальных форматов — многосекционная сборка не реализована,
+            // откатываемся к одной реплике (история работать не будет)
+            else -> buildSingleTurnPrompt(prompt, systemPrompt)
         }
     }
            private fun buildSingleTurnPrompt(prompt: String, systemPrompt: String?): String {
@@ -403,7 +515,7 @@ class LlamaHelper(
             ModelFormat.GEMMA -> listOf("<end_of_turn>", "<eos>", "<|endoftext|>", "<|im_end|>")
             ModelFormat.PHI -> listOf("<|end|>", "<|endoftext|>", "<|im_end|>")
             ModelFormat.QWEN -> listOf("<|im_end|>", "<|endoftext|>", "<|end|>")
-            ModelFormat.DEEPSEEK -> listOf("<|end_of_sentence|>", "<|endoftext|>", "User:")
+            ModelFormat.DEEPSEEK -> listOf("<｜end▁of▁sentence｜>", "<|endoftext|>")
             ModelFormat.YI -> listOf("<|im_end|>", "<|endoftext|>")
             ModelFormat.COMMAND_R -> listOf("<|END_OF_TURN_TOKEN|>", "<|endoftext|>")
             ModelFormat.CHATML -> listOf("<|im_end|>", "<|endoftext|>")
