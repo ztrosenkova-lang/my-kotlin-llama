@@ -181,11 +181,12 @@ class LlamaHelper(
         }
     }
 
-             fun predict(
+                    fun predict(
         prompt: String,
         imagePath: String? = null,
         systemPrompt: String? = null,
-        maxTokens: Int = 512
+        maxTokens: Int = 512,
+        chatHistory: List<Pair<String, String>> = emptyList()
     ) {
         val context = currentContext ?: throw Exception("Model was not loaded yet")
         val startTime = System.currentTimeMillis()
@@ -193,7 +194,7 @@ class LlamaHelper(
         allText = ""
 
         // Формируем промпт в зависимости от формата модели
-        val fullPrompt = buildPrompt(prompt, systemPrompt)
+        val fullPrompt = buildPrompt(prompt, systemPrompt, chatHistory)
         
         Log.d("LlamaHelper", "=== predict: modelFormat = $currentModelFormat")
         Log.d("LlamaHelper", "=== predict: fullPrompt length = ${fullPrompt.length}")
@@ -241,11 +242,40 @@ class LlamaHelper(
         }
     }
 
-             private fun buildPrompt(
+                   private fun buildPrompt(
         prompt: String,
-        systemPrompt: String?
+        systemPrompt: String?,
+        chatHistory: List<Pair<String, String>> = emptyList()
     ): String {
-        return buildSingleTurnPrompt(prompt, systemPrompt)
+        // Если истории нет — одна реплика (режим калькулятора)
+        if (chatHistory.isEmpty()) {
+            return buildSingleTurnPrompt(prompt, systemPrompt)
+        }
+
+        // ChatML с полной историей и текущим prompt в конце
+        return buildString {
+            if (!systemPrompt.isNullOrEmpty()) {
+                append("<|im_start|>system\n")
+                append(systemPrompt)
+                append("<|im_end|>\n")
+            }
+            for ((role, text) in chatHistory) {
+                if (role == "system") continue
+                val tag = if (role == "user") "user" else "assistant"
+                append("<|im_start|>")
+                append(tag)
+                append("\n")
+                append(text)
+                append("<|im_end|>\n")
+            }
+            // ТЕКУЩИЙ ВОПРОС — в конце, перед маркером ассистента
+            if (prompt.isNotBlank()) {
+                append("<|im_start|>user\n")
+                append(prompt)
+                append("<|im_end|>\n")
+            }
+            append("<|im_start|>assistant\n")
+        }
     }
            private fun buildSingleTurnPrompt(prompt: String, systemPrompt: String?): String {
         return when (currentModelFormat) {
