@@ -1718,26 +1718,25 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     effectivePrompt.contains(CHAT_LOOKUP_COMMAND, ignoreCase = true)
         }
 
-                          val fullSystemPrompt = if (isSearchCommand) {
+                                  val fullSystemPrompt = if (isSearchCommand) {
             buildSystemPrompt("search", effectivePrompt)
         } else {
             _systemPrompt.value
         }
 
-        // Умный режим: склеиваем всю историю чата в одну строку.
-        // Режим калькулятора: только текущее сообщение.
-        val promptForPredict: String = if (_isSmartMode.value) {
-            _chatHistory.value.joinToString("\n") { message ->
-                val prefix = when (message.role) {
-                    "user" -> "Пользователь: "
-                    "assistant" -> "Ассистент: "
-                    else -> "Система: "
-                }
-                prefix + message.text
-            }
-        } else {
-            effectivePrompt
-        }
+        // Умный режим: история без последнего сообщения (оно идёт как prompt)
+        // Режим калькулятора: пустая история, только текущий prompt
+        val historyForPredict: List<Pair<String, String>> = if (_isSmartMode.value) {
+    val h = _chatHistory.value
+    val withoutLast = if (h.isNotEmpty() && h.last().role == "user" && h.last().text == effectivePrompt) {
+        h.dropLast(1)
+    } else {
+        h
+    }
+    withoutLast.map { it.role to it.text }
+} else {
+    emptyList()
+}
 
         _generatedText.value = ""
         _state.value = GenerationState.Generating(prompt = effectivePrompt, tokensGenerated = 0)
@@ -1745,10 +1744,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         scope.launch {
             try {
                 llamaHelper.predict(
-                    prompt = promptForPredict,
+                    prompt = effectivePrompt,
                     imagePath = imagePath,
                     systemPrompt = fullSystemPrompt,
-                    maxTokens = maxTokens.value
+                    maxTokens = maxTokens.value,
+                    chatHistory = historyForPredict
                 )
             } catch (e: Exception) {
                 _state.value = GenerationState.Error(e.message ?: "Unknown error")
