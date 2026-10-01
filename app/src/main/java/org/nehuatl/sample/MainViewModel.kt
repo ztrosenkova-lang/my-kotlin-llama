@@ -2,6 +2,7 @@ package org.nehuatl.sample
 
 import android.app.Application
 import android.app.AlarmManager
+import android.app.DownloadManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.ContentResolver
@@ -11,6 +12,7 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -43,6 +45,18 @@ import java.security.KeyPairGenerator
 import kotlin.math.log10
 
 data class ChatMessage(val role: String, val text: String)
+
+enum class DownloadStatus {
+    IDLE,
+    RUNNING,
+    SUCCESS,
+    FAILED
+}
+
+data class DownloadProgress(
+    val percent: Int,
+    val status: DownloadStatus
+)
 
 class MainViewModel(application: Application, val contentResolver: ContentResolver) : AndroidViewModel(application) {
     companion object {
@@ -297,8 +311,16 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     
 
-    private val _memoryInfoText = MutableStateFlow("Всего доступно: 0.0 ГБ / Занято: 0.0 ГБ")
+        private val _memoryInfoText = MutableStateFlow("Всего доступно: 0.0 ГБ / Занято: 0.0 ГБ")
     val memoryInfoText: StateFlow<String> = _memoryInfoText.asStateFlow()
+
+    // ========== ЗАГРУЗКА МОДЕЛЕЙ ==========
+    // Карта modelId -> downloadId. Живёт в синглтоне, переживает переоткрытие диалога.
+    val downloadIds: MutableMap<String, Long> = mutableMapOf()
+
+    // Прогресс загрузок: modelId -> DownloadProgress
+    private val _downloadProgress = MutableStateFlow<Map<String, DownloadProgress>>(emptyMap())
+    val downloadProgress: StateFlow<Map<String, DownloadProgress>> = _downloadProgress.asStateFlow()
 
     private val _isAppLocked = MutableStateFlow(true)
     val isAppLocked: StateFlow<Boolean> = _isAppLocked.asStateFlow()
@@ -664,9 +686,106 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    fun toggleTheme() {
+        fun toggleTheme() {
         _isDarkTheme.value = !_isDarkTheme.value
         prefs.edit().putBoolean(KEY_DARK_THEME, _isDarkTheme.value).apply()
+    }
+
+    // ========== ЗАГРУЗКА МОДЕЛЕЙ ЧЕРЕЗ DOWNLOADMANAGER ==========
+
+    fun startModelDownload(modelId: String, url: String, fileName: String) {
+        // Если уже качается или скачано — не запускаем повторно
+        val existingProgress = _downloadProgress.value[modelId]
+        if (existingProgress != null &&
+            (existingProgress.status == DownloadStatus.RUNNING ||
+             existingProgress.status == DownloadStatus.SUCCESS)) {
+            return
+        }
+
+        try {
+            val request = DownloadManager.Request(Uri.parse(url))
+                .setTitle(fileName)
+                .setDescription("Загрузка модели ИИ-Друг")
+                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+                .setAllowedOverMetered(true)
+                .setAllowedOverRoaming(false)
+
+            val dm = getApplication<Application>().getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+            val downloadId = dm.enqueue(request)
+
+            downloadIds[modelId] = downloadId
+            _downloadProgress.value = _downloadProgress.value + (modelId to DownloadProgress(0, DownloadStatus.RUNNING))
+
+            scope.launch {
+                pollDownloadProgress(downloadId, modelId)
+            }
+
+            Log.d(TAG, "Download started: modelId=$modelId, downloadId=$downloadId, file=$fileName")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start download: ${e.message}", e)
+            _downloadProgress.value = _downloadProgress.value + (modelId to DownloadProgress(0, DownloadStatus.FAILED))
+        }
+    }
+
+    private suspend fun pollDownloadProgress(downloadId: Long, modelId: String) {
+        val dm = getApplication<Application>().getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+
+        while (true) {
+            delay(500)
+
+            val query = DownloadManager.Query().setFilterById(downloadId)
+            val cursor = try {
+                dm.query(query)
+            } catch (e: Exception) {
+                Log.e(TAG, "Download query failed: ${e.message}", e)
+                _downloadProgress.value = _downloadProgress.value + (modelId to DownloadProgress(0, DownloadStatus.FAILED))
+                return
+            }
+
+            if (cursor == null) {
+                _downloadProgress.value = _downloadProgress.value + (modelId to DownloadProgress(0, DownloadStatus.FAILED))
+                return
+            }
+
+            cursor.use {
+                if (!it.moveToFirst()) {
+                    _downloadProgress.value = _downloadProgress.value + (modelId to DownloadProgress(0, DownloadStatus.FAILED))
+                    return
+                }
+
+                val statusIndex = it.getColumnIndex(DownloadManager.COLUMN_STATUS)
+                val downloadedIndex = it.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
+                val totalIndex = it.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
+
+                val status = if (statusIndex >= 0) it.getInt(statusIndex) else DownloadManager.STATUS_FAILED
+                val downloaded = if (downloadedIndex >= 0) it.getLong(downloadedIndex) else 0L
+                val total = if (totalIndex >= 0) it.getLong(totalIndex) else -1L
+
+                when (status) {
+                    DownloadManager.STATUS_SUCCESSFUL -> {
+                        _downloadProgress.value = _downloadProgress.value + (modelId to DownloadProgress(100, DownloadStatus.SUCCESS))
+                        Log.d(TAG, "Download SUCCESS: modelId=$modelId")
+                        return
+                    }
+                    DownloadManager.STATUS_FAILED -> {
+                        _downloadProgress.value = _downloadProgress.value + (modelId to DownloadProgress(0, DownloadStatus.FAILED))
+                        Log.e(TAG, "Download FAILED: modelId=$modelId")
+                        return
+                    }
+                    DownloadManager.STATUS_PAUSED,
+                    DownloadManager.STATUS_PENDING,
+                    DownloadManager.STATUS_RUNNING -> {
+                        val percent = if (total > 0L) {
+                            ((downloaded * 100L) / total).toInt().coerceIn(0, 100)
+                        } else {
+                            0
+                        }
+                        _downloadProgress.value = _downloadProgress.value + (modelId to DownloadProgress(percent, DownloadStatus.RUNNING))
+                    }
+                }
+            }
+        }
     }
 
     fun showBrainEditor() {
