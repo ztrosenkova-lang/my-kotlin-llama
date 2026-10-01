@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -67,6 +68,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -241,6 +243,7 @@ fun ChatScreen(
 
     var promptInput by remember { mutableStateOf("") }
     var showModelDialog by remember { mutableStateOf(false) }
+    var showDownloadDialog by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var showPromptSettings by remember { mutableStateOf(false) }
     var showCloudDialog by remember { mutableStateOf(false) }
@@ -475,7 +478,7 @@ fun ChatScreen(
         return
     }
 
-    if (showModelDialog) {
+        if (showModelDialog) {
         ModelPickerDialog(
             currentModelPath = currentModelPath,
             mmprojPath = mmprojPath,
@@ -488,7 +491,20 @@ fun ChatScreen(
                     viewModel.setCurrentMode(AIMode.LOCAL)
                 }
             },
+            onOpenDownloadDialog = {
+                showModelDialog = false
+                showDownloadDialog = true
+            },
             onDismiss = { showModelDialog = false },
+            colors = colors,
+            isDarkTheme = isDarkTheme
+        )
+    }
+
+    if (showDownloadDialog) {
+        ModelDownloadDialog(
+            viewModel = viewModel,
+            onDismiss = { showDownloadDialog = false },
             colors = colors,
             isDarkTheme = isDarkTheme
         )
@@ -5559,6 +5575,7 @@ private fun ModelPickerDialog(
     onPickModel: () -> Unit,
     onPickMmproj: () -> Unit,
     onLoad: () -> Unit,
+    onOpenDownloadDialog: () -> Unit,
     onDismiss: () -> Unit,
     colors: AppColors,
     isDarkTheme: Boolean
@@ -5681,11 +5698,8 @@ private fun ModelPickerDialog(
                     Text("Запустить нейросеть", color = if (currentModelPath != null) Color.White else colors.text.copy(alpha = 0.5f), fontSize = 13.sp)
                 }
 
-                Button(
-                    onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://huggingface.co/AnkitAI/Parable-Granite-4.1-3B-Claude-Fable-5-GGUF/resolve/main/Parable-Granite-4.1-3B-Claude-Fable-5-GGUF-Q6_K.gguf"))
-                        context.startActivity(intent)
-                    },
+                               Button(
+                    onClick = onOpenDownloadDialog,
                     modifier = Modifier.fillMaxWidth(0.7f),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = colors.accent,
@@ -5711,6 +5725,239 @@ private fun ModelPickerDialog(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ModelDownloadDialog(
+    viewModel: MainViewModel,
+    onDismiss: () -> Unit,
+    colors: AppColors,
+    isDarkTheme: Boolean
+) {
+    val downloadProgress by viewModel.downloadProgress.collectAsStateWithLifecycle()
+    var descriptionModel by remember { mutableStateOf<ModelInfo?>(null) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .border(1.dp, colors.borderGray, RoundedCornerShape(16.dp))
+        ) {
+            AndroidView(
+                factory = { matrixContext ->
+                    MatrixChatBackground(matrixContext)
+                },
+                modifier = Modifier
+                    .matchParentSize()
+                    .clip(RoundedCornerShape(16.dp))
+            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(if (isDarkTheme) Color(0xFF1E1E1E).copy(alpha = 0.95f) else colors.surfaceGray)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                    Text(text = "⬇", fontSize = 22.sp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "Загрузка моделей",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = colors.accent,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+
+                Text(
+                    text = "После загрузки файл будет в папке Downloads. Выберите его через «Выбрать модель».",
+                    color = colors.text.copy(alpha = 0.8f),
+                    fontSize = 11.sp,
+                    textAlign = TextAlign.Center,
+                    fontFamily = FontFamily.Monospace
+                )
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(420.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    ModelCatalog.models.forEach { model ->
+                        val progress = downloadProgress[model.id]
+
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, colors.borderGray),
+                            colors = CardDefaults.cardColors(containerColor = colors.background.copy(alpha = 0.85f))
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = model.name,
+                                    color = colors.text,
+                                    fontSize = 12.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold
+                                )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Button(
+                                        onClick = { descriptionModel = model },
+                                        modifier = Modifier.weight(1f).height(34.dp),
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = colors.borderGray,
+                                            contentColor = colors.text
+                                        ),
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = BorderStroke(1.dp, colors.borderGray)
+                                    ) {
+                                        Text("Описание", color = colors.text, fontSize = 11.sp)
+                                    }
+
+                                    Button(
+                                        onClick = {
+                                            viewModel.startModelDownload(model.id, model.url, model.fileName)
+                                        },
+                                        enabled = progress == null || progress.status == DownloadStatus.FAILED,
+                                        modifier = Modifier.weight(1f).height(34.dp),
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = colors.accent,
+                                            contentColor = colors.background,
+                                            disabledContainerColor = colors.borderGray,
+                                            disabledContentColor = colors.text.copy(alpha = 0.5f)
+                                        ),
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = BorderStroke(1.dp, colors.borderGray)
+                                    ) {
+                                        val label = when (progress?.status) {
+                                            DownloadStatus.RUNNING -> "Качается..."
+                                            DownloadStatus.SUCCESS -> "✅ Готово"
+                                            DownloadStatus.FAILED -> "❌ Повторить"
+                                            else -> "Загрузить"
+                                        }
+                                        Text(label, color = colors.background, fontSize = 11.sp)
+                                    }
+                                }
+
+                                if (progress != null && progress.status == DownloadStatus.RUNNING) {
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                                    ) {
+                                        LinearProgressIndicator(
+                                            progress = progress.percent / 100f,
+                                            modifier = Modifier.fillMaxWidth().height(6.dp),
+                                            color = colors.accent,
+                                            trackColor = colors.borderGray
+                                        )
+                                        Text(
+                                            text = "${progress.percent}%",
+                                            color = colors.text,
+                                            fontSize = 10.sp,
+                                            fontFamily = FontFamily.Monospace,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            textAlign = TextAlign.End
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth(0.6f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = colors.accent,
+                        contentColor = colors.background
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, colors.borderGray)
+                ) {
+                    Text("Закрыть", color = colors.background, fontSize = 13.sp)
+                }
+            }
+        }
+    }
+
+    descriptionModel?.let { model ->
+        ModelDescriptionDialog(
+            model = model,
+            onDismiss = { descriptionModel = null },
+            colors = colors,
+            isDarkTheme = isDarkTheme
+        )
+    }
+}
+
+@Composable
+private fun ModelDescriptionDialog(
+    model: ModelInfo,
+    onDismiss: () -> Unit,
+    colors: AppColors,
+    isDarkTheme: Boolean
+) {
+    MaterialTheme(
+        colorScheme = if (isDarkTheme) darkColorScheme() else lightColorScheme()
+    ) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = {
+                Text(
+                    text = model.name,
+                    color = colors.accent,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 400.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(
+                        text = model.description,
+                        color = colors.text,
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.Monospace,
+                        lineHeight = 17.sp
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = colors.accent,
+                        contentColor = colors.background
+                    ),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Понятно", color = colors.background)
+                }
+            },
+            containerColor = colors.surfaceGray
+        )
     }
 }
 
