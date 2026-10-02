@@ -267,7 +267,7 @@ fun ChatScreen(
     // Сигнал для полёта в левый верхний угол и уменьшения
     var shrinkSmallSignal by remember { mutableStateOf(false) }
 
-    // Состояния для робота после приземления
+        // Состояния для робота после приземления
     var robotIsLanded by remember { mutableStateOf(false) }
     var robotScale by remember { mutableStateOf(1f) }
     var robotIsFlyingHome by remember { mutableStateOf(false) }
@@ -276,6 +276,9 @@ fun ChatScreen(
     var robotOrbitAngle by remember { mutableStateOf(0f) }
     var robotOffsetX by remember { mutableStateOf(0f) }
     var robotOffsetY by remember { mutableStateOf(0f) }
+
+    // Флаг «палец сейчас двигает робота» — защита от откатов при перетаскивании
+    var isRobotDragging by remember { mutableStateOf(false) }
 
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -603,7 +606,7 @@ fun ChatScreen(
     }
 
         
-    val density = LocalDensity.current      
+        val density = LocalDensity.current      
    
            // Автосброс waveSignal на случай застревания (страховка)
     LaunchedEffect(waveSignal) {
@@ -611,6 +614,15 @@ fun ChatScreen(
             delay(2500)
             waveSignal = false
         }
+    }
+
+    // Флаг «палец двигает робота»: включается на любое изменение позиции/масштаба,
+    // гаснет через 300 мс тишины. Пока флаг true — синхронизация не работает,
+    // и робот следует за пальцем без сопротивления.
+    LaunchedEffect(robotOffsetX, robotOffsetY, robotScale) {
+        isRobotDragging = true
+        delay(300)
+        isRobotDragging = false
     }
             // Команда "стань большим" — переводит робота на экран, если он не там
     LaunchedEffect(growBigSignal) {
@@ -1176,9 +1188,11 @@ fun ChatScreen(
                     )
                 }
 
-                // Синхронизация robotOffsetX/Y и robotScale с анимированными значениями
-                LaunchedEffect(animatedOffsetX, animatedOffsetY, animatedScale, isCommandActive) {
-                    if (!isCommandActive) {
+                                // Синхронизация robotOffsetX/Y и robotScale с анимированными значениями.
+                // Не работает, пока палец двигает робота (isRobotDragging == true),
+                // чтобы не откатывать позицию назад во время перетаскивания.
+                LaunchedEffect(animatedOffsetX, animatedOffsetY, animatedScale, isCommandActive, isRobotDragging) {
+                    if (!isCommandActive && !isRobotDragging) {
                         robotOffsetX = animatedOffsetX
                         robotOffsetY = animatedOffsetY
                         robotScale = animatedScale
