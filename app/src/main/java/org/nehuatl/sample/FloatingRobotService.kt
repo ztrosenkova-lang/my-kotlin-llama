@@ -175,12 +175,20 @@ class FloatingRobotService : LifecycleService() {
                     val dy = kotlin.math.abs(event.rawY - touchY)
                     val dt = System.currentTimeMillis() - downTime
 
-                    // Считаем тапом только если не двигали и быстро отпустили
+                                       // Считаем тапом только если не двигали и быстро отпустили
                     if (dx < 15 && dy < 15 && dt < 300) {
                         val now = System.currentTimeMillis()
                         if (now - lastTapTime < 400) {
-                            // Двойной тап — поднимаем приложение из фона
+                            // Двойной тап — убираем робота и микрофон, поднимаем приложение
                             lastTapTime = 0L
+
+                            // 1. Останавливаем сервис — робот и микрофон исчезают
+                            val stopIntent = Intent(this@FloatingRobotService, FloatingRobotService::class.java).apply {
+                                action = ACTION_STOP
+                            }
+                            startService(stopIntent)
+
+                            // 2. Поднимаем MainActivity на передний план
                             try {
                                 val intent = Intent(this@FloatingRobotService, MainActivity::class.java).apply {
                                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or
