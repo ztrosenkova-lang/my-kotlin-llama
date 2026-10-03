@@ -558,6 +558,57 @@ fun startFloatingWithPermissionCheck() {
     moveTaskToBack(true)
 }
 
+/**
+ * Принудительный запуск робота 2 в overlay + сворачивание приложения.
+ * Отличие от startFloatingWithPermissionCheck: ВСЕГДА сворачивает приложение,
+ * даже если сервис уже запущен (перезапускает его).
+ * Используется при двойном тапе на робота 1.
+ */
+fun forceStartFloatingAndMinimize() {
+    // Разрешение overlay — обязательное условие
+    if (!hasOverlayPermission()) {
+        Log.d(TAG, "forceStart: requesting overlay permission")
+        android.widget.Toast.makeText(
+            this,
+            "Дайте разрешение 'Поверх других приложений'",
+            android.widget.Toast.LENGTH_LONG
+        ).show()
+        requestOverlayPermission()
+        return
+    }
+
+    // Если сервис уже запущен — останавливаем и через 700 мс запускаем заново
+    if (FloatingRobotService.isRunning) {
+        Log.d(TAG, "forceStart: service running, restarting")
+        val stopIntent = Intent(this, FloatingRobotService::class.java).apply {
+            action = FloatingRobotService.ACTION_STOP
+        }
+        startService(stopIntent)
+
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            startFloatingService()
+            android.widget.Toast.makeText(
+                this,
+                "🤖 Плавающий робот запущен",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+            // Всегда сворачиваем приложение
+            moveTaskToBack(true)
+        }, 700)
+        return
+    }
+
+    // Сервис не запущен — обычный запуск + всегда сворачиваем
+    Log.d(TAG, "forceStart: starting service")
+    startFloatingService()
+    android.widget.Toast.makeText(
+        this,
+        "🤖 Плавающий робот запущен",
+        android.widget.Toast.LENGTH_SHORT
+    ).show()
+    moveTaskToBack(true)
+}
+
     // ========== ОСНОВНОЙ КОНТЕНТ ==========
 
     private fun showMainContent() {
