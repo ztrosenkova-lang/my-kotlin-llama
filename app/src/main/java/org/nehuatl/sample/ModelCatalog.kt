@@ -5,103 +5,153 @@ data class ModelInfo(
     val name: String,
     val url: String,
     val fileName: String,
-    val description: String
+    val description: String,
+    val mmprojUrl: String? = null,
+    val mmprojFileName: String? = null
 )
 
 object ModelCatalog {
 
-    private const val BASE = "https://huggingface.co/bartowski/"
+    private const val BART = "https://huggingface.co/bartowski/"
+    private const val PRITHIV = "https://huggingface.co/prithivMLmods/"
 
     val models: List<ModelInfo> = listOf(
 
-        // 1. PHI-3.5-MINI — САМЫЙ УМНЫЙ В РАЗМЕРЕ
+        // ===== 1. VIBETHINKER-3B — ГЛАВНАЯ ДУМАЮЩАЯ =====
         ModelInfo(
-            id = "phi35_mini",
-            name = "Phi-3.5-mini (3.8B) — умник",
-            url = BASE + "Phi-3.5-mini-instruct-GGUF/resolve/main/Phi-3.5-mini-instruct-Q4_K_M.gguf",
-            fileName = "phi35_mini_q4.gguf",
-            description = "Самая умная модель в этом списке. 3.8B параметров, ~2.4 ГБ. Отлично следует инструкциям, сильна в логике, рассуждениях и коде. 128K контекст. Русский язык — средний, но понимает. Если телефон тянет 4+ ГБ RAM — это лучший выбор для сложных задач. [citation:6]"
+            id = "vibethinker_3b",
+            name = "VibeThinker-3B — видно как думает ⭐",
+            url = PRITHIV + "VibeThinker-3B-GGUF/resolve/main/VibeThinker-3B.Q4_K_M.gguf",
+            fileName = "vibethinker_3b_q4.gguf",
+            description = "Та самая VibeThinker. 3B, ~1.93 ГБ в Q4_K_M. Построена на Qwen2.5-Coder-3B, обучена на верифицируемых рассуждениях (математика, код, STEM). На IMO-AnswerBench набрала 76.4 — уровень DeepSeek V3.2 (671B). Ты видишь её цепочку размышлений. 96.1% прохождение LeetCode. Рекомендуется ставить maxTokens = 60000–100000, иначе не увидишь всё размышление. Русский язык — не заявлен. [citation:1][citation:7][citation:13]"
         ),
 
-        // 2. QWEN2.5-3B — БАЛАНС
+        // ===== 2. QWEN3-4B THINKING — ДУМАЮЩАЯ, RUS =====
         ModelInfo(
-            id = "qwen25_3b",
-            name = "Qwen2.5-3B — баланс",
-            url = BASE + "Qwen2.5-3B-Instruct-GGUF/resolve/main/Qwen2.5-3B-Instruct-Q4_K_M.gguf",
-            fileName = "qwen25_3b_q4.gguf",
-            description = "Золотая середина. 3B параметров, ~1.9 ГБ. Умнее Gemma 2B, легче Phi-3.5. Хорошо держит диалог, понимает русский лучше среднего. Отличный выбор на каждый день. [citation:19]"
+            id = "qwen3_4b_thinking",
+            name = "Qwen3-4B Thinking — думающая, русский",
+            url = PRITHIV + "Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Thinking-2507.Q4_K_M.gguf",
+            fileName = "qwen3_4b_thinking_q4.gguf",
+            description = "Qwen3-4B в режиме thinking (2507). 4B, ~2.5 ГБ. Официальная Qwen с режимом размышлений. Русский язык — хорошо. Умная, следует инструкциям. Если VibeThinker заточена под код и математику, эта — универсальнее. Контекст 32K. [citation:4]"
         ),
 
-        // 3. GEMMA 2 2B — БЫСТРАЯ
+        // ===== 3. QWEN3-4B KIMI REASONING DISTILLED — ДУМАЮЩАЯ #3 =====
+        ModelInfo(
+            id = "qwen3_kimi_reasoning",
+            name = "Qwen3-4B Kimi Reasoning — думающая",
+            url = "https://huggingface.co/khazarai/Qwen3-4B-Kimi2.5-Reasoning-Distilled-GGUF/resolve/main/qwen3-4b-thinking-2507.Q4_K_M.gguf",
+            fileName = "qwen3_kimi_reasoning_q4.gguf",
+            description = "Qwen3-4B, дистиллированная с Kimi-2.5-thinking. ~2.5 ГБ. Обучена на длинных цепочках рассуждений Kimi. Разбивает задачи, самокорректируется, даёт аналитические ответы. Третья думающая модель в списке — если две предыдущие не подошли, попробуй эту. [citation:10]"
+        ),
+
+        // ===== 4. GEMMA 3 4B — RUS + 128K + VISION =====
+        ModelInfo(
+            id = "gemma3_4b",
+            name = "Gemma 3 4B — русский, 128K, картинки",
+            url = BART + "google_gemma-3-4b-it-GGUF/resolve/main/google_gemma-3-4b-it-Q4_K_M.gguf",
+            fileName = "gemma3_4b_q4.gguf",
+            mmprojUrl = BART + "google_gemma-3-4b-it-GGUF/resolve/main/mmproj-google_gemma-3-4b-it-f16.gguf",
+            mmprojFileName = "gemma3_4b_mmproj_f16.gguf",
+            description = "Gemma 3 от Google. 4B, ~2.3 ГБ + ~850 МБ проектор. 128K контекст, 140+ языков (русский — отлично). Понимает картинки. Для анализа изображений загружай оба файла. Лучшая русскоязычная модель в списке для общих задач. [citation:5][citation:16]"
+        ),
+
+        // ===== 5. GRANITE 4.1 3B — IBM, 128K, RUS =====
+        ModelInfo(
+            id = "granite_3b",
+            name = "Granite 4.1 3B — IBM, 128K, русский",
+            url = BART + "ibm-granite_granite-4.1-3b-GGUF/resolve/main/granite-4.1-3b-Q4_K_M.gguf",
+            fileName = "granite_3b_q4.gguf",
+            description = "IBM Granite 4.1 на 3B, ~2.17 ГБ. 128K контекст. Корпоративная надёжность, чистая речь, хорошее следование инструкциям. Русский язык — хороший (IBM обучает на многих языках). Отлично для структурированных ответов и документов. "
+        ),
+
+        // ===== 6. PHI-4-MINI — MICROSOFT, 128K, ЛОГИКА =====
+        ModelInfo(
+            id = "phi4_mini",
+            name = "Phi-4-mini — Microsoft, 128K, логика",
+            url = "https://huggingface.co/jc-builds/Phi-4-mini-instruct-GGUF/resolve/main/Phi-4-mini-instruct-Q4_K_M.gguf",
+            fileName = "phi4_mini_q4.gguf",
+            description = "Phi-4-mini от Microsoft. 3.8B, ~2.3 ГБ. 128K контекст (YaRN). Бьёт модели в 5–10 раз больше на MATH и GPQA. MIT-лицензия. Лучший выбор для сложной логики, математики, структурированных рассуждений. Русский — средний, но понимает. [citation:8]"
+        ),
+
+        // ===== 7. SMOLLM3 3B — ДИАЛОГ, 128K =====
+        ModelInfo(
+            id = "smollm3_3b",
+            name = "SmolLM3 3B — диалог, гибрид",
+            url = BART + "HuggingFaceTB_SmolLM3-3B-GGUF/resolve/main/SmolLM3-3B-Q4_K_M.gguf",
+            fileName = "smollm3_3b_q4.gguf",
+            description = "SmolLM3 от HuggingFace. 3B, ~1.92 ГБ. 128K контекст. Гибридная: может думать или просто отвечать. 6 языков (русского нет). Дружелюбная, хороша для диалога. "
+        ),
+
+        // ===== 8. MINICPM5-2B — 131K, ЛЁГКАЯ =====
+        ModelInfo(
+            id = "minicpm5_2b",
+            name = "MiniCPM5-2B — лёгкая, 131K",
+            url = "https://huggingface.co/saidutta69/MiniCPM5-2B-GGUF/resolve/main/MiniCPM5-2B-Q4_K_M.gguf",
+            fileName = "minicpm5_2b_q4.gguf",
+            description = "MiniCPM5-2B, ~1.56 ГБ. 131K контекст! Огромный контекст при малом размере. EN/ZH двуязычная, нативная поддержка tool calling. Русского нет, но для английского — отлично. Быстрая даже на CPU. [citation:14]"
+        ),
+
+        // ===== 9. QWEN3.8-2B — 262K, ДУМАЮЩАЯ =====
+        ModelInfo(
+            id = "qwen38_2b",
+            name = "Qwen3.8-2B — 262K, думающая",
+            url = "https://huggingface.co/empero-ai/Qwen3.8-2B-GGUF/resolve/main/Qwen3.8-2B-Q4_K_M.gguf",
+            fileName = "qwen38_2b_q4.gguf",
+            description = "Qwen3.8-2B, ~1.3 ГБ в Q4_K_M. 262K контекст! Дистиллирована с Qwen3.8 2.4T. Режим размышлений, function calling. Огромный контекст за минимальный размер. Русский — как у Qwen (средне-хороший). [citation:18]"
+        ),
+
+        // ===== 10. VIBETHINKER-3B HERETIC — БЕЗ ЦЕНЗУРЫ =====
+        ModelInfo(
+            id = "vibethinker_heretic",
+            name = "VibeThinker-3B Heretic — без цензуры",
+            url = "https://huggingface.co/saidutta69/VibeThinker-3B-heretic/resolve/main/VibeThinker-3B-heretic-Q4_K_M.gguf",
+            fileName = "vibethinker_heretic_q4.gguf",
+            description = "Та же VibeThinker-3B, но снята цензура (abliterated). ~1.80 ГБ в Q4_K_M. Сохранены все способности к рассуждениям и код. Не отказывается отвечать. Отлично для тестов «свободного» поведения. Не заставляет модель говорить с собой — это не «сырая» модель. [citation:9]"
+        ),
+
+        // ===== 11. LLAMA 3.2 1B HERETIC — ЛЁГКАЯ, БЕЗ ЦЕНЗУРЫ =====
+        ModelInfo(
+            id = "llama32_1b_heretic",
+            name = "Llama 3.2 1B Heretic — лёгкая, без цензуры",
+            url = "https://huggingface.co/Green-Eye/Llama-3.2-1B-Instruct-heretic/resolve/main/Llama-3.2-1B-Instruct-heretic-Q4_K_M.gguf",
+            fileName = "llama32_1b_heretic_q4.gguf",
+            description = "Llama 3.2 1B с снятой цензурой. ~0.81 ГБ. Отказы упали с 96/100 до 7/100. Знания и следование инструкциям почти не пострадали. Идеальна для слабых телефонов, когда нужна «свободная» модель. Русский — слабый. [citation:3]"
+        ),
+
+        // ===== 12. NOVA-LFM 1.2B — ДУМАЮЩАЯ, ЛЁГКАЯ =====
+        ModelInfo(
+            id = "nova_lfm_12b",
+            name = "Nova-LFM 1.2B Thinking — думающая, лёгкая",
+            url = "https://huggingface.co/NovachronoAI/Nova-LFM-1.2B-Thinking-GGUF/resolve/main/Nova-LFM-1.2B-Thinking-Q4_K_M.gguf",
+            fileName = "nova_lfm_12b_q4.gguf",
+            description = "Nova-LFM 1.2B Thinking, ~0.7 ГБ. «System 2 Thinking»: останавливается, проверяет логику, исправляет ошибки. GSM8K 53.5% — лучше Llama 3.2 1B и Gemma 2 2B. Думающая, но очень лёгкая. Идеальна для слабых телефонов. Английский. [citation:2]"
+        ),
+
+        // ===== 13. GEMMA 2 2B — СЛАБАЯ, ДЛЯ СРАВНЕНИЯ =====
         ModelInfo(
             id = "gemma2_2b",
-            name = "Gemma 2 2B — быстрая",
-            url = BASE + "gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
+            name = "Gemma 2 2B — слабая (как сейчас)",
+            url = BART + "gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
             fileName = "gemma2_2b_q4.gguf",
-            description = "Лёгкая и шустрая. 2B параметров, ~1.7 ГБ. Google обучал её на качественных данных, поэтому для своего размера она удивительно толковая. Русский — слабее, чем у Qwen, но для английского идеальна. Быстрый отклик на слабых телефонах. [citation:5]"
+            description = "Оставляем как эталон слабой модели. 2B, ~1.7 ГБ. Контекст 8K — мало для «вспомни». Быстрая, но не умная. Для сравнения. "
         ),
 
-        // 4. VIKHR-QWEN-2.5-0.5B — РУССКИЙ
+        // ===== 14. VIKHR-QWEN 0.5B — РУССКИЙ, СЛАБАЯ =====
         ModelInfo(
             id = "vikhr_qwen_05b",
-            name = "Vikhr-Qwen 0.5B — русский",
+            name = "Vikhr-Qwen 0.5B — русский, слабая",
             url = "https://huggingface.co/QuantFactory/Vikhr-Qwen-2.5-0.5b-Instruct-GGUF/resolve/main/Vikhr-Qwen-2.5-0.5b-Instruct.Q4_K_M.gguf",
             fileName = "vikhr_qwen_05b_q4.gguf",
-            description = "Специально дообучена на русском (датасет GrandMaster-PRO-MAX, 150k инструкций). 0.5B, ~0.4 ГБ. Очень лёгкая, летает на любом телефоне. В 4 раза эффективнее базовой Qwen. Для простых команд, заметок, диалога на русском — идеальна. Не жди от неё сложных рассуждений. [citation:8]"
+            description = "Русская, 0.5B, ~0.4 ГБ. Очень лёгкая. Для простых команд и заметок. Слабая, но говорит по-русски. "
         ),
 
-        // 5. VIKHR-LLAMA-3.2-1B — РУССКИЙ + LLAMA
+        // ===== 15. QWEN2.5-3B — УНИВЕРСАЛЬНАЯ (БАЗА VIBETHINKER) =====
         ModelInfo(
-            id = "vikhr_llama_1b",
-            name = "Vikhr-Llama 3.2 1B — русский",
-            url = "https://huggingface.co/QuantFactory/Vikhr-Llama-3.2-1B-Instruct-GGUF/resolve/main/Vikhr-Llama-3.2-1B-Instruct.Q4_K_M.gguf",
-            fileName = "vikhr_llama_1b_q4.gguf",
-            description = "Llama 3.2 1B, дообученная на русском. ~0.8 ГБ. В 5 раз эффективнее базовой. Хороший компромисс: чуть умнее Vikhr-Qwen 0.5B, но всё ещё очень лёгкая. Понимает русский, держит контекст диалога. [citation:15]"
-        ),
-
-        // 6. LLAMA 3.2 1B — МОБИЛЬНАЯ
-        ModelInfo(
-            id = "llama32_1b",
-            name = "Llama 3.2 1B — мобильная",
-            url = "https://huggingface.co/dispatchAI/Llama-3.2-1B-Instruct-Q4-mobile/resolve/main/ggml-model-Q4_K_M.gguf",
-            fileName = "llama32_1b_q4.gguf",
-            description = "Оптимизирована под мобильные (Snapdragon 865+). 1.23B, всего ~767 МБ. Скорость ~28 токенов/с на CPU, память ~1.2 ГБ. Качество ~95% от FP16. Идеальна, если телефон слабый, но хочется нормальный английский. [citation:17]"
-        ),
-
-        // 7. SMOLM2 1.7B — ДИАЛОГ
-        ModelInfo(
-            id = "smollm2_17b",
-            name = "SmolLM2 1.7B — диалог",
-            url = BASE + "SmolLM2-1.7B-Instruct-GGUF/resolve/main/SmolLM2-1.7B-Instruct-Q4_K_M.gguf",
-            fileName = "smollm2_17b_q4.gguf",
-            description = "HuggingFace обучали её специально для диалогов. 1.7B, ~1.1 ГБ. Дружелюбная, хорошо держит беседу. Английский — отлично, русский — слабо. Хороша для теста «характера» модели. [citation:9]"
-        ),
-
-        // 8. DOLPHIN 3.0 LLAMA 3.2 3B — БЕЗ ЦЕНЗУРЫ
-        ModelInfo(
-            id = "dolphin3_llama3b",
-            name = "Dolphin 3.0 Llama 3.2 3B — без цензуры",
-            url = BASE + "Dolphin3.0-Llama3.2-3B-GGUF/resolve/main/Dolphin3.0-Llama3.2-3B-Q4_K_M.gguf",
-            fileName = "dolphin3_llama3b_q4.gguf",
-            description = "Llama 3.2 3B, дообученная без цензуры (Dolphin). ~2.0 ГБ. Отвечает на всё, не отказывается. Ум на уровне Qwen2.5-3B. Английский — отлично, русский — средне. Интересно для теста «свободного» поведения. [citation:9]"
-        ),
-
-        // 9. QWEN2.5-0.5B — СОВСЕМ ЛЁГКАЯ
-        ModelInfo(
-            id = "qwen25_05b",
-            name = "Qwen2.5 0.5B — минимальная",
-            url = BASE + "Qwen2.5-0.5B-Instruct-GGUF/resolve/main/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf",
-            fileName = "qwen25_05b_q4.gguf",
-            description = "Базовая Qwen2.5 на 0.5B, ~0.4 ГБ. Очень слабая, но показывает «нижнюю границу»: что вообще способна выдать модель такого размера. Полезна для сравнения с Vikhr-Qwen (которая на той же базе, но дообучена). [citation:10]"
-        ),
-
-        // 10. PHI-3.5-MINI UNCENSORED — УМ + БЕЗ ЦЕНЗУРЫ
-        ModelInfo(
-            id = "phi35_uncensored",
-            name = "Phi-3.5-mini Uncensored — ум + свобода",
-            url = BASE + "Phi-3.5-mini-instruct_Uncensored-GGUF/resolve/main/Phi-3.5-mini-instruct_Uncensored-Q4_K_M.gguf",
-            fileName = "phi35_uncensored_q4.gguf",
-            description = "Тот же Phi-3.5-mini (самый умный в списке), но снята цензура. ~2.4 ГБ. Для тех случаев, когда стандартный Phi отказывается отвечать, а ответ нужен. Русский — как у оригинала (средний). [citation:13]"
+            id = "qwen25_3b",
+            name = "Qwen2.5-3B — универсальная база",
+            url = BART + "Qwen2.5-3B-Instruct-GGUF/resolve/main/Qwen2.5-3B-Instruct-Q4_K_M.gguf",
+            fileName = "qwen25_3b_q4.gguf",
+            description = "Базовая Qwen2.5-3B, ~1.9 ГБ. На её основе сделана VibeThinker. Универсальная, без режима «размышлений». Хороший русский, диалог, следование инструкциям. Для тех, кому не нужен thinking. "
         )
     )
 }
