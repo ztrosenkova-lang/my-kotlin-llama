@@ -1186,7 +1186,7 @@ fun ChatScreen(
                             )
                         }
                 ) {
-                ThinkingRobotAnimation(
+                                ThinkingRobotAnimation(
                         height = 70.dp,
                         isActive = true,
                         isSpeaking = isSpeaking,
@@ -1194,6 +1194,7 @@ fun ChatScreen(
                         isIdle = !isSpeaking && state !is GenerationState.Generating && cloudState !is CloudAIState.Generating,
                         shouldWave = waveSignal,
                         isAiReady = isModelLoaded || (cloudState is CloudAIState.Ready),
+                        isSmartMode = isSmartMode,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -1419,6 +1420,7 @@ fun ThinkingRobotAnimation(
     shouldWave: Boolean = false,
     commandScale: Float? = null,
     isAiReady: Boolean = false,
+    isSmartMode: Boolean = false,
     uDivisor: Float = 200f,
     yOffsetUnits: Float = 0f
 ) {
@@ -1555,7 +1557,7 @@ fun ThinkingRobotAnimation(
         label = "head_panel_open"
     )
 
-    val leftBarsPhase by transition.animateFloat(
+        val leftBarsPhase by transition.animateFloat(
         initialValue = 0f,
         targetValue = 3f,
         animationSpec = infiniteRepeatable(
@@ -1563,6 +1565,17 @@ fun ThinkingRobotAnimation(
             repeatMode = RepeatMode.Restart
         ),
         label = "left_bars_phase"
+    )
+
+    // Пульсация шариков антенн в умном режиме
+    val smartPulse by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2 * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "smart_pulse"
     )
             // Внутренний сигнал от ChatScreen — включается при приветствии
         var externalWave by remember { mutableStateOf(false) }
@@ -3028,17 +3041,52 @@ for (i in 0 until sparkCount) {
                 size = Size(4f * u, 3f * u),
                 cornerRadius = CornerRadius(1.5f * u)
             )
-            drawCircle(
-                color = mediumGray,
-                radius = 1.8f * u,
-                center = pt(-46f, -4f)
-            )
-            drawCircle(
-                color = darkGray,
-                radius = 1.8f * u,
-                center = pt(-46f, -4f),
-                style = Stroke(width = 0.8f * u)
-            )
+                       // Шарик антенны: в умном режиме пульсирует и светится
+            if (isSmartMode) {
+                val pulseAmount = (sin(smartPulse) + 1f) / 2f  // 0..1
+                val currentRadius = 1.8f * u * (1f + 0.35f * pulseAmount)
+
+                // Ореол (мягкое свечение вокруг)
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            neonBlue.copy(alpha = 0.55f * pulseAmount),
+                            neonBlue.copy(alpha = 0.25f * pulseAmount),
+                            Color.Transparent
+                        ),
+                        center = pt(-46f, -4f),
+                        radius = currentRadius * 4f
+                    ),
+                    radius = currentRadius * 4f,
+                    center = pt(-46f, -4f)
+                )
+
+                // Яркий шарик
+                drawCircle(
+                    color = neonBlue.copy(alpha = 0.85f),
+                    radius = currentRadius,
+                    center = pt(-46f, -4f)
+                )
+                drawCircle(
+                    color = Color.White.copy(alpha = 0.9f),
+                    radius = currentRadius,
+                    center = pt(-46f, -4f),
+                    style = Stroke(width = 0.8f * u)
+                )
+            } else {
+                // Обычное состояние — статичный серый
+                drawCircle(
+                    color = mediumGray,
+                    radius = 1.8f * u,
+                    center = pt(-46f, -4f)
+                )
+                drawCircle(
+                    color = darkGray,
+                    radius = 1.8f * u,
+                    center = pt(-46f, -4f),
+                    style = Stroke(width = 0.8f * u)
+                )
+            }
         }
 
                 // ================= ПРАВЫЙ НАУШНИК (повёрнут к голове на 12°) =================
@@ -3095,17 +3143,52 @@ for (i in 0 until sparkCount) {
                 size = Size(4f * u, 3f * u),
                 cornerRadius = CornerRadius(1.5f * u)
             )
-            drawCircle(
-                color = mediumGray,
-                radius = 1.8f * u,
-                center = pt(46f, -4f)
-            )
-            drawCircle(
-                color = darkGray,
-                radius = 1.8f * u,
-                center = pt(46f, -4f),
-                style = Stroke(width = 0.8f * u)
-            )
+                       // Шарик антенны: в умном режиме пульсирует и светится
+            if (isSmartMode) {
+                val pulseAmount = (sin(smartPulse) + 1f) / 2f  // 0..1
+                val currentRadius = 1.8f * u * (1f + 0.35f * pulseAmount)
+
+                // Ореол (мягкое свечение вокруг)
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            neonBlue.copy(alpha = 0.55f * pulseAmount),
+                            neonBlue.copy(alpha = 0.25f * pulseAmount),
+                            Color.Transparent
+                        ),
+                        center = pt(46f, -4f),
+                        radius = currentRadius * 4f
+                    ),
+                    radius = currentRadius * 4f,
+                    center = pt(46f, -4f)
+                )
+
+                // Яркий шарик
+                drawCircle(
+                    color = neonBlue.copy(alpha = 0.85f),
+                    radius = currentRadius,
+                    center = pt(46f, -4f)
+                )
+                drawCircle(
+                    color = Color.White.copy(alpha = 0.9f),
+                    radius = currentRadius,
+                    center = pt(46f, -4f),
+                    style = Stroke(width = 0.8f * u)
+                )
+            } else {
+                // Обычное состояние — статичный серый
+                drawCircle(
+                    color = mediumGray,
+                    radius = 1.8f * u,
+                    center = pt(46f, -4f)
+                )
+                drawCircle(
+                    color = darkGray,
+                    radius = 1.8f * u,
+                    center = pt(46f, -4f),
+                    style = Stroke(width = 0.8f * u)
+                )
+            }
         }
                                        
         // ================= ГОЛОВА (обрезанный шар, выпуклый низ) =================
