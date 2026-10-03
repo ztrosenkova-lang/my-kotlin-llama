@@ -145,13 +145,49 @@ object ModelCatalog {
             description = "Русская, 0.5B, ~0.4 ГБ. Очень лёгкая. Для простых команд и заметок. Слабая, но говорит по-русски. "
         ),
 
-        // ===== 15. QWEN2.5-3B — УНИВЕРСАЛЬНАЯ (БАЗА VIBETHINKER) =====
+                // ===== 15. QWEN2.5-3B — УНИВЕРСАЛЬНАЯ (БАЗА VIBETHINKER) =====
         ModelInfo(
             id = "qwen25_3b",
             name = "Qwen2.5-3B — универсальная база",
             url = BART + "Qwen2.5-3B-Instruct-GGUF/resolve/main/Qwen2.5-3B-Instruct-Q4_K_M.gguf",
             fileName = "qwen25_3b_q4.gguf",
             description = "Базовая Qwen2.5-3B, ~1.9 ГБ. На её основе сделана VibeThinker. Универсальная, без режима «размышлений». Хороший русский, диалог, следование инструкциям. Для тех, кому не нужен thinking. "
+        ),
+
+        // ===== 16. PARABLE-GRANITE HERETIC — БЕЗ ЦЕНЗУРЫ + THINKING =====
+        ModelInfo(
+            id = "parable_granite_heretic",
+            name = "Parable-Granite 3B Heretic — без цензуры, thinking",
+            url = "https://huggingface.co/saidutta69/Parable-Granite-4.1-3B-Claude-Fable-5-heretic/resolve/main/Parable-Granite-4.1-3B-Claude-Fable-5-heretic-Q4_K_M.gguf",
+            fileName = "parable_granite_heretic_q4.gguf",
+            description = "Parable-Granite 3B с снятой цензурой (abliterated). Q4_K_M, ~2.1 ГБ. Отказы упали с 96/100 до 5/100, способности к рассуждениям и коду сохранены. Режим размышлений <think> работает. Для тех случаев, когда обычная Parable отказывается, а ответ нужен. "
+        ),
+
+        // ===== 17. NVIDIA NEMOTRON-3-NANO-4B — ОТ NVIDIA, MoE =====
+        ModelInfo(
+            id = "nemotron_3_nano_4b",
+            name = "NVIDIA Nemotron-3-Nano-4B — от NVIDIA, MoE",
+            url = "https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16/resolve/main/NVIDIA-Nemotron3-Nano-4B-Q4_K_M.gguf",
+            fileName = "nemotron_3_nano_4b_q4.gguf",
+            description = "NVIDIA Nemotron-3-Nano-4B — модель от мирового лидера, заточена под edge-устройства (NPC, ассистенты, IoT). Q4_K_M, ~2.84 ГБ. Архитектура MoE. Русский язык входит в обучающий корпус (15 языков). Отличная скорость на реальном железе. "
+        ),
+
+        // ===== 18. QWEN3.5-4B — 262K КОНТЕКСТ =====
+        ModelInfo(
+            id = "qwen35_4b",
+            name = "Qwen3.5-4B — 262K контекст",
+            url = "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_S.gguf",
+            fileName = "qwen35_4b_q4.gguf",
+            description = "Qwen3.5-4B от Alibaba, Q4_K_S, ~2.59 ГБ. Контекст 262144 токена (262K) — огромный. Режим размышлений, function calling, нативное vision (нужен mmproj — не входит). Русский язык — слабый (низкий балл MERA), для английского и мультиязычных задач — отлично. "
+        ),
+
+        // ===== 19. QVIKHR-3-4B — РУССКАЯ ОТ VIKHR =====
+        ModelInfo(
+            id = "qvikhr_3_4b",
+            name = "QVikhr-3-4B — русская, Qwen3-4B база",
+            url = "https://huggingface.co/prithivMLmods/QVikhr-3-4B-it-F32-GGUF/resolve/main/QVikhr-3-4B-Instruction.Q4_K_M.gguf",
+            fileName = "qvikhr_3_4b_q4.gguf",
+            description = "Русская модель от команды Vikhr на базе Qwen3-4B. Q4_K_M, ~2.5 ГБ. Обучена на датасете GrandMaster2. Ru Arena General = 78.2 — значительно выше базовой Qwen3-4B (64.8). Лучший выбор для русского языка среди моделей этого размера. "
         )
     )
 }
