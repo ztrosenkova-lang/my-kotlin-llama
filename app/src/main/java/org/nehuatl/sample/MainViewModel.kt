@@ -141,8 +141,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     val chatHistory = _chatHistory.asStateFlow()
 
     val temperature = MutableStateFlow(0.3f)
-    val contextSize = MutableStateFlow(2048)
-    val maxTokens = MutableStateFlow(512)
+    val contextSize = MutableStateFlow(8192)
+    val maxTokens = MutableStateFlow(2048)
 
     private val _isDarkTheme = MutableStateFlow(false)
     val isDarkTheme: StateFlow<Boolean> = _isDarkTheme.asStateFlow()
