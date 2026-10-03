@@ -20,6 +20,7 @@ fun RobotOverlayContent(
     val cloudState by viewModel.cloudState.collectAsStateWithLifecycle()
     val isModelLoaded by viewModel.isModelLoaded.collectAsStateWithLifecycle()
     val waveSignal by viewModel.overlayWaveSignal.collectAsStateWithLifecycle(initialValue = false)
+    val isSmartMode by viewModel.isSmartMode.collectAsStateWithLifecycle(initialValue = false)
 
     val isThinking = state is GenerationState.Generating ||
                      cloudState is CloudAIState.Generating
@@ -37,6 +38,7 @@ fun RobotOverlayContent(
             isIdle = isIdle,
             shouldWave = waveSignal,
             isAiReady = isModelLoaded || (cloudState is CloudAIState.Ready),
+            isSmartMode = isSmartMode,
             uDivisor = 350f,
             yOffsetUnits = 24f,
             modifier = Modifier.fillMaxHeight()
