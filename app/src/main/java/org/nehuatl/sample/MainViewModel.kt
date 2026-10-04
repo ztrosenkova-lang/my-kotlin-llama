@@ -1772,7 +1772,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _state.value = GenerationState.LoadingModel
         _isModelLoaded.value = false
 
-        scope.launch {
+                scope.launch {
             try {
                 llamaHelper.load(
                     path,
@@ -1784,6 +1784,35 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         val uri = Uri.parse(path)
                         currentModelName = getFileNameFromUri(contentResolver, uri)
                         _loadedModelName.value = currentModelName
+
+                        // Подсказка для модели-переводчика Hy-MT2
+                        if (currentModelName.contains("Hy-MT2", ignoreCase = true) ||
+                            currentModelName.contains("hy_mt2", ignoreCase = true)) {
+                            appendSystemMessage(
+                                "🌍 ЭТО МОДЕЛЬ-ПЕРЕВОДЧИК, А НЕ СОБЕСЕДНИК.\n\n" +
+                                "Она НЕ умеет вести диалог. Она только ПЕРЕВОДИТ.\n\n" +
+                                "ЧТОБЫ ПОЛЬЗОВАТЬСЯ:\n" +
+                                "1. Нажми «характер» (иконка 🧠 в панели внизу).\n" +
+                                "2. В поле «Инструкция для ИИ» вставь один из промптов:\n\n" +
+                                "• Перевести НА РУССКИЙ (с любого языка):\n" +
+                                "  «Переведи следующий текст на русский, без дополнительных объяснений:»\n\n" +
+                                "• Перевести НА АНГЛИЙСКИЙ (с любого языка):\n" +
+                                "  «Translate the following text into English, without additional explanation:»\n\n" +
+                                "• Перевести НА ИСПАНСКИЙ:\n" +
+                                "  «Traduce el siguiente texto al español, sin explicaciones adicionales:»\n\n" +
+                                "• Перевести НА НЕМЕЦКИЙ:\n" +
+                                "  «Übersetze den folgenden Text ins Deutsche, ohne zusätzliche Erklärungen:»\n\n" +
+                                "• Перевести НА ФРАНЦУЗСКИЙ:\n" +
+                                "  «Traduis le texte suivant en français, sans explication supplémentaire:»\n\n" +
+                                "• Перевести НА КИТАЙСКИЙ:\n" +
+                                "  «将以下文本翻译成中文，不要额外解释：»\n\n" +
+                                "3. Сохрани промпт и пиши текст на ЛЮБОМ языке.\n\n" +
+                                "ПРИМЕРЫ:\n" +
+                                "• Пишешь по-испански, промпт «на русский» → получаешь русский перевод.\n" +
+                                "• Пишешь по-русски, промпт «на испанский» → получаешь испанский перевод.\n\n" +
+                                "Язык перевода задаётся ПРОМПТОМ, а не тем, на каком языке ты пишешь."
+                            )
+                        }
                     }
                 )
             } catch (e: Exception) {
