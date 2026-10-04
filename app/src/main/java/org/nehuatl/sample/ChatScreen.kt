@@ -6004,7 +6004,7 @@ private fun ModelDownloadDialog(
         }
     }
 
-    descriptionModel?.let { model ->
+        descriptionModel?.let { model ->
         ModelDescriptionDialog(
             model = model,
             onDismiss = { descriptionModel = null },
