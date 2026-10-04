@@ -181,13 +181,22 @@ object ModelCatalog {
             description = "Qwen3.5-4B от Alibaba, Q4_K_S, ~2.59 ГБ. Контекст 262144 токена (262K) — огромный. Режим размышлений, function calling, нативное vision (нужен mmproj — не входит). Русский язык — слабый (низкий балл MERA), для английского и мультиязычных задач — отлично. "
         ),
 
-        // ===== 19. QVIKHR-3-4B — РУССКАЯ ОТ VIKHR =====
+                // ===== 19. QVIKHR-3-4B — РУССКАЯ ОТ VIKHR =====
         ModelInfo(
             id = "qvikhr_3_4b",
             name = "QVikhr-3-4B — русская, Qwen3-4B база",
             url = "https://huggingface.co/prithivMLmods/QVikhr-3-4B-it-F32-GGUF/resolve/main/QVikhr-3-4B-Instruction.Q4_K_M.gguf",
             fileName = "qvikhr_3_4b_q4.gguf",
             description = "Русская модель от команды Vikhr на базе Qwen3-4B. Q4_K_M, ~2.5 ГБ. Обучена на датасете GrandMaster2. Ru Arena General = 78.2 — значительно выше базовой Qwen3-4B (64.8). Лучший выбор для русского языка среди моделей этого размера. "
+        ),
+
+        // ===== 20. HY-MT2-1.8B — ПЕРЕВОДЧИК, 33 ЯЗЫКА =====
+        ModelInfo(
+            id = "hy_mt2_1_8b",
+            name = "Hy-MT2-1.8B — переводчик, 33 языка",
+            url = "https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF/resolve/main/Hy-MT2-1.8B-Q4_K_M.gguf",
+            fileName = "hy_mt2_1_8b_q4.gguf",
+            description = "Модель-ПЕРЕВОДЧИК от Tencent, а не диалоговая. Q4_K_M, ~1.13 ГБ. 33 языка, включая русский. Создана специально для телефонов — 1.25-bit версия весит всего 440 МБ. Обгоняет Microsoft Translator и Doubao. ВАЖНО: у модели нет промпта по умолчанию — для перевода нужно задать промпт вручную: «Переведи следующий текст на русский, без дополнительных объяснений:». Модель НЕ ведёт диалог — только переводит. "
         )
     )
 }
