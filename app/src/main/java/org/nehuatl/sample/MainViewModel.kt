@@ -17,7 +17,10 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.provider.Settings
+import android.speech.tts.TextToSpeech
 import android.util.Log
+import com.google.mlkit.nl.languageid.LanguageIdentification
+import com.google.mlkit.nl.languageid.LanguageIdentifier
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CoroutineScope
@@ -162,9 +165,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _showBrainEditor = MutableStateFlow(false)
     val showBrainEditor: StateFlow<Boolean> = _showBrainEditor.asStateFlow()
 
-    private val memoryFile: File by lazy {
+        private val memoryFile: File by lazy {
         File(getApplication<Application>().filesDir, "memory.txt")
     }
+
+    // ML Kit + Android TTS для озвучки не-русского текста
+    private var languageIdentifier: LanguageIdentifier? = null
+    private var androidTts: TextToSpeech? = null
+    private var androidTtsReady = false
 
     private val brainFile: File by lazy {
         File(getApplication<Application>().filesDir, "brain.txt")
@@ -405,7 +413,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             addAction(TtsService.ACTION_SPEAK_END)
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             getApplication<Application>().registerReceiver(
                 ttsReceiver,
                 ttsFilter,
@@ -413,6 +421,18 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             )
         } else {
             getApplication<Application>().registerReceiver(ttsReceiver, ttsFilter)
+        }
+
+        languageIdentifier = LanguageIdentification.getClient()
+
+        androidTts = TextToSpeech(getApplication<Application>()) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                androidTtsReady = true
+                Log.d(TAG, "Android TTS initialized")
+            } else {
+                androidTtsReady = false
+                Log.e(TAG, "Android TTS init failed: $status")
+            }
         }
 
         if (prefs.getBoolean("is_permanently_blocked", false)) {
@@ -1105,21 +1125,78 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         return cleanText.replace(Regex("\\s+"), " ").trim()
     }
 
-    fun speakText(text: String) {
+       fun speakText(text: String) {
         if (!isTtsEnabled || text.isBlank()) {
             return
         }
+        val identifier = languageIdentifier
+        if (identifier == null) {
+            speakWithSherpa(text)
+            return
+        }
+        identifier.identifyLanguage(text)
+            .addOnSuccessListener { languageCode ->
+                Log.d(TAG, "Detected language: $languageCode")
+                if (languageCode == "und" || languageCode == "ru") {
+                    speakWithSherpa(text)
+                } else {
+                    speakWithAndroidTts(text, languageCode)
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "Language detection failed: ${e.message}")
+                speakWithSherpa(text)
+            }
+    }
+
+    private fun speakWithSherpa(text: String) {
         val filteredText = filterTextForSpeech(text)
         if (filteredText.isBlank()) {
             return
         }
-
         val context = getApplication<Application>()
         val intent = Intent(context, TtsService::class.java).apply {
             action = TtsService.ACTION_SPEAK
             putExtra(TtsService.EXTRA_TEXT, filteredText)
         }
         context.startService(intent)
+    }
+
+    private fun speakWithAndroidTts(text: String, languageCode: String) {
+        val tts = androidTts
+        if (tts == null || !androidTtsReady) {
+            Log.w(TAG, "Android TTS not ready")
+            return
+        }
+        val locale = when (languageCode.lowercase()) {
+            "en" -> java.util.Locale.ENGLISH
+            "es" -> java.util.Locale("es", "ES")
+            "de" -> java.util.Locale.GERMAN
+            "fr" -> java.util.Locale.FRENCH
+            "it" -> java.util.Locale.ITALIAN
+            "pt" -> java.util.Locale("pt", "PT")
+            "zh" -> java.util.Locale.CHINESE
+            "ja" -> java.util.Locale.JAPANESE
+            "ko" -> java.util.Locale.KOREAN
+            "ar" -> java.util.Locale("ar", "SA")
+            else -> java.util.Locale.ENGLISH
+        }
+        when (tts.isLanguageAvailable(locale)) {
+            TextToSpeech.LANG_AVAILABLE,
+            TextToSpeech.LANG_COUNTRY_AVAILABLE,
+            TextToSpeech.LANG_COUNTRY_VAR_AVAILABLE -> {
+                tts.language = locale
+                tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "android_tts_${System.currentTimeMillis()}")
+            }
+            TextToSpeech.LANG_MISSING_DATA -> {
+                Log.w(TAG, "TTS missing data for $locale")
+                appendSystemMessage("⚠️ Для озвучки на этом языке установите голосовые данные в настройках Android")
+            }
+            TextToSpeech.LANG_NOT_SUPPORTED -> {
+                Log.w(TAG, "TTS not supported for $locale")
+                appendSystemMessage("⚠️ Озвучка на этом языке не поддерживается на устройстве")
+            }
+        }
     }
 
     fun clearPendingText() {
@@ -2107,11 +2184,17 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             Log.e(TAG, "Error stopping TTS service: ${e.message}")
         }
 
-        try {
+               try {
             getApplication<Application>().unregisterReceiver(ttsReceiver)
         } catch (e: Exception) {
             Log.e(TAG, "Error unregistering TTS receiver: ${e.message}")
         }
+
+        languageIdentifier?.close()
+        languageIdentifier = null
+        androidTts?.shutdown()
+        androidTts = null
+        androidTtsReady = false
     }
 }
 
