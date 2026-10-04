@@ -97,6 +97,7 @@ dependencies {
     implementation(files("libs/sherpa-onnx-1.13.6.aar"))
 
     implementation(project(":llamaCpp"))
+    implementation("com.google.mlkit:language-id:17.0.6")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
