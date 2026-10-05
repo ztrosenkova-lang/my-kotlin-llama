@@ -813,7 +813,7 @@ fun ChatScreen(
                                 .padding(16.dp)
                                 .verticalScroll(scrollState)
                         ) {
-                            chatMessages.forEach { message ->
+                                                        chatMessages.forEach { message ->
                                 val prefix = when (message.role) {
                                     "user" -> "Вы: "
                                     "assistant" -> "ИИ-Друг: "
@@ -825,13 +825,54 @@ fun ChatScreen(
                                     "assistant" -> colors.text
                                     else -> colors.text
                                 }
-                                Text(
-                                    text = prefix + message.text,
-                                    color = textColor,
-                                    fontFamily = colors.chatFont,
-                                    fontSize = 10.sp,
-                                    modifier = Modifier.padding(vertical = 2.dp)
-                                )
+                                Column(modifier = Modifier.padding(vertical = 2.dp)) {
+                                    Text(
+                                        text = prefix + message.text,
+                                        color = textColor,
+                                        fontFamily = colors.chatFont,
+                                        fontSize = 10.sp
+                                    )
+
+                                    if (!message.promptButtons.isNullOrEmpty()) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(top = 6.dp, start = 4.dp),
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            message.promptButtons.forEach { button ->
+                                                Button(
+                                                    onClick = {
+                                                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                                        val clip = android.content.ClipData.newPlainText("Prompt", button.promptText)
+                                                        clipboard.setPrimaryClip(clip)
+                                                        android.widget.Toast.makeText(
+                                                            context,
+                                                            "Промпт скопирован. Вставь в «характер»",
+                                                            android.widget.Toast.LENGTH_SHORT
+                                                        ).show()
+                                                    },
+                                                    modifier = Modifier
+                                                        .fillMaxWidth(0.6f)
+                                                        .height(30.dp),
+                                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                                    colors = ButtonDefaults.buttonColors(
+                                                        containerColor = colors.accent,
+                                                        contentColor = colors.background
+                                                    ),
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    border = BorderStroke(1.dp, colors.borderGray)
+                                                ) {
+                                                    Text(
+                                                        text = button.label,
+                                                        color = colors.background,
+                                                        fontSize = 10.sp
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
 
                             if (generatedText.isNotEmpty() && state is GenerationState.Generating) {
