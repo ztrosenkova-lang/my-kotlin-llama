@@ -35,13 +35,13 @@ object ModelCatalog {
             description = "Qwen3-4B в режиме thinking (2507). 4B, ~2.5 ГБ. Официальная Qwen с режимом размышлений. Русский язык — хорошо. Умная, следует инструкциям. Если VibeThinker заточена под код и математику, эта — универсальнее. Контекст 32K. "
         ),
 
-        // ===== 3. QWEN3-4B KIMI REASONING DISTILLED — ДУМАЮЩАЯ #3 =====
+                // ===== 3. MEDPSY-4B — МЕДИЦИНА (EN) =====
         ModelInfo(
-            id = "qwen3_kimi_reasoning",
-            name = "Qwen3-4B Kimi Reasoning — думающая",
-            url = "https://huggingface.co/khazarai/Qwen3-4B-Kimi2.5-Reasoning-Distilled-GGUF/resolve/main/qwen3-4b-thinking-2507.Q4_K_M.gguf",
-            fileName = "qwen3_kimi_reasoning_q4.gguf",
-            description = "Qwen3-4B, дистиллированная с Kimi-2.5-thinking. ~2.5 ГБ. Обучена на длинных цепочках рассуждений Kimi. Разбивает задачи, самокорректируется, даёт аналитические ответы. Третья думающая модель в списке — если две предыдущие не подошли, попробуй эту. "
+            id = "medpsy_4b",
+            name = "MedPsy-4B — медицина (English)",
+            url = "https://huggingface.co/qvac/MedPsy-4B-GGUF/resolve/main/medpsy-4b-q4_k_m-imat.gguf",
+            fileName = "medpsy_4b_q4.gguf",
+            description = "Медицинская модель от Tether на базе Qwen3-4B-Thinking. Q4_K_M ~2.72 ГБ. Reasoning-модель: показывает цепочку размышлений. HealthBench Hard = 56 — обгоняет Google MedGemma-27B. Медицина, химия, биология. ⚠️ ТОЛЬКО АНГЛИЙСКИЙ — задавай вопросы через переводчик Hy-MT2. ⚠️ Требует 4+ ГБ RAM. Не专门 по травам и грибам. "
         ),
 
         // ===== 4. GEMMA 3 4B — RUS + 128K + VISION (Q6_K) =====
@@ -73,15 +73,14 @@ object ModelCatalog {
             description = "Phi-4-mini от Microsoft. 3.8B, Q5_K_M ~2.8 ГБ. 128K контекст (131072 токена). Бьёт модели в 5–10 раз больше на MATH и GPQA. MIT-лицензия. Лучший выбор для сложной логики, математики, структурированных рассуждений. Русский — средний, но понимает. "
         ),
 
-        // ===== 7. SMOLLM3 3B — ДИАЛОГ, 128K (Q5_K_M) =====
+                // ===== 7. TUTORAI-CHEMISTRY-PHI4 — ХИМИЯ (EN) =====
         ModelInfo(
-            id = "smollm3_3b",
-            name = "SmolLM3 3B — диалог, гибрид",
-            url = BART + "HuggingFaceTB_SmolLM3-3B-GGUF/resolve/main/SmolLM3-3B-Q5_K_M.gguf",
-            fileName = "smollm3_3b_q5.gguf",
-            description = "SmolLM3 от HuggingFace. 3B, Q5_K_M ~2.3 ГБ. 128K контекст. Гибридная: может думать или просто отвечать. 6 языков (русского нет). Дружелюбная, хороша для диалога. "
+            id = "tutorai_chemistry",
+            name = "TutorAI-Chemistry-Phi4 — химия (English)",
+            url = "https://huggingface.co/mradermacher/TutorAI-Chemistry-Phi4-GGUF/resolve/main/TutorAI-Chemistry-Phi4.Q4_K_M.gguf",
+            fileName = "tutorai_chemistry_q4.gguf",
+            description = "Химический репетитор на базе Phi-4-mini (3.8B), дообучен через RL (GRPO) специально для химии. Q4_K_M ~2.6 ГБ. Разбирает молекулярные взаимодействия, стехиометрию, формулы пошагово. Показывает цепочку размышлений <think>, финальный ответ в \\boxed{}. ⚠️ ТОЛЬКО АНГЛИЙСКИЙ — задавай вопросы через переводчик Hy-MT2. "
         ),
-
         // ===== 8. MINICPM5-2B — 131K, ЛЁГКАЯ (Q6_K) =====
         ModelInfo(
             id = "minicpm5_2b",
