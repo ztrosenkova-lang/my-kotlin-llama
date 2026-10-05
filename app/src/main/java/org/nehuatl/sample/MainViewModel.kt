@@ -1701,10 +1701,16 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             return
         }
 
-        _chatHistory.value = _chatHistory.value + ChatMessage("user", text)
+               _chatHistory.value = _chatHistory.value + ChatMessage("user", text)
         userMessageCount++
 
-        if (userMessageCount >= AUTO_BRAIN_COMPRESSION_THRESHOLD) {
+        // Модель-переводчик не умеет сжимать диалоги — пропускаем сжатие
+        val isTranslatorModel = currentModelName.contains("Hy-MT2", ignoreCase = true) ||
+                                currentModelName.contains("hy_mt2", ignoreCase = true)
+
+        if (isTranslatorModel) {
+            userMessageCount = 0
+        } else if (userMessageCount >= AUTO_BRAIN_COMPRESSION_THRESHOLD) {
             userMessageCount = 0
 
             // Сохраняем сообщение — отправим его после завершения сжатия
