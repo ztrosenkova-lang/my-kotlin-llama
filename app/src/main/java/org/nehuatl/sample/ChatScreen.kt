@@ -587,9 +587,10 @@ fun ChatScreen(
         MaterialTheme(
             colorScheme = if (isDarkTheme) darkColorScheme() else lightColorScheme()
         ) {
-            MemoryEditorDialog(
+                       MemoryEditorDialog(
                 initialText = viewModel.readFromLongTermMemory(),
                 onSave = { viewModel.overwriteLongTermMemory(it) },
+                onRestoreBase = { viewModel.restoreBaseMemory() },
                 onDismiss = { showMemoryEditor = false },
                 colors = colors
             )
@@ -5533,6 +5534,7 @@ private fun HelpDialog(
 private fun MemoryEditorDialog(
     initialText: String,
     onSave: (String) -> Unit,
+    onRestoreBase: () -> Unit,
     onDismiss: () -> Unit,
     colors: AppColors
 ) {
@@ -5567,7 +5569,12 @@ private fun MemoryEditorDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Закрыть", color = colors.text) }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = { onRestoreBase(); onDismiss() }) {
+                    Text("📚 Восстановить базовые", color = colors.accent)
+                }
+                TextButton(onClick = onDismiss) { Text("Закрыть", color = colors.text) }
+            }
         }
     )
 }
