@@ -4093,14 +4093,15 @@ drawPath(
     style = Stroke(width = 0.7f * u, cap = StrokeCap.Round)
 )
         
-                // ================= РОТ (с анимациями под стиль хищника) =================
+                                // ================= РОТ (с анимациями под стиль хищника) =================
 // Позиция рта — под визором, центрирована
 val mouthY = 52f
-val mouthBaseWidth = 20f * u
+val mouthBaseWidth = 24f * u
+val mouthBaseHeight = 10f * u
 
 // Анимация для speaking — пульсация высоты
 val mouthOpenHeight = if (isSpeaking) {
-    (4f + 3f * sin(mouthPhase * 2f)) * u
+    (5f + 3.5f * sin(mouthPhase * 2f)) * u
 } else {
     0f
 }
@@ -4113,30 +4114,135 @@ val thinkingTwitch = if (isThinking) {
 }
 
 if (isSpeaking) {
-    // ========== ОТКРЫТЫЙ РОТ (говорит) ==========
-    // Внешний овал (тёмный)
-    drawOval(
-        color = darkerGray,
-        topLeft = pt(-10f, mouthY - mouthOpenHeight / u / 2f),
-        size = Size(mouthBaseWidth, mouthOpenHeight * 2f),
+    // ========== ДИНАМИЧЕСКИЙ РОТ (говорит) ==========
+    // Форма меняется: широкая/узкая/круглая — в такт mouthPhase
+    val widthOscillate = 1f + 0.25f * sin(mouthPhase * 1.7f)   // 0.75..1.25
+    val heightOscillate = 1f + 0.35f * sin(mouthPhase * 2.3f)  // 0.65..1.35
+
+    val currentWidth = mouthBaseWidth * widthOscillate
+    val currentHeight = mouthOpenHeight * heightOscillate
+    val halfW = currentWidth / 2f
+    val halfH = currentHeight / 2f
+
+    // Внешний контур рта (Path, а не овал — форма меняется)
+    val outerMouthPath = Path().apply {
+        val cx = pt(0f, mouthY).x
+        val cy = pt(0f, mouthY).y
+        moveTo(cx - halfW, cy)
+        // Левая половина — верхняя дуга
+        cubicTo(
+            cx - halfW * 0.6f, cy - halfH,
+            cx + halfW * 0.6f, cy - halfH,
+            cx + halfW, cy
+        )
+        // Правая половина — нижняя дуга
+        cubicTo(
+            cx + halfW * 0.6f, cy + halfH,
+            cx - halfW * 0.6f, cy + halfH,
+            cx - halfW, cy
+        )
+        close()
+    }
+
+    // Тёмный внешний контур
+    drawPath(outerMouthPath, color = darkerGray)
+
+    // Внутренняя глубина (чёрный)
+    val innerMouthPath = Path().apply {
+        val cx = pt(0f, mouthY).x
+        val cy = pt(0f, mouthY).y
+        val iw = halfW * 0.78f
+        val ih = halfH * 0.78f
+        moveTo(cx - iw, cy)
+        cubicTo(
+            cx - iw * 0.6f, cy - ih,
+            cx + iw * 0.6f, cy - ih,
+            cx + iw, cy
+        )
+        cubicTo(
+            cx + iw * 0.6f, cy + ih,
+            cx - iw * 0.6f, cy + ih,
+            cx - iw, cy
+        )
+        close()
+    }
+    drawPath(innerMouthPath, color = Color(0xFF050510))
+
+    // ========== ОРЕОЛ СВЕЧЕНИЯ ВОКРУГ РТА ==========
+    val glowPulse = 0.6f + 0.4f * sin(mouthPhase * 3f)
+    drawCircle(
+        brush = Brush.radialGradient(
+            colors = listOf(
+                neonBlue.copy(alpha = 0.55f * glowPulse),
+                neonBlue.copy(alpha = 0.25f * glowPulse),
+                Color.Transparent
+            ),
+            center = pt(0f, mouthY),
+            radius = currentWidth * 1.1f
+        ),
+        radius = currentWidth * 1.1f,
+        center = pt(0f, mouthY)
     )
-    
-    // Внутренний овал (чёрный — глубина рта)
-    drawOval(
-        color = Color(0xFF050510),
-        topLeft = pt(-8f, mouthY - mouthOpenHeight / u / 2f + 0.5f),
-        size = Size(16f * u, mouthOpenHeight * 2f - 1f * u)
-    )
-    
-    // Неоновая подсветка внутри рта (эффект энергии)
-    if (mouthOpenHeight > 3f * u) {
-        drawOval(
-            color = neonBluePulse.copy(alpha = 0.3f),
-            topLeft = pt(-6f, mouthY - mouthOpenHeight / u / 2f + 2f),
-            size = Size(12f * u, mouthOpenHeight * 1.5f)
+
+    // Внутреннее свечение (энергия изо рта)
+    if (currentHeight > 3f * u) {
+        drawPath(
+            path = innerMouthPath,
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color.White.copy(alpha = 0.7f * glowPulse),
+                    neonBlue.copy(alpha = 0.5f * glowPulse),
+                    Color.Transparent
+                ),
+                center = pt(0f, mouthY),
+                radius = currentWidth * 0.6f
+            )
         )
     }
-    
+
+    // ========== ЭКВАЛАЙЗЕР ВНУТРИ РТА (5 полосок) ==========
+    val barCount = 5
+    val barSpacing = currentWidth / (barCount + 1)
+    for (i in 0 until barCount) {
+        val barX = -currentWidth / 2f + barSpacing * (i + 1)
+        // Каждая полоска колеблется со своей фазой
+        val barPhase = mouthPhase * 2f + i * 1.1f
+        val barHeightFactor = 0.3f + 0.7f * abs(sin(barPhase))
+        val barH = currentHeight * 0.7f * barHeightFactor
+        val barW = 1.2f * u
+
+        // Цвет полоски — от белого к голубому
+        val barColor = if (barHeightFactor > 0.7f) {
+            Color.White.copy(alpha = 0.95f)
+        } else {
+            neonBlue.copy(alpha = 0.85f)
+        }
+
+        // Тень полоски (для контраста на чёрном)
+        drawRoundRect(
+            color = barColor,
+            topLeft = pt(barX - barW / 2f, mouthY - barH / 2f / u),
+            size = Size(barW, barH),
+            cornerRadius = CornerRadius(barW / 2f)
+        )
+
+        // Ореол вокруг ярких полосок
+        if (barHeightFactor > 0.8f) {
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        neonBlue.copy(alpha = 0.5f),
+                        Color.Transparent
+                    ),
+                    center = pt(barX, mouthY),
+                    radius = barW * 3f
+                ),
+                radius = barW * 3f,
+                center = pt(barX, mouthY)
+            )
+        }
+    }
+
 } else if (isThinking) {
     // ========== ЗАДУМЧИВАЯ ЛИНИЯ (думает) ==========
     // Прямая линия с лёгким подрагиванием
