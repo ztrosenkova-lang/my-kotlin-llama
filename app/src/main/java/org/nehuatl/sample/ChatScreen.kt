@@ -370,8 +370,8 @@ fun ChatScreen(
 
     val isFirstLaunch by viewModel.isFirstLaunch.collectAsStateWithLifecycle(initialValue = false)
 
-    LaunchedEffect(isTtsReady) {
-        if (isTtsReady && !welcomeStarted) {
+        LaunchedEffect(isTtsReady, isAppLocked) {
+        if (isTtsReady && !welcomeStarted && !isAppLocked) {
             welcomeStarted = true
             val greeting = if (isFirstLaunch) {
                 fullWelcomeString
