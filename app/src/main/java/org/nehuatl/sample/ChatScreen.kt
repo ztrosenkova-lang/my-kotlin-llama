@@ -5219,44 +5219,75 @@ private fun PromptSettingsPanel(
                     cursorColor = colors.accent
                 )
             )
-                        Spacer(modifier = Modifier.height(12.dp))
+                                   Spacer(modifier = Modifier.height(12.dp))
 
-Button(
-    onClick = onSave,
-    colors = ButtonDefaults.buttonColors(containerColor = colors.accent),
+Column(
     modifier = Modifier.fillMaxWidth(),
-    shape = RoundedCornerShape(12.dp),
-    border = BorderStroke(1.dp, colors.borderGray)
+    horizontalAlignment = Alignment.CenterHorizontally,
+    verticalArrangement = Arrangement.spacedBy(6.dp)
 ) {
-    Text("Сохранить", color = colors.background, fontSize = 14.sp)
-}
-
-Spacer(modifier = Modifier.height(8.dp))
-
-Button(
-    onClick = {
-        val context = context
-        try {
-            val intent = Intent("com.android.settings.TTS_SETTINGS")
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(intent)
-        } catch (e: Exception) {
-            android.util.Log.e("PromptSettingsPanel", "Не удалось открыть настройки TTS: ${e.message}")
-            try {
-                val fallbackIntent = Intent(android.speech.tts.TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA)
-                fallbackIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(fallbackIntent)
-            } catch (e2: Exception) {
-                android.util.Log.e("PromptSettingsPanel", "Fallback тоже не сработал: ${e2.message}")
-            }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Button(
+            onClick = onSave,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = colors.accent,
+                contentColor = colors.background
+            ),
+            shape = RoundedCornerShape(10.dp),
+            border = BorderStroke(1.dp, colors.borderGray),
+            modifier = Modifier.weight(1f).height(38.dp),
+            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+        ) {
+            Text("Сохранить", color = colors.background, fontSize = 12.sp)
         }
-    },
-    colors = ButtonDefaults.buttonColors(containerColor = colors.borderGray),
-    modifier = Modifier.fillMaxWidth(),
-    shape = RoundedCornerShape(12.dp),
-    border = BorderStroke(1.dp, colors.borderGray)
-) {
-    Text("🔊 Настроить TTS (языки озвучки)", color = colors.text, fontSize = 14.sp)
+
+        Button(
+            onClick = onDismiss,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = colors.accent,
+                contentColor = colors.background
+            ),
+            shape = RoundedCornerShape(10.dp),
+            border = BorderStroke(1.dp, colors.borderGray),
+            modifier = Modifier.weight(1f).height(38.dp),
+            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+        ) {
+            Text("Закрыть", color = colors.background, fontSize = 12.sp)
+        }
+    }
+
+    Button(
+        onClick = {
+            try {
+                val intent = Intent("com.android.settings.TTS_SETTINGS")
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                android.util.Log.e("PromptSettingsPanel", "Не удалось открыть настройки TTS: ${e.message}")
+                try {
+                    val fallbackIntent = Intent(android.speech.tts.TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA)
+                    fallbackIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(fallbackIntent)
+                } catch (e2: Exception) {
+                    android.util.Log.e("PromptSettingsPanel", "Fallback тоже не сработал: ${e2.message}")
+                }
+            }
+        },
+        colors = ButtonDefaults.buttonColors(
+            containerColor = colors.borderGray,
+            contentColor = colors.text
+        ),
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.dp, colors.borderGray),
+        modifier = Modifier.fillMaxWidth(0.7f).height(36.dp),
+        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+    ) {
+        Text("🔊 Настроить TTS", color = colors.text, fontSize = 11.sp)
+    }
 }
         }
     }
@@ -5563,19 +5594,62 @@ private fun MemoryEditorDialog(
                 )
             )
         },
-        confirmButton = {
-            Button(onClick = { onSave(text); onDismiss() }, colors = ButtonDefaults.buttonColors(containerColor = colors.accent)) {
-                Text("Сохранить", color = colors.background)
+                confirmButton = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Button(
+                        onClick = { onSave(text); onDismiss() },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = colors.accent,
+                            contentColor = colors.background
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, colors.borderGray),
+                        modifier = Modifier.weight(1f).height(38.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                    ) {
+                        Text("Сохранить", color = colors.background, fontSize = 12.sp)
+                    }
+
+                    Button(
+                        onClick = onDismiss,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = colors.accent,
+                            contentColor = colors.background
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, colors.borderGray),
+                        modifier = Modifier.weight(1f).height(38.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                    ) {
+                        Text("Закрыть", color = colors.background, fontSize = 12.sp)
+                    }
+                }
+
+                Button(
+                    onClick = { onRestoreBase(); onDismiss() },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = colors.borderGray,
+                        contentColor = colors.text
+                    ),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, colors.borderGray),
+                    modifier = Modifier.fillMaxWidth(0.6f).height(36.dp),
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                ) {
+                    Text("📚 Восстановить базовые", color = colors.text, fontSize = 11.sp)
+                }
             }
         },
-        dismissButton = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = { onRestoreBase(); onDismiss() }) {
-                    Text("📚 Восстановить базовые", color = colors.accent)
-                }
-                TextButton(onClick = onDismiss) { Text("Закрыть", color = colors.text) }
-            }
-        }
+        dismissButton = null
     )
 }
 
