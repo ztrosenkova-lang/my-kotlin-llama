@@ -239,6 +239,7 @@ fun ChatScreen(
     val isFloatingRobotRunning by viewModel.floatingRobotRunning.collectAsStateWithLifecycle(initialValue = false)
     val isCompressing by viewModel.isCompressing.collectAsStateWithLifecycle(initialValue = false)
     val isSmartMode by viewModel.isSmartMode.collectAsStateWithLifecycle(initialValue = false)
+    val activeTranslationPrompt by viewModel.activeTranslationPrompt.collectAsStateWithLifecycle(initialValue = null)
 
     val colors = if (isDarkTheme) DarkColors else LightColors
 
@@ -835,7 +836,7 @@ fun ChatScreen(
                                         fontSize = 10.sp
                                     )
 
-                                    if (!message.promptButtons.isNullOrEmpty()) {
+                                                                        if (!message.promptButtons.isNullOrEmpty()) {
                                         Column(
                                             modifier = Modifier
                                                 .fillMaxWidth()
@@ -843,30 +844,27 @@ fun ChatScreen(
                                             verticalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
                                             message.promptButtons.forEach { button ->
+                                                val isActive = activeTranslationPrompt == button.promptText
                                                 Button(
                                                     onClick = {
-                                                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                                        val clip = android.content.ClipData.newPlainText("Prompt", button.promptText)
-                                                        clipboard.setPrimaryClip(clip)
-                                                        android.widget.Toast.makeText(
-                                                            context,
-                                                            "Промпт скопирован. Вставь в «характер»",
-                                                            android.widget.Toast.LENGTH_SHORT
-                                                        ).show()
+                                                        viewModel.applyTranslationPrompt(button.promptText, button.label)
                                                     },
                                                     modifier = Modifier
                                                         .fillMaxWidth(0.6f)
                                                         .height(30.dp),
                                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                                                     colors = ButtonDefaults.buttonColors(
-                                                        containerColor = colors.accent,
+                                                        containerColor = if (isActive) Color(0xFF4CAF50) else colors.accent,
                                                         contentColor = colors.background
                                                     ),
                                                     shape = RoundedCornerShape(8.dp),
-                                                    border = BorderStroke(1.dp, colors.borderGray)
+                                                    border = BorderStroke(
+                                                        width = if (isActive) 2.dp else 1.dp,
+                                                        color = if (isActive) Color(0xFF2E7D32) else colors.borderGray
+                                                    )
                                                 ) {
                                                     Text(
-                                                        text = button.label,
+                                                        text = if (isActive) "${button.label} ✅" else button.label,
                                                         color = colors.background,
                                                         fontSize = 10.sp
                                                     )
