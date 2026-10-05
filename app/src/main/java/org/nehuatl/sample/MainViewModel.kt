@@ -1329,7 +1329,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         context.startService(intent)
     }
 
-    private fun speakWithAndroidTts(text: String, languageCode: String) {
+       private fun speakWithAndroidTts(text: String, languageCode: String) {
         val tts = androidTts
         if (tts == null || !androidTtsReady) {
             Log.w(TAG, "Android TTS not ready")
@@ -1348,20 +1348,67 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             "ar" -> java.util.Locale("ar", "SA")
             else -> java.util.Locale.ENGLISH
         }
-        when (tts.isLanguageAvailable(locale)) {
-            TextToSpeech.LANG_AVAILABLE,
-            TextToSpeech.LANG_COUNTRY_AVAILABLE,
-            TextToSpeech.LANG_COUNTRY_VAR_AVAILABLE -> {
+
+        val availability = tts.isLanguageAvailable(locale)
+
+        // Проверка: язык "поддерживается", но голосовые данные не установлены
+        val voiceMissingData = try {
+            val voice = tts.voices?.find { v ->
+                v.locale.language.equals(locale.language, ignoreCase = true) &&
+                v.locale.country.equals(locale.country, ignoreCase = true)
+            } ?: tts.voices?.find { v ->
+                v.locale.language.equals(locale.language, ignoreCase = true)
+            }
+            voice?.features?.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) == true
+        } catch (e: Exception) {
+            false
+        }
+
+        when {
+            voiceMissingData -> {
+                Log.w(TAG, "TTS voice data NOT INSTALLED for $locale")
+                appendSystemMessage("⚠️ Голосовые данные для этого языка не установлены. Открываю настройки — скачай пакет для нужного языка.")
+                openTtsSettings()
+            }
+            availability == TextToSpeech.LANG_AVAILABLE ||
+            availability == TextToSpeech.LANG_COUNTRY_AVAILABLE ||
+            availability == TextToSpeech.LANG_COUNTRY_VAR_AVAILABLE -> {
                 tts.language = locale
                 tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "android_tts_${System.currentTimeMillis()}")
             }
-            TextToSpeech.LANG_MISSING_DATA -> {
-                Log.w(TAG, "TTS missing data for $locale")
-                appendSystemMessage("⚠️ Для озвучки на этом языке установите голосовые данные в настройках Android")
+            availability == TextToSpeech.LANG_MISSING_DATA -> {
+                Log.w(TAG, "TTS LANG_MISSING_DATA for $locale")
+                appendSystemMessage("⚠️ Голосовые данные для этого языка не установлены. Открываю настройки — скачай пакет.")
+                openTtsSettings()
             }
-            TextToSpeech.LANG_NOT_SUPPORTED -> {
-                Log.w(TAG, "TTS not supported for $locale")
-                appendSystemMessage("⚠️ Озвучка на этом языке не поддерживается на устройстве")
+            availability == TextToSpeech.LANG_NOT_SUPPORTED -> {
+                Log.w(TAG, "TTS LANG_NOT_SUPPORTED for $locale")
+                appendSystemMessage("⚠️ Озвучка на этом языке не поддерживается на устройстве. Установи другой TTS-движок в настройках Android.")
+            }
+            else -> {
+                Log.w(TAG, "TTS unknown availability: $availability for $locale")
+                appendSystemMessage("⚠️ Не удалось озвучить текст на этом языке. Проверь настройки TTS в Android.")
+            }
+        }
+    }
+
+    private fun openTtsSettings() {
+        val context = getApplication<Application>()
+        try {
+            val intent = Intent("com.android.settings.TTS_SETTINGS")
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+            Log.d(TAG, "Opened TTS settings")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to open TTS settings: ${e.message}, trying fallback")
+            try {
+                val fallback = Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA)
+                fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(fallback)
+                Log.d(TAG, "Opened TTS install data fallback")
+            } catch (e2: Exception) {
+                Log.e(TAG, "Fallback also failed: ${e2.message}")
+                appendSystemMessage("⚠️ Не удалось открыть настройки TTS. Открой вручную: Настройки → Язык и ввод → Синтез речи.")
             }
         }
     }
