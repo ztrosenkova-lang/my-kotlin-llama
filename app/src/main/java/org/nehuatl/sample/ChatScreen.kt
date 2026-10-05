@@ -761,7 +761,7 @@ fun ChatScreen(
                 )
             }
 
-                        if (showPromptSettings) {
+    if (showPromptSettings) {
        PromptSettingsPanel(
         promptText = tempPromptText,
         onPromptChange = { tempPromptText = it },
@@ -769,7 +769,8 @@ fun ChatScreen(
             viewModel.updateSystemPrompt(tempPromptText)
             showPromptSettings = false
         },
-        colors = colors
+        colors = colors,
+        context = context
     )
 }
 
@@ -5189,7 +5190,8 @@ private fun PromptSettingsPanel(
     promptText: String,
     onPromptChange: (String) -> Unit,
     onSave: () -> Unit,
-    colors: AppColors
+    colors: AppColors,
+    context: android.content.Context
 ) {
     Card(
         colors = CardDefaults.cardColors(containerColor = colors.surfaceGray),
@@ -5216,7 +5218,7 @@ private fun PromptSettingsPanel(
                     cursorColor = colors.accent
                 )
             )
-            Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
 
 Button(
     onClick = onSave,
@@ -5226,6 +5228,34 @@ Button(
     border = BorderStroke(1.dp, colors.borderGray)
 ) {
     Text("Сохранить", color = colors.background, fontSize = 14.sp)
+}
+
+Spacer(modifier = Modifier.height(8.dp))
+
+Button(
+    onClick = {
+        val context = context
+        try {
+            val intent = Intent("com.android.settings.TTS_SETTINGS")
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            android.util.Log.e("PromptSettingsPanel", "Не удалось открыть настройки TTS: ${e.message}")
+            try {
+                val fallbackIntent = Intent(android.speech.tts.TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA)
+                fallbackIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(fallbackIntent)
+            } catch (e2: Exception) {
+                android.util.Log.e("PromptSettingsPanel", "Fallback тоже не сработал: ${e2.message}")
+            }
+        }
+    },
+    colors = ButtonDefaults.buttonColors(containerColor = colors.borderGray),
+    modifier = Modifier.fillMaxWidth(),
+    shape = RoundedCornerShape(12.dp),
+    border = BorderStroke(1.dp, colors.borderGray)
+) {
+    Text("🔊 Настроить TTS (языки озвучки)", color = colors.text, fontSize = 14.sp)
 }
         }
     }
