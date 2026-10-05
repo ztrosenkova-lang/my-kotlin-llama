@@ -1806,9 +1806,16 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             .distinct()
     }
 
-    private fun buildSystemPrompt(commandType: String, prompt: String): String {
+       private fun buildSystemPrompt(commandType: String, prompt: String): String {
         val basePrompt = _systemPrompt.value
         val lowerPrompt = prompt.lowercase()
+
+        // Для модели-переводчика системный промпт не трогаем — это чистый промпт перевода
+        val isTranslator = currentModelName.contains("Hy-MT2", ignoreCase = true) ||
+                           currentModelName.contains("hy_mt2", ignoreCase = true)
+        if (isTranslator) {
+            return basePrompt
+        }
 
         return buildString {
             append(basePrompt)
@@ -1905,60 +1912,66 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             return
         }
 
-        val lowerText = text.lowercase()
+                val lowerText = text.lowercase()
 
-        when {
-            lowerText.contains(BRAIN_EDIT_COMMAND) -> {
-                showBrainEditor()
-                appendSystemMessage("🧠 Открыт редактор Brain.txt")
-                return
-            }
-            lowerText.contains(REMEMBER_COMMAND) -> {
-                val cleanText = text.substringAfter(REMEMBER_COMMAND).trim()
-                if (cleanText.isNotEmpty()) {
-                    saveToLongTermMemory(cleanText)
-                } else {
-                    appendSystemMessage("⚠️ Что именно мне нужно запомнить?")
+        // Если загружена модель-переводчик, команды памяти игнорируются —
+        // весь текст уходит в переводчик как есть
+        val isTranslator = currentModelName.contains("Hy-MT2", ignoreCase = true) ||
+                           currentModelName.contains("hy_mt2", ignoreCase = true)
+
+        if (!isTranslator) {
+            when {
+                lowerText.contains(BRAIN_EDIT_COMMAND) -> {
+                    showBrainEditor()
+                    appendSystemMessage("🧠 Открыт редактор Brain.txt")
+                    return
                 }
-                return
-            }
-            lowerText.contains(ALARM_COMMAND) || lowerText.contains(REMIND_COMMAND) -> {
-                handleAlarmCommand(text)
-                return
-            }
-                       lowerText.contains(RECALL_COMMAND) || lowerText.contains(FIND_COMMAND) || lowerText.contains(SEARCH_COMMAND) || lowerText.contains(CHAT_LOOKUP_COMMAND) -> {
-                if (_currentMode.value == AIMode.NEUTRAL) {
-                    when {
-                        lowerText.contains(CHAT_LOOKUP_COMMAND) -> {
-                            val chatData = searchChat(text)
-                            if (chatData.isNotEmpty()) {
-                                appendSystemMessage("💬 Найдено в истории чата:\n$chatData")
-                            } else {
-                                appendSystemMessage("💬 В истории чата ничего не найдено")
-                            }
-                        }
-                        lowerText.contains(RECALL_COMMAND) -> {
-                            val brainData = searchBrain(text)
-                            if (brainData.isNotEmpty()) {
-                                appendSystemMessage("🧠 Найдено в Brain.txt:\n$brainData")
-                            } else {
-                                appendSystemMessage("🧠 В Brain.txt ничего не найдено")
-                            }
-                        }
-                        else -> {
-                            val memoryData = searchMemory(text, null)
-                            if (memoryData.isNotEmpty()) {
-                                appendSystemMessage("🔍 Найдено в базе знаний:\n$memoryData")
-                            } else {
-                                appendSystemMessage("🔍 Ничего не найдено. Перефразируйте запрос.")
-                            }
-                        }
+                lowerText.contains(REMEMBER_COMMAND) -> {
+                    val cleanText = text.substringAfter(REMEMBER_COMMAND).trim()
+                    if (cleanText.isNotEmpty()) {
+                        saveToLongTermMemory(cleanText)
+                    } else {
+                        appendSystemMessage("⚠️ Что именно мне нужно запомнить?")
                     }
                     return
                 }
+                lowerText.contains(ALARM_COMMAND) || lowerText.contains(REMIND_COMMAND) -> {
+                    handleAlarmCommand(text)
+                    return
+                }
+                lowerText.contains(RECALL_COMMAND) || lowerText.contains(FIND_COMMAND) || lowerText.contains(SEARCH_COMMAND) || lowerText.contains(CHAT_LOOKUP_COMMAND) -> {
+                    if (_currentMode.value == AIMode.NEUTRAL) {
+                        when {
+                            lowerText.contains(CHAT_LOOKUP_COMMAND) -> {
+                                val chatData = searchChat(text)
+                                if (chatData.isNotEmpty()) {
+                                    appendSystemMessage("💬 Найдено в истории чата:\n$chatData")
+                                } else {
+                                    appendSystemMessage("💬 В истории чата ничего не найдено")
+                                }
+                            }
+                            lowerText.contains(RECALL_COMMAND) -> {
+                                val brainData = searchBrain(text)
+                                if (brainData.isNotEmpty()) {
+                                    appendSystemMessage("🧠 Найдено в Brain.txt:\n$brainData")
+                                } else {
+                                    appendSystemMessage("🧠 В Brain.txt ничего не найдено")
+                                }
+                            }
+                            else -> {
+                                val memoryData = searchMemory(text, null)
+                                if (memoryData.isNotEmpty()) {
+                                    appendSystemMessage("🔍 Найдено в базе знаний:\n$memoryData")
+                                } else {
+                                    appendSystemMessage("🔍 Ничего не найдено. Перефразируйте запрос.")
+                                }
+                            }
+                        }
+                        return
+                    }
+                }
             }
         }
-
                 when (_currentMode.value) {
             AIMode.LOCAL -> {
                 if (_isModelLoaded.value) {
