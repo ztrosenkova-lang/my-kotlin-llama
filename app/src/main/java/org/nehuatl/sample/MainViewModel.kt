@@ -2028,12 +2028,21 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     path,
                     contextSize.value,
                     if (mmprojPath.isNullOrEmpty()) null else mmprojPath,
-                    { id ->
+                                        { id ->
                         _state.value = GenerationState.ModelLoaded(path)
                         _isModelLoaded.value = true
                         val uri = Uri.parse(path)
                         currentModelName = getFileNameFromUri(contentResolver, uri)
                         _loadedModelName.value = currentModelName
+
+                        // Если активен промпт переводчика, а загружена не Hy-MT2 — сбрасываем
+                        val isTranslator = currentModelName.contains("Hy-MT2", ignoreCase = true) ||
+                                           currentModelName.contains("hy_mt2", ignoreCase = true)
+                        if (!isTranslator && _activeTranslationPrompt.value != null) {
+                            _activeTranslationPrompt.value = null
+                            _systemPrompt.value = "Ты — полезный, умный и лаконичный ИИ-ассистент. Отвечай строго на русском языке."
+                            appendSystemMessage("🔄 Промпт переводчика сброшен — загружена не модель-переводчик")
+                        }
 
                                                 // Подсказка для модели-переводчика Hy-MT2
                         if (currentModelName.contains("Hy-MT2", ignoreCase = true) ||
@@ -2352,8 +2361,23 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _cloudGeneratedText.value = ""
     }
 
-    fun updateSystemPrompt(newPrompt: String) {
+        fun updateSystemPrompt(newPrompt: String) {
         _systemPrompt.value = newPrompt
+    }
+
+    // Активный промпт переводчика (для подсветки кнопки языка)
+    private val _activeTranslationPrompt = MutableStateFlow<String?>(null)
+    val activeTranslationPrompt: StateFlow<String?> = _activeTranslationPrompt.asStateFlow()
+
+    fun applyTranslationPrompt(promptText: String, label: String) {
+        _systemPrompt.value = promptText
+        _activeTranslationPrompt.value = promptText
+        appendSystemMessage("✅ Промпт «$label» активирован. Говори или пиши — модель переведёт.")
+        Log.d(TAG, "Translation prompt applied: $label")
+    }
+
+    fun clearActiveTranslationPrompt() {
+        _activeTranslationPrompt.value = null
     }
 
     fun updateTemperature(temp: Float) {
