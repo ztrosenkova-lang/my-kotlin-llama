@@ -763,12 +763,15 @@ fun ChatScreen(
                 )
             }
 
-    if (showPromptSettings) {
+        if (showPromptSettings) {
        PromptSettingsPanel(
         promptText = tempPromptText,
         onPromptChange = { tempPromptText = it },
         onSave = {
             viewModel.updateSystemPrompt(tempPromptText)
+            showPromptSettings = false
+        },
+        onDismiss = {
             showPromptSettings = false
         },
         colors = colors,
@@ -5295,6 +5298,7 @@ private fun PromptSettingsPanel(
     promptText: String,
     onPromptChange: (String) -> Unit,
     onSave: () -> Unit,
+    onDismiss: () -> Unit,
     colors: AppColors,
     context: android.content.Context
 ) {
