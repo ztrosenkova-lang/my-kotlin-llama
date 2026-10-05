@@ -47,7 +47,16 @@ import android.security.keystore.KeyProperties
 import java.security.KeyPairGenerator
 import kotlin.math.log10
 
-data class ChatMessage(val role: String, val text: String)
+data class PromptButton(
+    val label: String,
+    val promptText: String
+)
+
+data class ChatMessage(
+    val role: String,
+    val text: String,
+    val promptButtons: List<PromptButton>? = null
+)
 
 enum class DownloadStatus {
     IDLE,
@@ -1885,32 +1894,47 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         currentModelName = getFileNameFromUri(contentResolver, uri)
                         _loadedModelName.value = currentModelName
 
-                        // Подсказка для модели-переводчика Hy-MT2
+                                                // Подсказка для модели-переводчика Hy-MT2
                         if (currentModelName.contains("Hy-MT2", ignoreCase = true) ||
                             currentModelName.contains("hy_mt2", ignoreCase = true)) {
-                            appendSystemMessage(
+                            val translationButtons = listOf(
+                                PromptButton(
+                                    label = "🇷🇺 На русский",
+                                    promptText = "Переведи следующий текст на русский, без дополнительных объяснений:"
+                                ),
+                                PromptButton(
+                                    label = "🇬🇧 На английский",
+                                    promptText = "Translate the following text into English, without additional explanation:"
+                                ),
+                                PromptButton(
+                                    label = "🇪🇸 На испанский",
+                                    promptText = "Traduce el siguiente texto al español, sin explicaciones adicionales:"
+                                ),
+                                PromptButton(
+                                    label = "🇩🇪 На немецкий",
+                                    promptText = "Übersetze den folgenden Text ins Deutsche, ohne zusätzliche Erklärungen:"
+                                ),
+                                PromptButton(
+                                    label = "🇫🇷 На французский",
+                                    promptText = "Traduis le texte suivant en français, sans explication supplémentaire:"
+                                ),
+                                PromptButton(
+                                    label = "🇨🇳 На китайский",
+                                    promptText = "将以下文本翻译成中文，不要额外解释："
+                                )
+                            )
+                            appendSystemMessageWithButtons(
                                 "🌍 ЭТО МОДЕЛЬ-ПЕРЕВОДЧИК, А НЕ СОБЕСЕДНИК.\n\n" +
                                 "Она НЕ умеет вести диалог. Она только ПЕРЕВОДИТ.\n\n" +
                                 "ЧТОБЫ ПОЛЬЗОВАТЬСЯ:\n" +
                                 "1. Нажми «характер» (иконка 🧠 в панели внизу).\n" +
-                                "2. В поле «Инструкция для ИИ» вставь один из промптов:\n\n" +
-                                "• Перевести НА РУССКИЙ (с любого языка):\n" +
-                                "  «Переведи следующий текст на русский, без дополнительных объяснений:»\n\n" +
-                                "• Перевести НА АНГЛИЙСКИЙ (с любого языка):\n" +
-                                "  «Translate the following text into English, without additional explanation:»\n\n" +
-                                "• Перевести НА ИСПАНСКИЙ:\n" +
-                                "  «Traduce el siguiente texto al español, sin explicaciones adicionales:»\n\n" +
-                                "• Перевести НА НЕМЕЦКИЙ:\n" +
-                                "  «Übersetze den folgenden Text ins Deutsche, ohne zusätzliche Erklärungen:»\n\n" +
-                                "• Перевести НА ФРАНЦУЗСКИЙ:\n" +
-                                "  «Traduis le texte suivant en français, sans explication supplémentaire:»\n\n" +
-                                "• Перевести НА КИТАЙСКИЙ:\n" +
-                                "  «将以下文本翻译成中文，不要额外解释：»\n\n" +
+                                "2. В поле «Инструкция для ИИ» вставь один из промптов — тапни на кнопку нужного языка ниже, промпт скопируется в буфер. Потом вставь его в «характер».\n" +
                                 "3. Сохрани промпт и пиши текст на ЛЮБОМ языке.\n\n" +
                                 "ПРИМЕРЫ:\n" +
                                 "• Пишешь по-испански, промпт «на русский» → получаешь русский перевод.\n" +
                                 "• Пишешь по-русски, промпт «на испанский» → получаешь испанский перевод.\n\n" +
-                                "Язык перевода задаётся ПРОМПТОМ, а не тем, на каком языке ты пишешь."
+                                "Язык перевода задаётся ПРОМПТОМ, а не тем, на каком языке ты пишешь.",
+                                translationButtons
                             )
                         }
                     }
@@ -2081,8 +2105,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    internal fun appendSystemMessage(text: String) {
+        internal fun appendSystemMessage(text: String) {
         _chatHistory.value = _chatHistory.value + ChatMessage("system", text)
+    }
+
+    internal fun appendSystemMessageWithButtons(text: String, buttons: List<PromptButton>) {
+        _chatHistory.value = _chatHistory.value + ChatMessage("system", text, buttons)
     }
 
     fun abortLocal() {
