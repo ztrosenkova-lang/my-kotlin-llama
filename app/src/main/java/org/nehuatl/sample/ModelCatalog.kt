@@ -26,7 +26,7 @@ object ModelCatalog {
             description = "Та самая VibeThinker. 3B, ~1.93 ГБ в Q4_K_M. Построена на Qwen2.5-Coder-3B, обучена на верифицируемых рассуждениях (математика, код, STEM). На IMO-AnswerBench набрала 76.4 — уровень DeepSeek V3.2 (671B). Ты видишь её цепочку размышлений. 96.1% прохождение LeetCode. Рекомендуется ставить maxTokens = 60000–100000, иначе не увидишь всё размышление. Русский язык — не заявлен. "
         ),
 
-                // ===== 2. QWEN3-4B INSTRUCT — УНИВЕРСАЛЬНАЯ, RUS =====
+        // ===== 2. QWEN3-4B INSTRUCT — УНИВЕРСАЛЬНАЯ, RUS =====
         ModelInfo(
             id = "qwen3_4b_instruct",
             name = "Qwen3-4B Instruct — универсальная, русский",
@@ -35,7 +35,7 @@ object ModelCatalog {
             description = "Qwen3-4B Instruct (2507) — официальная Qwen без режима thinking. 4B, ~2.5 ГБ. Универсальная: диалог, следование инструкциям, русский язык — хорошо. Контекст 32K. Для тех, кому не нужны долгие размышления, а нужен быстрый ответ. "
         ),
 
-                // ===== 3. MEDPSY-4B — МЕДИЦИНА (EN) =====
+        // ===== 3. MEDPSY-4B — МЕДИЦИНА (EN) =====
         ModelInfo(
             id = "medpsy_4b",
             name = "MedPsy-4B — медицина (English)",
@@ -55,7 +55,7 @@ object ModelCatalog {
             description = "Gemma 3 от Google. 4B, Q6_K ~3.0 ГБ + ~850 МБ проектор (итого ~3.85 ГБ). 128K контекст, 140+ языков (русский — отлично). Понимает картинки. Для анализа изображений загружай оба файла. ВАЖНО: Q6_K впритык к лимиту 3 ГБ — если не грузится, переключись на Q5_K_M вручную. "
         ),
 
-               // ===== 5. PARABLE-GRANITE 3B — IBM Granite база =====
+        // ===== 5. PARABLE-GRANITE 3B — IBM Granite база =====
         ModelInfo(
             id = "parable_granite",
             name = "Parable-Granite 3B — умный, русский",
@@ -73,7 +73,7 @@ object ModelCatalog {
             description = "Phi-4-mini от Microsoft. 3.8B, Q5_K_M ~2.8 ГБ. 128K контекст (131072 токена). Бьёт модели в 5–10 раз больше на MATH и GPQA. MIT-лицензия. Лучший выбор для сложной логики, математики, структурированных рассуждений. Русский — средний, но понимает. "
         ),
 
-                // ===== 7. TUTORAI-CHEMISTRY-PHI4 — ХИМИЯ (EN) =====
+        // ===== 7. TUTORAI-CHEMISTRY-PHI4 — ХИМИЯ (EN) =====
         ModelInfo(
             id = "tutorai_chemistry",
             name = "TutorAI-Chemistry-Phi4 — химия (English)",
@@ -81,6 +81,7 @@ object ModelCatalog {
             fileName = "tutorai_chemistry_q4.gguf",
             description = "Химический репетитор на базе Phi-4-mini (3.8B), дообучен через RL (GRPO) специально для химии. Q4_K_M ~2.6 ГБ. Разбирает молекулярные взаимодействия, стехиометрию, формулы пошагово. Показывает цепочку размышлений <think>, финальный ответ в \\boxed{}. ⚠️ ТОЛЬКО АНГЛИЙСКИЙ — задавай вопросы через переводчик Hy-MT2. "
         ),
+
         // ===== 8. MINICPM5-2B — 131K, ЛЁГКАЯ (Q6_K) =====
         ModelInfo(
             id = "minicpm5_2b",
@@ -94,9 +95,9 @@ object ModelCatalog {
         ModelInfo(
             id = "qwen38_2b",
             name = "Qwen3.8-2B — 262K, думающая",
-            url = "https://huggingface.co/buckets/Amirhossein133/Qwen3.8-2B-Distill-GGUF-bucket/resolve/main/Qwen3.8-2B-Q5_K_M.gguf",
+            url = "https://huggingface.co/empero-ai/Qwen3.8-2B-Distill-GGUF/resolve/main/Qwen3.8-2B-Q5_K_M.gguf",
             fileName = "qwen38_2b_q5.gguf",
-            description = "Qwen3.8-2B, Q5_K_M ~1.6 ГБ. 262K контекст! Дистиллирована с Qwen3.8 2.4T. Режим размышлений, function calling. Огромный контекст за минимальный размер. Русский — как у Qwen (средне-хороший). "
+            description = "Qwen3.8-2B, Q5_K_M ~1.46 ГБ. 262K контекст! Дистиллирована с Qwen3.8 2.4T. Режим размышлений, function calling. Огромный контекст за минимальный размер. Русский — как у Qwen (средне-хороший). "
         ),
 
         // ===== 10. VIBETHINKER-3B HERETIC — БЕЗ ЦЕНЗУРЫ (Q5_K_M) =====
@@ -112,9 +113,9 @@ object ModelCatalog {
         ModelInfo(
             id = "llama32_1b_heretic",
             name = "Llama 3.2 1B Heretic — лёгкая, без цензуры",
-            url = "https://huggingface.co/saidutta69/Llama-3.2-1B-Instruct-heretic/resolve/main/Llama-3.2-1B-Instruct-heretic-Q8_0.gguf",
+            url = "https://huggingface.co/saidutta69/Llama-3.2-1B-Instruct-heretic/resolve/main/llama3.2-1b-Q8_0.gguf",
             fileName = "llama32_1b_heretic_q8.gguf",
-            description = "Llama 3.2 1B с снятой цензурой. Q8_0 ~1.07 ГБ. Отказы упали с 96/100 до 7/100. Знания и следование инструкциям почти не пострадали. Идеальна для слабых телефонов, когда нужна «свободная» модель. Русский — слабый. "
+            description = "Llama 3.2 1B с снятой цензурой. Q8_0 ~1.23 ГБ. Отказы упали с 96/100 до 7/100. Знания и следование инструкциям почти не пострадали. Идеальна для слабых телефонов, когда нужна «свободная» модель. Русский — слабый. "
         ),
 
         // ===== 12. NOVA-LFM 1.2B — ДУМАЮЩАЯ, ЛЁГКАЯ (Q5_K_M) =====
@@ -135,13 +136,13 @@ object ModelCatalog {
             description = "Оставляем как эталон слабой модели. 2B, Q6_K ~2.1 ГБ. Контекст 8K — мало для «вспомни». Быстрая, но не умная. Для сравнения. "
         ),
 
-        // ===== 14. VIKHR-QWEN 0.5B — РУССКИЙ, СЛАБАЯ (Q6_K) =====
+                // ===== 14. VIKHR-QWEN 0.5B — РУССКИЙ, СЛАБАЯ (Q8_0) =====
         ModelInfo(
             id = "vikhr_qwen_05b",
             name = "Vikhr-Qwen 0.5B — русский, слабая",
-            url = "https://huggingface.co/tensorblock/Vikhr-Qwen-2.5-0.5b-Instruct-GGUF/resolve/main/Vikhr-Qwen-2.5-0.5b-Instruct-Q6_K.gguf",
-            fileName = "vikhr_qwen_05b_q6.gguf",
-            description = "Русская, 0.5B, Q6_K ~0.5 ГБ. Очень лёгкая. Для простых команд и заметок. Слабая, но говорит по-русски. "
+            url = "https://huggingface.co/Vikhrmodels/Vikhr-Qwen-2.5-0.5B-instruct-GGUF/resolve/main/Vikhr-Qwen-2.5-0.5B-instruct-Q8_0.gguf",
+            fileName = "vikhr_qwen_05b_q8.gguf",
+            description = "Русская, 0.5B, Q8_0 ~0.5 ГБ. Очень лёгкая. Для простых команд и заметок. Слабая, но говорит по-русски. Официальный GGUF от Vikhrmodels. "
         ),
 
         // ===== 15. QWEN2.5-3B — УНИВЕРСАЛЬНАЯ (Q6_K) =====
@@ -166,9 +167,9 @@ object ModelCatalog {
         ModelInfo(
             id = "nemotron_3_nano_4b",
             name = "NVIDIA Nemotron-3-Nano-4B — от NVIDIA, MoE",
-            url = "https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-4B-GGUF/resolve/main/NVIDIA-Nemotron-3-Nano-4B-Q5_K_M.gguf",
+            url = BART + "nvidia_Nemotron-3-Nano-4B-GGUF/resolve/main/Nemotron-3-Nano-4B-Q5_K_M.gguf",
             fileName = "nemotron_3_nano_4b_q5.gguf",
-            description = "NVIDIA Nemotron-3-Nano-4B — модель от мирового лидера, заточена под edge-устройства (NPC, ассистенты, IoT). Q5_K_M ~3.2 ГБ. Архитектура MoE. Русский язык входит в обучающий корпус (15 языков). Отличная скорость на реальном железе. ВАЖНО: Q5_K_M может не влезть в 3 ГБ — если не грузится, используй Q4_K_M. "
+            description = "NVIDIA Nemotron-3-Nano-4B — модель от мирового лидера, заточена под edge-устройства (NPC, ассистенты, IoT). Q5_K_M ~3.21 ГБ. Архитектура MoE. Русский язык входит в обучающий корпус (15 языков). Отличная скорость на реальном железе. ВАЖНО: Q5_K_M может не влезть в 3 ГБ — если не грузится, используй Q4_K_M. "
         ),
 
         // ===== 18. QWEN3.5-4B — 262K КОНТЕКСТ (Q5_K_M) =====
@@ -180,13 +181,13 @@ object ModelCatalog {
             description = "Qwen3.5-4B от Alibaba, Q5_K_M ~3.0 ГБ. Контекст 262144 токена (262K) — огромный. Режим размышлений, function calling, нативное vision (нужен mmproj — не входит). Русский язык — слабый (низкий балл MERA), для английского и мультиязычных задач — отлично. ВАЖНО: Q5_K_M впритык — если не грузится, используй Q4_K_M. "
         ),
 
-        // ===== 19. QVIKHR-3-4B — РУССКАЯ ОТ VIKHR (Q5_K_M) =====
+                // ===== 19. QVIKHR-3-4B — РУССКАЯ ОТ VIKHR (Q4_K_M) =====
         ModelInfo(
             id = "qvikhr_3_4b",
             name = "QVikhr-3-4B — русская, Qwen3-4B база",
-            url = "https://huggingface.co/tensorblock/Vikhrmodels_QVikhr-3-4B-Instruction-GGUF/resolve/main/QVikhr-3-4B-Instruction-Q5_K_M.gguf",
-            fileName = "qvikhr_3_4b_q5.gguf",
-            description = "Русская модель от команды Vikhr на базе Qwen3-4B. Q5_K_M ~3.0 ГБ. Обучена на датасете GrandMaster2. Ru Arena General = 78.2 — значительно выше базовой Qwen3-4B (64.8). Лучший выбор для русского языка среди моделей этого размера. ВАЖНО: Q5_K_M впритык — если не грузится, используй Q4_K_M. "
+            url = "https://huggingface.co/Vikhrmodels/QVikhr-3-4B-Instruction-GGUF/resolve/main/QVikhr-3-4B-Instruction-Q4_K_M.gguf",
+            fileName = "qvikhr_3_4b_q4.gguf",
+            description = "Русская модель от команды Vikhr на базе Qwen3-4B. Q4_K_M ~2.5 ГБ. Обучена на датасете GrandMaster2. Ru Arena General = 78.2 — значительно выше базовой Qwen3-4B (64.8). Лучший выбор для русского языка среди моделей этого размера. Официальный GGUF от Vikhrmodels. "
         ),
 
         // ===== 20. HY-MT2-1.8B — ПЕРЕВОДЧИК, 33 ЯЗЫКА =====
