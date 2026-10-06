@@ -1502,6 +1502,7 @@ fun ThinkingRobotAnimation(
     commandScale: Float? = null,
     isAiReady: Boolean = false,
     isSmartMode: Boolean = false,
+    isListening: Boolean = false,
     headTilt: Float = 0f,
     headBob: Float = 0f,
     headNod: Float = 0f,
@@ -3567,8 +3568,9 @@ fun ThinkingRobotAnimation(
                 1f
             }
 
-            val (eyeW, eyeH) = when {
+                       val (eyeW, eyeH) = when {
                 isBlinking -> baseEyeW to 1.5f * u
+                isListening -> (baseEyeW * 1.25f) to (baseEyeH * 1.35f)
                 isThinking -> (baseEyeW * 0.95f) to (baseEyeH * 0.6f)
                 isSpeaking -> (baseEyeW * speakingExpand) to (baseEyeH * 1.1f)
                 isIdle -> {
@@ -3592,8 +3594,9 @@ fun ThinkingRobotAnimation(
                 else -> baseEyeW to baseEyeH
             }
 
-            val irisRadius = when {
+                val irisRadius = when {
                 isBlinking -> 1.5f * u
+                isListening -> 5.2f * u
                 isThinking -> 3f * u * predatorPulse
                 isSpeaking -> 4.5f * u * speakingExpand
                 isIdle -> {
