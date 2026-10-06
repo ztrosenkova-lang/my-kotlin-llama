@@ -52,7 +52,7 @@ class FloatingRobotService : LifecycleService() {
         // Инициализируем распознавание речи
         voiceRecognizer = VoiceRecognizer(
             context = applicationContext,
-                        onResult = { text ->
+                                   onResult = { text ->
                 Log.d(TAG, "Voice result: $text")
                 val vm = MainViewModel.instance
                 if (vm == null) {
@@ -73,10 +73,12 @@ class FloatingRobotService : LifecycleService() {
                     }
                 }
                 updateMicIcon(listening = false)
+                MainViewModel.instance?.setOverlayListening(false)
             },
             onError = { error ->
                 Log.w(TAG, "Voice error: $error")
                 updateMicIcon(listening = false)
+                MainViewModel.instance?.setOverlayListening(false)
             }
         )
     }
@@ -318,7 +320,7 @@ class FloatingRobotService : LifecycleService() {
 
     // ========== ЛОГИКА МИКРОФОНА ==========
 
-    private fun onMicClicked() {
+        private fun onMicClicked() {
         val vm = MainViewModel.instance
         if (vm == null) {
             Log.w(TAG, "MainViewModel.instance is null, cannot recognize")
@@ -327,6 +329,7 @@ class FloatingRobotService : LifecycleService() {
 
         Log.d(TAG, "Mic clicked, starting recognition")
         updateMicIcon(listening = true)
+        vm.setOverlayListening(true)
         voiceRecognizer?.start()
     }
 
