@@ -61,12 +61,24 @@ class FloatingRobotService : LifecycleService() {
              val command = text.trim().lowercase()
                                         when (command) {
             "махни рукой" -> vm.triggerOverlayWave()
-            "уйди" -> {
-            val stopIntent = Intent(this@FloatingRobotService, FloatingRobotService::class.java).apply {
-                                action = ACTION_STOP
-                            }
-                            startService(stopIntent)
-                        }
+                       "уйди" -> {
+                // Останавливаем сервис — робот и микрофон исчезают
+                val stopIntent = Intent(this@FloatingRobotService, FloatingRobotService::class.java).apply {
+                    action = ACTION_STOP
+                }
+                startService(stopIntent)
+
+                // Поднимаем MainActivity на передний план
+                try {
+                    val intent = Intent(this@FloatingRobotService, MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                                Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                    }
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to bring MainActivity to front: ${e.message}")
+                }
+            }
                         "умный режим" -> vm.enableSmartMode()
                         "режим калькулятора" -> vm.disableSmartMode()
                         else -> vm.sendUserMessage(text)
@@ -178,7 +190,7 @@ class FloatingRobotService : LifecycleService() {
                     val dt = System.currentTimeMillis() - downTime
 
                                        // Считаем тапом только если не двигали и быстро отпустили
-                    if (dx < 15 && dy < 15 && dt < 300) {
+                                        if (dx < 15 && dy < 15 && dt < 300) {
                         val now = System.currentTimeMillis()
                         if (now - lastTapTime < 400) {
                             // Двойной тап — убираем робота и микрофон, поднимаем приложение
@@ -201,7 +213,12 @@ class FloatingRobotService : LifecycleService() {
                                 Log.w(TAG, "Failed to bring MainActivity to front: ${e.message}")
                             }
                         } else {
+                            // Одиночный тап — наклон головы робота
                             lastTapTime = now
+                            val vm = MainViewModel.instance
+                            val robotCenterX = params.x + widthPx / 2f
+                            val direction = if (event.rawX < robotCenterX) -1f else 1f
+                            vm?.triggerOverlayHeadTilt(direction)
                         }
                     }
                     return true
