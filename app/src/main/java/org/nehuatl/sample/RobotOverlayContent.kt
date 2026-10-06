@@ -71,12 +71,13 @@ fun RobotOverlayContent(
             },
         contentAlignment = Alignment.Center
     ) {
-                ThinkingRobotAnimation(
+                       ThinkingRobotAnimation(
             height = 72.dp,
             isActive = true,
             isSpeaking = isSpeaking,
             isThinking = isThinking,
             isIdle = isIdle && !overlayListening,
+            isListening = overlayListening,
             shouldWave = waveSignal || robotGreetingSignal,
             isAiReady = isModelLoaded || (cloudState is CloudAIState.Ready),
             isSmartMode = isSmartMode,
