@@ -233,6 +233,7 @@ fun ChatScreen(
     val isPermanentlyBlocked by viewModel.isPermanentlyBlocked.collectAsStateWithLifecycle(initialValue = false)
     val isSpeaking by viewModel.isSpeaking.collectAsStateWithLifecycle(initialValue = false)
     val speakStartTrigger by viewModel.speakStartTrigger.collectAsStateWithLifecycle(initialValue = false)
+    val robotGreetingSignal by viewModel.robotGreetingSignal.collectAsStateWithLifecycle(initialValue = false)
     val pendingTextToPrint by viewModel.pendingTextToPrint.collectAsStateWithLifecycle(initialValue = "")
     val isDarkTheme by viewModel.isDarkTheme.collectAsStateWithLifecycle(initialValue = false)
     val showBrainEditorState by viewModel.showBrainEditor.collectAsStateWithLifecycle(initialValue = false)
@@ -1270,7 +1271,7 @@ fun ChatScreen(
                         isSpeaking = isSpeaking,
                         isThinking = state is GenerationState.Generating || cloudState is CloudAIState.Generating,
                         isIdle = !isSpeaking && state !is GenerationState.Generating && cloudState !is CloudAIState.Generating,
-                        shouldWave = waveSignal,
+                        shouldWave = waveSignal || robotGreetingSignal,
                         isAiReady = isModelLoaded || (cloudState is CloudAIState.Ready),
                         isSmartMode = isSmartMode,
                         headTilt = headTiltTarget,
