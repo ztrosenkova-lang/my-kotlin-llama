@@ -716,22 +716,22 @@ fun ChatScreen(
                 isTtsReady = isTtsReady
             )
 
-            ControlPanel(
+                        ControlPanel(
                 onMemoryClick = {
                     memoryEditText = viewModel.readFromLongTermMemory()
                     showMemoryEditor = true
-                    viewModel.speakText("Редактор базы знаний")
+                    viewModel.speakUiPhrase("Редактор базы знаний")
                 },
                 onSettingsClick = {
                     showSettings = !showSettings
-                    viewModel.speakText("Настройки движка ИИ")
+                    viewModel.speakUiPhrase("Настройки движка ИИ")
                 },
                 onPromptSettingsClick = {
                     showPromptSettings = !showPromptSettings
-                    viewModel.speakText("Настройка роли ИИ")
+                    viewModel.speakUiPhrase("Настройка роли ИИ")
                 },
                 onHelpClick = {
-                    viewModel.speakText("Открываю руководство пользователя.")
+                    viewModel.speakUiPhrase("Открываю руководство пользователя.")
                     showHelpDialog = true
                 },
                 isTtsReady = isTtsReady,
