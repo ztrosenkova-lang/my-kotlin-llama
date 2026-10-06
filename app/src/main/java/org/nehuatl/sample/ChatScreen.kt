@@ -784,11 +784,11 @@ fun ChatScreen(
                 cloudState = cloudState,
                 currentMode = currentMode,
                 currentModel = if (isModelLoaded) currentModelPath else null,
+                modelDisplayName = loadedModelName,
                 isSmartMode = isSmartMode,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 colors = colors
             )
-
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -5827,6 +5827,7 @@ private fun StatusBar(
     cloudState: CloudAIState,
     currentMode: AIMode,
     currentModel: String?,
+    modelDisplayName: String = "",
     isSmartMode: Boolean = false,
     modifier: Modifier = Modifier,
     colors: AppColors
@@ -5875,11 +5876,7 @@ private fun StatusBar(
                 )
                 is GenerationState.ModelLoaded -> Triple(
                     colors.surfaceGray,
-                    run {
-                        val modelName = (currentModel?.substringAfterLast("/") ?: "нейросеть")
-                            .replace("primary%3AModels%", "")
-                        if (currentModel == null) "🤖 Локальный ИИ: выгружен из памяти" else "🤖 Модель $modelName успешно загружена"
-                    },
+                    if (modelDisplayName.isEmpty()) "🤖 Модель успешно загружена" else "🤖 Модель $modelDisplayName успешно загружена",
                     false
                 )
                 is GenerationState.AnalyzingImage -> Triple(
