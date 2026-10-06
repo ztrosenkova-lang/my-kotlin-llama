@@ -458,13 +458,20 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         private val _memoryInfoText = MutableStateFlow("Всего доступно: 0.0 ГБ / Занято: 0.0 ГБ")
     val memoryInfoText: StateFlow<String> = _memoryInfoText.asStateFlow()
 
-    // ========== ЗАГРУЗКА МОДЕЛЕЙ ==========
-    // Карта modelId -> downloadId. Живёт в синглтоне, переживает переоткрытие диалога.
+        // ========== ЗАГРУЗКА МОДЕЛЕЙ ==========
+    // Карта modelId -> downloadId (основная модель). Живёт в синглтоне.
     val downloadIds: MutableMap<String, Long> = mutableMapOf()
 
-    // Прогресс загрузок: modelId -> DownloadProgress
+    // Карта modelId -> downloadId проектора (если есть). Живёт в синглтоне.
+    val mmprojDownloadIds: MutableMap<String, Long> = mutableMapOf()
+
+    // Прогресс загрузок: modelId -> DownloadProgress (основная модель)
     private val _downloadProgress = MutableStateFlow<Map<String, DownloadProgress>>(emptyMap())
     val downloadProgress: StateFlow<Map<String, DownloadProgress>> = _downloadProgress.asStateFlow()
+
+    // Прогресс загрузок проектора: modelId -> DownloadProgress
+    private val _mmprojDownloadProgress = MutableStateFlow<Map<String, DownloadProgress>>(emptyMap())
+    val mmprojDownloadProgress: StateFlow<Map<String, DownloadProgress>> = _mmprojDownloadProgress.asStateFlow()
 
     private val _isAppLocked = MutableStateFlow(true)
     val isAppLocked: StateFlow<Boolean> = _isAppLocked.asStateFlow()
@@ -880,42 +887,82 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     // ========== ЗАГРУЗКА МОДЕЛЕЙ ЧЕРЕЗ DOWNLOADMANAGER ==========
 
-    fun startModelDownload(modelId: String, url: String, fileName: String) {
-        // Если уже качается или скачано — не запускаем повторно
-        val existingProgress = _downloadProgress.value[modelId]
-        if (existingProgress != null &&
-            (existingProgress.status == DownloadStatus.RUNNING ||
-             existingProgress.status == DownloadStatus.SUCCESS)) {
-            return
-        }
+        fun startModelDownload(modelId: String, url: String, fileName: String) {
+        // Основная модель
+        val mainProgress = _downloadProgress.value[modelId]
+        val mainAlreadyDone = mainProgress?.status == DownloadStatus.SUCCESS
+        val mainRunning = mainProgress?.status == DownloadStatus.RUNNING
+
+        // Проектор
+        val model = ModelCatalog.models.find { it.id == modelId }
+        val mmprojUrl = model?.mmprojUrl
+        val mmprojFileName = model?.mmprojFileName
+        val hasMmproj = !mmprojUrl.isNullOrEmpty() && !mmprojFileName.isNullOrEmpty()
+
+        val mmprojProgress = _mmprojDownloadProgress.value[modelId]
+        val mmprojAlreadyDone = mmprojProgress?.status == DownloadStatus.SUCCESS
+        val mmprojRunning = mmprojProgress?.status == DownloadStatus.RUNNING
+
+        // Ничего не делаем, если всё уже качается или скачано
+        if (mainRunning) return
+        if (hasMmproj && mmprojRunning) return
 
         try {
-            val request = DownloadManager.Request(Uri.parse(url))
-                .setTitle(fileName)
-                .setDescription("Загрузка модели ИИ-Друг")
-                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
-                .setAllowedOverMetered(true)
-                .setAllowedOverRoaming(false)
-
             val dm = getApplication<Application>().getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-            val downloadId = dm.enqueue(request)
 
-            downloadIds[modelId] = downloadId
-            _downloadProgress.value = _downloadProgress.value + (modelId to DownloadProgress(0, DownloadStatus.RUNNING))
+            // Запуск основной модели — только если ещё не скачана
+            if (!mainAlreadyDone) {
+                val mainRequest = DownloadManager.Request(Uri.parse(url))
+                    .setTitle(fileName)
+                    .setDescription("Загрузка модели ИИ-Друг")
+                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                    .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+                    .setAllowedOverMetered(true)
+                    .setAllowedOverRoaming(false)
 
-            scope.launch {
-                pollDownloadProgress(downloadId, modelId)
+                val mainId = dm.enqueue(mainRequest)
+                downloadIds[modelId] = mainId
+                _downloadProgress.value = _downloadProgress.value + (modelId to DownloadProgress(0, DownloadStatus.RUNNING))
+
+                scope.launch {
+                    pollDownloadProgress(mainId, modelId, isMain = true)
+                }
+
+                Log.d(TAG, "Main download started: modelId=$modelId, mainId=$mainId")
             }
 
-            Log.d(TAG, "Download started: modelId=$modelId, downloadId=$downloadId, file=$fileName")
+            // Запуск проектора — только если есть и ещё не скачан
+            if (hasMmproj && !mmprojAlreadyDone) {
+                val mmprojRequest = DownloadManager.Request(Uri.parse(mmprojUrl!!))
+                    .setTitle(mmprojFileName!!)
+                    .setDescription("Загрузка проектора ИИ-Друг")
+                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                    .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, mmprojFileName)
+                    .setAllowedOverMetered(true)
+                    .setAllowedOverRoaming(false)
+
+                val mmprojId = dm.enqueue(mmprojRequest)
+                mmprojDownloadIds[modelId] = mmprojId
+                _mmprojDownloadProgress.value = _mmprojDownloadProgress.value + (modelId to DownloadProgress(0, DownloadStatus.RUNNING))
+
+                scope.launch {
+                    pollDownloadProgress(mmprojId, modelId, isMain = false)
+                }
+
+                Log.d(TAG, "Mmproj download started: modelId=$modelId, mmprojId=$mmprojId")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start download: ${e.message}", e)
-            _downloadProgress.value = _downloadProgress.value + (modelId to DownloadProgress(0, DownloadStatus.FAILED))
+            if (!mainAlreadyDone) {
+                _downloadProgress.value = _downloadProgress.value + (modelId to DownloadProgress(0, DownloadStatus.FAILED))
+            }
+            if (hasMmproj && !mmprojAlreadyDone) {
+                _mmprojDownloadProgress.value = _mmprojDownloadProgress.value + (modelId to DownloadProgress(0, DownloadStatus.FAILED))
+            }
         }
     }
 
-    private suspend fun pollDownloadProgress(downloadId: Long, modelId: String) {
+       private suspend fun pollDownloadProgress(downloadId: Long, modelId: String, isMain: Boolean) {
         val dm = getApplication<Application>().getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
 
         while (true) {
@@ -926,18 +973,18 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 dm.query(query)
             } catch (e: Exception) {
                 Log.e(TAG, "Download query failed: ${e.message}", e)
-                _downloadProgress.value = _downloadProgress.value + (modelId to DownloadProgress(0, DownloadStatus.FAILED))
+                updateProgress(modelId, isMain, 0, DownloadStatus.FAILED)
                 return
             }
 
             if (cursor == null) {
-                _downloadProgress.value = _downloadProgress.value + (modelId to DownloadProgress(0, DownloadStatus.FAILED))
+                updateProgress(modelId, isMain, 0, DownloadStatus.FAILED)
                 return
             }
 
             cursor.use {
                 if (!it.moveToFirst()) {
-                    _downloadProgress.value = _downloadProgress.value + (modelId to DownloadProgress(0, DownloadStatus.FAILED))
+                    updateProgress(modelId, isMain, 0, DownloadStatus.FAILED)
                     return
                 }
 
@@ -951,13 +998,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
                 when (status) {
                     DownloadManager.STATUS_SUCCESSFUL -> {
-                        _downloadProgress.value = _downloadProgress.value + (modelId to DownloadProgress(100, DownloadStatus.SUCCESS))
-                        Log.d(TAG, "Download SUCCESS: modelId=$modelId")
+                        updateProgress(modelId, isMain, 100, DownloadStatus.SUCCESS)
+                        Log.d(TAG, "Download SUCCESS: modelId=$modelId, isMain=$isMain")
                         return
                     }
                     DownloadManager.STATUS_FAILED -> {
-                        _downloadProgress.value = _downloadProgress.value + (modelId to DownloadProgress(0, DownloadStatus.FAILED))
-                        Log.e(TAG, "Download FAILED: modelId=$modelId")
+                        updateProgress(modelId, isMain, 0, DownloadStatus.FAILED)
+                        Log.e(TAG, "Download FAILED: modelId=$modelId, isMain=$isMain")
                         return
                     }
                     DownloadManager.STATUS_PAUSED,
@@ -968,10 +1015,18 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         } else {
                             0
                         }
-                        _downloadProgress.value = _downloadProgress.value + (modelId to DownloadProgress(percent, DownloadStatus.RUNNING))
+                        updateProgress(modelId, isMain, percent, DownloadStatus.RUNNING)
                     }
                 }
             }
+        }
+    }
+
+    private fun updateProgress(modelId: String, isMain: Boolean, percent: Int, status: DownloadStatus) {
+        if (isMain) {
+            _downloadProgress.value = _downloadProgress.value + (modelId to DownloadProgress(percent, status))
+        } else {
+            _mmprojDownloadProgress.value = _mmprojDownloadProgress.value + (modelId to DownloadProgress(percent, status))
         }
     }
 
