@@ -190,13 +190,35 @@ object ModelCatalog {
             description = "Русская модель от команды Vikhr на базе Qwen3-4B. Q4_K_M ~2.5 ГБ. Обучена на датасете GrandMaster2. Ru Arena General = 78.2 — значительно выше базовой Qwen3-4B (64.8). Лучший выбор для русского языка среди моделей этого размера. Официальный GGUF от Vikhrmodels. "
         ),
 
-        // ===== 20. HY-MT2-1.8B — ПЕРЕВОДЧИК, 33 ЯЗЫКА =====
+                // ===== 20. HY-MT2-1.8B — ПЕРЕВОДЧИК, 33 ЯЗЫКА =====
         ModelInfo(
             id = "hy_mt2_1_8b",
             name = "Hy-MT2-1.8B — переводчик, 33 языка",
             url = "https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF/resolve/main/Hy-MT2-1.8B-Q4_K_M.gguf",
             fileName = "hy_mt2_1_8b_q4.gguf",
             description = "Модель-ПЕРЕВОДЧИК от Tencent, а не диалоговая. Q4_K_M, ~1.13 ГБ. 33 языка, включая русский, английский, испанский, немецкий, французский, китайский и другие. Создана специально для телефонов — версия 1.25-bit весит всего 440 МБ. Обгоняет Microsoft Translator и Doubao.\n\n⚠️ ВАЖНО: модель НЕ ведёт диалог — только ПЕРЕВОДИТ. У неё нет промпта по умолчанию.\n\nЧТОБЫ ПОЛЬЗОВАТЬСЯ:\n1. Открой «характер» (🧠) в панели внизу.\n2. Вставь в поле «Инструкция для ИИ» промпт для нужного языка:\n• НА РУССКИЙ: «Переведи следующий текст на русский, без дополнительных объяснений:»\n• НА АНГЛИЙСКИЙ: «Translate the following text into English, without additional explanation:»\n• НА ИСПАНСКИЙ: «Traduce el siguiente texto al español, sin explicaciones adicionales:»\n• НА НЕМЕЦКИЙ: «Übersetze den folgenden Text ins Deutsche, ohne zusätzliche Erklärungen:»\n• НА ФРАНЦУЗСКИЙ: «Traduis le texte suivant en français, sans explication supplémentaire:»\n• НА КИТАЙСКИЙ: «将以下文本翻译成中文，不要额外解释：»\n3. Сохрани и пиши текст на любом языке.\n\nПРИМЕР: промпт «на русский» + пишешь по-испански → получаешь русский перевод. Промпт «на испанский» + пишешь по-русски → получаешь испанский.\n\nЯзык перевода задаётся ПРОМПТОМ, а не языком ввода. "
+        ),
+
+        // ===== 21. SMOLVLM-256M — КАРТИНКИ, САМАЯ ЛЁГКАЯ =====
+        ModelInfo(
+            id = "smolvlm_256m",
+            name = "SmolVLM-256M — картинки, самая лёгкая",
+            url = "https://huggingface.co/ggml-org/SmolVLM-256M-Instruct-GGUF/resolve/main/SmolVLM-256M-Instruct-Q4_K_M.gguf",
+            fileName = "smolvlm_256m_q4.gguf",
+            mmprojUrl = "https://huggingface.co/ggml-org/SmolVLM-256M-Instruct-GGUF/resolve/main/mmproj-SmolVLM-256M-Instruct-F16.gguf",
+            mmprojFileName = "smolvlm_256m_mmproj.gguf",
+            description = "Vision-модель от HuggingFace. 256M, ~300 МБ (модель + проектор). Контекст 8K. Умеет: описание картинок, OCR (распознавание текста), определение координат кнопок. Английский. Идеальна для слабых телефонов. Очень быстрая. "
+        ),
+
+        // ===== 22. SMOLVLM2-500M — КАРТИНКИ, КАЧЕСТВЕННЕЕ =====
+        ModelInfo(
+            id = "smolvlm2_500m",
+            name = "SmolVLM2-500M — картинки, качественнее",
+            url = "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/SmolVLM2-500M-Video-Instruct-Q4_K_M.gguf",
+            fileName = "smolvlm2_500m_q4.gguf",
+            mmprojUrl = "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-500M-Video-Instruct-f16.gguf",
+            mmprojFileName = "smolvlm2_500m_mmproj.gguf",
+            description = "Vision-модель от HuggingFace. 500M, ~500 МБ (модель + проектор). Контекст 4K. Умеет: описание картинок, визуальный Q&A, OCR, анализ сцен. Английский. Скорость 15–20 токенов/с на телефоне. Качество выше, чем у 256M. "
         )
     )
 }
