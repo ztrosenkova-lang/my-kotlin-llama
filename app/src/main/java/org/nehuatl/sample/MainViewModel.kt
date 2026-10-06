@@ -438,9 +438,21 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    // Сигнал махания для робота в overlay (робот 2)
+        // Сигнал махания для робота в overlay (робот 2)
     private val _overlayWaveSignal = MutableStateFlow(false)
     val overlayWaveSignal: StateFlow<Boolean> = _overlayWaveSignal.asStateFlow()
+
+    // Сигнал «привет» — для робота 1 (машет рукой сам)
+    private val _robotGreetingSignal = MutableStateFlow(false)
+    val robotGreetingSignal: StateFlow<Boolean> = _robotGreetingSignal.asStateFlow()
+
+    fun triggerRobotGreeting() {
+        _robotGreetingSignal.value = true
+        scope.launch {
+            delay(2500)
+            _robotGreetingSignal.value = false
+        }
+    }
 
     private var overlayWaveResetJob: Job? = null
 
@@ -1948,7 +1960,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             return
         }
 
-                val lowerText = text.lowercase()
+                        val lowerText = text.lowercase()
+
+        // Реакция на «привет» — робот машет рукой
+        if (lowerText.contains("привет") || lowerText.contains("здравствуй") || lowerText.contains("хай")) {
+            triggerRobotGreeting()
+        }
 
         // Если загружена модель-переводчик, команды памяти игнорируются —
         // весь текст уходит в переводчик как есть
