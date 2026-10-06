@@ -26,13 +26,13 @@ object ModelCatalog {
             description = "Та самая VibeThinker. 3B, ~1.93 ГБ в Q4_K_M. Построена на Qwen2.5-Coder-3B, обучена на верифицируемых рассуждениях (математика, код, STEM). На IMO-AnswerBench набрала 76.4 — уровень DeepSeek V3.2 (671B). Ты видишь её цепочку размышлений. 96.1% прохождение LeetCode. Рекомендуется ставить maxTokens = 60000–100000, иначе не увидишь всё размышление. Русский язык — не заявлен. "
         ),
 
-        // ===== 2. QWEN3-4B THINKING — ДУМАЮЩАЯ, RUS =====
+                // ===== 2. QWEN3-4B INSTRUCT — УНИВЕРСАЛЬНАЯ, RUS =====
         ModelInfo(
-            id = "qwen3_4b_thinking",
-            name = "Qwen3-4B Thinking — думающая, русский",
-            url = PRITHIV + "Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Thinking-2507.Q4_K_M.gguf",
-            fileName = "qwen3_4b_thinking_q4.gguf",
-            description = "Qwen3-4B в режиме thinking (2507). 4B, ~2.5 ГБ. Официальная Qwen с режимом размышлений. Русский язык — хорошо. Умная, следует инструкциям. Если VibeThinker заточена под код и математику, эта — универсальнее. Контекст 32K. "
+            id = "qwen3_4b_instruct",
+            name = "Qwen3-4B Instruct — универсальная, русский",
+            url = PRITHIV + "Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507.Q4_K_M.gguf",
+            fileName = "qwen3_4b_instruct_q4.gguf",
+            description = "Qwen3-4B Instruct (2507) — официальная Qwen без режима thinking. 4B, ~2.5 ГБ. Универсальная: диалог, следование инструкциям, русский язык — хорошо. Контекст 32K. Для тех, кому не нужны долгие размышления, а нужен быстрый ответ. "
         ),
 
                 // ===== 3. MEDPSY-4B — МЕДИЦИНА (EN) =====
@@ -55,13 +55,13 @@ object ModelCatalog {
             description = "Gemma 3 от Google. 4B, Q6_K ~3.0 ГБ + ~850 МБ проектор (итого ~3.85 ГБ). 128K контекст, 140+ языков (русский — отлично). Понимает картинки. Для анализа изображений загружай оба файла. ВАЖНО: Q6_K впритык к лимиту 3 ГБ — если не грузится, переключись на Q5_K_M вручную. "
         ),
 
-        // ===== 5. GRANITE 4.1 3B — IBM, 128K, RUS (Q6_K) =====
+               // ===== 5. PARABLE-GRANITE 3B — IBM Granite база =====
         ModelInfo(
-            id = "granite_3b",
-            name = "Granite 4.1 3B — IBM, 128K, русский",
-            url = BART + "ibm-granite_granite-4.1-3b-GGUF/resolve/main/granite-4.1-3b-Q6_K.gguf",
-            fileName = "granite_3b_q6.gguf",
-            description = "IBM Granite 4.1 на 3B, Q6_K ~2.8 ГБ. 128K контекст. Корпоративная надёжность, чистая речь, хорошее следование инструкциям. Русский язык — хороший (IBM обучает на многих языках). Отлично для структурированных ответов и документов. "
+            id = "parable_granite",
+            name = "Parable-Granite 3B — умный, русский",
+            url = "https://huggingface.co/AnkitAI/Parable-Granite-4.1-3B-Claude-Fable-5-GGUF/resolve/main/Parable-Granite-4.1-3B-Claude-Fable-5-GGUF-Q4_K_M.gguf",
+            fileName = "parable_granite_q4.gguf",
+            description = "Parable-Granite 3B на базе IBM Granite 4.1, дообученная на траекториях Claude Fable 5 и GPT-5.5. Q4_K_M ~2 ГБ. Запускается на 3 ГБ RAM. Режим размышлений <think>. Сильна в объяснениях, идиомах, однострочных командах. Русский язык — понимает. "
         ),
 
         // ===== 6. PHI-4-MINI — MICROSOFT, 128K, ЛОГИКА (Q5_K_M) =====
