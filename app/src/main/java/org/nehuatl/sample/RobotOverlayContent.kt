@@ -22,6 +22,7 @@ fun RobotOverlayContent(
     val waveSignal by viewModel.overlayWaveSignal.collectAsStateWithLifecycle(initialValue = false)
     val isSmartMode by viewModel.isSmartMode.collectAsStateWithLifecycle(initialValue = false)
     val robotGreetingSignal by viewModel.robotGreetingSignal.collectAsStateWithLifecycle(initialValue = false)
+    val overlayListening by viewModel.overlayListening.collectAsStateWithLifecycle(initialValue = false)
 
     val isThinking = state is GenerationState.Generating ||
                      cloudState is CloudAIState.Generating
@@ -64,12 +65,12 @@ fun RobotOverlayContent(
             },
         contentAlignment = Alignment.Center
     ) {
-        ThinkingRobotAnimation(
+                ThinkingRobotAnimation(
             height = 72.dp,
             isActive = true,
             isSpeaking = isSpeaking,
             isThinking = isThinking,
-            isIdle = isIdle,
+            isIdle = isIdle && !overlayListening,
             shouldWave = waveSignal || robotGreetingSignal,
             isAiReady = isModelLoaded || (cloudState is CloudAIState.Ready),
             isSmartMode = isSmartMode,
