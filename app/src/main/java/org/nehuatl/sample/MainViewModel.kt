@@ -438,10 +438,29 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-           // Сигнал махания для робота в overlay (робот 2)
+               // Сигнал махания для робота в overlay (робот 2)
     private val _overlayWaveSignal = MutableStateFlow(false)
     val overlayWaveSignal: StateFlow<Boolean> = _overlayWaveSignal.asStateFlow()
 
+    // Сигнал наклона головы робота 2 при одиночном тапе
+    private val _overlayHeadTilt = MutableStateFlow(0f)
+    val overlayHeadTilt: StateFlow<Float> = _overlayHeadTilt.asStateFlow()
+
+    private val _overlayHeadNod = MutableStateFlow(0f)
+    val overlayHeadNod: StateFlow<Float> = _overlayHeadNod.asStateFlow()
+
+    private var overlayHeadResetJob: Job? = null
+
+    fun triggerOverlayHeadTilt(direction: Float) {
+        overlayHeadResetJob?.cancel()
+        _overlayHeadTilt.value = direction * 8f
+        _overlayHeadNod.value = 0.3f
+        overlayHeadResetJob = scope.launch {
+            delay(500)
+            _overlayHeadTilt.value = 0f
+            _overlayHeadNod.value = 0f
+        }
+    }
     // Сигнал «микрофон overlay слушает» — для робота 2 (глаза расширяются)
     private val _overlayListening = MutableStateFlow(false)
     val overlayListening: StateFlow<Boolean> = _overlayListening.asStateFlow()
