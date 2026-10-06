@@ -279,8 +279,12 @@ fun ChatScreen(
     var robotOffsetX by remember { mutableStateOf(0f) }
     var robotOffsetY by remember { mutableStateOf(0f) }
 
-    // Флаг «палец сейчас двигает робота» — защита от откатов при перетаскивании
+        // Флаг «палец сейчас двигает робота» — защита от откатов при перетаскивании
     var isRobotDragging by remember { mutableStateOf(false) }
+
+    // Реакции робота на пользователя
+    var headTiltTarget by remember { mutableStateOf(0f) }
+    var headNodTarget by remember { mutableStateOf(0f) }
 
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -619,13 +623,29 @@ fun ChatScreen(
         }
     }
 
-    // Флаг «палец двигает робота»: включается на любое изменение позиции/масштаба,
+        // Флаг «палец двигает робота»: включается на любое изменение позиции/масштаба,
     // гаснет через 300 мс тишины. Пока флаг true — синхронизация не работает,
     // и робот следует за пальцем без сопротивления.
     LaunchedEffect(robotOffsetX, robotOffsetY, robotScale) {
         isRobotDragging = true
         delay(300)
         isRobotDragging = false
+    }
+
+    // Автосброс реакций головы через 0.5 сек после срабатывания
+    LaunchedEffect(headTiltTarget) {
+        if (headTiltTarget != 0f) {
+            delay(500)
+            headTiltTarget = 0f
+        }
+    }
+
+    // Автосброс кивка через 0.5 сек
+    LaunchedEffect(headNodTarget) {
+        if (headNodTarget != 0f) {
+            delay(500)
+            headNodTarget = 0f
+        }
     }
             // Команда "стань большим" — переводит робота на экран, если он не там
     LaunchedEffect(growBigSignal) {
@@ -906,9 +926,15 @@ fun ChatScreen(
                 ImagePreview(imagePath = imagePath, colors = colors)
             }
 
-            PromptInput(
+                        PromptInput(
                 prompt = promptInput,
-                onPromptChange = { promptInput = it },
+                onPromptChange = {
+                    promptInput = it
+                    // Пока пользователь печатает — голова чуть вниз
+                    if (it.isNotEmpty()) {
+                        headNodTarget = 0.3f
+                    }
+                },
                                onGenerate = {
                     keyboardController?.hide()
                     val command = promptInput.trim().lowercase()
@@ -1220,8 +1246,16 @@ fun ChatScreen(
                                 robotScale = (robotScale * zoom).coerceIn(0.5f, 3f)
                             }
                         }
-                        .pointerInput(Unit) {
+                                                .pointerInput(Unit) {
                             detectTapGestures(
+                                onTap = { offset ->
+                                    // Одиночный тап — «повернулся к тебе»
+                                    // Наклоняем голову к точке тапа
+                                    val robotCenterX = screenWidthPx / 2f
+                                    val tiltDirection = if (offset.x < robotCenterX) -1f else 1f
+                                    headTiltTarget = tiltDirection * 8f
+                                    headNodTarget = 0.3f
+                                },
                                 onDoubleTap = {
                                     // Двойной тап на робота 1 — как команда «выйди из матрицы»,
                                     // но всегда сворачивает приложение и перезапускает робота 2
@@ -1230,7 +1264,7 @@ fun ChatScreen(
                             )
                         }
                 ) {
-                                ThinkingRobotAnimation(
+                                                ThinkingRobotAnimation(
                         height = 70.dp,
                         isActive = true,
                         isSpeaking = isSpeaking,
@@ -1239,6 +1273,8 @@ fun ChatScreen(
                         shouldWave = waveSignal,
                         isAiReady = isModelLoaded || (cloudState is CloudAIState.Ready),
                         isSmartMode = isSmartMode,
+                        headTilt = headTiltTarget,
+                        headNod = headNodTarget,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -1465,6 +1501,9 @@ fun ThinkingRobotAnimation(
     commandScale: Float? = null,
     isAiReady: Boolean = false,
     isSmartMode: Boolean = false,
+    headTilt: Float = 0f,
+    headBob: Float = 0f,
+    headNod: Float = 0f,
     uDivisor: Float = 200f,
     yOffsetUnits: Float = 0f
 ) {
@@ -1480,7 +1519,7 @@ fun ThinkingRobotAnimation(
         label = "bob"
     )
 
-        val blink by transition.animateFloat(
+    val blink by transition.animateFloat(
         initialValue = 1f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
@@ -1555,7 +1594,7 @@ fun ThinkingRobotAnimation(
         label = "flamePhase"
     )
 
-       val pulse by transition.animateFloat(
+    val pulse by transition.animateFloat(
         initialValue = 0f,
         targetValue = (2 * PI).toFloat(),
         animationSpec = infiniteRepeatable(
@@ -1564,7 +1603,7 @@ fun ThinkingRobotAnimation(
         ),
         label = "pulse"
     )
-           // Цикл спокойного состояния глаз: Обычное -> Любопытство -> Сканирование -> Обычное
+
     val idleEyePhase by transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
@@ -1575,7 +1614,7 @@ fun ThinkingRobotAnimation(
         label = "idleEyePhase"
     )
 
-              val armPhase by transition.animateFloat(
+    val armPhase by transition.animateFloat(
         initialValue = 0f,
         targetValue = (2 * PI).toFloat(),
         animationSpec = infiniteRepeatable(
@@ -1585,7 +1624,7 @@ fun ThinkingRobotAnimation(
         label = "armPhase"
     )
 
-        val indicatorPulse by transition.animateFloat(
+    val indicatorPulse by transition.animateFloat(
         initialValue = 0.3f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
@@ -1595,13 +1634,13 @@ fun ThinkingRobotAnimation(
         label = "indicator_pulse"
     )
 
-          val headPanelOpenAmount by animateFloatAsState(
+    val headPanelOpenAmount by animateFloatAsState(
         targetValue = if (isThinking) 1f else 0f,
         animationSpec = tween(durationMillis = 2000, easing = FastOutSlowInEasing),
         label = "head_panel_open"
     )
 
-        val leftBarsPhase by transition.animateFloat(
+    val leftBarsPhase by transition.animateFloat(
         initialValue = 0f,
         targetValue = 3f,
         animationSpec = infiniteRepeatable(
@@ -1611,7 +1650,6 @@ fun ThinkingRobotAnimation(
         label = "left_bars_phase"
     )
 
-    // Пульсация шариков антенн в умном режиме
     val smartPulse by transition.animateFloat(
         initialValue = 0f,
         targetValue = (2 * PI).toFloat(),
@@ -1621,8 +1659,8 @@ fun ThinkingRobotAnimation(
         ),
         label = "smart_pulse"
     )
-            // Внутренний сигнал от ChatScreen — включается при приветствии
-        var externalWave by remember { mutableStateOf(false) }
+
+    var externalWave by remember { mutableStateOf(false) }
     LaunchedEffect(shouldWave) {
         if (shouldWave) {
             externalWave = true
@@ -1631,12 +1669,9 @@ fun ThinkingRobotAnimation(
         }
     }
 
-    // Автоматическое махание через случайные промежутки 1–4 минуты
-    // (когда нет внешнего сигнала)
     var randomWave by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         while (true) {
-            // Случайный интервал от 60 до 240 секунд
             val nextDelay = (60..240).random() * 1000L
             delay(nextDelay)
             randomWave = true
@@ -1645,27 +1680,24 @@ fun ThinkingRobotAnimation(
         }
     }
 
-    // Объединённое состояние махания
     val isWaving = externalWave || randomWave
 
-    // Плавный вход/выход из режима махания (0 = не машет, 1 = машет)
     val waveAmount by animateFloatAsState(
         targetValue = if (isWaving) 1f else 0f,
         animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
         label = "wave_amount"
     )
 
-             val textMeasurer = rememberTextMeasurer()
+    val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
 
-    // Плавное изменение масштаба при командах "стань большим" / "стань маленьким"
     val animatedScale by animateFloatAsState(
         targetValue = commandScale ?: 1f,
         animationSpec = tween(durationMillis = 3000, easing = FastOutSlowInEasing),
         label = "command_scale"
     )
 
-        Canvas(
+    Canvas(
         modifier = modifier
             .height(height)
             .width(height * 0.85f)
@@ -1674,7 +1706,7 @@ fun ThinkingRobotAnimation(
                 scaleY = if (commandScale != null) animatedScale else 1f
             )
     ) {
-                val u = size.height / uDivisor
+        val u = size.height / uDivisor
         val cx = size.width / 2f
         val bobOffset = if (isActive) sin(bob) * 10f * u else 0f
         val lookOffsetX = lookX * 1f * u
@@ -1683,7 +1715,11 @@ fun ThinkingRobotAnimation(
         val staticYOffset = yOffsetUnits * u
         val panelOpen = headPanelOpenAmount
         val panelLift = panelOpen * 20f * u
-        // ================= ПАЛИТРА =================
+
+        // Смещение головы — независимо от тела
+        val headOffsetX = headBob * 1.5f * u
+        val headOffsetY = headNod * 2f * u
+
         val whiteBody = Color(0xFFF4F6F8)
         val whiteHighlight = Color(0xFFFFFFFF)
         val lightGray = Color(0xFFD9DEE3)
@@ -1701,11 +1737,15 @@ fun ThinkingRobotAnimation(
             neonBlue
         }
 
-    fun pt(x: Float, y: Float) = Offset(cx + x * u, y * u + bobOffset + staticYOffset)
+        fun pt(x: Float, y: Float) = Offset(cx + x * u, y * u + bobOffset + staticYOffset)
 
-                       
+        // Функция для элементов головы — добавляет смещение головы
+        fun ptHead(x: Float, y: Float): Offset {
+            val base = pt(x, y)
+            return Offset(base.x + headOffsetX, base.y + headOffsetY)
+        }
 
-    // ================= АНИМАЦИЯ РУК =================
+        // ================= АНИМАЦИЯ РУК =================
         val armSway = sin(armPhase)
         val leftArmOffsetY = when {
             isSpeaking -> armSway * 0.8f
@@ -1719,20 +1759,11 @@ fun ThinkingRobotAnimation(
             isIdle -> sin(armPhase + PI.toFloat()) * 0.8f
             else -> 0f
         }
-                // Углы приветствия — плавно появляются при waveAmount → 1
-        // Верхнее звено: поворот вокруг плеча на -60°
         val shoulderWaveAngle = -60f * waveAmount
-        // Нижнее звено: поворот вокруг локтя на -50°
         val forearmWaveAngle = -50f * waveAmount
-        // Махание кисти: колебание ±18°, частота 1 Гц
         val handWiggle = sin(armPhase * 2f) * 18f * waveAmount
 
-        // ================= РУКИ (опущены вниз по бокам) =================
-        // Предплечье в 2 раза толще бицепса. Руки укорочены на 20%.
-        // Все части выровнены по центральной оси. Левая ось: X = -46f. Правая ось: X = 46f.
-
-        // ЛЕВАЯ РУКА
-        // Плечо (круглый сустав)
+        // ================= ЛЕВАЯ РУКА =================
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(whiteHighlight, lightGray),
@@ -1754,7 +1785,6 @@ fun ThinkingRobotAnimation(
             center = pt(-46f, 96f + leftArmOffsetY)
         )
 
-        // Бицепс — ширина 16, скругление 4, высота 21
         drawRoundRect(
             color = lightGray,
             topLeft = pt(-54f, 104f + leftArmOffsetY),
@@ -1768,7 +1798,6 @@ fun ThinkingRobotAnimation(
             cornerRadius = CornerRadius(4f * u),
             style = Stroke(width = 1.3f * u)
         )
-        // Блик на бицепсе
         drawRoundRect(
             color = whiteHighlight.copy(alpha = 0.8f),
             topLeft = pt(-52f, 108f + leftArmOffsetY),
@@ -1776,7 +1805,6 @@ fun ThinkingRobotAnimation(
             cornerRadius = CornerRadius(1.5f * u)
         )
 
-        // ЛОКОТЬ
         drawCircle(
             color = mediumGray,
             radius = 7f * u,
@@ -1789,7 +1817,6 @@ fun ThinkingRobotAnimation(
             style = Stroke(width = 1.3f * u)
         )
 
-        // Предплечье — ширина 25.92 (уменьшено на 10%), высота 24.2 (увеличено на 10%), скругление 7
         drawRoundRect(
             color = lightGray,
             topLeft = pt(-58.96f, 128f + leftArmOffsetY),
@@ -1803,7 +1830,6 @@ fun ThinkingRobotAnimation(
             cornerRadius = CornerRadius(7f * u),
             style = Stroke(width = 1.3f * u)
         )
-        // Блик на предплечье
         drawRoundRect(
             color = whiteHighlight.copy(alpha = 0.8f),
             topLeft = pt(-56f, 132f + leftArmOffsetY),
@@ -1811,7 +1837,6 @@ fun ThinkingRobotAnimation(
             cornerRadius = CornerRadius(1.5f * u)
         )
 
-                // ЛЕВАЯ КИСТЬ
         drawOval(
             color = lightGray,
             topLeft = pt(-54f, 150f + leftArmOffsetY),
@@ -1824,33 +1849,27 @@ fun ThinkingRobotAnimation(
             style = Stroke(width = 1.3f * u)
         )
 
-        // ========== ТРИ ГОРИЗОНТАЛЬНЫЕ ПОЛОСКИ НА ЛЕВОМ ПРЕДПЛЕЧЬЕ ==========
-        // Индикатор активности: покой — синие, думы — по очереди зелёные, выгружено — тускло-синие
         val barsCenterX = -46f
         val barsCenterY = 140f + leftArmOffsetY
-        val barWidth = 6f * u          // длина по горизонтали
-        val barHeight = 1.6f * u       // толщина
-        val barGap = 1.4f * u          // зазор между полосками
+        val barWidth = 6f * u
+        val barHeight = 1.6f * u
+        val barGap = 1.4f * u
         val barsTotalHeight = barHeight * 3 + barGap * 2
 
         for (i in 0..2) {
-            // Позиция полоски i (сверху вниз)
             val barY = barsCenterY - barsTotalHeight / 2f + barHeight / 2f + i * (barHeight + barGap)
             val barTopLeft = pt(barsCenterX - barWidth / 2f, barY - barHeight / 2f)
             val barSize = Size(barWidth, barHeight)
 
-            // Вспыхивает ли эта полоска прямо сейчас
             val isBarActive = isThinking && (leftBarsPhase.toInt() == i)
 
-            // Цвет полоски
             val barColor = when {
-                isBarActive -> Color(0xFF00E676)                  // ярко-зелёный — активная
-                isThinking -> Color(0xFF1E88E5)                    // синий — ждёт очереди
-                isAiReady -> Color(0xFF1E88E5)                     // синий — модель готова, покой/говор
-                else -> Color(0xFF1565C0).copy(alpha = 0.5f)       // тускло-синий — модель выгружена
+                isBarActive -> Color(0xFF00E676)
+                isThinking -> Color(0xFF1E88E5)
+                isAiReady -> Color(0xFF1E88E5)
+                else -> Color(0xFF1565C0).copy(alpha = 0.5f)
             }
 
-            // Ореол вокруг активной полоски
             if (isBarActive) {
                 val barCenter = pt(barsCenterX, barY)
                 drawCircle(
@@ -1868,7 +1887,6 @@ fun ThinkingRobotAnimation(
                 )
             }
 
-            // Тёмная подложка полоски
             drawRoundRect(
                 color = Color(0xFF1A1A20).copy(alpha = 0.85f),
                 topLeft = Offset(barTopLeft.x - 0.3f * u, barTopLeft.y - 0.3f * u),
@@ -1876,7 +1894,6 @@ fun ThinkingRobotAnimation(
                 cornerRadius = CornerRadius(0.9f * u)
             )
 
-            // Сама полоска
             drawRoundRect(
                 color = barColor,
                 topLeft = barTopLeft,
@@ -1884,7 +1901,6 @@ fun ThinkingRobotAnimation(
                 cornerRadius = CornerRadius(0.8f * u)
             )
 
-            // Обводка
             drawRoundRect(
                 color = if (isBarActive) Color(0xFFB9F6CA) else darkGray,
                 topLeft = barTopLeft,
@@ -1893,7 +1909,6 @@ fun ThinkingRobotAnimation(
                 style = Stroke(width = if (isBarActive) 0.6f * u else 0.4f * u)
             )
 
-            // Внутренний блик сверху
             drawRoundRect(
                 color = Color.White.copy(alpha = if (isBarActive) 0.5f else 0.2f),
                 topLeft = Offset(barTopLeft.x + 0.3f * u, barTopLeft.y + 0.2f * u),
@@ -1902,7 +1917,6 @@ fun ThinkingRobotAnimation(
             )
         }
 
-        // Пальцы левой кисти
         for (i in 0..3) {
             val fx = -52f + i * 4f
             drawRoundRect(
@@ -1930,7 +1944,6 @@ fun ThinkingRobotAnimation(
             )
         }
 
-        // Большой палец левой кисти
         drawRoundRect(
             color = mediumGray,
             topLeft = pt(-51f, 156f + leftArmOffsetY),
@@ -1945,11 +1958,8 @@ fun ThinkingRobotAnimation(
             style = Stroke(width = 0.9f * u)
         )
 
-                        // ================= ПРАВАЯ РУКА (с приветственным маханием) =================
-        // Внешний rotate — верхнее звено (плечо + бицепс) вокруг плеча.
+        // ================= ПРАВАЯ РУКА =================
         rotate(shoulderWaveAngle, pivot = pt(46f, 96f)) {
-
-            // Плечо
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(whiteHighlight, lightGray),
@@ -1971,7 +1981,6 @@ fun ThinkingRobotAnimation(
                 center = pt(46f, 96f + rightArmOffsetY)
             )
 
-            // Бицепс
             drawRoundRect(
                 color = lightGray,
                 topLeft = pt(38f, 104f + rightArmOffsetY),
@@ -1992,7 +2001,6 @@ fun ThinkingRobotAnimation(
                 cornerRadius = CornerRadius(1.5f * u)
             )
 
-            // Локоть
             drawCircle(
                 color = mediumGray,
                 radius = 7f * u,
@@ -2005,10 +2013,7 @@ fun ThinkingRobotAnimation(
                 style = Stroke(width = 1.3f * u)
             )
 
-            // Внутренний rotate — нижнее звено (предплечье + кисть + пальцы) вокруг локтя
             rotate(forearmWaveAngle + handWiggle, pivot = pt(46f, 126f + rightArmOffsetY)) {
-
-                // Предплечье
                 drawRoundRect(
                     color = lightGray,
                     topLeft = pt(33.04f, 128f + rightArmOffsetY),
@@ -2029,7 +2034,6 @@ fun ThinkingRobotAnimation(
                     cornerRadius = CornerRadius(1.5f * u)
                 )
 
-                // Кисть
                 drawOval(
                     color = lightGray,
                     topLeft = pt(38f, 150f + rightArmOffsetY),
@@ -2042,7 +2046,6 @@ fun ThinkingRobotAnimation(
                     style = Stroke(width = 1.3f * u)
                 )
 
-                // Пальцы
                 for (i in 0..3) {
                     val fx = 40f + i * 4f
                     drawRoundRect(
@@ -2070,7 +2073,6 @@ fun ThinkingRobotAnimation(
                     )
                 }
 
-                                // Большой палец
                 drawRoundRect(
                     color = mediumGray,
                     topLeft = pt(46f, 156f + rightArmOffsetY),
@@ -2085,7 +2087,6 @@ fun ThinkingRobotAnimation(
                     style = Stroke(width = 0.9f * u)
                 )
 
-                                // ========== ИНДИКАТОР СОСТОЯНИЯ ИИ (часы на предплечье) ==========
                 val indicatorCenterX = 46f
                 val indicatorCenterY = 140f
                 val indicatorRadius = 4f * u
@@ -2096,9 +2097,9 @@ fun ThinkingRobotAnimation(
                     Color(0xFF2196F3)
                 }
 
-                val clockW = indicatorRadius * 1.9f   // ширина часов
-                val clockH = indicatorRadius * 1.5f   // высота часов
-                val clockCorner = 1.2f * u            // радиус скругления углов
+                val clockW = indicatorRadius * 1.9f
+                val clockH = indicatorRadius * 1.5f
+                val clockCorner = 1.2f * u
                 val clockCenter = pt(indicatorCenterX, indicatorCenterY + rightArmOffsetY)
                 val clockTopLeft = Offset(
                     clockCenter.x - clockW / 2f,
@@ -2106,11 +2107,9 @@ fun ThinkingRobotAnimation(
                 )
                 val clockSize = Size(clockW, clockH)
 
-                // ========== ОРЕОЛ (когда модель загружена) ==========
                 if (isAiReady) {
                     val glowPulse = 0.5f + 0.5f * indicatorPulse
 
-                    // Большое мягкое свечение
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(
@@ -2125,7 +2124,6 @@ fun ThinkingRobotAnimation(
                         center = clockCenter
                     )
 
-                    // Яркое среднее свечение
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(
@@ -2140,7 +2138,6 @@ fun ThinkingRobotAnimation(
                     )
                 }
 
-                // Внешний тёмный фон (прямоугольник со скруглёнными углами)
                 drawRoundRect(
                     color = darkerGray,
                     topLeft = Offset(
@@ -2151,7 +2148,6 @@ fun ThinkingRobotAnimation(
                     cornerRadius = CornerRadius(clockCorner * 1.3f)
                 )
 
-                // Цветной прямоугольник
                 drawRoundRect(
                     color = indicatorColor,
                     topLeft = clockTopLeft,
@@ -2159,7 +2155,6 @@ fun ThinkingRobotAnimation(
                     cornerRadius = CornerRadius(clockCorner)
                 )
 
-                // Обводка (ярче при активном)
                 drawRoundRect(
                     color = if (isAiReady) {
                         Color(0xFFB9F6CA).copy(alpha = 0.9f)
@@ -2172,7 +2167,6 @@ fun ThinkingRobotAnimation(
                     style = Stroke(width = 0.7f * u)
                 )
 
-                // Внутренний блик сверху (стекло)
                 drawRoundRect(
                     color = Color.White.copy(alpha = 0.25f),
                     topLeft = Offset(clockTopLeft.x + 0.5f * u, clockTopLeft.y + 0.4f * u),
@@ -2180,7 +2174,6 @@ fun ThinkingRobotAnimation(
                     cornerRadius = CornerRadius(clockCorner * 0.6f)
                 )
 
-                // Часовая стрелка (от центра к верху-влево)
                 drawLine(
                     color = Color.White.copy(alpha = 0.95f),
                     start = clockCenter,
@@ -2192,7 +2185,6 @@ fun ThinkingRobotAnimation(
                     cap = StrokeCap.Round
                 )
 
-                // Минутная стрелка (от центра вверх)
                 drawLine(
                     color = Color.White.copy(alpha = 0.95f),
                     start = clockCenter,
@@ -2204,7 +2196,6 @@ fun ThinkingRobotAnimation(
                     cap = StrokeCap.Round
                 )
 
-                // Центральная точка
                 drawCircle(
                     color = Color.White.copy(alpha = 0.95f),
                     radius = 0.65f * u,
@@ -2212,691 +2203,643 @@ fun ThinkingRobotAnimation(
                 )
             }
         }
-        
-        // ================= ТУЛОВИЩЕ (сегментированное, мужская фигура) =================
 
+        // ================= ТУЛОВИЩЕ =================
+        val domeTopY = 70f
+        val domeBottomY = 87f
+        val domeWidth = 37f
 
-// 2. 3D КУПОЛ (верхняя крышка с овальными кольцами для объёма)
-val domeTopY = 70f
-val domeBottomY = 87f
-val domeWidth = 37f
+        val domePath = Path().apply {
+            moveTo(pt(-domeWidth, domeBottomY).x, pt(-domeWidth, domeBottomY).y)
+            quadraticBezierTo(
+                pt(-domeWidth, domeTopY + 5f).x, pt(-domeWidth, domeTopY + 5f).y,
+                pt(0f, domeTopY).x, pt(0f, domeTopY).y
+            )
+            quadraticBezierTo(
+                pt(domeWidth, domeTopY + 5f).x, pt(domeWidth, domeTopY + 5f).y,
+                pt(domeWidth, domeBottomY).x, pt(domeWidth, domeBottomY).y
+            )
+            quadraticBezierTo(
+                pt(0f, domeBottomY + 7f).x, pt(0f, domeBottomY + 7f).y,
+                pt(-domeWidth, domeBottomY).x, pt(-domeWidth, domeBottomY).y
+            )
+            close()
+        }
 
-val domePath = Path().apply {
-    moveTo(pt(-domeWidth, domeBottomY).x, pt(-domeWidth, domeBottomY).y)
-    quadraticBezierTo(
-        pt(-domeWidth, domeTopY + 5f).x, pt(-domeWidth, domeTopY + 5f).y,
-        pt(0f, domeTopY).x, pt(0f, domeTopY).y
-    )
-    quadraticBezierTo(
-        pt(domeWidth, domeTopY + 5f).x, pt(domeWidth, domeTopY + 5f).y,
-        pt(domeWidth, domeBottomY).x, pt(domeWidth, domeBottomY).y
-    )
-    quadraticBezierTo(
-        pt(0f, domeBottomY + 7f).x, pt(0f, domeBottomY + 7f).y,
-        pt(-domeWidth, domeBottomY).x, pt(-domeWidth, domeBottomY).y
-    )
-    close()
-}
-
-// Заливка купола (радиальный градиент для 3D)
-drawPath(
-    domePath,
-    brush = Brush.radialGradient(
-        colors = listOf(
-            whiteHighlight,
-            whiteBody,
-            lightGray,
-            mediumGray
-        ),
-        center = pt(0f, domeTopY + 5f),
-        radius = 40f * u
-    )
-)
-drawPath(domePath, color = darkGray, style = Stroke(width = 1.3f * u))
-
-
-
-// 3. СЕГМЕНТ 1: Верхняя часть (широкие плечи)
-val segment1Top = 87f
-val segment1Bottom = 107f
-val segment1WidthTop = 38f
-val segment1WidthBottom = 34f
-
-val segment1Path = Path().apply {
-    moveTo(pt(-segment1WidthTop, segment1Top).x, pt(-segment1WidthTop, segment1Top).y)
-    lineTo(pt(segment1WidthTop, segment1Top).x, pt(segment1WidthTop, segment1Top).y)
-    quadraticBezierTo(
-        pt(segment1WidthBottom, segment1Bottom).x, pt(segment1WidthBottom, segment1Bottom).y,
-        pt(segment1WidthBottom, segment1Bottom).x, pt(segment1WidthBottom, segment1Bottom).y
-    )
-    lineTo(pt(-segment1WidthBottom, segment1Bottom).x, pt(-segment1WidthBottom, segment1Bottom).y)
-    quadraticBezierTo(
-        pt(-segment1WidthTop, segment1Top).x, pt(-segment1WidthTop, segment1Top).y,
-        pt(-segment1WidthTop, segment1Top).x, pt(-segment1WidthTop, segment1Top).y
-    )
-    close()
-}
-
-drawPath(
-    segment1Path,
-    brush = Brush.verticalGradient(
-        colors = listOf(whiteBody, lightGray),
-        startY = pt(0f, segment1Top).y,
-        endY = pt(0f, segment1Bottom).y
-    )
-)
-drawPath(segment1Path, color = darkGray, style = Stroke(width = 1.2f * u))
-
-// Разделительная линия сегмента 1
-drawLine(
-    color = mediumGray,
-    start = pt(-segment1WidthBottom + 2f, segment1Bottom - 2f),
-    end = pt(segment1WidthBottom - 2f, segment1Bottom - 2f),
-    strokeWidth = 0.8f * u
-)
-
-// Клёпки сегмента 1
-for (i in -1..1 step 2) {
-    drawCircle(
-        color = mediumGray,
-        radius = 1f * u,
-        center = pt(i * 30f, segment1Top + 5f)
-    )
-    drawCircle(
-        color = mediumGray,
-        radius = 1f * u,
-        center = pt(i * 27f, segment1Bottom - 5f)
-    )
-}
-
-// 4. ЭКРАН НА ГРУДИ (оригинальное пульсирующее солнце)
-val screenCenterY = 97f
-
-// Внешняя рамка экрана
-drawRoundRect(
-    color = darkerGray,
-    topLeft = pt(-22f, screenCenterY - 12f),
-    size = Size(44f * u, 24f * u),
-    cornerRadius = CornerRadius(6f * u)
-)
-
-// Внутренняя тёмная панель
-drawRoundRect(
-    color = Color(0xFF0F1216),
-    topLeft = pt(-20f, screenCenterY - 10f),
-    size = Size(40f * u, 20f * u),
-    cornerRadius = CornerRadius(5f * u)
-)
-
-// Блик на верхней части экрана
-drawRoundRect(
-    color = Color.White.copy(alpha = 0.1f),
-    topLeft = pt(-18f, screenCenterY - 9f),
-    size = Size(36f * u, 4f * u),
-    cornerRadius = CornerRadius(2f * u)
-)
-
-// ПУЛЬСИРУЮЩЕЕ СОЛНЦЕ (оригинальное)
-val heartCenter = pt(0f, screenCenterY)
-val corePulse = 0.5f + 0.5f * sin(pulse * 1.5f)
-val sunRadius = 5f * u * (1f + 0.15f * corePulse)
-
-// Внешнее свечение
-drawCircle(
-    brush = Brush.radialGradient(
-        colors = listOf(
-            Color(0x0000FFFF),
-            Color(0x3000BFFF).copy(alpha = 0.4f + 0.2f * corePulse),
-            Color(0x600088FF).copy(alpha = 0.3f),
-            Color.Transparent
-        ),
-        center = heartCenter,
-        radius = sunRadius * 3.2f
-    ),
-    radius = sunRadius * 3.2f,
-    center = heartCenter
-)
-
-// Среднее свечение
-drawCircle(
-    brush = Brush.radialGradient(
-        colors = listOf(
-            Color(0xFF00FFFF).copy(alpha = (0.7f + 0.3f * corePulse) * 0.8f),
-            Color(0xFF00BFFF).copy(alpha = 0.5f),
-            Color(0xFF0044FF).copy(alpha = 0f)
-        ),
-        center = heartCenter,
-        radius = sunRadius * 1.8f
-    ),
-    radius = sunRadius * 1.8f,
-    center = heartCenter
-)
-
-// Ядро солнца
-drawCircle(
-    brush = Brush.radialGradient(
-        colors = listOf(
-            Color.White,
-            Color(0xFF00FFFF),
-            Color(0xFF00BFFF),
-            Color(0xFF0044FF)
-        ),
-        center = heartCenter,
-        radius = sunRadius
-    ),
-    radius = sunRadius,
-    center = heartCenter
-)
-
-// Частицы на орбите
-val particleCount = 12
-for (i in 0 until particleCount) {
-    val angle = (i.toFloat() / particleCount) * 2f * PI.toFloat() + pulse
-    val distance = sunRadius * (1.3f + 0.4f * sin(pulse * 2f + i * 0.8f))
-    val px = heartCenter.x + cos(angle) * distance
-    val py = heartCenter.y + sin(angle) * distance
-    val pr = (0.3f + 0.3f * sin(pulse * 3f + i)) * u
-
-    drawCircle(
-        color = Color(0xFF00FFFF).copy(alpha = 0.4f + 0.4f * sin(pulse * 4f + i)),
-        radius = pr,
-        center = Offset(px, py)
-    )
-}
-
-// Белый блик
-drawCircle(
-    color = Color.White.copy(alpha = 0.9f),
-    radius = sunRadius * 0.35f,
-    center = Offset(heartCenter.x - sunRadius * 0.2f, heartCenter.y - sunRadius * 0.2f)
-)
-
-// Кольцо-орбита
-drawCircle(
-    color = Color(0xFF00FFFF).copy(alpha = 0.3f + 0.2f * corePulse),
-    radius = sunRadius * 1.6f,
-    center = heartCenter,
-    style = Stroke(width = 0.6f * u)
-)
-
-// 5. СЕГМЕНТ 2: Средняя часть (сужение к талии)
-val segment2Top = segment1Bottom
-val segment2Bottom = 127f
-val segment2WidthTop = segment1WidthBottom
-val segment2WidthBottom = 28f
-
-val segment2Path = Path().apply {
-    moveTo(pt(-segment2WidthTop, segment2Top).x, pt(-segment2WidthTop, segment2Top).y)
-    lineTo(pt(segment2WidthTop, segment2Top).x, pt(segment2WidthTop, segment2Top).y)
-    quadraticBezierTo(
-        pt(segment2WidthBottom, segment2Bottom).x, pt(segment2WidthBottom, segment2Bottom).y,
-        pt(segment2WidthBottom, segment2Bottom).x, pt(segment2WidthBottom, segment2Bottom).y
-    )
-    lineTo(pt(-segment2WidthBottom, segment2Bottom).x, pt(-segment2WidthBottom, segment2Bottom).y)
-    quadraticBezierTo(
-        pt(-segment2WidthTop, segment2Top).x, pt(-segment2WidthTop, segment2Top).y,
-        pt(-segment2WidthTop, segment2Top).x, pt(-segment2WidthTop, segment2Top).y
-    )
-    close()
-}
-
-drawPath(
-    segment2Path,
-    brush = Brush.verticalGradient(
-        colors = listOf(lightGray, mediumGray),
-        startY = pt(0f, segment2Top).y,
-        endY = pt(0f, segment2Bottom).y
-    )
-)
-drawPath(segment2Path, color = darkGray, style = Stroke(width = 1.2f * u))
-
-// Разделительная линия сегмента 2
-drawLine(
-    color = mediumGray,
-    start = pt(-segment2WidthBottom + 2f, segment2Bottom - 2f),
-    end = pt(segment2WidthBottom - 2f, segment2Bottom - 2f),
-    strokeWidth = 0.8f * u
-)
-
-// Клёпки сегмента 2
-for (i in -1..1 step 2) {
-    drawCircle(
-        color = mediumGray,
-        radius = 1f * u,
-        center = pt(i * 24f, segment2Top + 5f)
-    )
-    drawCircle(
-        color = mediumGray,
-        radius = 1f * u,
-        center = pt(i * 20f, segment2Bottom - 5f)
-    )
-}
-val beltHeight = 5f * u
-val beltCenterY = 139.25f
-// 5.5 СЕГМЕНТ 2.5: Область между талией и поясом (под надписью "ИИ-Друг")
-val segment2_5Top = segment2Bottom                        // 127f
-val segment2_5Bottom = beltCenterY - beltHeight / (2f * u) // 136.75f
-val segment2_5WidthTop = segment2WidthBottom              // 28f
-val segment2_5WidthBottom = 30f
-
-val segment2_5Path = Path().apply {
-    moveTo(pt(-segment2_5WidthTop, segment2_5Top).x, pt(-segment2_5WidthTop, segment2_5Top).y)
-    lineTo(pt(segment2_5WidthTop, segment2_5Top).x, pt(segment2_5WidthTop, segment2_5Top).y)
-    quadraticBezierTo(
-        pt(segment2_5WidthBottom, segment2_5Bottom).x, pt(segment2_5WidthBottom, segment2_5Bottom).y,
-        pt(segment2_5WidthBottom, segment2_5Bottom).x, pt(segment2_5WidthBottom, segment2_5Bottom).y
-    )
-    lineTo(pt(-segment2_5WidthBottom, segment2_5Bottom).x, pt(-segment2_5WidthBottom, segment2_5Bottom).y)
-    quadraticBezierTo(
-        pt(-segment2_5WidthTop, segment2_5Top).x, pt(-segment2_5WidthTop, segment2_5Top).y,
-        pt(-segment2_5WidthTop, segment2_5Top).x, pt(-segment2_5WidthTop, segment2_5Top).y
-    )
-    close()
-}
-
-drawPath(
-    segment2_5Path,
-    brush = Brush.verticalGradient(
-        colors = listOf(mediumGray, mediumGray, darkGray),
-        startY = pt(0f, segment2_5Top).y,
-        endY = pt(0f, segment2_5Bottom).y
-    )
-)
-drawPath(segment2_5Path, color = darkGray, style = Stroke(width = 1.2f * u))
-
-// Клёпки на сегменте 2.5
-for (i in -1..1 step 2) {
-    drawCircle(
-        color = mediumGray,
-        radius = 1f * u,
-        center = pt(i * 22f, segment2_5Top + 3f)
-    )
-    drawCircle(
-        color = mediumGray,
-        radius = 1f * u,
-        center = pt(i * 24f, segment2_5Bottom - 3f)
-    )
-}
-
-// 6. ПОЯС С БЕГУЩИМ ИНДИКАТОРОМ (оригинальный)
-val beltTop = beltCenterY - beltHeight / (2f * u)
-val beltWidth = 60f * u
-val beltLeft = -30f
-
-drawRoundRect(
-    color = darkerGray,
-    topLeft = pt(beltLeft, beltTop),
-    size = Size(beltWidth, beltHeight),
-    cornerRadius = CornerRadius(2f * u)
-)
-drawRoundRect(
-    color = darkGray,
-    topLeft = pt(beltLeft, beltTop),
-    size = Size(beltWidth, beltHeight),
-    cornerRadius = CornerRadius(2f * u),
-    style = Stroke(width = 1f * u)
-)
-
-// Бегущий индикатор (оригинальный)
-val chargeBarLeft = beltLeft + 2f
-val chargeBarRight = beltLeft + 30f + 28f - 2f
-val chargeBarWidth = chargeBarRight - chargeBarLeft
-val chargeBarHeight = 1.5f
-val chargeBarY = beltTop + (beltHeight / (2f * u)) - chargeBarHeight / 2f
-
-val chargeProgress = ((pulse % (2f * PI.toFloat())) / (2f * PI.toFloat())).toFloat()
-
-drawRoundRect(
-    Color(0xFF0A1520),
-    topLeft = pt(chargeBarLeft, chargeBarY),
-    size = Size(chargeBarWidth * u, chargeBarHeight * u),
-    cornerRadius = CornerRadius(0.7f * u)
-)
-
-val chargeBarTravel = chargeBarWidth * chargeProgress
-val chargeBarStart = chargeBarLeft + chargeBarTravel
-
-if (chargeBarTravel > 0.1f) {
-    drawRoundRect(
-        Brush.horizontalGradient(
-            listOf(neonBlue, neonBlueGlow, neonBlue),
-            startX = pt(chargeBarStart, chargeBarY).x,
-            endX = pt(chargeBarStart + 6f, chargeBarY).x
-        ),
-        topLeft = pt(chargeBarStart, chargeBarY),
-        size = Size(6f * u, chargeBarHeight * u),
-        cornerRadius = CornerRadius(0.7f * u)
-    )
-
-    drawCircle(
-        brush = Brush.radialGradient(
-            colors = listOf(
-                neonBlue.copy(alpha = 0.35f),
-                Color.Transparent
-            ),
-            center = pt(chargeBarStart + 3f, chargeBarY + chargeBarHeight / 2f),
-            radius = 3f * u
-        ),
-        radius = 3f * u,
-        center = pt(chargeBarStart + 3f, chargeBarY + chargeBarHeight / 2f)
-    )
-
-    drawCircle(
-        color = neonBlueGlow.copy(alpha = 0.9f),
-        radius = 0.5f * u,
-        center = pt(chargeBarStart + 6f, chargeBarY + chargeBarHeight / 2f)
-    )
-}
-
-// 7. СЕГМЕНТ 3: Нижняя часть (перед соплом) — не шире пояса, со скруглёнными углами
-val segment3Top = beltCenterY + beltHeight / (2f * u)
-val segment3Bottom = 155f
-val segment3WidthTop = 30f      // ← было 33.6f, теперь уже пояса (30f) с запасом
-val segment3WidthBottom = 30f   // ← было 31.2f, теперь одинаково с верхом
-val segment3CornerRadius = 4f   // ← радиус скругления углов
-
-val segment3Path = Path().apply {
-    // Верхний левый угол
-    moveTo(pt(-segment3WidthTop + segment3CornerRadius, segment3Top).x, pt(-segment3WidthTop + segment3CornerRadius, segment3Top).y)
-    // Верхняя линия
-    lineTo(pt(segment3WidthTop - segment3CornerRadius, segment3Top).x, pt(segment3WidthTop - segment3CornerRadius, segment3Top).y)
-    // Верхний правый угол
-    quadraticBezierTo(
-        pt(segment3WidthTop, segment3Top).x, pt(segment3WidthTop, segment3Top).y,
-        pt(segment3WidthTop, segment3Top + segment3CornerRadius).x, pt(segment3WidthTop, segment3Top + segment3CornerRadius).y
-    )
-    // Правая боковина
-    lineTo(pt(segment3WidthBottom, segment3Bottom - segment3CornerRadius).x, pt(segment3WidthBottom, segment3Bottom - segment3CornerRadius).y)
-    // Нижний правый угол
-    quadraticBezierTo(
-        pt(segment3WidthBottom, segment3Bottom).x, pt(segment3WidthBottom, segment3Bottom).y,
-        pt(segment3WidthBottom - segment3CornerRadius, segment3Bottom).x, pt(segment3WidthBottom - segment3CornerRadius, segment3Bottom).y
-    )
-    // Нижняя линия
-    lineTo(pt(-segment3WidthBottom + segment3CornerRadius, segment3Bottom).x, pt(-segment3WidthBottom + segment3CornerRadius, segment3Bottom).y)
-    // Нижний левый угол
-    quadraticBezierTo(
-        pt(-segment3WidthBottom, segment3Bottom).x, pt(-segment3WidthBottom, segment3Bottom).y,
-        pt(-segment3WidthBottom, segment3Bottom - segment3CornerRadius).x, pt(-segment3WidthBottom, segment3Bottom - segment3CornerRadius).y
-    )
-    // Левая боковина
-    lineTo(pt(-segment3WidthTop, segment3Top + segment3CornerRadius).x, pt(-segment3WidthTop, segment3Top + segment3CornerRadius).y)
-    // Верхний левый угол
-    quadraticBezierTo(
-        pt(-segment3WidthTop, segment3Top).x, pt(-segment3WidthTop, segment3Top).y,
-        pt(-segment3WidthTop + segment3CornerRadius, segment3Top).x, pt(-segment3WidthTop + segment3CornerRadius, segment3Top).y
-    )
-    close()
-}
-
-drawPath(
-    segment3Path,
-    brush = Brush.verticalGradient(
-        colors = listOf(mediumGray, darkGray),
-        startY = pt(0f, segment3Top).y,
-        endY = pt(0f, segment3Bottom).y
-    )
-)
-drawPath(segment3Path, color = darkGray, style = Stroke(width = 1.2f * u))
-
-// Клёпки сегмента 3
-for (i in -1..1 step 2) {
-    drawCircle(
-        color = mediumGray,
-        radius = 1f * u,
-        center = pt(i * 20f, segment3Top + 3f)
-    )
-}
-
-// 8. СОПЛО (колоколообразное, De Laval nozzle)
-val nozzleTop = 155f
-val nozzleThroat = 165f
-val nozzleBottom = 180f
-val nozzleTopWidth = 31.2f
-val nozzleThroatWidth = 19.2f
-val nozzleBottomWidth = 26.4f
-
-val nozzlePath = Path().apply {
-    moveTo(pt(-nozzleTopWidth / 2f, nozzleTop).x, pt(-nozzleTopWidth / 2f, nozzleTop).y)
-    quadraticBezierTo(
-        pt(-nozzleThroatWidth / 2f, nozzleThroat).x, pt(-nozzleThroatWidth / 2f, nozzleThroat).y,
-        pt(-nozzleThroatWidth / 2f, nozzleThroat).x, pt(-nozzleThroatWidth / 2f, nozzleThroat).y
-    )
-    quadraticBezierTo(
-        pt(-nozzleBottomWidth / 2f, nozzleBottom).x, pt(-nozzleBottomWidth / 2f, nozzleBottom).y,
-        pt(-nozzleBottomWidth / 2f, nozzleBottom).x, pt(-nozzleBottomWidth / 2f, nozzleBottom).y
-    )
-    lineTo(pt(nozzleBottomWidth / 2f, nozzleBottom).x, pt(nozzleBottomWidth / 2f, nozzleBottom).y)
-    quadraticBezierTo(
-        pt(nozzleThroatWidth / 2f, nozzleThroat).x, pt(nozzleThroatWidth / 2f, nozzleThroat).y,
-        pt(nozzleThroatWidth / 2f, nozzleThroat).x, pt(nozzleThroatWidth / 2f, nozzleThroat).y
-    )
-    quadraticBezierTo(
-        pt(nozzleTopWidth / 2f, nozzleTop).x, pt(nozzleTopWidth / 2f, nozzleTop).y,
-        pt(nozzleTopWidth / 2f, nozzleTop).x, pt(nozzleTopWidth / 2f, nozzleTop).y
-    )
-    close()
-}
-
-drawPath(
-    nozzlePath,
-    brush = Brush.verticalGradient(
-        colors = listOf(darkGray, darkerGray, Color(0xFF1A1A20)),
-        startY = pt(0f, nozzleTop).y,
-        endY = pt(0f, nozzleBottom).y
-    )
-)
-drawPath(nozzlePath, color = darkerGray, style = Stroke(width = 1.3f * u))
-
-// Кольца охлаждения на сопле
-for (i in 1..5) {
-    val y = nozzleTop + i * 5f
-    val width = when {
-        y < nozzleThroat -> nozzleTopWidth - (nozzleTopWidth - nozzleThroatWidth) * (y - nozzleTop) / (nozzleThroat - nozzleTop)
-        else -> nozzleThroatWidth + (nozzleBottomWidth - nozzleThroatWidth) * (y - nozzleThroat) / (nozzleBottom - nozzleThroat)
-    }
-    
-    drawLine(
-        color = Color(0xFF0A0A14).copy(alpha = 0.5f),
-        start = pt(-width / 2f, y),
-        end = pt(width / 2f, y),
-        strokeWidth = 0.7f * u
-    )
-}
-
-// Блик на сопле
-drawLine(
-    color = whiteHighlight.copy(alpha = 0.3f),
-    start = pt(-nozzleTopWidth / 2f + 3f, nozzleTop + 2f),
-    end = pt(-nozzleBottomWidth / 2f + 2f, nozzleBottom - 2f),
-    strokeWidth = 1.5f * u,
-    cap = StrokeCap.Round
-)
-
-// Верхний ободок сопла
-drawRoundRect(
-    color = mediumGray,
-    topLeft = pt(-nozzleTopWidth / 2f - 1f, nozzleTop - 1f),
-    size = Size((nozzleTopWidth + 2f) * u, 3f * u),
-    cornerRadius = CornerRadius(1.5f * u)
-)
-
-// Нижний ободок сопла (фланец)
-drawRoundRect(
-    color = darkerGray,
-    topLeft = pt(-nozzleBottomWidth / 2f - 2f, nozzleBottom),
-    size = Size((nozzleBottomWidth + 4f) * u, 3f * u),
-    cornerRadius = CornerRadius(1.5f * u)
-)
-
-// 9. ПЛАМЯ РАКЕТНОГО ДВИГАТЕЛЯ
-val flameFlicker = sin(flamePhase * 2.5f) * 2f
-val flameFlickerX = sin(flamePhase * 3.7f) * 1.5f
-val flamePulse = 0.7f + 0.3f * sin(flamePhase * 6f)
-
-// Свечение вокруг пламени
-drawCircle(
-    brush = Brush.radialGradient(
-        colors = listOf(
-            Color(0xFF00AAFF).copy(alpha = 0.4f * flamePulse),
-            Color(0xFF0066FF).copy(alpha = 0.2f * flamePulse),
-            Color.Transparent
-        ),
-        center = pt(0f, 195f).copy(x = pt(0f, 195f).x + flameFlickerX * u),
-        radius = 30f * u
-    ),
-    radius = 30f * u,
-    center = pt(0f, 195f).copy(x = pt(0f, 195f).x + flameFlickerX * u)
-)
-
-// Внешнее пламя
-val outerFlamePath = Path().apply {
-    moveTo(pt(-14.4f, nozzleBottom + 2f).x, pt(-14.4f, nozzleBottom + 2f).y)
-    quadraticBezierTo(
-        pt(-12f + flameFlickerX * 0.5f, nozzleBottom + 15f).x,
-        pt(-12f + flameFlickerX * 0.5f, nozzleBottom + 15f).y,
-        pt(-9.6f + flameFlickerX * 0.3f, nozzleBottom + 25f).x,
-        pt(-9.6f + flameFlickerX * 0.3f, nozzleBottom + 25f).y
-    )
-    quadraticBezierTo(
-        pt(0f, nozzleBottom + 30f + flameFlicker).x,
-        pt(0f, nozzleBottom + 30f + flameFlicker).y,
-        pt(9.6f + flameFlickerX * 0.3f, nozzleBottom + 25f).x,
-        pt(9.6f + flameFlickerX * 0.3f, nozzleBottom + 25f).y
-    )
-    quadraticBezierTo(
-        pt(12f + flameFlickerX * 0.5f, nozzleBottom + 15f).x,
-        pt(12f + flameFlickerX * 0.5f, nozzleBottom + 15f).y,
-        pt(14.4f, nozzleBottom + 2f).x, pt(14.4f, nozzleBottom + 2f).y
-    )
-    close()
-}
-
-drawPath(
-    outerFlamePath,
-    brush = Brush.verticalGradient(
-        colors = listOf(
-            Color(0xFFFF3300),
-            Color(0xFFFF4500),
-            Color(0xFFFF6600),
-            Color(0xFFFF8800).copy(alpha = 0.7f)
-        ),
-        startY = pt(0f, nozzleBottom).y,
-        endY = pt(0f, nozzleBottom + 30f).y
-    )
-)
-
-// Среднее пламя
-val middleFlamePath = Path().apply {
-    moveTo(pt(-8.4f, nozzleBottom + 3f).x, pt(-8.4f, nozzleBottom + 3f).y)
-    quadraticBezierTo(
-        pt(-6f, nozzleBottom + 12f).x, pt(-6f, nozzleBottom + 12f).y,
-        pt(-3.6f, nozzleBottom + 20f).x, pt(-3.6f, nozzleBottom + 20f).y
-    )
-    quadraticBezierTo(
-        pt(0f, nozzleBottom + 23f).x, pt(0f, nozzleBottom + 23f).y,
-        pt(3.6f, nozzleBottom + 20f).x, pt(3.6f, nozzleBottom + 20f).y
-    )
-    quadraticBezierTo(
-        pt(6f, nozzleBottom + 12f).x, pt(6f, nozzleBottom + 12f).y,
-        pt(8.4f, nozzleBottom + 3f).x, pt(8.4f, nozzleBottom + 3f).y
-    )
-    close()
-}
-drawPath(
-    middleFlamePath,
-    brush = Brush.verticalGradient(
-        colors = listOf(
-            Color(0xFFFF8800),
-            Color(0xFFFFAA00),
-            Color(0xFFFFCC00),
-            Color(0xFFFFE066).copy(alpha = 0.8f)
-        ),
-        startY = pt(0f, nozzleBottom).y,
-        endY = pt(0f, nozzleBottom + 25f).y
-    )
-)
-
-// Ромбы Маха
-for (i in 0..2) {
-    val diamondY = nozzleBottom + 8f + i * 5f
-    val diamondSize = (3f - i * 0.72f) * u
-    val diamondAlpha = 0.7f - i * 0.2f
-    
-    drawCircle(
-        color = Color(0xFFFFEE88).copy(alpha = diamondAlpha * flamePulse),
-        radius = diamondSize,
-        center = pt(0f, diamondY),
-        style = Stroke(width = 0.5f * u)
-    )
-    
-    drawCircle(
-        brush = Brush.radialGradient(
-            colors = listOf(
-                Color.White.copy(alpha = diamondAlpha * flamePulse),
-                Color(0xFFFFF5B0).copy(alpha = diamondAlpha * 0.5f),
-                Color.Transparent
-            ),
-            center = pt(0f, diamondY),
-            radius = diamondSize * 0.6f
-        ),
-        radius = diamondSize * 0.6f,
-        center = pt(0f, diamondY)
-    )
-}
-
-// Внутреннее ядро
-val innerFlamePath = Path().apply {
-    moveTo(pt(-4.8f, nozzleBottom + 4f).x, pt(-4.8f, nozzleBottom + 4f).y)
-    quadraticBezierTo(
-        pt(-2.4f, nozzleBottom + 10f).x, pt(-2.4f, nozzleBottom + 10f).y,
-        pt(0f, nozzleBottom + 15f).x, pt(0f, nozzleBottom + 15f).y
-    )
-    quadraticBezierTo(
-        pt(2.4f, nozzleBottom + 10f).x, pt(2.4f, nozzleBottom + 10f).y,
-        pt(4.8f, nozzleBottom + 4f).x, pt(4.8f, nozzleBottom + 4f).y
-    )
-    close()
-}
-
-drawPath(
-    innerFlamePath,
-    brush = Brush.verticalGradient(
-        colors = listOf(
-            Color.White,
-            Color(0xFFFFF5B0),
-            Color(0xFFFFE066).copy(alpha = 0.7f)
-        ),
-        startY = pt(0f, nozzleBottom).y,
-        endY = pt(0f, nozzleBottom + 18f).y
-    )
-)
-
-// Искры
-val sparkCount = 10
-for (i in 0 until sparkCount) {
-    val sparkPhase = (flamePhase * 3f + i * 0.6f) % (2f * PI.toFloat())
-    val sparkProgress = sparkPhase / (2f * PI.toFloat())
-    
-    val sparkY = nozzleBottom + 5f + sparkProgress * 35f
-    val sparkX = -9.6f + i * 2.16f + sin(sparkPhase * 4f) * 3f
-    val sparkAlpha = (1f - sparkProgress) * 0.9f
-    val sparkR = (1f - sparkProgress * 0.7f) * u
-    
-    if (sparkAlpha > 0.05f && sparkR > 0f) {
-        drawCircle(
-            color = Color(0xFFFFEE88).copy(alpha = sparkAlpha),
-            radius = sparkR,
-            center = pt(sparkX, sparkY)
+        drawPath(
+            domePath,
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    whiteHighlight,
+                    whiteBody,
+                    lightGray,
+                    mediumGray
+                ),
+                center = pt(0f, domeTopY + 5f),
+                radius = 40f * u
+            )
         )
-        drawCircle(
-            color = Color.White.copy(alpha = sparkAlpha * 0.9f),
-            radius = sparkR * 0.5f,
-            center = pt(sparkX, sparkY)
+        drawPath(domePath, color = darkGray, style = Stroke(width = 1.3f * u))
+
+        val segment1Top = 87f
+        val segment1Bottom = 107f
+        val segment1WidthTop = 38f
+        val segment1WidthBottom = 34f
+
+        val segment1Path = Path().apply {
+            moveTo(pt(-segment1WidthTop, segment1Top).x, pt(-segment1WidthTop, segment1Top).y)
+            lineTo(pt(segment1WidthTop, segment1Top).x, pt(segment1WidthTop, segment1Top).y)
+            quadraticBezierTo(
+                pt(segment1WidthBottom, segment1Bottom).x, pt(segment1WidthBottom, segment1Bottom).y,
+                pt(segment1WidthBottom, segment1Bottom).x, pt(segment1WidthBottom, segment1Bottom).y
+            )
+            lineTo(pt(-segment1WidthBottom, segment1Bottom).x, pt(-segment1WidthBottom, segment1Bottom).y)
+            quadraticBezierTo(
+                pt(-segment1WidthTop, segment1Top).x, pt(-segment1WidthTop, segment1Top).y,
+                pt(-segment1WidthTop, segment1Top).x, pt(-segment1WidthTop, segment1Top).y
+            )
+            close()
+        }
+
+        drawPath(
+            segment1Path,
+            brush = Brush.verticalGradient(
+                colors = listOf(whiteBody, lightGray),
+                startY = pt(0f, segment1Top).y,
+                endY = pt(0f, segment1Bottom).y
+            )
         )
-    }
-}
-                       // ================= НАДПИСЬ "ИИ-Друг" МЕЖДУ ЭКРАНОМ И РЕМНЁМ =================
+        drawPath(segment1Path, color = darkGray, style = Stroke(width = 1.2f * u))
+
+        drawLine(
+            color = mediumGray,
+            start = pt(-segment1WidthBottom + 2f, segment1Bottom - 2f),
+            end = pt(segment1WidthBottom - 2f, segment1Bottom - 2f),
+            strokeWidth = 0.8f * u
+        )
+
+        for (i in -1..1 step 2) {
+            drawCircle(
+                color = mediumGray,
+                radius = 1f * u,
+                center = pt(i * 30f, segment1Top + 5f)
+            )
+            drawCircle(
+                color = mediumGray,
+                radius = 1f * u,
+                center = pt(i * 27f, segment1Bottom - 5f)
+            )
+        }
+
+        val screenCenterY = 97f
+
+        drawRoundRect(
+            color = darkerGray,
+            topLeft = pt(-22f, screenCenterY - 12f),
+            size = Size(44f * u, 24f * u),
+            cornerRadius = CornerRadius(6f * u)
+        )
+
+        drawRoundRect(
+            color = Color(0xFF0F1216),
+            topLeft = pt(-20f, screenCenterY - 10f),
+            size = Size(40f * u, 20f * u),
+            cornerRadius = CornerRadius(5f * u)
+        )
+
+        drawRoundRect(
+            color = Color.White.copy(alpha = 0.1f),
+            topLeft = pt(-18f, screenCenterY - 9f),
+            size = Size(36f * u, 4f * u),
+            cornerRadius = CornerRadius(2f * u)
+        )
+
+        val heartCenter = pt(0f, screenCenterY)
+        val corePulse = 0.5f + 0.5f * sin(pulse * 1.5f)
+        val sunRadius = 5f * u * (1f + 0.15f * corePulse)
+
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color(0x0000FFFF),
+                    Color(0x3000BFFF).copy(alpha = 0.4f + 0.2f * corePulse),
+                    Color(0x600088FF).copy(alpha = 0.3f),
+                    Color.Transparent
+                ),
+                center = heartCenter,
+                radius = sunRadius * 3.2f
+            ),
+            radius = sunRadius * 3.2f,
+            center = heartCenter
+        )
+
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color(0xFF00FFFF).copy(alpha = (0.7f + 0.3f * corePulse) * 0.8f),
+                    Color(0xFF00BFFF).copy(alpha = 0.5f),
+                    Color(0xFF0044FF).copy(alpha = 0f)
+                ),
+                center = heartCenter,
+                radius = sunRadius * 1.8f
+            ),
+            radius = sunRadius * 1.8f,
+            center = heartCenter
+        )
+
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color.White,
+                    Color(0xFF00FFFF),
+                    Color(0xFF00BFFF),
+                    Color(0xFF0044FF)
+                ),
+                center = heartCenter,
+                radius = sunRadius
+            ),
+            radius = sunRadius,
+            center = heartCenter
+        )
+
+        val particleCount = 12
+        for (i in 0 until particleCount) {
+            val angle = (i.toFloat() / particleCount) * 2f * PI.toFloat() + pulse
+            val distance = sunRadius * (1.3f + 0.4f * sin(pulse * 2f + i * 0.8f))
+            val px = heartCenter.x + cos(angle) * distance
+            val py = heartCenter.y + sin(angle) * distance
+            val pr = (0.3f + 0.3f * sin(pulse * 3f + i)) * u
+
+            drawCircle(
+                color = Color(0xFF00FFFF).copy(alpha = 0.4f + 0.4f * sin(pulse * 4f + i)),
+                radius = pr,
+                center = Offset(px, py)
+            )
+        }
+
+        drawCircle(
+            color = Color.White.copy(alpha = 0.9f),
+            radius = sunRadius * 0.35f,
+            center = Offset(heartCenter.x - sunRadius * 0.2f, heartCenter.y - sunRadius * 0.2f)
+        )
+
+        drawCircle(
+            color = Color(0xFF00FFFF).copy(alpha = 0.3f + 0.2f * corePulse),
+            radius = sunRadius * 1.6f,
+            center = heartCenter,
+            style = Stroke(width = 0.6f * u)
+        )
+
+        val segment2Top = segment1Bottom
+        val segment2Bottom = 127f
+        val segment2WidthTop = segment1WidthBottom
+        val segment2WidthBottom = 28f
+
+        val segment2Path = Path().apply {
+            moveTo(pt(-segment2WidthTop, segment2Top).x, pt(-segment2WidthTop, segment2Top).y)
+            lineTo(pt(segment2WidthTop, segment2Top).x, pt(segment2WidthTop, segment2Top).y)
+            quadraticBezierTo(
+                pt(segment2WidthBottom, segment2Bottom).x, pt(segment2WidthBottom, segment2Bottom).y,
+                pt(segment2WidthBottom, segment2Bottom).x, pt(segment2WidthBottom, segment2Bottom).y
+            )
+            lineTo(pt(-segment2WidthBottom, segment2Bottom).x, pt(-segment2WidthBottom, segment2Bottom).y)
+            quadraticBezierTo(
+                pt(-segment2WidthTop, segment2Top).x, pt(-segment2WidthTop, segment2Top).y,
+                pt(-segment2WidthTop, segment2Top).x, pt(-segment2WidthTop, segment2Top).y
+            )
+            close()
+        }
+
+        drawPath(
+            segment2Path,
+            brush = Brush.verticalGradient(
+                colors = listOf(lightGray, mediumGray),
+                startY = pt(0f, segment2Top).y,
+                endY = pt(0f, segment2Bottom).y
+            )
+        )
+        drawPath(segment2Path, color = darkGray, style = Stroke(width = 1.2f * u))
+
+        drawLine(
+            color = mediumGray,
+            start = pt(-segment2WidthBottom + 2f, segment2Bottom - 2f),
+            end = pt(segment2WidthBottom - 2f, segment2Bottom - 2f),
+            strokeWidth = 0.8f * u
+        )
+
+        for (i in -1..1 step 2) {
+            drawCircle(
+                color = mediumGray,
+                radius = 1f * u,
+                center = pt(i * 24f, segment2Top + 5f)
+            )
+            drawCircle(
+                color = mediumGray,
+                radius = 1f * u,
+                center = pt(i * 20f, segment2Bottom - 5f)
+            )
+        }
+        val beltHeight = 5f * u
+        val beltCenterY = 139.25f
+
+        val segment2_5Top = segment2Bottom
+        val segment2_5Bottom = beltCenterY - beltHeight / (2f * u)
+        val segment2_5WidthTop = segment2WidthBottom
+        val segment2_5WidthBottom = 30f
+
+        val segment2_5Path = Path().apply {
+            moveTo(pt(-segment2_5WidthTop, segment2_5Top).x, pt(-segment2_5WidthTop, segment2_5Top).y)
+            lineTo(pt(segment2_5WidthTop, segment2_5Top).x, pt(segment2_5WidthTop, segment2_5Top).y)
+            quadraticBezierTo(
+                pt(segment2_5WidthBottom, segment2_5Bottom).x, pt(segment2_5WidthBottom, segment2_5Bottom).y,
+                pt(segment2_5WidthBottom, segment2_5Bottom).x, pt(segment2_5WidthBottom, segment2_5Bottom).y
+            )
+            lineTo(pt(-segment2_5WidthBottom, segment2_5Bottom).x, pt(-segment2_5WidthBottom, segment2_5Bottom).y)
+            quadraticBezierTo(
+                pt(-segment2_5WidthTop, segment2_5Top).x, pt(-segment2_5WidthTop, segment2_5Top).y,
+                pt(-segment2_5WidthTop, segment2_5Top).x, pt(-segment2_5WidthTop, segment2_5Top).y
+            )
+            close()
+        }
+
+        drawPath(
+            segment2_5Path,
+            brush = Brush.verticalGradient(
+                colors = listOf(mediumGray, mediumGray, darkGray),
+                startY = pt(0f, segment2_5Top).y,
+                endY = pt(0f, segment2_5Bottom).y
+            )
+        )
+        drawPath(segment2_5Path, color = darkGray, style = Stroke(width = 1.2f * u))
+
+        for (i in -1..1 step 2) {
+            drawCircle(
+                color = mediumGray,
+                radius = 1f * u,
+                center = pt(i * 22f, segment2_5Top + 3f)
+            )
+            drawCircle(
+                color = mediumGray,
+                radius = 1f * u,
+                center = pt(i * 24f, segment2_5Bottom - 3f)
+            )
+        }
+
+        val beltTop = beltCenterY - beltHeight / (2f * u)
+        val beltWidth = 60f * u
+        val beltLeft = -30f
+
+        drawRoundRect(
+            color = darkerGray,
+            topLeft = pt(beltLeft, beltTop),
+            size = Size(beltWidth, beltHeight),
+            cornerRadius = CornerRadius(2f * u)
+        )
+        drawRoundRect(
+            color = darkGray,
+            topLeft = pt(beltLeft, beltTop),
+            size = Size(beltWidth, beltHeight),
+            cornerRadius = CornerRadius(2f * u),
+            style = Stroke(width = 1f * u)
+        )
+
+        val chargeBarLeft = beltLeft + 2f
+        val chargeBarRight = beltLeft + 30f + 28f - 2f
+        val chargeBarWidth = chargeBarRight - chargeBarLeft
+        val chargeBarHeight = 1.5f
+        val chargeBarY = beltTop + (beltHeight / (2f * u)) - chargeBarHeight / 2f
+
+        val chargeProgress = ((pulse % (2f * PI.toFloat())) / (2f * PI.toFloat())).toFloat()
+
+        drawRoundRect(
+            Color(0xFF0A1520),
+            topLeft = pt(chargeBarLeft, chargeBarY),
+            size = Size(chargeBarWidth * u, chargeBarHeight * u),
+            cornerRadius = CornerRadius(0.7f * u)
+        )
+
+        val chargeBarTravel = chargeBarWidth * chargeProgress
+        val chargeBarStart = chargeBarLeft + chargeBarTravel
+
+        if (chargeBarTravel > 0.1f) {
+            drawRoundRect(
+                Brush.horizontalGradient(
+                    listOf(neonBlue, neonBlueGlow, neonBlue),
+                    startX = pt(chargeBarStart, chargeBarY).x,
+                    endX = pt(chargeBarStart + 6f, chargeBarY).x
+                ),
+                topLeft = pt(chargeBarStart, chargeBarY),
+                size = Size(6f * u, chargeBarHeight * u),
+                cornerRadius = CornerRadius(0.7f * u)
+            )
+
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        neonBlue.copy(alpha = 0.35f),
+                        Color.Transparent
+                    ),
+                    center = pt(chargeBarStart + 3f, chargeBarY + chargeBarHeight / 2f),
+                    radius = 3f * u
+                ),
+                radius = 3f * u,
+                center = pt(chargeBarStart + 3f, chargeBarY + chargeBarHeight / 2f)
+            )
+
+            drawCircle(
+                color = neonBlueGlow.copy(alpha = 0.9f),
+                radius = 0.5f * u,
+                center = pt(chargeBarStart + 6f, chargeBarY + chargeBarHeight / 2f)
+            )
+        }
+
+        val segment3Top = beltCenterY + beltHeight / (2f * u)
+        val segment3Bottom = 155f
+        val segment3WidthTop = 30f
+        val segment3WidthBottom = 30f
+        val segment3CornerRadius = 4f
+
+        val segment3Path = Path().apply {
+            moveTo(pt(-segment3WidthTop + segment3CornerRadius, segment3Top).x, pt(-segment3WidthTop + segment3CornerRadius, segment3Top).y)
+            lineTo(pt(segment3WidthTop - segment3CornerRadius, segment3Top).x, pt(segment3WidthTop - segment3CornerRadius, segment3Top).y)
+            quadraticBezierTo(
+                pt(segment3WidthTop, segment3Top).x, pt(segment3WidthTop, segment3Top).y,
+                pt(segment3WidthTop, segment3Top + segment3CornerRadius).x, pt(segment3WidthTop, segment3Top + segment3CornerRadius).y
+            )
+            lineTo(pt(segment3WidthBottom, segment3Bottom - segment3CornerRadius).x, pt(segment3WidthBottom, segment3Bottom - segment3CornerRadius).y)
+            quadraticBezierTo(
+                pt(segment3WidthBottom, segment3Bottom).x, pt(segment3WidthBottom, segment3Bottom).y,
+                pt(segment3WidthBottom - segment3CornerRadius, segment3Bottom).x, pt(segment3WidthBottom - segment3CornerRadius, segment3Bottom).y
+            )
+            lineTo(pt(-segment3WidthBottom + segment3CornerRadius, segment3Bottom).x, pt(-segment3WidthBottom + segment3CornerRadius, segment3Bottom).y)
+            quadraticBezierTo(
+                pt(-segment3WidthBottom, segment3Bottom).x, pt(-segment3WidthBottom, segment3Bottom).y,
+                pt(-segment3WidthBottom, segment3Bottom - segment3CornerRadius).x, pt(-segment3WidthBottom, segment3Bottom - segment3CornerRadius).y
+            )
+            lineTo(pt(-segment3WidthTop, segment3Top + segment3CornerRadius).x, pt(-segment3WidthTop, segment3Top + segment3CornerRadius).y)
+            quadraticBezierTo(
+                pt(-segment3WidthTop, segment3Top).x, pt(-segment3WidthTop, segment3Top).y,
+                pt(-segment3WidthTop + segment3CornerRadius, segment3Top).x, pt(-segment3WidthTop + segment3CornerRadius, segment3Top).y
+            )
+            close()
+        }
+
+        drawPath(
+            segment3Path,
+            brush = Brush.verticalGradient(
+                colors = listOf(mediumGray, darkGray),
+                startY = pt(0f, segment3Top).y,
+                endY = pt(0f, segment3Bottom).y
+            )
+        )
+        drawPath(segment3Path, color = darkGray, style = Stroke(width = 1.2f * u))
+
+        for (i in -1..1 step 2) {
+            drawCircle(
+                color = mediumGray,
+                radius = 1f * u,
+                center = pt(i * 20f, segment3Top + 3f)
+            )
+        }
+
+        val nozzleTop = 155f
+        val nozzleThroat = 165f
+        val nozzleBottom = 180f
+        val nozzleTopWidth = 31.2f
+        val nozzleThroatWidth = 19.2f
+        val nozzleBottomWidth = 26.4f
+
+        val nozzlePath = Path().apply {
+            moveTo(pt(-nozzleTopWidth / 2f, nozzleTop).x, pt(-nozzleTopWidth / 2f, nozzleTop).y)
+            quadraticBezierTo(
+                pt(-nozzleThroatWidth / 2f, nozzleThroat).x, pt(-nozzleThroatWidth / 2f, nozzleThroat).y,
+                pt(-nozzleThroatWidth / 2f, nozzleThroat).x, pt(-nozzleThroatWidth / 2f, nozzleThroat).y
+            )
+            quadraticBezierTo(
+                pt(-nozzleBottomWidth / 2f, nozzleBottom).x, pt(-nozzleBottomWidth / 2f, nozzleBottom).y,
+                pt(-nozzleBottomWidth / 2f, nozzleBottom).x, pt(-nozzleBottomWidth / 2f, nozzleBottom).y
+            )
+            lineTo(pt(nozzleBottomWidth / 2f, nozzleBottom).x, pt(nozzleBottomWidth / 2f, nozzleBottom).y)
+            quadraticBezierTo(
+                pt(nozzleThroatWidth / 2f, nozzleThroat).x, pt(nozzleThroatWidth / 2f, nozzleThroat).y,
+                pt(nozzleThroatWidth / 2f, nozzleThroat).x, pt(nozzleThroatWidth / 2f, nozzleThroat).y
+            )
+            quadraticBezierTo(
+                pt(nozzleTopWidth / 2f, nozzleTop).x, pt(nozzleTopWidth / 2f, nozzleTop).y,
+                pt(nozzleTopWidth / 2f, nozzleTop).x, pt(nozzleTopWidth / 2f, nozzleTop).y
+            )
+            close()
+        }
+
+        drawPath(
+            nozzlePath,
+            brush = Brush.verticalGradient(
+                colors = listOf(darkGray, darkerGray, Color(0xFF1A1A20)),
+                startY = pt(0f, nozzleTop).y,
+                endY = pt(0f, nozzleBottom).y
+            )
+        )
+        drawPath(nozzlePath, color = darkerGray, style = Stroke(width = 1.3f * u))
+
+        for (i in 1..5) {
+            val y = nozzleTop + i * 5f
+            val width = when {
+                y < nozzleThroat -> nozzleTopWidth - (nozzleTopWidth - nozzleThroatWidth) * (y - nozzleTop) / (nozzleThroat - nozzleTop)
+                else -> nozzleThroatWidth + (nozzleBottomWidth - nozzleThroatWidth) * (y - nozzleThroat) / (nozzleBottom - nozzleThroat)
+            }
+
+            drawLine(
+                color = Color(0xFF0A0A14).copy(alpha = 0.5f),
+                start = pt(-width / 2f, y),
+                end = pt(width / 2f, y),
+                strokeWidth = 0.7f * u
+            )
+        }
+
+        drawLine(
+            color = whiteHighlight.copy(alpha = 0.3f),
+            start = pt(-nozzleTopWidth / 2f + 3f, nozzleTop + 2f),
+            end = pt(-nozzleBottomWidth / 2f + 2f, nozzleBottom - 2f),
+            strokeWidth = 1.5f * u,
+            cap = StrokeCap.Round
+        )
+
+        drawRoundRect(
+            color = mediumGray,
+            topLeft = pt(-nozzleTopWidth / 2f - 1f, nozzleTop - 1f),
+            size = Size((nozzleTopWidth + 2f) * u, 3f * u),
+            cornerRadius = CornerRadius(1.5f * u)
+        )
+
+        drawRoundRect(
+            color = darkerGray,
+            topLeft = pt(-nozzleBottomWidth / 2f - 2f, nozzleBottom),
+            size = Size((nozzleBottomWidth + 4f) * u, 3f * u),
+            cornerRadius = CornerRadius(1.5f * u)
+        )
+
+        val flameFlicker = sin(flamePhase * 2.5f) * 2f
+        val flameFlickerX = sin(flamePhase * 3.7f) * 1.5f
+        val flamePulse = 0.7f + 0.3f * sin(flamePhase * 6f)
+
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color(0xFF00AAFF).copy(alpha = 0.4f * flamePulse),
+                    Color(0xFF0066FF).copy(alpha = 0.2f * flamePulse),
+                    Color.Transparent
+                ),
+                center = pt(0f, 195f).copy(x = pt(0f, 195f).x + flameFlickerX * u),
+                radius = 30f * u
+            ),
+            radius = 30f * u,
+            center = pt(0f, 195f).copy(x = pt(0f, 195f).x + flameFlickerX * u)
+        )
+
+        val outerFlamePath = Path().apply {
+            moveTo(pt(-14.4f, nozzleBottom + 2f).x, pt(-14.4f, nozzleBottom + 2f).y)
+            quadraticBezierTo(
+                pt(-12f + flameFlickerX * 0.5f, nozzleBottom + 15f).x,
+                pt(-12f + flameFlickerX * 0.5f, nozzleBottom + 15f).y,
+                pt(-9.6f + flameFlickerX * 0.3f, nozzleBottom + 25f).x,
+                pt(-9.6f + flameFlickerX * 0.3f, nozzleBottom + 25f).y
+            )
+            quadraticBezierTo(
+                pt(0f, nozzleBottom + 30f + flameFlicker).x,
+                pt(0f, nozzleBottom + 30f + flameFlicker).y,
+                pt(9.6f + flameFlickerX * 0.3f, nozzleBottom + 25f).x,
+                pt(9.6f + flameFlickerX * 0.3f, nozzleBottom + 25f).y
+            )
+            quadraticBezierTo(
+                pt(12f + flameFlickerX * 0.5f, nozzleBottom + 15f).x,
+                pt(12f + flameFlickerX * 0.5f, nozzleBottom + 15f).y,
+                pt(14.4f, nozzleBottom + 2f).x, pt(14.4f, nozzleBottom + 2f).y
+            )
+            close()
+        }
+
+        drawPath(
+            outerFlamePath,
+            brush = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFFFF3300),
+                    Color(0xFFFF4500),
+                    Color(0xFFFF6600),
+                    Color(0xFFFF8800).copy(alpha = 0.7f)
+                ),
+                startY = pt(0f, nozzleBottom).y,
+                endY = pt(0f, nozzleBottom + 30f).y
+            )
+        )
+
+        val middleFlamePath = Path().apply {
+            moveTo(pt(-8.4f, nozzleBottom + 3f).x, pt(-8.4f, nozzleBottom + 3f).y)
+            quadraticBezierTo(
+                pt(-6f, nozzleBottom + 12f).x, pt(-6f, nozzleBottom + 12f).y,
+                pt(-3.6f, nozzleBottom + 20f).x, pt(-3.6f, nozzleBottom + 20f).y
+            )
+            quadraticBezierTo(
+                pt(0f, nozzleBottom + 23f).x, pt(0f, nozzleBottom + 23f).y,
+                pt(3.6f, nozzleBottom + 20f).x, pt(3.6f, nozzleBottom + 20f).y
+            )
+            quadraticBezierTo(
+                pt(6f, nozzleBottom + 12f).x, pt(6f, nozzleBottom + 12f).y,
+                pt(8.4f, nozzleBottom + 3f).x, pt(8.4f, nozzleBottom + 3f).y
+            )
+            close()
+        }
+        drawPath(
+            middleFlamePath,
+            brush = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFFFF8800),
+                    Color(0xFFFFAA00),
+                    Color(0xFFFFCC00),
+                    Color(0xFFFFE066).copy(alpha = 0.8f)
+                ),
+                startY = pt(0f, nozzleBottom).y,
+                endY = pt(0f, nozzleBottom + 25f).y
+            )
+        )
+
+        for (i in 0..2) {
+            val diamondY = nozzleBottom + 8f + i * 5f
+            val diamondSize = (3f - i * 0.72f) * u
+            val diamondAlpha = 0.7f - i * 0.2f
+
+            drawCircle(
+                color = Color(0xFFFFEE88).copy(alpha = diamondAlpha * flamePulse),
+                radius = diamondSize,
+                center = pt(0f, diamondY),
+                style = Stroke(width = 0.5f * u)
+            )
+
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = diamondAlpha * flamePulse),
+                        Color(0xFFFFF5B0).copy(alpha = diamondAlpha * 0.5f),
+                        Color.Transparent
+                    ),
+                    center = pt(0f, diamondY),
+                    radius = diamondSize * 0.6f
+                ),
+                radius = diamondSize * 0.6f,
+                center = pt(0f, diamondY)
+            )
+        }
+
+        val innerFlamePath = Path().apply {
+            moveTo(pt(-4.8f, nozzleBottom + 4f).x, pt(-4.8f, nozzleBottom + 4f).y)
+            quadraticBezierTo(
+                pt(-2.4f, nozzleBottom + 10f).x, pt(-2.4f, nozzleBottom + 10f).y,
+                pt(0f, nozzleBottom + 15f).x, pt(0f, nozzleBottom + 15f).y
+            )
+            quadraticBezierTo(
+                pt(2.4f, nozzleBottom + 10f).x, pt(2.4f, nozzleBottom + 10f).y,
+                pt(4.8f, nozzleBottom + 4f).x, pt(4.8f, nozzleBottom + 4f).y
+            )
+            close()
+        }
+
+        drawPath(
+            innerFlamePath,
+            brush = Brush.verticalGradient(
+                colors = listOf(
+                    Color.White,
+                    Color(0xFFFFF5B0),
+                    Color(0xFFFFE066).copy(alpha = 0.7f)
+                ),
+                startY = pt(0f, nozzleBottom).y,
+                endY = pt(0f, nozzleBottom + 18f).y
+            )
+        )
+
+        val sparkCount = 10
+        for (i in 0 until sparkCount) {
+            val sparkPhase = (flamePhase * 3f + i * 0.6f) % (2f * PI.toFloat())
+            val sparkProgress = sparkPhase / (2f * PI.toFloat())
+
+            val sparkY = nozzleBottom + 5f + sparkProgress * 35f
+            val sparkX = -9.6f + i * 2.16f + sin(sparkPhase * 4f) * 3f
+            val sparkAlpha = (1f - sparkProgress) * 0.9f
+            val sparkR = (1f - sparkProgress * 0.7f) * u
+
+            if (sparkAlpha > 0.05f && sparkR > 0f) {
+                drawCircle(
+                    color = Color(0xFFFFEE88).copy(alpha = sparkAlpha),
+                    radius = sparkR,
+                    center = pt(sparkX, sparkY)
+                )
+                drawCircle(
+                    color = Color.White.copy(alpha = sparkAlpha * 0.9f),
+                    radius = sparkR * 0.5f,
+                    center = pt(sparkX, sparkY)
+                )
+            }
+        }
+
+        // ================= НАДПИСЬ "ИИ-Друг" =================
         val labelText = "ИИ-Друг"
         val labelFontSize = with(density) { (10f * u).toSp() }
         val labelStyle = TextStyle(
@@ -2908,7 +2851,7 @@ for (i in 0 until sparkCount) {
             text = labelText,
             style = labelStyle
         )
-               val labelCenterY = 117f
+        val labelCenterY = 117f
         val labelCenterPos = pt(0f, labelCenterY)
         drawText(
             textLayoutResult = labelLayout,
@@ -2918,1399 +2861,1263 @@ for (i in 0 until sparkCount) {
             )
         )
 
-                // ================= ШЕЯ (гибкое сочленение из колец) =================
-        // 4 кольца — сужаются к голове
+        // ================= ГОЛОВА И ВСЁ, ЧТО С НЕЙ СВЯЗАНО =================
+        // Оборачиваем в rotate(headTilt) — голова наклоняется вокруг основания шеи
+        rotate(headTilt, pivot = pt(0f, 62f)) {
 
-        // Нижнее кольцо (самое широкое, основание)
-        drawRoundRect(
-            color = lightGray,
-            topLeft = pt(-14f, 62f),
-            size = Size(28f * u, 4f * u),
-            cornerRadius = CornerRadius(2f * u)
-        )
-        drawRoundRect(
-            color = darkGray,
-            topLeft = pt(-14f, 62f),
-            size = Size(28f * u, 4f * u),
-            cornerRadius = CornerRadius(2f * u),
-            style = Stroke(width = 1f * u)
-        )
-
-        // Второе кольцо
-        drawRoundRect(
-            color = mediumGray,
-            topLeft = pt(-13f, 66f),
-            size = Size(26f * u, 3.5f * u),
-            cornerRadius = CornerRadius(1.8f * u)
-        )
-        drawRoundRect(
-            color = darkGray,
-            topLeft = pt(-13f, 66f),
-            size = Size(26f * u, 3.5f * u),
-            cornerRadius = CornerRadius(1.8f * u),
-            style = Stroke(width = 1f * u)
-        )
-
-        // Третье кольцо
-        drawRoundRect(
-            color = lightGray,
-            topLeft = pt(-12f, 69.5f),
-            size = Size(24f * u, 3.5f * u),
-            cornerRadius = CornerRadius(1.8f * u)
-        )
-        drawRoundRect(
-            color = darkGray,
-            topLeft = pt(-12f, 69.5f),
-            size = Size(24f * u, 3.5f * u),
-            cornerRadius = CornerRadius(1.8f * u),
-            style = Stroke(width = 1f * u)
-        )
-
-        // Четвёртое кольцо (самое узкое, у головы)
-        drawRoundRect(
-            color = mediumGray,
-            topLeft = pt(-11f, 73f),
-            size = Size(22f * u, 3f * u),
-            cornerRadius = CornerRadius(1.5f * u)
-        )
-        drawRoundRect(
-            color = darkGray,
-            topLeft = pt(-11f, 73f),
-            size = Size(22f * u, 3f * u),
-            cornerRadius = CornerRadius(1.5f * u),
-            style = Stroke(width = 1f * u)
-        )
-
-        // Тёмный жёлоб между кольцами (для эффекта сочленения)
-        drawLine(
-            darkerGray,
-            pt(-12f, 65.5f),
-            pt(12f, 65.5f),
-            strokeWidth = 0.5f * u
-        )
-        drawLine(
-            darkerGray,
-            pt(-12f, 69f),
-            pt(12f, 69f),
-            strokeWidth = 0.5f * u
-        )
-        drawLine(
-            darkerGray,
-            pt(-11f, 72.5f),
-            pt(11f, 72.5f),
-            strokeWidth = 0.5f * u
-        )
-
-        // Блик слева на кольцах
-        drawRoundRect(
-            color = whiteHighlight.copy(alpha = 0.6f),
-            topLeft = pt(-13f, 62.5f),
-            size = Size(2f * u, 3f * u),
-            cornerRadius = CornerRadius(1f * u)
-        )
-        drawRoundRect(
-            color = whiteHighlight.copy(alpha = 0.6f),
-            topLeft = pt(-12f, 66.5f),
-            size = Size(2f * u, 2.5f * u),
-            cornerRadius = CornerRadius(1f * u)
-        )
-        drawRoundRect(
-            color = whiteHighlight.copy(alpha = 0.6f),
-            topLeft = pt(-11f, 70f),
-            size = Size(2f * u, 2.5f * u),
-            cornerRadius = CornerRadius(1f * u)
-        )
-        drawRoundRect(
-            color = whiteHighlight.copy(alpha = 0.6f),
-            topLeft = pt(-10f, 73.5f),
-            size = Size(2f * u, 2f * u),
-            cornerRadius = CornerRadius(1f * u)
-        )
-
-             // ================= ЛЕВЫЙ НАУШНИК (повёрнут к голове на 12°) =================
-        rotate(12f, pivot = pt(-42f, 45f)) {
-            // Внешний полукруг
-            val leftEarOuterPath = Path().apply {
-                moveTo(pt(-42f, 18f).x, pt(-42f, 18f).y)
-                cubicTo(
-                    pt(-56.4f, 20f).x, pt(-56.4f, 20f).y,
-                    pt(-56.4f, 43f).x, pt(-56.4f, 43f).y,
-                    pt(-42f, 45f).x, pt(-42f, 45f).y
-                )
-                lineTo(pt(-42f, 18f).x, pt(-42f, 18f).y)
-                close()
-            }
-            drawPath(
-                leftEarOuterPath,
-                brush = Brush.horizontalGradient(
-                    colors = listOf(lightGray, whiteBody),
-                    startX = pt(-56.4f, 32f).x,
-                    endX = pt(-42f, 32f).x
-                )
-            )
-            drawPath(leftEarOuterPath, color = darkGray, style = Stroke(width = 1.3f * u))
-
-            // Внутренний полукруг
-            val leftEarInnerPath = Path().apply {
-                moveTo(pt(-47f, 23f).x, pt(-47f, 23f).y)
-                cubicTo(
-                    pt(-55f, 25f).x, pt(-55f, 25f).y,
-                    pt(-55f, 38f).x, pt(-55f, 38f).y,
-                    pt(-47f, 40f).x, pt(-47f, 40f).y
-                )
-                lineTo(pt(-47f, 23f).x, pt(-47f, 23f).y)
-                close()
-            }
-            drawPath(leftEarInnerPath, color = mediumGray)
-            drawPath(leftEarInnerPath, color = darkGray, style = Stroke(width = 1.1f * u))
-
-            // Тёмный центр
-            drawCircle(
-                color = darkerGray,
-                radius = 2.8f * u,
-                center = pt(-50f, 31f)
-            )
-
-            // Антенна
-            drawLine(
-                color = darkGray,
-                start = pt(-46f, 18f),
-                end = pt(-46f, -4f),
-                strokeWidth = 1.8f * u,
-                cap = StrokeCap.Round
+            // ================= ШЕЯ =================
+            drawRoundRect(
+                color = lightGray,
+                topLeft = ptHead(-14f, 62f),
+                size = Size(28f * u, 4f * u),
+                cornerRadius = CornerRadius(2f * u)
             )
             drawRoundRect(
-                color = darkerGray,
-                topLeft = pt(-48f, 17f),
-                size = Size(4f * u, 3f * u),
-                cornerRadius = CornerRadius(1.5f * u)
-            )
-                       // Шарик антенны: в умном режиме пульсирует и светится
-            if (isSmartMode) {
-                val pulseAmount = (sin(smartPulse) + 1f) / 2f  // 0..1
-                val currentRadius = 1.8f * u * (1f + 0.35f * pulseAmount)
-
-                // Ореол (мягкое свечение вокруг)
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            neonBlue.copy(alpha = 0.55f * pulseAmount),
-                            neonBlue.copy(alpha = 0.25f * pulseAmount),
-                            Color.Transparent
-                        ),
-                        center = pt(-46f, -4f),
-                        radius = currentRadius * 4f
-                    ),
-                    radius = currentRadius * 4f,
-                    center = pt(-46f, -4f)
-                )
-
-                // Яркий шарик
-                drawCircle(
-                    color = neonBlue.copy(alpha = 0.85f),
-                    radius = currentRadius,
-                    center = pt(-46f, -4f)
-                )
-                drawCircle(
-                    color = Color.White.copy(alpha = 0.9f),
-                    radius = currentRadius,
-                    center = pt(-46f, -4f),
-                    style = Stroke(width = 0.8f * u)
-                )
-            } else {
-                // Обычное состояние — статичный серый
-                drawCircle(
-                    color = mediumGray,
-                    radius = 1.8f * u,
-                    center = pt(-46f, -4f)
-                )
-                drawCircle(
-                    color = darkGray,
-                    radius = 1.8f * u,
-                    center = pt(-46f, -4f),
-                    style = Stroke(width = 0.8f * u)
-                )
-            }
-        }
-
-                // ================= ПРАВЫЙ НАУШНИК (повёрнут к голове на 12°) =================
-        rotate(-12f, pivot = pt(42f, 45f)) {
-            val rightEarOuterPath = Path().apply {
-                moveTo(pt(42f, 18f).x, pt(42f, 18f).y)
-                cubicTo(
-                    pt(56.4f, 20f).x, pt(56.4f, 20f).y,
-                    pt(56.4f, 43f).x, pt(56.4f, 43f).y,
-                    pt(42f, 45f).x, pt(42f, 45f).y
-                )
-                lineTo(pt(42f, 18f).x, pt(42f, 18f).y)
-                close()
-            }
-            drawPath(
-                rightEarOuterPath,
-                brush = Brush.horizontalGradient(
-                    colors = listOf(whiteBody, lightGray),
-                    startX = pt(42f, 32f).x,
-                    endX = pt(56.4f, 32f).x
-                )
-            )
-            drawPath(rightEarOuterPath, color = darkGray, style = Stroke(width = 1.3f * u))
-
-            val rightEarInnerPath = Path().apply {
-                moveTo(pt(47f, 23f).x, pt(47f, 23f).y)
-                cubicTo(
-                    pt(55f, 25f).x, pt(55f, 25f).y,
-                    pt(55f, 38f).x, pt(55f, 38f).y,
-                    pt(47f, 40f).x, pt(47f, 40f).y
-                )
-                lineTo(pt(47f, 23f).x, pt(47f, 23f).y)
-                close()
-            }
-            drawPath(rightEarInnerPath, color = mediumGray)
-            drawPath(rightEarInnerPath, color = darkGray, style = Stroke(width = 1.1f * u))
-
-            drawCircle(
-                color = darkerGray,
-                radius = 2.8f * u,
-                center = pt(50f, 31f)
-            )
-
-            drawLine(
                 color = darkGray,
-                start = pt(46f, 18f),
-                end = pt(46f, -4f),
-                strokeWidth = 1.8f * u,
-                cap = StrokeCap.Round
+                topLeft = ptHead(-14f, 62f),
+                size = Size(28f * u, 4f * u),
+                cornerRadius = CornerRadius(2f * u),
+                style = Stroke(width = 1f * u)
+            )
+
+            drawRoundRect(
+                color = mediumGray,
+                topLeft = ptHead(-13f, 66f),
+                size = Size(26f * u, 3.5f * u),
+                cornerRadius = CornerRadius(1.8f * u)
             )
             drawRoundRect(
-                color = darkerGray,
-                topLeft = pt(44f, 17f),
-                size = Size(4f * u, 3f * u),
+                color = darkGray,
+                topLeft = ptHead(-13f, 66f),
+                size = Size(26f * u, 3.5f * u),
+                cornerRadius = CornerRadius(1.8f * u),
+                style = Stroke(width = 1f * u)
+            )
+
+            drawRoundRect(
+                color = lightGray,
+                topLeft = ptHead(-12f, 69.5f),
+                size = Size(24f * u, 3.5f * u),
+                cornerRadius = CornerRadius(1.8f * u)
+            )
+            drawRoundRect(
+                color = darkGray,
+                topLeft = ptHead(-12f, 69.5f),
+                size = Size(24f * u, 3.5f * u),
+                cornerRadius = CornerRadius(1.8f * u),
+                style = Stroke(width = 1f * u)
+            )
+
+            drawRoundRect(
+                color = mediumGray,
+                topLeft = ptHead(-11f, 73f),
+                size = Size(22f * u, 3f * u),
                 cornerRadius = CornerRadius(1.5f * u)
             )
-                       // Шарик антенны: в умном режиме пульсирует и светится
-            if (isSmartMode) {
-                val pulseAmount = (sin(smartPulse) + 1f) / 2f  // 0..1
-                val currentRadius = 1.8f * u * (1f + 0.35f * pulseAmount)
-
-                // Ореол (мягкое свечение вокруг)
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            neonBlue.copy(alpha = 0.55f * pulseAmount),
-                            neonBlue.copy(alpha = 0.25f * pulseAmount),
-                            Color.Transparent
-                        ),
-                        center = pt(46f, -4f),
-                        radius = currentRadius * 4f
-                    ),
-                    radius = currentRadius * 4f,
-                    center = pt(46f, -4f)
-                )
-
-                // Яркий шарик
-                drawCircle(
-                    color = neonBlue.copy(alpha = 0.85f),
-                    radius = currentRadius,
-                    center = pt(46f, -4f)
-                )
-                drawCircle(
-                    color = Color.White.copy(alpha = 0.9f),
-                    radius = currentRadius,
-                    center = pt(46f, -4f),
-                    style = Stroke(width = 0.8f * u)
-                )
-            } else {
-                // Обычное состояние — статичный серый
-                drawCircle(
-                    color = mediumGray,
-                    radius = 1.8f * u,
-                    center = pt(46f, -4f)
-                )
-                drawCircle(
-                    color = darkGray,
-                    radius = 1.8f * u,
-                    center = pt(46f, -4f),
-                    style = Stroke(width = 0.8f * u)
-                )
-            }
-        }
-                                       
-        // ================= ГОЛОВА (обрезанный шар, выпуклый низ) =================
-        // Верх — полукруг, низ — дуга, выпуклая вниз. Низ опущен до шеи.
-        val headPath = Path().apply {
-            // Левая точка нижнего края
-            moveTo(pt(-42f, 48f).x, pt(-42f, 48f).y)
-            // Дуга вверх (половина круга)
-            cubicTo(
-                pt(-42f, 10f).x, pt(-42f, 10f).y,
-                pt(-25f, -6f).x, pt(-25f, -6f).y,
-                pt(0f, -6f).x, pt(0f, -6f).y
-            )
-            cubicTo(
-                pt(25f, -6f).x, pt(25f, -6f).y,
-                pt(42f, 10f).x, pt(42f, 10f).y,
-                pt(42f, 48f).x, pt(42f, 48f).y
-            )
-            // Низ — выпуклая дуга вниз, опущена до шеи
-            cubicTo(
-                pt(42f, 58f).x, pt(42f, 58f).y,
-                pt(20f, 62f).x, pt(20f, 62f).y,
-                pt(0f, 62f).x, pt(0f, 62f).y
-            )
-            cubicTo(
-                pt(-20f, 62f).x, pt(-20f, 62f).y,
-                pt(-42f, 58f).x, pt(-42f, 58f).y,
-                pt(-42f, 48f).x, pt(-42f, 48f).y
-            )
-            close()
-        }
-
-        // Заливка головы с градиентом
-        drawPath(
-            headPath,
-            brush = Brush.verticalGradient(
-                colors = listOf(whiteHighlight, whiteBody, lightGray),
-                startY = pt(0f, -6f).y,
-                endY = pt(0f, 62f).y
-            )
-        )
-        drawPath(headPath, color = darkGray, style = Stroke(width = 1.5f * u))
-
-        // ================= ЛИНИЯ ВЫШЕ НИЗА ГОЛОВЫ (на 4 единицы) =================
-        val upperBandLinePath = Path().apply {
-            moveTo(pt(-42f, 44f).x, pt(-42f, 44f).y)
-            cubicTo(
-                pt(-42f, 54f).x, pt(-42f, 54f).y,
-                pt(-20f, 58f).x, pt(-20f, 58f).y,
-                pt(0f, 58f).x, pt(0f, 58f).y
-            )
-            cubicTo(
-                pt(20f, 58f).x, pt(20f, 58f).y,
-                pt(42f, 54f).x, pt(42f, 54f).y,
-                pt(42f, 44f).x, pt(42f, 44f).y
-            )
-        }
-
-        drawPath(upperBandLinePath, color = darkGray, style = Stroke(width = 1.2f * u))
-
-        // ================= КЛЁПКИ ПОСЕРЕДИНЕ МЕЖДУ ЛИНИЯМИ =================
-        // 7 клёпок с равным промежутком вдоль средней линии.
-        // Средняя линия = низ головы − 2 единицы по Y (половина ширины 4).
-        val rivetColor = mediumGray
-        val rivetRadius = 1f * u
-
-        // Левая половина: 3 клёпки
-        drawCircle(
-            color = rivetColor,
-            radius = rivetRadius,
-            center = pt(-38.25f, 52.42f)
-        )
-        drawCircle(
-            color = rivetColor,
-            radius = rivetRadius,
-            center = pt(-28.5f, 56.75f)
-        )
-        drawCircle(
-            color = rivetColor,
-            radius = rivetRadius,
-            center = pt(-15.01f, 59.22f)
-        )
-
-        // Центр: 1 клёпка
-        drawCircle(
-            color = rivetColor,
-            radius = rivetRadius,
-            center = pt(0f, 60f)
-        )
-
-        // Правая половина: 3 клёпки (симметрично)
-        drawCircle(
-            color = rivetColor,
-            radius = rivetRadius,
-            center = pt(15.01f, 59.22f)
-        )
-        drawCircle(
-            color = rivetColor,
-            radius = rivetRadius,
-            center = pt(28.5f, 56.75f)
-        )
-        drawCircle(
-            color = rivetColor,
-            radius = rivetRadius,
-            center = pt(38.25f, 52.42f)
-        )
-                                // ================= ОБЛАСТЬ МЕЖДУ ЛИНИЯМИ НА ГОЛОВЕ =================
-        // Верх — дуга шлема, низ — верхняя кромка визора,
-        // бока — leftHeadLinePath и rightHeadLinePath.
-
-        // ================= МОЗГ ПОД ПАНЕЛЬЮ (виден, когда панель открыта) =================
-                if (panelOpen > 0.05f) {
-                val brainClipPath = Path().apply {
-                moveTo(pt(-16f, -4f).x, pt(-16f, -4f).y)
-                cubicTo(
-                    pt(-8f, -6f).x, pt(-8f, -6f).y,
-                    pt(8f, -6f).x, pt(8f, -6f).y,
-                    pt(16f, -4f).x, pt(16f, -4f).y
-                )
-                cubicTo(
-                    pt(16f, 2f).x, pt(16f, 2f).y,
-                    pt(15.5f, 8f).x, pt(15.5f, 8f).y,
-                    pt(15f, 14f).x, pt(15f, 14f).y
-                )
-                lineTo(pt(-15f, 14f).x, pt(-15f, 14f).y)
-                cubicTo(
-                    pt(-15.5f, 8f).x, pt(-15.5f, 8f).y,
-                    pt(-16f, 2f).x, pt(-16f, 2f).y,
-                    pt(-16f, -4f).x, pt(-16f, -4f).y
-                )
-                close()
-            }
-
-            drawPath(
-                brainClipPath,
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        Color(0xFF1A0A2E),
-                        Color(0xFF0A0518),
-                        Color(0xFF000000)
-                    ),
-                    center = pt(0f, 5f),
-                    radius = 20f * u
-                )
-            )
-
-            val brainPulse = 0.7f + 0.3f * sin(pulse * 2f)
-            val brainColor1 = Color(0xFFFF4FC3).copy(alpha = 0.8f * brainPulse)
-            val brainColor2 = Color(0xFF9C27B0).copy(alpha = 0.7f * brainPulse)
-            val brainColor3 = Color(0xFF00D9FF).copy(alpha = 0.5f * brainPulse)
-
-            drawOval(
-                brush = Brush.radialGradient(
-                    colors = listOf(brainColor1, brainColor2, Color.Transparent),
-                    center = pt(-6f, 4f),
-                    radius = 8f * u
-                ),
-                topLeft = pt(-12f, -1f),
-                size = Size(12f * u, 12f * u)
-            )
-
-            drawOval(
-                brush = Brush.radialGradient(
-                    colors = listOf(brainColor1, brainColor2, Color.Transparent),
-                    center = pt(6f, 4f),
-                    radius = 8f * u
-                ),
-                topLeft = pt(0f, -1f),
-                size = Size(12f * u, 12f * u)
+            drawRoundRect(
+                color = darkGray,
+                topLeft = ptHead(-11f, 73f),
+                size = Size(22f * u, 3f * u),
+                cornerRadius = CornerRadius(1.5f * u),
+                style = Stroke(width = 1f * u)
             )
 
             drawLine(
-                color = Color(0xFF3A1A5C),
-                start = pt(0f, -2f),
-                end = pt(0f, 12f),
-                strokeWidth = 0.8f * u,
-                cap = StrokeCap.Round
+                darkerGray,
+                ptHead(-12f, 65.5f),
+                ptHead(12f, 65.5f),
+                strokeWidth = 0.5f * u
+            )
+            drawLine(
+                darkerGray,
+                ptHead(-12f, 69f),
+                ptHead(12f, 69f),
+                strokeWidth = 0.5f * u
+            )
+            drawLine(
+                darkerGray,
+                ptHead(-11f, 72.5f),
+                ptHead(11f, 72.5f),
+                strokeWidth = 0.5f * u
             )
 
-            for (i in 0..4) {
-                val phase = i * 0.7f + pulse * 1.5f
-                val amplitude = 2f + sin(phase) * 0.5f
-                val yStart = -1f + i * 3f
+            drawRoundRect(
+                color = whiteHighlight.copy(alpha = 0.6f),
+                topLeft = ptHead(-13f, 62.5f),
+                size = Size(2f * u, 3f * u),
+                cornerRadius = CornerRadius(1f * u)
+            )
+            drawRoundRect(
+                color = whiteHighlight.copy(alpha = 0.6f),
+                topLeft = ptHead(-12f, 66.5f),
+                size = Size(2f * u, 2.5f * u),
+                cornerRadius = CornerRadius(1f * u)
+            )
+            drawRoundRect(
+                color = whiteHighlight.copy(alpha = 0.6f),
+                topLeft = ptHead(-11f, 70f),
+                size = Size(2f * u, 2.5f * u),
+                cornerRadius = CornerRadius(1f * u)
+            )
+            drawRoundRect(
+                color = whiteHighlight.copy(alpha = 0.6f),
+                topLeft = ptHead(-10f, 73.5f),
+                size = Size(2f * u, 2f * u),
+                cornerRadius = CornerRadius(1f * u)
+            )
 
-                val wrinklePath = Path().apply {
-                    moveTo(pt(-11f, yStart).x, pt(-11f, yStart).y)
+            // ================= ЛЕВЫЙ НАУШНИК =================
+            rotate(12f, pivot = ptHead(-42f, 45f)) {
+                val leftEarOuterPath = Path().apply {
+                    moveTo(ptHead(-42f, 18f).x, ptHead(-42f, 18f).y)
                     cubicTo(
-                        pt(-7f, yStart - amplitude).x, pt(-7f, yStart - amplitude).y,
-                        pt(-3f, yStart + amplitude).x, pt(-3f, yStart + amplitude).y,
-                        pt(0f, yStart).x, pt(0f, yStart).y
+                        ptHead(-56.4f, 20f).x, ptHead(-56.4f, 20f).y,
+                        ptHead(-56.4f, 43f).x, ptHead(-56.4f, 43f).y,
+                        ptHead(-42f, 45f).x, ptHead(-42f, 45f).y
                     )
-                    cubicTo(
-                        pt(3f, yStart - amplitude).x, pt(3f, yStart - amplitude).y,
-                        pt(7f, yStart + amplitude).x, pt(7f, yStart + amplitude).y,
-                        pt(11f, yStart).x, pt(11f, yStart).y
-                    )
+                    lineTo(ptHead(-42f, 18f).x, ptHead(-42f, 18f).y)
+                    close()
                 }
                 drawPath(
-                    wrinklePath,
-                    color = brainColor3.copy(alpha = 0.4f + 0.3f * sin(phase)),
-                    style = Stroke(width = 0.6f * u, cap = StrokeCap.Round)
+                    leftEarOuterPath,
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(lightGray, whiteBody),
+                        startX = ptHead(-56.4f, 32f).x,
+                        endX = ptHead(-42f, 32f).x
+                    )
+                )
+                drawPath(leftEarOuterPath, color = darkGray, style = Stroke(width = 1.3f * u))
+
+                val leftEarInnerPath = Path().apply {
+                    moveTo(ptHead(-47f, 23f).x, ptHead(-47f, 23f).y)
+                    cubicTo(
+                        ptHead(-55f, 25f).x, ptHead(-55f, 25f).y,
+                        ptHead(-55f, 38f).x, ptHead(-55f, 38f).y,
+                        ptHead(-47f, 40f).x, ptHead(-47f, 40f).y
+                    )
+                    lineTo(ptHead(-47f, 23f).x, ptHead(-47f, 23f).y)
+                    close()
+                }
+                drawPath(leftEarInnerPath, color = mediumGray)
+                drawPath(leftEarInnerPath, color = darkGray, style = Stroke(width = 1.1f * u))
+
+                drawCircle(
+                    color = darkerGray,
+                    radius = 2.8f * u,
+                    center = ptHead(-50f, 31f)
+                )
+
+                drawLine(
+                    color = darkGray,
+                    start = ptHead(-46f, 18f),
+                    end = ptHead(-46f, -4f),
+                    strokeWidth = 1.8f * u,
+                    cap = StrokeCap.Round
+                )
+                drawRoundRect(
+                    color = darkerGray,
+                    topLeft = ptHead(-48f, 17f),
+                    size = Size(4f * u, 3f * u),
+                    cornerRadius = CornerRadius(1.5f * u)
+                )
+                if (isSmartMode) {
+                    val pulseAmount = (sin(smartPulse) + 1f) / 2f
+                    val currentRadius = 1.8f * u * (1f + 0.35f * pulseAmount)
+
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                neonBlue.copy(alpha = 0.55f * pulseAmount),
+                                neonBlue.copy(alpha = 0.25f * pulseAmount),
+                                Color.Transparent
+                            ),
+                            center = ptHead(-46f, -4f),
+                            radius = currentRadius * 4f
+                        ),
+                        radius = currentRadius * 4f,
+                        center = ptHead(-46f, -4f)
+                    )
+
+                    drawCircle(
+                        color = neonBlue.copy(alpha = 0.85f),
+                        radius = currentRadius,
+                        center = ptHead(-46f, -4f)
+                    )
+                    drawCircle(
+                        color = Color.White.copy(alpha = 0.9f),
+                        radius = currentRadius,
+                        center = ptHead(-46f, -4f),
+                        style = Stroke(width = 0.8f * u)
+                    )
+                } else {
+                    drawCircle(
+                        color = mediumGray,
+                        radius = 1.8f * u,
+                        center = ptHead(-46f, -4f)
+                    )
+                    drawCircle(
+                        color = darkGray,
+                        radius = 1.8f * u,
+                        center = ptHead(-46f, -4f),
+                        style = Stroke(width = 0.8f * u)
+                    )
+                }
+            }
+
+            // ================= ПРАВЫЙ НАУШНИК =================
+            rotate(-12f, pivot = ptHead(42f, 45f)) {
+                val rightEarOuterPath = Path().apply {
+                    moveTo(ptHead(42f, 18f).x, ptHead(42f, 18f).y)
+                    cubicTo(
+                        ptHead(56.4f, 20f).x, ptHead(56.4f, 20f).y,
+                        ptHead(56.4f, 43f).x, ptHead(56.4f, 43f).y,
+                        ptHead(42f, 45f).x, ptHead(42f, 45f).y
+                    )
+                    lineTo(ptHead(42f, 18f).x, ptHead(42f, 18f).y)
+                    close()
+                }
+                drawPath(
+                    rightEarOuterPath,
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(whiteBody, lightGray),
+                        startX = ptHead(42f, 32f).x,
+                        endX = ptHead(56.4f, 32f).x
+                    )
+                )
+                drawPath(rightEarOuterPath, color = darkGray, style = Stroke(width = 1.3f * u))
+
+                val rightEarInnerPath = Path().apply {
+                    moveTo(ptHead(47f, 23f).x, ptHead(47f, 23f).y)
+                    cubicTo(
+                        ptHead(55f, 25f).x, ptHead(55f, 25f).y,
+                        ptHead(55f, 38f).x, ptHead(55f, 38f).y,
+                        ptHead(47f, 40f).x, ptHead(47f, 40f).y
+                    )
+                    lineTo(ptHead(47f, 23f).x, ptHead(47f, 23f).y)
+                    close()
+                }
+                drawPath(rightEarInnerPath, color = mediumGray)
+                drawPath(rightEarInnerPath, color = darkGray, style = Stroke(width = 1.1f * u))
+
+                drawCircle(
+                    color = darkerGray,
+                    radius = 2.8f * u,
+                    center = ptHead(50f, 31f)
+                )
+
+                drawLine(
+                    color = darkGray,
+                    start = ptHead(46f, 18f),
+                    end = ptHead(46f, -4f),
+                    strokeWidth = 1.8f * u,
+                    cap = StrokeCap.Round
+                )
+                drawRoundRect(
+                    color = darkerGray,
+                    topLeft = ptHead(44f, 17f),
+                    size = Size(4f * u, 3f * u),
+                    cornerRadius = CornerRadius(1.5f * u)
+                )
+                if (isSmartMode) {
+                    val pulseAmount = (sin(smartPulse) + 1f) / 2f
+                    val currentRadius = 1.8f * u * (1f + 0.35f * pulseAmount)
+
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                neonBlue.copy(alpha = 0.55f * pulseAmount),
+                                neonBlue.copy(alpha = 0.25f * pulseAmount),
+                                Color.Transparent
+                            ),
+                            center = ptHead(46f, -4f),
+                            radius = currentRadius * 4f
+                        ),
+                        radius = currentRadius * 4f,
+                        center = ptHead(46f, -4f)
+                    )
+
+                    drawCircle(
+                        color = neonBlue.copy(alpha = 0.85f),
+                        radius = currentRadius,
+                        center = ptHead(46f, -4f)
+                    )
+                    drawCircle(
+                        color = Color.White.copy(alpha = 0.9f),
+                        radius = currentRadius,
+                        center = ptHead(46f, -4f),
+                        style = Stroke(width = 0.8f * u)
+                    )
+                } else {
+                    drawCircle(
+                        color = mediumGray,
+                        radius = 1.8f * u,
+                        center = ptHead(46f, -4f)
+                    )
+                    drawCircle(
+                        color = darkGray,
+                        radius = 1.8f * u,
+                        center = ptHead(46f, -4f),
+                        style = Stroke(width = 0.8f * u)
+                    )
+                }
+            }
+
+            // ================= ГОЛОВА =================
+            val headPath = Path().apply {
+                moveTo(ptHead(-42f, 48f).x, ptHead(-42f, 48f).y)
+                cubicTo(
+                    ptHead(-42f, 10f).x, ptHead(-42f, 10f).y,
+                    ptHead(-25f, -6f).x, ptHead(-25f, -6f).y,
+                    ptHead(0f, -6f).x, ptHead(0f, -6f).y
+                )
+                cubicTo(
+                    ptHead(25f, -6f).x, ptHead(25f, -6f).y,
+                    ptHead(42f, 10f).x, ptHead(42f, 10f).y,
+                    ptHead(42f, 48f).x, ptHead(42f, 48f).y
+                )
+                cubicTo(
+                    ptHead(42f, 58f).x, ptHead(42f, 58f).y,
+                    ptHead(20f, 62f).x, ptHead(20f, 62f).y,
+                    ptHead(0f, 62f).x, ptHead(0f, 62f).y
+                )
+                cubicTo(
+                    ptHead(-20f, 62f).x, ptHead(-20f, 62f).y,
+                    ptHead(-42f, 58f).x, ptHead(-42f, 58f).y,
+                    ptHead(-42f, 48f).x, ptHead(-42f, 48f).y
+                )
+                close()
+            }
+
+            drawPath(
+                headPath,
+                brush = Brush.verticalGradient(
+                    colors = listOf(whiteHighlight, whiteBody, lightGray),
+                    startY = ptHead(0f, -6f).y,
+                    endY = ptHead(0f, 62f).y
+                )
+            )
+            drawPath(headPath, color = darkGray, style = Stroke(width = 1.5f * u))
+
+            val upperBandLinePath = Path().apply {
+                moveTo(ptHead(-42f, 44f).x, ptHead(-42f, 44f).y)
+                cubicTo(
+                    ptHead(-42f, 54f).x, ptHead(-42f, 54f).y,
+                    ptHead(-20f, 58f).x, ptHead(-20f, 58f).y,
+                    ptHead(0f, 58f).x, ptHead(0f, 58f).y
+                )
+                cubicTo(
+                    ptHead(20f, 58f).x, ptHead(20f, 58f).y,
+                    ptHead(42f, 54f).x, ptHead(42f, 54f).y,
+                    ptHead(42f, 44f).x, ptHead(42f, 44f).y
                 )
             }
 
-            val orbitCount = 3
-            for (orbit in 0 until orbitCount) {
-                val orbitPhase = orbit * 2.1f
-                val orbitTilt = orbit * 30f
+            drawPath(upperBandLinePath, color = darkGray, style = Stroke(width = 1.2f * u))
 
-                rotate(orbitTilt, pivot = pt(0f, 5f)) {
-                    drawOval(
-                        color = brainColor3.copy(alpha = 0.2f),
-                        topLeft = pt(-(6f + orbit * 2f), 5f - (4f + orbit * 1.5f)),
-                        size = Size(
-                            (12f + orbit * 4f) * u,
-                            (8f + orbit * 3f) * u
-                        ),
-                        style = Stroke(width = 0.3f * u)
+            val rivetColor = mediumGray
+            val rivetRadius = 1f * u
+
+            drawCircle(
+                color = rivetColor,
+                radius = rivetRadius,
+                center = ptHead(-38.25f, 52.42f)
+            )
+            drawCircle(
+                color = rivetColor,
+                radius = rivetRadius,
+                center = ptHead(-28.5f, 56.75f)
+            )
+            drawCircle(
+                color = rivetColor,
+                radius = rivetRadius,
+                center = ptHead(-15.01f, 59.22f)
+            )
+
+            drawCircle(
+                color = rivetColor,
+                radius = rivetRadius,
+                center = ptHead(0f, 60f)
+            )
+
+            drawCircle(
+                color = rivetColor,
+                radius = rivetRadius,
+                center = ptHead(15.01f, 59.22f)
+            )
+            drawCircle(
+                color = rivetColor,
+                radius = rivetRadius,
+                center = ptHead(28.5f, 56.75f)
+            )
+            drawCircle(
+                color = rivetColor,
+                radius = rivetRadius,
+                center = ptHead(38.25f, 52.42f)
+            )
+
+            // ================= МОЗГ =================
+            if (panelOpen > 0.05f) {
+                val brainClipPath = Path().apply {
+                    moveTo(ptHead(-16f, -4f).x, ptHead(-16f, -4f).y)
+                    cubicTo(
+                        ptHead(-8f, -6f).x, ptHead(-8f, -6f).y,
+                        ptHead(8f, -6f).x, ptHead(8f, -6f).y,
+                        ptHead(16f, -4f).x, ptHead(16f, -4f).y
                     )
+                    cubicTo(
+                        ptHead(16f, 2f).x, ptHead(16f, 2f).y,
+                        ptHead(15.5f, 8f).x, ptHead(15.5f, 8f).y,
+                        ptHead(15f, 14f).x, ptHead(15f, 14f).y
+                    )
+                    lineTo(ptHead(-15f, 14f).x, ptHead(-15f, 14f).y)
+                    cubicTo(
+                        ptHead(-15.5f, 8f).x, ptHead(-15.5f, 8f).y,
+                        ptHead(-16f, 2f).x, ptHead(-16f, 2f).y,
+                        ptHead(-16f, -4f).x, ptHead(-16f, -4f).y
+                    )
+                    close()
+                }
 
-                    val ballCount = 2 + orbit
-                    for (ball in 0 until ballCount) {
-                        val angle = pulse * (1.5f + orbit * 0.5f) + ball * (2f * PI.toFloat() / ballCount) + orbitPhase
-                        val bx = cos(angle) * (6f + orbit * 2f)
-                        val by = 5f + sin(angle) * (4f + orbit * 1.5f)
+                drawPath(
+                    brainClipPath,
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFF1A0A2E),
+                            Color(0xFF0A0518),
+                            Color(0xFF000000)
+                        ),
+                        center = ptHead(0f, 5f),
+                        radius = 20f * u
+                    )
+                )
 
-                        val ballAlpha = 0.6f + 0.4f * sin(pulse * 3f + ball)
+                val brainPulse = 0.7f + 0.3f * sin(pulse * 2f)
+                val brainColor1 = Color(0xFFFF4FC3).copy(alpha = 0.8f * brainPulse)
+                val brainColor2 = Color(0xFF9C27B0).copy(alpha = 0.7f * brainPulse)
+                val brainColor3 = Color(0xFF00D9FF).copy(alpha = 0.5f * brainPulse)
 
-                        drawCircle(
-                            brush = Brush.radialGradient(
-                                colors = listOf(
-                                    Color.White.copy(alpha = ballAlpha * 0.8f),
-                                    Color(0xFF00D9FF).copy(alpha = ballAlpha * 0.6f),
-                                    Color.Transparent
-                                ),
-                                center = pt(bx, by),
-                                radius = 2.5f * u
+                drawOval(
+                    brush = Brush.radialGradient(
+                        colors = listOf(brainColor1, brainColor2, Color.Transparent),
+                        center = ptHead(-6f, 4f),
+                        radius = 8f * u
+                    ),
+                    topLeft = ptHead(-12f, -1f),
+                    size = Size(12f * u, 12f * u)
+                )
+
+                drawOval(
+                    brush = Brush.radialGradient(
+                        colors = listOf(brainColor1, brainColor2, Color.Transparent),
+                        center = ptHead(6f, 4f),
+                        radius = 8f * u
+                    ),
+                    topLeft = ptHead(0f, -1f),
+                    size = Size(12f * u, 12f * u)
+                )
+
+                drawLine(
+                    color = Color(0xFF3A1A5C),
+                    start = ptHead(0f, -2f),
+                    end = ptHead(0f, 12f),
+                    strokeWidth = 0.8f * u,
+                    cap = StrokeCap.Round
+                )
+
+                for (i in 0..4) {
+                    val phase = i * 0.7f + pulse * 1.5f
+                    val amplitude = 2f + sin(phase) * 0.5f
+                    val yStart = -1f + i * 3f
+
+                    val wrinklePath = Path().apply {
+                        moveTo(ptHead(-11f, yStart).x, ptHead(-11f, yStart).y)
+                        cubicTo(
+                            ptHead(-7f, yStart - amplitude).x, ptHead(-7f, yStart - amplitude).y,
+                            ptHead(-3f, yStart + amplitude).x, ptHead(-3f, yStart + amplitude).y,
+                            ptHead(0f, yStart).x, ptHead(0f, yStart).y
+                        )
+                        cubicTo(
+                            ptHead(3f, yStart - amplitude).x, ptHead(3f, yStart - amplitude).y,
+                            ptHead(7f, yStart + amplitude).x, ptHead(7f, yStart + amplitude).y,
+                            ptHead(11f, yStart).x, ptHead(11f, yStart).y
+                        )
+                    }
+                    drawPath(
+                        wrinklePath,
+                        color = brainColor3.copy(alpha = 0.4f + 0.3f * sin(phase)),
+                        style = Stroke(width = 0.6f * u, cap = StrokeCap.Round)
+                    )
+                }
+
+                val orbitCount = 3
+                for (orbit in 0 until orbitCount) {
+                    val orbitPhase = orbit * 2.1f
+                    val orbitTilt = orbit * 30f
+
+                    rotate(orbitTilt, pivot = ptHead(0f, 5f)) {
+                        drawOval(
+                            color = brainColor3.copy(alpha = 0.2f),
+                            topLeft = ptHead(-(6f + orbit * 2f), 5f - (4f + orbit * 1.5f)),
+                            size = Size(
+                                (12f + orbit * 4f) * u,
+                                (8f + orbit * 3f) * u
                             ),
-                            radius = 2.5f * u,
-                            center = pt(bx, by)
+                            style = Stroke(width = 0.3f * u)
                         )
 
-                        drawCircle(
-                            color = Color.White.copy(alpha = ballAlpha),
-                            radius = 0.8f * u,
-                            center = pt(bx, by)
-                        )
+                        val ballCount = 2 + orbit
+                        for (ball in 0 until ballCount) {
+                            val angle = pulse * (1.5f + orbit * 0.5f) + ball * (2f * PI.toFloat() / ballCount) + orbitPhase
+                            val bx = cos(angle) * (6f + orbit * 2f)
+                            val by = 5f + sin(angle) * (4f + orbit * 1.5f)
+
+                            val ballAlpha = 0.6f + 0.4f * sin(pulse * 3f + ball)
+
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = ballAlpha * 0.8f),
+                                        Color(0xFF00D9FF).copy(alpha = ballAlpha * 0.6f),
+                                        Color.Transparent
+                                    ),
+                                    center = ptHead(bx, by),
+                                    radius = 2.5f * u
+                                ),
+                                radius = 2.5f * u,
+                                center = ptHead(bx, by)
+                            )
+
+                            drawCircle(
+                                color = Color.White.copy(alpha = ballAlpha),
+                                radius = 0.8f * u,
+                                center = ptHead(bx, by)
+                            )
+                        }
                     }
                 }
             }
-        }
 
-                      val headPanelPath = Path().apply {
-            // Вся панель сдвигается ВНИЗ к визору и исчезает за ним.
-            // Верх остаётся на месте, а низ — уходит вниз (к y=14, где начинается визор).
-            // При panelOpen=1 низ панели уходит ниже y=14, верх тоже опускается.
-            moveTo(pt(-16f, -4f).x, pt(-16f, -4f).y + panelLift)
-            cubicTo(
-                pt(-8f, -6f).x, pt(-8f, -6f).y + panelLift,
-                pt(8f, -6f).x, pt(8f, -6f).y + panelLift,
-                pt(16f, -4f).x, pt(16f, -4f).y + panelLift
-            )
-            cubicTo(
-                pt(16f, 2f).x, pt(16f, 2f).y + panelLift,
-                pt(15.5f, 8f).x, pt(15.5f, 8f).y + panelLift,
-                pt(15f, 14f).x, pt(15f, 14f).y + panelLift
-            )
-            lineTo(pt(-15f, 14f).x, pt(-15f, 14f).y + panelLift)
-            cubicTo(
-                pt(-15.5f, 8f).x, pt(-15.5f, 8f).y + panelLift,
-                pt(-16f, 2f).x, pt(-16f, 2f).y + panelLift,
-                pt(-16f, -4f).x, pt(-16f, -4f).y + panelLift
-            )
-            close()
-        }
-                      // Заливка — едет вместе с крышкой и скрывается за визором
-        drawPath(
-            headPanelPath,
-            brush = Brush.verticalGradient(
-                colors = listOf(
-                    Color(0xFFEDEFF2),
-                    Color(0xFFD9DEE3),
-                    Color(0xFFC4CAD1)
-                ),
-                startY = pt(0f, -4f).y,
-                endY = pt(0f, 14f).y
-            )
-        )
-
-      // Блик — вертикальная полоса слева (едет вместе с панелью)
-        val headPanelHighlight = Path().apply {
-            moveTo(pt(-9f, -2f).x, pt(-9f, -2f).y + panelLift)
-            lineTo(pt(-4f, -2f).x, pt(-4f, -2f).y + panelLift)
-            lineTo(pt(-4f, 12f).x, pt(-4f, 12f).y + panelLift)
-            lineTo(pt(-9f, 12f).x, pt(-9f, 12f).y + panelLift)
-            close()
-        }
-        drawPath(
-            headPanelHighlight,
-            color = Color.White.copy(alpha = 0.5f)
-        )
-        
-        
-// ================= ДВЕ ЛИНИИ НА ГОЛОВЕ (от верхнего края шлема до визора) =================
-        // Левая линия — идёт по дуге шлема сверху вниз до верхней кромки визора (y = 14)
-        val leftHeadLinePath = Path().apply {
-            moveTo(pt(-16f, -4f).x, pt(-16f, -4f).y)
-            cubicTo(
-                pt(-16f, 2f).x, pt(-16f, 2f).y,
-                pt(-15.5f, 8f).x, pt(-15.5f, 8f).y,
-                pt(-15f, 14f).x, pt(-15f, 14f).y
-            )
-        }
-                               drawPath(
-            leftHeadLinePath,
-            color = darkGray,
-            style = Stroke(width = 1f * u, cap = StrokeCap.Round)
-        )
-
-        // Правая линия — симметрично
-        val rightHeadLinePath = Path().apply {
-            moveTo(pt(16f, -4f).x, pt(16f, -4f).y)
-            cubicTo(
-                pt(16f, 2f).x, pt(16f, 2f).y,
-                pt(15.5f, 8f).x, pt(15.5f, 8f).y,
-                pt(15f, 14f).x, pt(15f, 14f).y
-            )
-        }
-                        drawPath(
-            rightHeadLinePath,
-            color = darkGray,
-            style = Stroke(width = 1f * u, cap = StrokeCap.Round)
-        )
-// ================= ВИЗОР (СТЕКЛО) — лыжная маска с правильными углами =================
-val topRadius = 4f * u  // Верхние углы — маленькое скругление
-val bottomRadius = 13f * u  // Нижние углы — большое скругление
-
-val visorPath = Path().apply {
-    // Начинаем с верхнего левого угла (после скругления)
-    moveTo(pt(-34f + topRadius, 14f).x, pt(-34f + topRadius, 14f).y)
-    
-    // Верхняя линия до правого верхнего угла
-    lineTo(pt(34f - topRadius, 14f).x, pt(34f - topRadius, 14f).y)
-    
-    // Правый верхний угол (маленькое скругление)
-    arcTo(
-        rect = Rect(
-            left = pt(34f - 2f * topRadius, 14f).x,
-            top = pt(34f - 2f * topRadius, 14f).y,
-            right = pt(34f, 14f).x,
-            bottom = pt(34f, 14f + 2f * topRadius).y
-        ),
-        startAngleDegrees = 270f,
-        sweepAngleDegrees = 90f,
-        forceMoveTo = false
-    )
-    
-    // Правая боковина вниз
-    lineTo(pt(34f, 42f - bottomRadius).x, pt(34f, 42f - bottomRadius).y)
-    
-    // Правый нижний угол (большое скругление)
-    arcTo(
-        rect = Rect(
-            left = pt(34f - 2f * bottomRadius, 42f - 2f * bottomRadius).x,
-            top = pt(34f - 2f * bottomRadius, 42f - 2f * bottomRadius).y,
-            right = pt(34f, 42f).x,
-            bottom = pt(34f, 42f).y
-        ),
-        startAngleDegrees = 0f,
-        sweepAngleDegrees = 90f,
-        forceMoveTo = false
-    )
-    
-    // Низ справа к выемке под нос
-    lineTo(pt(10f, 42f).x, pt(10f, 42f).y)
-    
-    // Выемка под нос (кривые Безье)
-    cubicTo(
-        pt(6f, 40f).x, pt(6f, 40f).y,
-        pt(3f, 37f).x, pt(3f, 37f).y,
-        pt(0f, 37f).x, pt(0f, 37f).y
-    )
-    cubicTo(
-        pt(-3f, 37f).x, pt(-3f, 37f).y,
-        pt(-6f, 40f).x, pt(-6f, 40f).y,
-        pt(-10f, 42f).x, pt(-10f, 42f).y
-    )
-    
-    // Низ слева от выемки
-lineTo(pt(-34f + bottomRadius, 42f).x, pt(-34f + bottomRadius, 42f).y)
-    
-    // Левый нижний угол (большое скругление)
-    arcTo(
-        rect = Rect(
-            left = pt(-34f, 42f - 2f * bottomRadius).x,
-            top = pt(-34f, 42f - 2f * bottomRadius).y,
-            right = pt(-34f + 2f * bottomRadius, 42f).x,
-            bottom = pt(-34f + 2f * bottomRadius, 42f).y
-        ),
-        startAngleDegrees = 90f,
-        sweepAngleDegrees = 90f,
-        forceMoveTo = false
-    )
-    
-    // Левая боковина вверх
-    lineTo(pt(-34f, 14f + topRadius).x, pt(-34f, 14f + topRadius).y)
-    
-    // Левый верхний угол (маленькое скругление)
-    arcTo(
-        rect = Rect(
-            left = pt(-34f, 14f).x,
-            top = pt(-34f, 14f).y,
-            right = pt(-34f + 2f * topRadius, 14f).x,
-            bottom = pt(-34f + 2f * topRadius, 14f + 2f * topRadius).y
-        ),
-        startAngleDegrees = 180f,
-        sweepAngleDegrees = 90f,
-        forceMoveTo = false
-    )
-    
-    close()
-}
-
-// Заливка визора (градиент сверху вниз)
-drawPath(
-    visorPath,
-    brush = Brush.verticalGradient(
-        colors = listOf(visorGlass, visorDark),
-        startY = pt(0f, 14f).y,
-        endY = pt(0f, 42f).y
-    )
-)
-
-// Обводка визора
-drawPath(visorPath, color = darkerGray, style = Stroke(width = 1.5f * u))
-
-// ================= ГЛАЗА ХИЩНИКА (с бровями, подогнаны под визор) =================
-val isBlinking = currentBlink < 0.5f
-
-// Базовые размеры (немного уменьшили, чтобы влезли в визор)
-val baseEyeW = 14f * u
-val baseEyeH = 7f * u
-
-// Анимация пульсации для thinking
-val predatorPulse = if (isThinking) {
-    1f + sin(pulse) * 0.2f
-} else {
-    1f
-}
-
-// Анимация расширения для speaking
-val speakingExpand = if (isSpeaking) {
-    1.15f + sin(mouthPhase * 2f) * 0.08f
-} else {
-    1f
-}
-
-// Вычисляем размеры глаза
-val (eyeW, eyeH) = when {
-    isBlinking -> baseEyeW to 1.5f * u
-    isThinking -> (baseEyeW * 0.95f) to (baseEyeH * 0.6f)
-    isSpeaking -> (baseEyeW * speakingExpand) to (baseEyeH * 1.1f)
-    isIdle -> {
-        val p = idleEyePhase
-        when {
-            p < 0.4f -> baseEyeW to baseEyeH
-            p < 0.6f -> {
-                val t = (p - 0.4f) / 0.2f
-                (baseEyeW + 1.5f * u * t) to (baseEyeH + 1.5f * u * t)
+            val headPanelPath = Path().apply {
+                moveTo(ptHead(-16f, -4f).x, ptHead(-16f, -4f).y + panelLift)
+                cubicTo(
+                    ptHead(-8f, -6f).x, ptHead(-8f, -6f).y + panelLift,
+                    ptHead(8f, -6f).x, ptHead(8f, -6f).y + panelLift,
+                    ptHead(16f, -4f).x, ptHead(16f, -4f).y + panelLift
+                )
+                cubicTo(
+                    ptHead(16f, 2f).x, ptHead(16f, 2f).y + panelLift,
+                    ptHead(15.5f, 8f).x, ptHead(15.5f, 8f).y + panelLift,
+                    ptHead(15f, 14f).x, ptHead(15f, 14f).y + panelLift
+                )
+                lineTo(ptHead(-15f, 14f).x, ptHead(-15f, 14f).y + panelLift)
+                cubicTo(
+                    ptHead(-15.5f, 8f).x, ptHead(-15.5f, 8f).y + panelLift,
+                    ptHead(-16f, 2f).x, ptHead(-16f, 2f).y + panelLift,
+                    ptHead(-16f, -4f).x, ptHead(-16f, -4f).y + panelLift
+                )
+                close()
             }
-            p < 0.8f -> {
-                val t = (p - 0.6f) / 0.2f
-                (baseEyeW + 2f * u * t) to (baseEyeH - 3f * u * t)
-            }
-            else -> {
-                val t = (p - 0.8f) / 0.2f
-                ((baseEyeW + 2f * u) - 2f * u * t) to ((baseEyeH - 3f * u) + 3f * u * t)
-            }
-        }
-    }
-    else -> baseEyeW to baseEyeH
-}
-
-// Размер зрачка-шестерёнки
-val irisRadius = when {
-    isBlinking -> 1.5f * u
-    isThinking -> 3f * u * predatorPulse
-    isSpeaking -> 4.5f * u * speakingExpand
-    isIdle -> {
-        val p = idleEyePhase
-        when {
-            p < 0.4f -> 4f * u
-            p < 0.6f -> 4f * u + 1.2f * u * ((p - 0.4f) / 0.2f)
-            p < 0.8f -> 5.2f * u - 2.5f * u * ((p - 0.6f) / 0.2f)
-            else -> 2.7f * u + 1.3f * u * ((p - 0.8f) / 0.2f)
-        }
-    }
-    else -> 4f * u
-}
-
-// Функция создания трапециевидной формы глаза хищника
-fun createPredatorEyePath(centerX: Float, centerY: Float, width: Float, height: Float, isLeft: Boolean): Path {
-    val halfW = width / 2f
-    val halfH = height / 2f
-    val outerRatio = 0.3f
-    
-    val innerTopY = centerY - halfH
-    val innerBottomY = centerY + halfH
-    val outerTopY = centerY - halfH * outerRatio
-    val outerBottomY = centerY + halfH * outerRatio
-    
-    val innerX = if (isLeft) centerX + halfW * 0.9f else centerX - halfW * 0.9f
-    val outerX = if (isLeft) centerX - halfW else centerX + halfW
-    val cornerRadius = 1f * u
-    
-    return Path().apply {
-        moveTo(innerX - cornerRadius, innerTopY)
-        lineTo(outerX + cornerRadius, outerTopY)
-        quadraticBezierTo(outerX, outerTopY, outerX, outerTopY + cornerRadius)
-        lineTo(outerX, outerBottomY - cornerRadius)
-        quadraticBezierTo(outerX, outerBottomY, outerX - cornerRadius, outerBottomY)
-        quadraticBezierTo(centerX, centerY + halfH * 1.2f, innerX + cornerRadius, innerBottomY)
-        quadraticBezierTo(innerX, innerBottomY, innerX, innerBottomY - cornerRadius)
-        lineTo(innerX, innerTopY + cornerRadius)
-        quadraticBezierTo(innerX, innerTopY, innerX - cornerRadius, innerTopY)
-        close()
-    }
-}
-
-// Функция создания брови с учётом состояния (живая бровь)
-fun createLivingBrowPath(
-    centerX: Float,
-    centerY: Float,
-    width: Float,
-    height: Float,
-    isLeft: Boolean,
-    lift: Float,        // сдвиг по Y (в px)
-    tilt: Float,        // наклон в градусах
-    stretch: Float      // масштаб по X
-): Path {
-    val halfW = width * stretch / 2f
-    val browOffsetY = height * 0.9f
-
-    val innerX = if (isLeft) centerX + halfW * 0.9f else centerX - halfW * 0.9f
-    val outerX = if (isLeft) centerX - halfW * 1.1f else centerX + halfW * 1.1f
-    val innerY = centerY - browOffsetY + lift
-    val outerY = centerY - browOffsetY - height * 0.3f + lift
-
-    // Наклон вокруг внутреннего края (центр вращения — innerX, innerY)
-    val pivotX = innerX
-    val pivotY = innerY
-    val rad = tilt * PI.toFloat() / 180f
-    val cosA = cos(rad)
-    val sinA = sin(rad)
-
-    fun rotatePoint(x: Float, y: Float): Offset {
-        val dx = x - pivotX
-        val dy = y - pivotY
-        return Offset(
-            pivotX + dx * cosA - dy * sinA,
-            pivotY + dx * sinA + dy * cosA
-        )
-    }
-
-    val innerRot = rotatePoint(innerX, innerY)
-    val outerRot = rotatePoint(outerX, outerY)
-    val ctrlRot = rotatePoint(
-        (innerX + outerX) / 2f,
-        innerY - height * 0.15f
-    )
-
-    return Path().apply {
-        moveTo(innerRot.x, innerRot.y)
-        quadraticBezierTo(ctrlRot.x, ctrlRot.y, outerRot.x, outerRot.y)
-    }
-}
-
-// Функция создания зрачка-шестерёнки
-fun createGearIrisPath(centerX: Float, centerY: Float, radius: Float, teethCount: Int = 8): Path {
-    val path = Path()
-    val outerRadius = radius
-    val innerRadius = radius * 0.75f
-    val angleStep = (2f * PI.toFloat()) / teethCount
-    var firstPoint = true
-
-    for (i in 0 until teethCount) {
-        val angle = i * angleStep - PI.toFloat() / 2f
-        val outerX = centerX + cos(angle) * outerRadius
-        val outerY = centerY + sin(angle) * outerRadius
-        val nextAngle = angle + angleStep / 2f
-        val innerX = centerX + cos(nextAngle) * innerRadius
-        val innerY = centerY + sin(nextAngle) * innerRadius
-
-        if (firstPoint) {
-            path.moveTo(outerX, outerY)
-            firstPoint = false
-        } else {
-            path.lineTo(outerX, outerY)
-        }
-        path.lineTo(innerX, innerY)
-    }
-    path.close()
-    return path
-}
-// ================= ЖИВЫЕ БРОВИ — РАСЧЁТ СОСТОЯНИЯ =================
-// Брови реагируют на: isThinking, isSpeaking, isIdle, isBlinking, lookOffsetX/Y
-// Каждая бровь имеет: наклон (rotation), подъём (offsetY), сжатие/растяжение (scaleX)
-
-// Базовый наклон: внутренний край выше внешнего (хищный прищур)
-// При isThinking — брови сдвигаются к центру (сосредоточенность)
-// При isSpeaking — брови поднимаются (удивление/активность)
-// При isIdle — плавное «дыхание» бровей через idleEyePhase
-
-val browPhase = if (isThinking) {
-    // Сосредоточенность: брови сдвигаются вниз и к центру
-    -0.15f + sin(pulse * 2f) * 0.05f
-} else if (isSpeaking) {
-    // Активность: брови поднимаются
-    0.25f + sin(mouthPhase * 2f) * 0.08f
-} else if (isIdle) {
-    // Спокойствие: лёгкое «дыхание» бровей
-    val p = idleEyePhase
-    when {
-        p < 0.4f -> 0f
-        p < 0.6f -> ((p - 0.4f) / 0.2f) * 0.15f          // подъём
-        p < 0.8f -> 0.15f - ((p - 0.6f) / 0.2f) * 0.3f    // сдвиг вниз (хмурость)
-        else -> -0.15f + ((p - 0.8f) / 0.2f) * 0.15f      // возврат
-    }
-} else {
-    0f
-}
-
-// Подъём бровей по Y (в единицах дизайна)
-val browLift = when {
-    isBlinking -> -0.5f * u                  // при моргании — чуть вниз
-    isThinking -> -1.2f * u                  // сосредоточенность — вниз
-    isSpeaking -> 1.5f * u                   // активность — вверх
-    isIdle -> browPhase * 3f * u             // «дыхание»
-    else -> 0f
-}
-
-// Наклон бровей (градусы): положительный — внутренний край вверх
-val browTilt = when {
-    isThinking -> 12f                        // сдвиг к центру (злой/сосредоточенный)
-    isSpeaking -> -6f                        // удивлённый подъём
-    isIdle -> browPhase * 10f                // лёгкое движение
-    else -> 0f
-}
-
-// Сжатие/растяжение бровей по X (1f = норма)
-val browStretch = when {
-    isThinking -> 0.9f                       // чуть сжаты
-    isSpeaking -> 1.1f                       // чуть растянуты
-    isIdle -> 1f + browPhase * 0.15f         // «дыхание»
-    else -> 1f
-}
-
-// ========== ЛЕВЫЙ ГЛАЗ (позиция внутри визора) ==========
-val leftEyeCenterX = -12f + lookOffsetX / u
-val leftEyeCenterY = 26f + lookOffsetY / u  // Чуть выше, чтобы влезли в визор
-val leftCenter = pt(leftEyeCenterX, leftEyeCenterY)
-
-val leftEyePath = createPredatorEyePath(leftCenter.x, leftCenter.y, eyeW, eyeH, isLeft = true)
-
-// Свечение глаза
-drawPath(
-    path = leftEyePath,
-    brush = Brush.radialGradient(
-        colors = listOf(
-            neonBluePulse.copy(alpha = 0.5f),
-            neonBluePulse.copy(alpha = 0.15f),
-            Color.Transparent
-        ),
-        center = leftCenter,
-        radius = eyeW * 0.7f
-    )
-)
-
-// Тёмная подложка
-drawPath(leftEyePath, color = Color(0xFF0A0A14))
-
-// Основной цвет глаза
-drawPath(
-    path = leftEyePath,
-    brush = Brush.radialGradient(
-        colors = listOf(neonBluePulse, neonBluePulse.copy(alpha = 0.6f)),
-        center = Offset(leftCenter.x + eyeW * 0.1f, leftCenter.y + eyeH * 0.2f),
-        radius = eyeW * 0.5f
-    )
-)
-
-// Зрачок-шестерёнка
-val pupilOffsetX = (lookOffsetX / u) * 0.25f * u
-val pupilOffsetY = (lookOffsetY / u) * 0.25f * u
-val leftIrisCenter = Offset(leftCenter.x + pupilOffsetX, leftCenter.y + pupilOffsetY + eyeH * 0.15f)
-
-drawCircle(
-    color = Color(0xFF050510),
-    radius = irisRadius * 1.1f,
-    center = leftIrisCenter
-)
-
-val leftGearPath = createGearIrisPath(leftIrisCenter.x, leftIrisCenter.y, irisRadius, teethCount = 8)
-drawPath(path = leftGearPath, color = Color(0xFF0A0A14))
-drawPath(
-    path = leftGearPath,
-    color = neonBluePulse.copy(alpha = 0.9f),
-    style = Stroke(width = 0.7f * u)
-)
-
-drawCircle(
-    color = Color(0xFF050510),
-    radius = irisRadius * 0.35f,
-    center = leftIrisCenter
-)
-
-// Блики
-drawOval(
-    color = Color.White.copy(alpha = 0.95f),
-    topLeft = Offset(leftIrisCenter.x - 0.4f * u, leftIrisCenter.y - irisRadius * 0.4f),
-    size = Size(0.8f * u, irisRadius * 0.8f)
-)
-drawCircle(
-    color = Color.White.copy(alpha = 0.8f),
-    radius = 0.6f * u,
-    center = Offset(leftIrisCenter.x + irisRadius * 0.3f, leftIrisCenter.y - irisRadius * 0.3f)
-)
-
-// ========== ЛЕВАЯ БРОВЬ — ЖИВАЯ, ВАРИАНТ B (neonBluePulse) ==========
-val leftBrowPath = createLivingBrowPath(
-    centerX = leftCenter.x,
-    centerY = leftCenter.y,
-    width = eyeW,
-    height = eyeH,
-    isLeft = true,
-    lift = browLift,
-    tilt = browTilt,
-    stretch = browStretch
-)
-
-// Свечение брови (ореол)
-drawPath(
-    path = leftBrowPath,
-    color = neonBluePulse.copy(alpha = 0.35f),
-    style = Stroke(width = 3.5f * u, cap = StrokeCap.Round)
-)
-
-// Основная линия брови — неоновый голубой
-drawPath(
-    path = leftBrowPath,
-    color = neonBluePulse.copy(alpha = 0.95f),
-    style = Stroke(width = 2f * u, cap = StrokeCap.Round)
-)
-
-// Яркое ядро (тонкая белая линия поверх) — для «живого» свечения
-drawPath(
-    path = leftBrowPath,
-    color = Color.White.copy(alpha = 0.7f),
-    style = Stroke(width = 0.7f * u, cap = StrokeCap.Round)
-)
-
-// ========== ПРАВЫЙ ГЛАЗ ==========
-val rightEyeCenterX = 12f + lookOffsetX / u
-val rightEyeCenterY = 26f + lookOffsetY / u
-val rightCenter = pt(rightEyeCenterX, rightEyeCenterY)
-
-val rightEyePath = createPredatorEyePath(rightCenter.x, rightCenter.y, eyeW, eyeH, isLeft = false)
-
-// Свечение
-drawPath(
-    path = rightEyePath,
-    brush = Brush.radialGradient(
-        colors = listOf(
-            neonBluePulse.copy(alpha = 0.5f),
-            neonBluePulse.copy(alpha = 0.15f),
-            Color.Transparent
-        ),
-        center = rightCenter,
-        radius = eyeW * 0.7f
-    )
-)
-
-// Тёмная подложка
-drawPath(rightEyePath, color = Color(0xFF0A0A14))
-
-// Основной цвет
-drawPath(
-    path = rightEyePath,
-    brush = Brush.radialGradient(
-        colors = listOf(neonBluePulse, neonBluePulse.copy(alpha = 0.6f)),
-        center = Offset(rightCenter.x - eyeW * 0.1f, rightCenter.y + eyeH * 0.2f),
-        radius = eyeW * 0.5f
-    )
-)
-
-// Зрачок-шестерёнка
-val rightIrisCenter = Offset(rightCenter.x + pupilOffsetX, rightCenter.y + pupilOffsetY + eyeH * 0.15f)
-
-drawCircle(
-    color = Color(0xFF050510),
-    radius = irisRadius * 1.1f,
-    center = rightIrisCenter
-)
-
-val rightGearPath = createGearIrisPath(rightIrisCenter.x, rightIrisCenter.y, irisRadius, teethCount = 8)
-drawPath(path = rightGearPath, color = Color(0xFF0A0A14))
-drawPath(
-    path = rightGearPath,
-    color = neonBluePulse.copy(alpha = 0.9f),
-    style = Stroke(width = 0.7f * u)
-)
-
-drawCircle(
-    color = Color(0xFF050510),
-    radius = irisRadius * 0.35f,
-    center = rightIrisCenter
-)
-
-// Блики
-drawOval(
-    color = Color.White.copy(alpha = 0.95f),
-    topLeft = Offset(rightIrisCenter.x - 0.4f * u, rightIrisCenter.y - irisRadius * 0.4f),
-    size = Size(0.8f * u, irisRadius * 0.8f)
-)
-drawCircle(
-    color = Color.White.copy(alpha = 0.8f),
-    radius = 0.6f * u,
-    center = Offset(rightIrisCenter.x + irisRadius * 0.3f, rightIrisCenter.y - irisRadius * 0.3f)
-)
-
-// ========== ПРАВАЯ БРОВЬ — ЖИВАЯ, ВАРИАНТ B (neonBluePulse) ==========
-val rightBrowPath = createLivingBrowPath(
-    centerX = rightCenter.x,
-    centerY = rightCenter.y,
-    width = eyeW,
-    height = eyeH,
-    isLeft = false,
-    lift = browLift,
-    tilt = browTilt,
-    stretch = browStretch
-)
-
-// Свечение брови (ореол)
-drawPath(
-    path = rightBrowPath,
-    color = neonBluePulse.copy(alpha = 0.35f),
-    style = Stroke(width = 3.5f * u, cap = StrokeCap.Round)
-)
-
-// Основная линия брови — неоновый голубой
-drawPath(
-    path = rightBrowPath,
-    color = neonBluePulse.copy(alpha = 0.95f),
-    style = Stroke(width = 2f * u, cap = StrokeCap.Round)
-)
-
-// Яркое ядро (тонкая белая линия поверх)
-drawPath(
-    path = rightBrowPath,
-    color = Color.White.copy(alpha = 0.7f),
-    style = Stroke(width = 0.7f * u, cap = StrokeCap.Round)
-)
-        
-                                // ================= РОТ (с анимациями под стиль хищника) =================
-// Позиция рта — под визором, центрирована
-val mouthY = 52f
-val mouthBaseWidth = 24f * u
-val mouthBaseHeight = 10f * u
-
-// Анимация для speaking — пульсация высоты
-val mouthOpenHeight = if (isSpeaking) {
-    (5f + 3.5f * sin(mouthPhase * 2f)) * u
-} else {
-    0f
-}
-
-// Анимация для thinking — лёгкое подрагивание
-val thinkingTwitch = if (isThinking) {
-    sin(pulse * 3f) * 0.5f
-} else {
-    0f
-}
-
-if (isSpeaking) {
-    // ========== ДИНАМИЧЕСКИЙ РОТ (говорит) ==========
-    // Форма меняется: широкая/узкая/круглая — в такт mouthPhase
-    val widthOscillate = 1f + 0.25f * sin(mouthPhase * 1.7f)   // 0.75..1.25
-    val heightOscillate = 1f + 0.35f * sin(mouthPhase * 2.3f)  // 0.65..1.35
-
-    val currentWidth = mouthBaseWidth * widthOscillate
-    val currentHeight = mouthOpenHeight * heightOscillate
-    val halfW = currentWidth / 2f
-    val halfH = currentHeight / 2f
-
-    // Внешний контур рта (Path, а не овал — форма меняется)
-    val outerMouthPath = Path().apply {
-        val cx = pt(0f, mouthY).x
-        val cy = pt(0f, mouthY).y
-        moveTo(cx - halfW, cy)
-        // Левая половина — верхняя дуга
-        cubicTo(
-            cx - halfW * 0.6f, cy - halfH,
-            cx + halfW * 0.6f, cy - halfH,
-            cx + halfW, cy
-        )
-        // Правая половина — нижняя дуга
-        cubicTo(
-            cx + halfW * 0.6f, cy + halfH,
-            cx - halfW * 0.6f, cy + halfH,
-            cx - halfW, cy
-        )
-        close()
-    }
-
-    // Тёмный внешний контур
-    drawPath(outerMouthPath, color = darkerGray)
-
-    // Внутренняя глубина (чёрный)
-    val innerMouthPath = Path().apply {
-        val cx = pt(0f, mouthY).x
-        val cy = pt(0f, mouthY).y
-        val iw = halfW * 0.78f
-        val ih = halfH * 0.78f
-        moveTo(cx - iw, cy)
-        cubicTo(
-            cx - iw * 0.6f, cy - ih,
-            cx + iw * 0.6f, cy - ih,
-            cx + iw, cy
-        )
-        cubicTo(
-            cx + iw * 0.6f, cy + ih,
-            cx - iw * 0.6f, cy + ih,
-            cx - iw, cy
-        )
-        close()
-    }
-    drawPath(innerMouthPath, color = Color(0xFF050510))
-
-    // ========== ОРЕОЛ СВЕЧЕНИЯ ВОКРУГ РТА ==========
-    val glowPulse = 0.6f + 0.4f * sin(mouthPhase * 3f)
-    drawCircle(
-        brush = Brush.radialGradient(
-            colors = listOf(
-                neonBlue.copy(alpha = 0.55f * glowPulse),
-                neonBlue.copy(alpha = 0.25f * glowPulse),
-                Color.Transparent
-            ),
-            center = pt(0f, mouthY),
-            radius = currentWidth * 1.1f
-        ),
-        radius = currentWidth * 1.1f,
-        center = pt(0f, mouthY)
-    )
-
-    // Внутреннее свечение (энергия изо рта)
-    if (currentHeight > 3f * u) {
-        drawPath(
-            path = innerMouthPath,
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    Color.White.copy(alpha = 0.7f * glowPulse),
-                    neonBlue.copy(alpha = 0.5f * glowPulse),
-                    Color.Transparent
-                ),
-                center = pt(0f, mouthY),
-                radius = currentWidth * 0.6f
+            drawPath(
+                headPanelPath,
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFFEDEFF2),
+                        Color(0xFFD9DEE3),
+                        Color(0xFFC4CAD1)
+                    ),
+                    startY = ptHead(0f, -4f).y,
+                    endY = ptHead(0f, 14f).y
+                )
             )
-        )
-    }
 
-    // ========== ЭКВАЛАЙЗЕР ВНУТРИ РТА (5 полосок) ==========
-    val barCount = 5
-    val barSpacing = currentWidth / (barCount + 1)
-    for (i in 0 until barCount) {
-        val barX = -currentWidth / 2f + barSpacing * (i + 1)
-        // Каждая полоска колеблется со своей фазой
-        val barPhase = mouthPhase * 2f + i * 1.1f
-        val barHeightFactor = 0.3f + 0.7f * abs(sin(barPhase))
-        val barH = currentHeight * 0.7f * barHeightFactor
-        val barW = 1.2f * u
+            val headPanelHighlight = Path().apply {
+                moveTo(ptHead(-9f, -2f).x, ptHead(-9f, -2f).y + panelLift)
+                lineTo(ptHead(-4f, -2f).x, ptHead(-4f, -2f).y + panelLift)
+                lineTo(ptHead(-4f, 12f).x, ptHead(-4f, 12f).y + panelLift)
+                lineTo(ptHead(-9f, 12f).x, ptHead(-9f, 12f).y + panelLift)
+                close()
+            }
+            drawPath(
+                headPanelHighlight,
+                color = Color.White.copy(alpha = 0.5f)
+            )
 
-        // Цвет полоски — от белого к голубому
-        val barColor = if (barHeightFactor > 0.7f) {
-            Color.White.copy(alpha = 0.95f)
-        } else {
-            neonBlue.copy(alpha = 0.85f)
-        }
+            val leftHeadLinePath = Path().apply {
+                moveTo(ptHead(-16f, -4f).x, ptHead(-16f, -4f).y)
+                cubicTo(
+                    ptHead(-16f, 2f).x, ptHead(-16f, 2f).y,
+                    ptHead(-15.5f, 8f).x, ptHead(-15.5f, 8f).y,
+                    ptHead(-15f, 14f).x, ptHead(-15f, 14f).y
+                )
+            }
+            drawPath(
+                leftHeadLinePath,
+                color = darkGray,
+                style = Stroke(width = 1f * u, cap = StrokeCap.Round)
+            )
 
-        // Тень полоски (для контраста на чёрном)
-        drawRoundRect(
-            color = barColor,
-            topLeft = pt(barX - barW / 2f, mouthY - barH / 2f / u),
-            size = Size(barW, barH),
-            cornerRadius = CornerRadius(barW / 2f)
-        )
+            val rightHeadLinePath = Path().apply {
+                moveTo(ptHead(16f, -4f).x, ptHead(16f, -4f).y)
+                cubicTo(
+                    ptHead(16f, 2f).x, ptHead(16f, 2f).y,
+                    ptHead(15.5f, 8f).x, ptHead(15.5f, 8f).y,
+                    ptHead(15f, 14f).x, ptHead(15f, 14f).y
+                )
+            }
+            drawPath(
+                rightHeadLinePath,
+                color = darkGray,
+                style = Stroke(width = 1f * u, cap = StrokeCap.Round)
+            )
 
-        // Ореол вокруг ярких полосок
-        if (barHeightFactor > 0.8f) {
-            drawCircle(
+            // ================= ВИЗОР =================
+            val topRadius = 4f * u
+            val bottomRadius = 13f * u
+
+            val visorPath = Path().apply {
+                moveTo(ptHead(-34f + topRadius, 14f).x, ptHead(-34f + topRadius, 14f).y)
+                lineTo(ptHead(34f - topRadius, 14f).x, ptHead(34f - topRadius, 14f).y)
+                arcTo(
+                    rect = Rect(
+                        left = ptHead(34f - 2f * topRadius, 14f).x,
+                        top = ptHead(34f - 2f * topRadius, 14f).y,
+                        right = ptHead(34f, 14f).x,
+                        bottom = ptHead(34f, 14f + 2f * topRadius).y
+                    ),
+                    startAngleDegrees = 270f,
+                    sweepAngleDegrees = 90f,
+                    forceMoveTo = false
+                )
+                lineTo(ptHead(34f, 42f - bottomRadius).x, ptHead(34f, 42f - bottomRadius).y)
+                arcTo(
+                    rect = Rect(
+                        left = ptHead(34f - 2f * bottomRadius, 42f - 2f * bottomRadius).x,
+                        top = ptHead(34f - 2f * bottomRadius, 42f - 2f * bottomRadius).y,
+                        right = ptHead(34f, 42f).x,
+                        bottom = ptHead(34f, 42f).y
+                    ),
+                    startAngleDegrees = 0f,
+                    sweepAngleDegrees = 90f,
+                    forceMoveTo = false
+                )
+                lineTo(ptHead(10f, 42f).x, ptHead(10f, 42f).y)
+                cubicTo(
+                    ptHead(6f, 40f).x, ptHead(6f, 40f).y,
+                    ptHead(3f, 37f).x, ptHead(3f, 37f).y,
+                    ptHead(0f, 37f).x, ptHead(0f, 37f).y
+                )
+                cubicTo(
+                    ptHead(-3f, 37f).x, ptHead(-3f, 37f).y,
+                    ptHead(-6f, 40f).x, ptHead(-6f, 40f).y,
+                    ptHead(-10f, 42f).x, ptHead(-10f, 42f).y
+                )
+                lineTo(ptHead(-34f + bottomRadius, 42f).x, ptHead(-34f + bottomRadius, 42f).y)
+                arcTo(
+                    rect = Rect(
+                        left = ptHead(-34f, 42f - 2f * bottomRadius).x,
+                        top = ptHead(-34f, 42f - 2f * bottomRadius).y,
+                        right = ptHead(-34f + 2f * bottomRadius, 42f).x,
+                        bottom = ptHead(-34f + 2f * bottomRadius, 42f).y
+                    ),
+                    startAngleDegrees = 90f,
+                    sweepAngleDegrees = 90f,
+                    forceMoveTo = false
+                )
+                lineTo(ptHead(-34f, 14f + topRadius).x, ptHead(-34f, 14f + topRadius).y)
+                arcTo(
+                    rect = Rect(
+                        left = ptHead(-34f, 14f).x,
+                        top = ptHead(-34f, 14f).y,
+                        right = ptHead(-34f + 2f * topRadius, 14f).x,
+                        bottom = ptHead(-34f + 2f * topRadius, 14f + 2f * topRadius).y
+                    ),
+                    startAngleDegrees = 180f,
+                    sweepAngleDegrees = 90f,
+                    forceMoveTo = false
+                )
+                close()
+            }
+
+            drawPath(
+                visorPath,
+                brush = Brush.verticalGradient(
+                    colors = listOf(visorGlass, visorDark),
+                    startY = ptHead(0f, 14f).y,
+                    endY = ptHead(0f, 42f).y
+                )
+            )
+
+            drawPath(visorPath, color = darkerGray, style = Stroke(width = 1.5f * u))
+
+            // ================= ГЛАЗА И БРОВИ =================
+            val isBlinking = currentBlink < 0.5f
+            val baseEyeW = 14f * u
+            val baseEyeH = 7f * u
+
+            val predatorPulse = if (isThinking) {
+                1f + sin(pulse) * 0.2f
+            } else {
+                1f
+            }
+
+            val speakingExpand = if (isSpeaking) {
+                1.15f + sin(mouthPhase * 2f) * 0.08f
+            } else {
+                1f
+            }
+
+            val (eyeW, eyeH) = when {
+                isBlinking -> baseEyeW to 1.5f * u
+                isThinking -> (baseEyeW * 0.95f) to (baseEyeH * 0.6f)
+                isSpeaking -> (baseEyeW * speakingExpand) to (baseEyeH * 1.1f)
+                isIdle -> {
+                    val p = idleEyePhase
+                    when {
+                        p < 0.4f -> baseEyeW to baseEyeH
+                        p < 0.6f -> {
+                            val t = (p - 0.4f) / 0.2f
+                            (baseEyeW + 1.5f * u * t) to (baseEyeH + 1.5f * u * t)
+                        }
+                        p < 0.8f -> {
+                            val t = (p - 0.6f) / 0.2f
+                            (baseEyeW + 2f * u * t) to (baseEyeH - 3f * u * t)
+                        }
+                        else -> {
+                            val t = (p - 0.8f) / 0.2f
+                            ((baseEyeW + 2f * u) - 2f * u * t) to ((baseEyeH - 3f * u) + 3f * u * t)
+                        }
+                    }
+                }
+                else -> baseEyeW to baseEyeH
+            }
+
+            val irisRadius = when {
+                isBlinking -> 1.5f * u
+                isThinking -> 3f * u * predatorPulse
+                isSpeaking -> 4.5f * u * speakingExpand
+                isIdle -> {
+                    val p = idleEyePhase
+                    when {
+                        p < 0.4f -> 4f * u
+                        p < 0.6f -> 4f * u + 1.2f * u * ((p - 0.4f) / 0.2f)
+                        p < 0.8f -> 5.2f * u - 2.5f * u * ((p - 0.6f) / 0.2f)
+                        else -> 2.7f * u + 1.3f * u * ((p - 0.8f) / 0.2f)
+                    }
+                }
+                else -> 4f * u
+            }
+
+            fun createPredatorEyePath(centerX: Float, centerY: Float, width: Float, height: Float, isLeft: Boolean): Path {
+                val halfW = width / 2f
+                val halfH = height / 2f
+                val outerRatio = 0.3f
+
+                val innerTopY = centerY - halfH
+                val innerBottomY = centerY + halfH
+                val outerTopY = centerY - halfH * outerRatio
+                val outerBottomY = centerY + halfH * outerRatio
+
+                val innerX = if (isLeft) centerX + halfW * 0.9f else centerX - halfW * 0.9f
+                val outerX = if (isLeft) centerX - halfW else centerX + halfW
+                val cornerRadius = 1f * u
+
+                return Path().apply {
+                    moveTo(innerX - cornerRadius, innerTopY)
+                    lineTo(outerX + cornerRadius, outerTopY)
+                    quadraticBezierTo(outerX, outerTopY, outerX, outerTopY + cornerRadius)
+                    lineTo(outerX, outerBottomY - cornerRadius)
+                    quadraticBezierTo(outerX, outerBottomY, outerX - cornerRadius, outerBottomY)
+                    quadraticBezierTo(centerX, centerY + halfH * 1.2f, innerX + cornerRadius, innerBottomY)
+                    quadraticBezierTo(innerX, innerBottomY, innerX, innerBottomY - cornerRadius)
+                    lineTo(innerX, innerTopY + cornerRadius)
+                    quadraticBezierTo(innerX, innerTopY, innerX - cornerRadius, innerTopY)
+                    close()
+                }
+            }
+
+            fun createLivingBrowPath(
+                centerX: Float,
+                centerY: Float,
+                width: Float,
+                height: Float,
+                isLeft: Boolean,
+                lift: Float,
+                tilt: Float,
+                stretch: Float
+            ): Path {
+                val halfW = width * stretch / 2f
+                val browOffsetY = height * 0.9f
+
+                val innerX = if (isLeft) centerX + halfW * 0.9f else centerX - halfW * 0.9f
+                val outerX = if (isLeft) centerX - halfW * 1.1f else centerX + halfW * 1.1f
+                val innerY = centerY - browOffsetY + lift
+                val outerY = centerY - browOffsetY - height * 0.3f + lift
+
+                val pivotX = innerX
+                val pivotY = innerY
+                val rad = tilt * PI.toFloat() / 180f
+                val cosA = cos(rad)
+                val sinA = sin(rad)
+
+                fun rotatePoint(x: Float, y: Float): Offset {
+                    val dx = x - pivotX
+                    val dy = y - pivotY
+                    return Offset(
+                        pivotX + dx * cosA - dy * sinA,
+                        pivotY + dx * sinA + dy * cosA
+                    )
+                }
+
+                val innerRot = rotatePoint(innerX, innerY)
+                val outerRot = rotatePoint(outerX, outerY)
+                val ctrlRot = rotatePoint(
+                    (innerX + outerX) / 2f,
+                    innerY - height * 0.15f
+                )
+
+                return Path().apply {
+                    moveTo(innerRot.x, innerRot.y)
+                    quadraticBezierTo(ctrlRot.x, ctrlRot.y, outerRot.x, outerRot.y)
+                }
+            }
+
+            fun createGearIrisPath(centerX: Float, centerY: Float, radius: Float, teethCount: Int = 8): Path {
+                val path = Path()
+                val outerRadius = radius
+                val innerRadius = radius * 0.75f
+                val angleStep = (2f * PI.toFloat()) / teethCount
+                var firstPoint = true
+
+                for (i in 0 until teethCount) {
+                    val angle = i * angleStep - PI.toFloat() / 2f
+                    val outerX = centerX + cos(angle) * outerRadius
+                    val outerY = centerY + sin(angle) * outerRadius
+                    val nextAngle = angle + angleStep / 2f
+                    val innerX = centerX + cos(nextAngle) * innerRadius
+                    val innerY = centerY + sin(nextAngle) * innerRadius
+
+                    if (firstPoint) {
+                        path.moveTo(outerX, outerY)
+                        firstPoint = false
+                    } else {
+                        path.lineTo(outerX, outerY)
+                    }
+                    path.lineTo(innerX, innerY)
+                }
+                path.close()
+                return path
+            }
+
+            val browPhase = if (isThinking) {
+                -0.15f + sin(pulse * 2f) * 0.05f
+            } else if (isSpeaking) {
+                0.25f + sin(mouthPhase * 2f) * 0.08f
+            } else if (isIdle) {
+                val p = idleEyePhase
+                when {
+                    p < 0.4f -> 0f
+                    p < 0.6f -> ((p - 0.4f) / 0.2f) * 0.15f
+                    p < 0.8f -> 0.15f - ((p - 0.6f) / 0.2f) * 0.3f
+                    else -> -0.15f + ((p - 0.8f) / 0.2f) * 0.15f
+                }
+            } else {
+                0f
+            }
+
+            val browLift = when {
+                isBlinking -> -0.5f * u
+                isThinking -> -1.2f * u
+                isSpeaking -> 1.5f * u
+                isIdle -> browPhase * 3f * u
+                else -> 0f
+            }
+
+            val browTilt = when {
+                isThinking -> 12f
+                isSpeaking -> -6f
+                isIdle -> browPhase * 10f
+                else -> 0f
+            }
+
+            val browStretch = when {
+                isThinking -> 0.9f
+                isSpeaking -> 1.1f
+                isIdle -> 1f + browPhase * 0.15f
+                else -> 1f
+            }
+
+            val leftEyeCenterX = -12f + lookOffsetX / u
+            val leftEyeCenterY = 26f + lookOffsetY / u
+            val leftCenter = ptHead(leftEyeCenterX, leftEyeCenterY)
+
+            val leftEyePath = createPredatorEyePath(leftCenter.x, leftCenter.y, eyeW, eyeH, isLeft = true)
+
+            drawPath(
+                path = leftEyePath,
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        neonBlue.copy(alpha = 0.5f),
+                        neonBluePulse.copy(alpha = 0.5f),
+                        neonBluePulse.copy(alpha = 0.15f),
                         Color.Transparent
                     ),
-                    center = pt(barX, mouthY),
-                    radius = barW * 3f
-                ),
-                radius = barW * 3f,
-                center = pt(barX, mouthY)
+                    center = leftCenter,
+                    radius = eyeW * 0.7f
+                )
             )
+
+            drawPath(leftEyePath, color = Color(0xFF0A0A14))
+
+            drawPath(
+                path = leftEyePath,
+                brush = Brush.radialGradient(
+                    colors = listOf(neonBluePulse, neonBluePulse.copy(alpha = 0.6f)),
+                    center = Offset(leftCenter.x + eyeW * 0.1f, leftCenter.y + eyeH * 0.2f),
+                    radius = eyeW * 0.5f
+                )
+            )
+
+            val pupilOffsetX = (lookOffsetX / u) * 0.25f * u
+            val pupilOffsetY = (lookOffsetY / u) * 0.25f * u
+            val leftIrisCenter = Offset(leftCenter.x + pupilOffsetX, leftCenter.y + pupilOffsetY + eyeH * 0.15f)
+
+            drawCircle(
+                color = Color(0xFF050510),
+                radius = irisRadius * 1.1f,
+                center = leftIrisCenter
+            )
+
+            val leftGearPath = createGearIrisPath(leftIrisCenter.x, leftIrisCenter.y, irisRadius, teethCount = 8)
+            drawPath(path = leftGearPath, color = Color(0xFF0A0A14))
+            drawPath(
+                path = leftGearPath,
+                color = neonBluePulse.copy(alpha = 0.9f),
+                style = Stroke(width = 0.7f * u)
+            )
+
+            drawCircle(
+                color = Color(0xFF050510),
+                radius = irisRadius * 0.35f,
+                center = leftIrisCenter
+            )
+
+            drawOval(
+                color = Color.White.copy(alpha = 0.95f),
+                topLeft = Offset(leftIrisCenter.x - 0.4f * u, leftIrisCenter.y - irisRadius * 0.4f),
+                size = Size(0.8f * u, irisRadius * 0.8f)
+            )
+            drawCircle(
+                color = Color.White.copy(alpha = 0.8f),
+                radius = 0.6f * u,
+                center = Offset(leftIrisCenter.x + irisRadius * 0.3f, leftIrisCenter.y - irisRadius * 0.3f)
+            )
+
+            val leftBrowPath = createLivingBrowPath(
+                centerX = leftCenter.x,
+                centerY = leftCenter.y,
+                width = eyeW,
+                height = eyeH,
+                isLeft = true,
+                lift = browLift,
+                tilt = browTilt,
+                stretch = browStretch
+            )
+
+            drawPath(
+                path = leftBrowPath,
+                color = neonBluePulse.copy(alpha = 0.35f),
+                style = Stroke(width = 3.5f * u, cap = StrokeCap.Round)
+            )
+
+            drawPath(
+                path = leftBrowPath,
+                color = neonBluePulse.copy(alpha = 0.95f),
+                style = Stroke(width = 2f * u, cap = StrokeCap.Round)
+            )
+
+            drawPath(
+                path = leftBrowPath,
+                color = Color.White.copy(alpha = 0.7f),
+                style = Stroke(width = 0.7f * u, cap = StrokeCap.Round)
+            )
+
+            val rightEyeCenterX = 12f + lookOffsetX / u
+            val rightEyeCenterY = 26f + lookOffsetY / u
+            val rightCenter = ptHead(rightEyeCenterX, rightEyeCenterY)
+
+            val rightEyePath = createPredatorEyePath(rightCenter.x, rightCenter.y, eyeW, eyeH, isLeft = false)
+
+            drawPath(
+                path = rightEyePath,
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        neonBluePulse.copy(alpha = 0.5f),
+                        neonBluePulse.copy(alpha = 0.15f),
+                        Color.Transparent
+                    ),
+                    center = rightCenter,
+                    radius = eyeW * 0.7f
+                )
+            )
+
+            drawPath(rightEyePath, color = Color(0xFF0A0A14))
+
+            drawPath(
+                path = rightEyePath,
+                brush = Brush.radialGradient(
+                    colors = listOf(neonBluePulse, neonBluePulse.copy(alpha = 0.6f)),
+                    center = Offset(rightCenter.x - eyeW * 0.1f, rightCenter.y + eyeH * 0.2f),
+                    radius = eyeW * 0.5f
+                )
+            )
+
+            val rightIrisCenter = Offset(rightCenter.x + pupilOffsetX, rightCenter.y + pupilOffsetY + eyeH * 0.15f)
+
+            drawCircle(
+                color = Color(0xFF050510),
+                radius = irisRadius * 1.1f,
+                center = rightIrisCenter
+            )
+
+            val rightGearPath = createGearIrisPath(rightIrisCenter.x, rightIrisCenter.y, irisRadius, teethCount = 8)
+            drawPath(path = rightGearPath, color = Color(0xFF0A0A14))
+            drawPath(
+                path = rightGearPath,
+                color = neonBluePulse.copy(alpha = 0.9f),
+                style = Stroke(width = 0.7f * u)
+            )
+
+            drawCircle(
+                color = Color(0xFF050510),
+                radius = irisRadius * 0.35f,
+                center = rightIrisCenter
+            )
+
+            drawOval(
+                color = Color.White.copy(alpha = 0.95f),
+                topLeft = Offset(rightIrisCenter.x - 0.4f * u, rightIrisCenter.y - irisRadius * 0.4f),
+                size = Size(0.8f * u, irisRadius * 0.8f)
+            )
+            drawCircle(
+                color = Color.White.copy(alpha = 0.8f),
+                radius = 0.6f * u,
+                center = Offset(rightIrisCenter.x + irisRadius * 0.3f, rightIrisCenter.y - irisRadius * 0.3f)
+            )
+
+            val rightBrowPath = createLivingBrowPath(
+                centerX = rightCenter.x,
+                centerY = rightCenter.y,
+                width = eyeW,
+                height = eyeH,
+                isLeft = false,
+                lift = browLift,
+                tilt = browTilt,
+                stretch = browStretch
+            )
+
+            drawPath(
+                path = rightBrowPath,
+                color = neonBluePulse.copy(alpha = 0.35f),
+                style = Stroke(width = 3.5f * u, cap = StrokeCap.Round)
+            )
+
+            drawPath(
+                path = rightBrowPath,
+                color = neonBluePulse.copy(alpha = 0.95f),
+                style = Stroke(width = 2f * u, cap = StrokeCap.Round)
+            )
+
+            drawPath(
+                path = rightBrowPath,
+                color = Color.White.copy(alpha = 0.7f),
+                style = Stroke(width = 0.7f * u, cap = StrokeCap.Round)
+            )
+
+            // ================= РОТ =================
+            val mouthY = 52f
+            val mouthBaseWidth = 24f * u
+            val mouthBaseHeight = 10f * u
+
+            val mouthOpenHeight = if (isSpeaking) {
+                (5f + 3.5f * sin(mouthPhase * 2f)) * u
+            } else {
+                0f
+            }
+
+            val thinkingTwitch = if (isThinking) {
+                sin(pulse * 3f) * 0.5f
+            } else {
+                0f
+            }
+
+            if (isSpeaking) {
+                val widthOscillate = 1f + 0.25f * sin(mouthPhase * 1.7f)
+                val heightOscillate = 1f + 0.35f * sin(mouthPhase * 2.3f)
+
+                val currentWidth = mouthBaseWidth * widthOscillate
+                val currentHeight = mouthOpenHeight * heightOscillate
+                val halfW = currentWidth / 2f
+                val halfH = currentHeight / 2f
+
+                val outerMouthPath = Path().apply {
+                    val cx = ptHead(0f, mouthY).x
+                    val cy = ptHead(0f, mouthY).y
+                    moveTo(cx - halfW, cy)
+                    cubicTo(
+                        cx - halfW * 0.6f, cy - halfH,
+                        cx + halfW * 0.6f, cy - halfH,
+                        cx + halfW, cy
+                    )
+                    cubicTo(
+                        cx + halfW * 0.6f, cy + halfH,
+                        cx - halfW * 0.6f, cy + halfH,
+                        cx - halfW, cy
+                    )
+                    close()
+                }
+
+                drawPath(outerMouthPath, color = darkerGray)
+
+                val innerMouthPath = Path().apply {
+                    val cx = ptHead(0f, mouthY).x
+                    val cy = ptHead(0f, mouthY).y
+                    val iw = halfW * 0.78f
+                    val ih = halfH * 0.78f
+                    moveTo(cx - iw, cy)
+                    cubicTo(
+                        cx - iw * 0.6f, cy - ih,
+                        cx + iw * 0.6f, cy - ih,
+                        cx + iw, cy
+                    )
+                    cubicTo(
+                        cx + iw * 0.6f, cy + ih,
+                        cx - iw * 0.6f, cy + ih,
+                        cx - iw, cy
+                    )
+                    close()
+                }
+                drawPath(innerMouthPath, color = Color(0xFF050510))
+
+                val glowPulse = 0.6f + 0.4f * sin(mouthPhase * 3f)
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            neonBlue.copy(alpha = 0.55f * glowPulse),
+                            neonBlue.copy(alpha = 0.25f * glowPulse),
+                            Color.Transparent
+                        ),
+                        center = ptHead(0f, mouthY),
+                        radius = currentWidth * 1.1f
+                    ),
+                    radius = currentWidth * 1.1f,
+                    center = ptHead(0f, mouthY)
+                )
+
+                if (currentHeight > 3f * u) {
+                    drawPath(
+                        path = innerMouthPath,
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.7f * glowPulse),
+                                neonBlue.copy(alpha = 0.5f * glowPulse),
+                                Color.Transparent
+                            ),
+                            center = ptHead(0f, mouthY),
+                            radius = currentWidth * 0.6f
+                        )
+                    )
+                }
+
+                val barCount = 5
+                val barSpacing = currentWidth / (barCount + 1)
+                for (i in 0 until barCount) {
+                    val barX = -currentWidth / 2f + barSpacing * (i + 1)
+                    val barPhase = mouthPhase * 2f + i * 1.1f
+                    val barHeightFactor = 0.3f + 0.7f * abs(sin(barPhase))
+                    val barH = currentHeight * 0.7f * barHeightFactor
+                    val barW = 1.2f * u
+
+                    val barColor = if (barHeightFactor > 0.7f) {
+                        Color.White.copy(alpha = 0.95f)
+                    } else {
+                        neonBlue.copy(alpha = 0.85f)
+                    }
+
+                    drawRoundRect(
+                        color = barColor,
+                        topLeft = ptHead(barX - barW / 2f, mouthY - barH / 2f / u),
+                        size = Size(barW, barH),
+                        cornerRadius = CornerRadius(barW / 2f)
+                    )
+
+                    if (barHeightFactor > 0.8f) {
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    neonBlue.copy(alpha = 0.5f),
+                                    Color.Transparent
+                                ),
+                                center = ptHead(barX, mouthY),
+                                radius = barW * 3f
+                            ),
+                            radius = barW * 3f,
+                            center = ptHead(barX, mouthY)
+                        )
+                    }
+                }
+
+            } else if (isThinking) {
+                val twitchPath = Path().apply {
+                    moveTo(ptHead(-10f, mouthY + thinkingTwitch).x, ptHead(-10f, mouthY + thinkingTwitch).y)
+                    lineTo(ptHead(10f, mouthY + thinkingTwitch).x, ptHead(10f, mouthY + thinkingTwitch).y)
+                }
+
+                drawPath(
+                    twitchPath,
+                    color = mediumGray,
+                    style = Stroke(width = 1.5f * u, cap = StrokeCap.Round)
+                )
+
+                drawPath(
+                    twitchPath,
+                    color = neonBluePulse.copy(alpha = 0.4f),
+                    style = Stroke(width = 0.8f * u, cap = StrokeCap.Round)
+                )
+
+            } else {
+                val smilePath = Path().apply {
+                    moveTo(ptHead(-10f, mouthY - 2f).x, ptHead(-10f, mouthY - 2f).y)
+                    cubicTo(
+                        ptHead(-5f, mouthY + 3f).x, ptHead(-5f, mouthY + 3f).y,
+                        ptHead(5f, mouthY + 3f).x, ptHead(5f, mouthY + 3f).y,
+                        ptHead(10f, mouthY - 2f).x, ptHead(10f, mouthY - 2f).y
+                    )
+                }
+
+                drawPath(
+                    smilePath,
+                    color = darkerGray,
+                    style = Stroke(width = 2f * u, cap = StrokeCap.Round)
+                )
+
+                if (isActive) {
+                    drawPath(
+                        smilePath,
+                        color = neonBluePulse.copy(alpha = 0.2f),
+                        style = Stroke(width = 0.8f * u, cap = StrokeCap.Round)
+                    )
+                }
+            }
+
+            if (!isSpeaking) {
+                drawLine(
+                    color = mediumGray.copy(alpha = 0.4f),
+                    start = ptHead(-15f, mouthY + 8f),
+                    end = ptHead(15f, mouthY + 8f),
+                    strokeWidth = 0.5f * u
+                )
+            }
         }
     }
-
-} else if (isThinking) {
-    // ========== ЗАДУМЧИВАЯ ЛИНИЯ (думает) ==========
-    // Прямая линия с лёгким подрагиванием
-    val twitchPath = Path().apply {
-        moveTo(pt(-10f, mouthY + thinkingTwitch).x, pt(-10f, mouthY + thinkingTwitch).y)
-        lineTo(pt(10f, mouthY + thinkingTwitch).x, pt(10f, mouthY + thinkingTwitch).y)
-    }
-    
-    drawPath(
-        twitchPath,
-        color = mediumGray,
-        style = Stroke(width = 1.5f * u, cap = StrokeCap.Round)
-    )
-    
-    // Лёгкое свечение для эффекта "обработки данных"
-    drawPath(
-        twitchPath,
-        color = neonBluePulse.copy(alpha = 0.4f),
-        style = Stroke(width = 0.8f * u, cap = StrokeCap.Round)
-    )
-    
-} else {
-    // ========== УЛЫБКА (спокойное состояние) ==========
-    // Основная улыбка (тёмная)
-    val smilePath = Path().apply {
-        moveTo(pt(-10f, mouthY - 2f).x, pt(-10f, mouthY - 2f).y)
-        cubicTo(
-            pt(-5f, mouthY + 3f).x, pt(-5f, mouthY + 3f).y,
-            pt(5f, mouthY + 3f).x, pt(5f, mouthY + 3f).y,
-            pt(10f, mouthY - 2f).x, pt(10f, mouthY - 2f).y
-        )
-    }
-    
-    drawPath(
-        smilePath,
-        color = darkerGray,
-        style = Stroke(width = 2f * u, cap = StrokeCap.Round)
-    )
-    
-    // Неоновая подсветка улыбки (еле заметная)
-    if (isActive) {
-        drawPath(
-            smilePath,
-            color = neonBluePulse.copy(alpha = 0.2f),
-            style = Stroke(width = 0.8f * u, cap = StrokeCap.Round)
-        )
-    }
-}
-
-// ========== ДОПОЛНИТЕЛЬНЫЕ ДЕТАЛИ (панель под ртом) ==========
-// Декоративная линия под ртом (как у хищника)
-if (!isSpeaking) {
-    drawLine(
-        color = mediumGray.copy(alpha = 0.4f),
-        start = pt(-15f, mouthY + 8f),
-        end = pt(15f, mouthY + 8f),
-        strokeWidth = 0.5f * u
-    )
-}
-    }
-}
-
-private val SineClientEasing = Easing { fraction ->
-    sin(fraction * PI.toFloat() / 2f).toFloat()
-
 }
 @Composable
 private fun LockScreen(
