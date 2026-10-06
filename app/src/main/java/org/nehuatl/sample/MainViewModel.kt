@@ -438,9 +438,17 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-        // Сигнал махания для робота в overlay (робот 2)
+           // Сигнал махания для робота в overlay (робот 2)
     private val _overlayWaveSignal = MutableStateFlow(false)
     val overlayWaveSignal: StateFlow<Boolean> = _overlayWaveSignal.asStateFlow()
+
+    // Сигнал «микрофон overlay слушает» — для робота 2 (глаза расширяются)
+    private val _overlayListening = MutableStateFlow(false)
+    val overlayListening: StateFlow<Boolean> = _overlayListening.asStateFlow()
+
+    fun setOverlayListening(listening: Boolean) {
+        _overlayListening.value = listening
+    }
 
     // Сигнал «привет» — для робота 1 (машет рукой сам)
     private val _robotGreetingSignal = MutableStateFlow(false)
