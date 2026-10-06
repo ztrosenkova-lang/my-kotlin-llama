@@ -4120,9 +4120,14 @@ fun ThinkingRobotAnimation(
                     strokeWidth = 0.5f * u
                 )
             }
-        }
+             }
     }
 }
+
+private val SineClientEasing = Easing { fraction ->
+    sin(fraction * PI.toFloat() / 2f).toFloat()
+}
+
 @Composable
 private fun LockScreen(
     secretPhrase: String,
