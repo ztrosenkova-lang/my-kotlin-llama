@@ -21,13 +21,47 @@ fun RobotOverlayContent(
     val isModelLoaded by viewModel.isModelLoaded.collectAsStateWithLifecycle()
     val waveSignal by viewModel.overlayWaveSignal.collectAsStateWithLifecycle(initialValue = false)
     val isSmartMode by viewModel.isSmartMode.collectAsStateWithLifecycle(initialValue = false)
+    val robotGreetingSignal by viewModel.robotGreetingSignal.collectAsStateWithLifecycle(initialValue = false)
 
     val isThinking = state is GenerationState.Generating ||
                      cloudState is CloudAIState.Generating
     val isIdle = !isSpeaking && !isThinking
 
+    // Реакция на одиночный тап — наклон головы
+    var headTiltTarget by remember { mutableStateOf(0f) }
+    var headNodTarget by remember { mutableStateOf(0f) }
+    var isListening by remember { mutableStateOf(false) }
+
+    // Автосброс наклона через 0.5 сек
+    LaunchedEffect(headTiltTarget) {
+        if (headTiltTarget != 0f) {
+            delay(500)
+            headTiltTarget = 0f
+        }
+    }
+
+    // Автосброс кивка через 0.5 сек
+    LaunchedEffect(headNodTarget) {
+        if (headNodTarget != 0f) {
+            delay(500)
+            headNodTarget = 0f
+        }
+    }
+
     Box(
-        modifier = Modifier.fillMaxHeight(),
+        modifier = Modifier
+            .fillMaxHeight()
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { offset ->
+                        // Одиночный тап — наклон головы в сторону тапа
+                        val boxWidth = size.width.toFloat()
+                        val tiltDirection = if (offset.x < boxWidth / 2f) -1f else 1f
+                        headTiltTarget = tiltDirection * 8f
+                        headNodTarget = 0.3f
+                    }
+                )
+            },
         contentAlignment = Alignment.Center
     ) {
         ThinkingRobotAnimation(
@@ -36,9 +70,11 @@ fun RobotOverlayContent(
             isSpeaking = isSpeaking,
             isThinking = isThinking,
             isIdle = isIdle,
-            shouldWave = waveSignal,
+            shouldWave = waveSignal || robotGreetingSignal,
             isAiReady = isModelLoaded || (cloudState is CloudAIState.Ready),
             isSmartMode = isSmartMode,
+            headTilt = headTiltTarget,
+            headNod = headNodTarget,
             uDivisor = 350f,
             yOffsetUnits = 24f,
             modifier = Modifier.fillMaxHeight()
