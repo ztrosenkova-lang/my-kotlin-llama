@@ -6103,6 +6103,7 @@ private fun ModelDownloadDialog(
     isDarkTheme: Boolean
 ) {
     val downloadProgress by viewModel.downloadProgress.collectAsStateWithLifecycle()
+    val mmprojDownloadProgress by viewModel.mmprojDownloadProgress.collectAsStateWithLifecycle()
     var descriptionModel by remember { mutableStateOf<ModelInfo?>(null) }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -6222,25 +6223,56 @@ private fun ModelDownloadDialog(
                                     }
                                 }
 
+                                                                // Прогресс основной модели
                                 if (progress != null && progress.status == DownloadStatus.RUNNING) {
                                     Column(
                                         modifier = Modifier.fillMaxWidth(),
                                         verticalArrangement = Arrangement.spacedBy(2.dp)
                                     ) {
+                                        Text(
+                                            text = "📦 Модель: ${progress.percent}%",
+                                            color = colors.text,
+                                            fontSize = 10.sp,
+                                            fontFamily = FontFamily.Monospace,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
                                         LinearProgressIndicator(
                                             progress = progress.percent / 100f,
                                             modifier = Modifier.fillMaxWidth().height(6.dp),
                                             color = colors.accent,
                                             trackColor = colors.borderGray
                                         )
+                                    }
+                                }
+
+                                // Прогресс проектора (только если он есть у модели)
+                                val mmprojProgress = mmprojDownloadProgress[model.id]
+                                if (model.mmprojUrl != null && mmprojProgress != null) {
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                                    ) {
+                                        val mmprojText = when (mmprojProgress.status) {
+                                            DownloadStatus.RUNNING -> "🔧 Проектор: ${mmprojProgress.percent}%"
+                                            DownloadStatus.SUCCESS -> "🔧 Проектор: ✅ 100%"
+                                            DownloadStatus.FAILED -> "🔧 Проектор: ❌ Ошибка"
+                                            else -> "🔧 Проектор: ожидание..."
+                                        }
                                         Text(
-                                            text = "${progress.percent}%",
+                                            text = mmprojText,
                                             color = colors.text,
                                             fontSize = 10.sp,
                                             fontFamily = FontFamily.Monospace,
-                                            modifier = Modifier.fillMaxWidth(),
-                                            textAlign = TextAlign.End
+                                            modifier = Modifier.fillMaxWidth()
                                         )
+                                        if (mmprojProgress.status == DownloadStatus.RUNNING) {
+                                            LinearProgressIndicator(
+                                                progress = mmprojProgress.percent / 100f,
+                                                modifier = Modifier.fillMaxWidth().height(6.dp),
+                                                color = Color(0xFF4CAF50),
+                                                trackColor = colors.borderGray
+                                            )
+                                        }
                                     }
                                 }
                             }
