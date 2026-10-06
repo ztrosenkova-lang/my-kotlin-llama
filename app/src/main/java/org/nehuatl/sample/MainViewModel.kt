@@ -1292,7 +1292,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         return cleanText.replace(Regex("\\s+"), " ").trim()
     }
 
-       fun speakText(text: String) {
+           fun speakText(text: String) {
         if (!isTtsEnabled || text.isBlank()) {
             return
         }
@@ -1314,6 +1314,15 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 Log.e(TAG, "Language detection failed: ${e.message}")
                 speakWithSherpa(text)
             }
+    }
+
+    // Озвучка фраз интерфейса — всегда через Sherpa (русский движок),
+    // без определения языка через ML Kit.
+    fun speakUiPhrase(text: String) {
+        if (!isTtsEnabled || text.isBlank()) {
+            return
+        }
+        speakWithSherpa(text)
     }
 
     private fun speakWithSherpa(text: String) {
@@ -1349,45 +1358,17 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             else -> java.util.Locale.ENGLISH
         }
 
-        val availability = tts.isLanguageAvailable(locale)
+                val availability = tts.isLanguageAvailable(locale)
 
-        // Проверка: язык "поддерживается", но голосовые данные не установлены
-        val voiceMissingData = try {
-            val voice = tts.voices?.find { v ->
-                v.locale.language.equals(locale.language, ignoreCase = true) &&
-                v.locale.country.equals(locale.country, ignoreCase = true)
-            } ?: tts.voices?.find { v ->
-                v.locale.language.equals(locale.language, ignoreCase = true)
-            }
-            voice?.features?.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) == true
-        } catch (e: Exception) {
-            false
-        }
-
-        when {
-            voiceMissingData -> {
-                Log.w(TAG, "TTS voice data NOT INSTALLED for $locale")
-                appendSystemMessage("⚠️ Голосовые данные для этого языка не установлены. Открываю настройки — скачай пакет для нужного языка.")
-                openTtsSettings()
-            }
-            availability == TextToSpeech.LANG_AVAILABLE ||
-            availability == TextToSpeech.LANG_COUNTRY_AVAILABLE ||
-            availability == TextToSpeech.LANG_COUNTRY_VAR_AVAILABLE -> {
+        when (availability) {
+            TextToSpeech.LANG_AVAILABLE,
+            TextToSpeech.LANG_COUNTRY_AVAILABLE,
+            TextToSpeech.LANG_COUNTRY_VAR_AVAILABLE -> {
                 tts.language = locale
                 tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "android_tts_${System.currentTimeMillis()}")
             }
-            availability == TextToSpeech.LANG_MISSING_DATA -> {
-                Log.w(TAG, "TTS LANG_MISSING_DATA for $locale")
-                appendSystemMessage("⚠️ Голосовые данные для этого языка не установлены. Открываю настройки — скачай пакет.")
-                openTtsSettings()
-            }
-            availability == TextToSpeech.LANG_NOT_SUPPORTED -> {
-                Log.w(TAG, "TTS LANG_NOT_SUPPORTED for $locale")
-                appendSystemMessage("⚠️ Озвучка на этом языке не поддерживается на устройстве. Установи другой TTS-движок в настройках Android.")
-            }
             else -> {
-                Log.w(TAG, "TTS unknown availability: $availability for $locale")
-                appendSystemMessage("⚠️ Не удалось озвучить текст на этом языке. Проверь настройки TTS в Android.")
+                Log.w(TAG, "TTS not available for $locale (availability=$availability)")
             }
         }
     }
