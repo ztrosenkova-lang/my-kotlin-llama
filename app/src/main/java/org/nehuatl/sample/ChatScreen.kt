@@ -929,11 +929,12 @@ fun ChatScreen(
 
                         PromptInput(
                 prompt = promptInput,
-                onPromptChange = {
+                                onPromptChange = {
                     promptInput = it
-                    // Пока пользователь печатает — голова чуть вниз
+                    // Пока пользователь печатает — голова опускается вниз.
+                    // 1f — заметный наклон, хватает для визуального отклика.
                     if (it.isNotEmpty()) {
-                        headNodTarget = 0.3f
+                        headNodTarget = 1f
                     }
                 },
                                onGenerate = {
@@ -1238,31 +1239,43 @@ fun ChatScreen(
                             scaleX = animatedScale,
                             scaleY = animatedScale
                         )
+                                                // ПЕРВЫЙ pointerInput — обработка ТАПОВ (одиночный и двойной).
+                        // Идёт ПЕРВЫМ, чтобы тап не конфликтовал с перетаскиванием.
                         .pointerInput(Unit) {
-                            detectTransformGestures { _, pan, zoom, _ ->
-                                // Позиция — мгновенно при перетаскивании
-                                robotOffsetX = (robotOffsetX + pan.x).coerceIn(0f, screenWidthPx - robotSizePx * robotScale)
-                                robotOffsetY = (robotOffsetY + pan.y).coerceIn(0f, screenHeightPx - robotSizePx * robotScale)
-                                // Масштаб — тоже мгновенно меняется в robotScale, но отображается плавно через animatedScale
-                                robotScale = (robotScale * zoom).coerceIn(0.5f, 3f)
-                            }
-                        }
-                                                .pointerInput(Unit) {
                             detectTapGestures(
                                 onTap = { offset ->
-                                    // Одиночный тап — «повернулся к тебе»
-                                    // Наклоняем голову к точке тапа
-                                    val robotCenterX = screenWidthPx / 2f
+                                    // Одиночный тап — «повернулся к тебе».
+                                    // offset — координаты тапа ВНУТРИ Box робота (0 .. size.width).
+                                    // Центр робота — это size.width / 2.
+                                    val robotCenterX = size.width / 2f
+                                    // Если тап слева от центра → -1f (наклон влево),
+                                    // если справа → +1f (наклон вправо).
                                     val tiltDirection = if (offset.x < robotCenterX) -1f else 1f
+                                    // Наклон головы на 8 градусов в сторону тапа.
                                     headTiltTarget = tiltDirection * 8f
+                                    // Лёгкий кивок вниз (0.3 — небольшая величина).
                                     headNodTarget = 0.3f
                                 },
                                 onDoubleTap = {
                                     // Двойной тап на робота 1 — как команда «выйди из матрицы»,
-                                    // но всегда сворачивает приложение и перезапускает робота 2
+                                    // но всегда сворачивает приложение и перезапускает робота 2.
                                     (context as? MainActivity)?.forceStartFloatingAndMinimize()
                                 }
                             )
+                        }
+                        // ВТОРОЙ pointerInput — обработка ПЕРЕТАСКИВАНИЯ и ЗУМА.
+                        // Идёт ВТОРЫМ, чтобы тап имел приоритет.
+                        .pointerInput(Unit) {
+                            detectTransformGestures { _, pan, zoom, _ ->
+                                // Позиция по X — мгновенно при перетаскивании.
+                                // coerceIn ограничивает, чтобы робот не ушёл за левый (0) и правый край экрана.
+                                robotOffsetX = (robotOffsetX + pan.x).coerceIn(0f, screenWidthPx - robotSizePx * robotScale)
+                                // Позиция по Y — то же самое, но для вертикали.
+                                robotOffsetY = (robotOffsetY + pan.y).coerceIn(0f, screenHeightPx - robotSizePx * robotScale)
+                                // Масштаб — мгновенно меняется в robotScale, но отображается плавно через animatedScale.
+                                // coerceIn ограничивает: минимум 0.5x, максимум 3x.
+                                robotScale = (robotScale * zoom).coerceIn(0.5f, 3f)
+                            }
                         }
                 ) {
                                                 ThinkingRobotAnimation(
@@ -1718,10 +1731,10 @@ fun ThinkingRobotAnimation(
         val panelOpen = headPanelOpenAmount
         val panelLift = panelOpen * 20f * u
 
-        // Смещение головы — независимо от тела
+        // Смещение головы — независимо от тела.
+        // 5f для headOffsetY — чтобы наклон вниз был заметен.
         val headOffsetX = headBob * 1.5f * u
-        val headOffsetY = headNod * 2f * u
-
+        val headOffsetY = headNod * 5f * u
         val whiteBody = Color(0xFFF4F6F8)
         val whiteHighlight = Color(0xFFFFFFFF)
         val lightGray = Color(0xFFD9DEE3)
