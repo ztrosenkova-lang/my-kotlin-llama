@@ -608,6 +608,16 @@ fun forceStartFloatingAndMinimize() {
     ).show()
     moveTaskToBack(true)
 }
+/**
+ * Сбрасывает выбранную модель и проектор.
+ * Вызывается при переключении в режим Neutral, чтобы в диалоге
+ * выбора модели поля были пустыми.
+ */
+fun clearSelectedModelAndMmproj() {
+    modelPath = null
+    mmprojPath = null
+    Log.d(TAG, "Selected model and mmproj cleared")
+}
 
     // ========== ОСНОВНОЙ КОНТЕНТ ==========
 
