@@ -203,10 +203,10 @@ object ModelCatalog {
         ModelInfo(
             id = "smolvlm_256m",
             name = "SmolVLM-256M — картинки, самая лёгкая",
-            url = "https://huggingface.co/ggml-org/SmolVLM-256M-Instruct-GGUF/resolve/main/SmolVLM-256M-Instruct-Q4_K_M.gguf",
-            fileName = "smolvlm_256m_q4.gguf",
-            mmprojUrl = "https://huggingface.co/ggml-org/SmolVLM-256M-Instruct-GGUF/resolve/main/mmproj-SmolVLM-256M-Instruct-F16.gguf",
-            mmprojFileName = "smolvlm_256m_mmproj.gguf",
+            url = "https://huggingface.co/pierretokns/SmolVLM-256M-Instruct-GGUF/resolve/main/SmolVLM-256M-Instruct-Q4_K_M.gguf",
+           fileName = "smolvlm_256m_q4.gguf",
+           mmprojUrl = "https://huggingface.co/pierretokns/SmolVLM-256M-Instruct-GGUF/resolve/main/mmproj-SmolVLM-256M-Instruct-f16.gguf",
+           mmprojFileName = "smolvlm_256m_mmproj.gguf",
             description = "Vision-модель от HuggingFace. 256M, ~300 МБ (модель + проектор). Контекст 8K. Умеет: описание картинок, OCR (распознавание текста), определение координат кнопок. Английский. Идеальна для слабых телефонов. Очень быстрая. "
         ),
 
@@ -214,7 +214,7 @@ object ModelCatalog {
         ModelInfo(
             id = "smolvlm2_500m",
             name = "SmolVLM2-500M — картинки, качественнее",
-            url = "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/SmolVLM2-500M-Video-Instruct-Q4_K_M.gguf",
+            url = "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
             fileName = "smolvlm2_500m_q4.gguf",
             mmprojUrl = "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-500M-Video-Instruct-f16.gguf",
             mmprojFileName = "smolvlm2_500m_mmproj.gguf",
