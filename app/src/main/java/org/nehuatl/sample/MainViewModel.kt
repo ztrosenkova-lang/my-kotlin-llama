@@ -55,7 +55,8 @@ data class PromptButton(
 data class ChatMessage(
     val role: String,
     val text: String,
-    val promptButtons: List<PromptButton>? = null
+    val promptButtons: List<PromptButton>? = null,
+    val hasImage: Boolean = false
 )
 
 enum class DownloadStatus {
@@ -1828,7 +1829,15 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
                // Если есть картинка без текста — не пишем пустое сообщение в чат,
         // а сразу отправляем в модель
-        if (text.isBlank() && imagePath != null) {
+                if (text.isBlank() && imagePath != null) {
+            // Добавляем сообщение в чат с пометкой «есть картинка».
+            // Текст — «[Изображение]», чтобы пользователь видел, что отправил фото.
+            _chatHistory.value = _chatHistory.value + ChatMessage(
+                role = "user",
+                text = "[Изображение]",
+                hasImage = true
+            )
+
             when (_currentMode.value) {
                 AIMode.LOCAL -> {
                     if (_isModelLoaded.value) {
@@ -1844,7 +1853,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             return
         }
 
-               _chatHistory.value = _chatHistory.value + ChatMessage("user", text)
+                       _chatHistory.value = _chatHistory.value + ChatMessage(
+            role = "user",
+            text = text,
+            hasImage = imagePath != null
+        )
         userMessageCount++
 
         // Модель-переводчик не умеет сжимать диалоги — пропускаем сжатие
