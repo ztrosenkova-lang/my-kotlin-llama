@@ -2289,7 +2289,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-       // Читает базовые знания из app/src/main/assets/memory_base.txt
+           // Читает базовые знания из app/src/main/assets/memory_base.txt
     private fun readBaseMemoryFromAssets(): String {
         return try {
             getApplication<Application>().assets
@@ -2298,6 +2298,19 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 .use { it.readText() }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to read base memory from assets: ${e.message}")
+            ""
+        }
+    }
+
+    // Читает базовые записи мозга из app/src/main/assets/brain_base.txt
+    private fun readBaseBrainFromAssets(): String {
+        return try {
+            getApplication<Application>().assets
+                .open("brain_base.txt")
+                .bufferedReader()
+                .use { it.readText() }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read base brain from assets: ${e.message}")
             ""
         }
     }
@@ -2315,7 +2328,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-            fun restoreBaseMemory() {
+                fun restoreBaseMemory() {
         try {
             val baseMemory = readBaseMemoryFromAssets()
             if (baseMemory.isEmpty()) {
@@ -2329,7 +2342,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
             val existing = memoryFile.readText()
 
-            // Если база пустая — просто записываем
             if (existing.isBlank()) {
                 memoryFile.writeText(baseMemory)
                 memorySearchEngine.clearCache()
@@ -2338,10 +2350,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 return
             }
 
-            // Если база уже есть — добавляем только те строки, которых нет
             val existingLines = existing.split("\n").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
             val baseLines = baseMemory.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
-
             val newLines = baseLines.filter { it !in existingLines }
 
             if (newLines.isEmpty()) {
@@ -2350,7 +2360,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 return
             }
 
-            // Дописываем только новые строки в конец файла
             val toAppend = "\n\n" + newLines.joinToString("\n")
             memoryFile.appendText(toAppend)
             memorySearchEngine.clearCache()
@@ -2360,6 +2369,50 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         } catch (e: Exception) {
             Log.e(TAG, "Failed to restore base memory: ${e.message}")
             appendSystemMessage("❌ Ошибка восстановления базовых знаний")
+        }
+    }
+
+    fun restoreBaseBrain() {
+        try {
+            val baseBrain = readBaseBrainFromAssets()
+            if (baseBrain.isEmpty()) {
+                appendSystemMessage("❌ Не удалось прочитать базовые записи мозга")
+                return
+            }
+
+            if (!brainFile.exists()) {
+                brainFile.createNewFile()
+            }
+
+            val existing = brainFile.readText()
+
+            if (existing.isBlank()) {
+                brainFile.writeText(baseBrain)
+                appendSystemMessage("🧠 Базовые записи добавлены в мозг")
+                Log.d(TAG, "Base brain added (file was empty)")
+                return
+            }
+
+            // Сравнение построчно: не добавляем строки, которые уже есть
+            val existingLines = existing.split("\n").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+            val baseLines = baseBrain.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+            val newLines = baseLines.filter { it !in existingLines }
+
+            if (newLines.isEmpty()) {
+                appendSystemMessage("✅ Базовые записи уже есть в мозге")
+                Log.d(TAG, "Base brain already present")
+                return
+            }
+
+            // Дописываем новые строки через двойной перенос
+            val toAppend = "\n\n" + newLines.joinToString("\n\n")
+            brainFile.appendText(toAppend)
+            appendSystemMessage("🧠 Базовые записи добавлены в мозг (${newLines.size} строк)")
+            Log.d(TAG, "Base brain appended: ${newLines.size} new lines")
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to restore base brain: ${e.message}")
+            appendSystemMessage("❌ Ошибка восстановления базовых записей мозга")
         }
     }
 
