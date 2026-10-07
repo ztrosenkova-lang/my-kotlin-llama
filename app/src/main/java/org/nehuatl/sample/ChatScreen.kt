@@ -187,6 +187,24 @@ enum class AIMode {
     NEUTRAL,
     CLOUD
 }
+// Очищает URI от мусорных символов и возвращает чистое имя файла
+private fun cleanModelName(path: String?): String {
+    if (path.isNullOrEmpty()) return ""
+    // Декодируем URL-encoded символы (%2F → /, %3A → : и т.д.)
+    val decoded = try {
+        java.net.URLDecoder.decode(path, "UTF-8")
+    } catch (e: Exception) {
+        path
+    }
+    // Берём имя файла после последнего слэша
+    val fileName = decoded.substringAfterLast("/")
+    // Убираем префиксы типа "primary:Models:"
+    return fileName
+        .replace(Regex("^primary:Models:"), "")
+        .replace(Regex("^primary:Models%3A"), "")
+        .trim()
+}
+
 private object SpaceConstants {
     const val ORBIT_CENTER_X_RATIO = 0.50f
     const val ORBIT_CENTER_Y_RATIO = 0.50f
