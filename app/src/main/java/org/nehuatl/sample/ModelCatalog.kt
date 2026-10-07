@@ -163,13 +163,13 @@ object ModelCatalog {
             description = "Parable-Granite 3B с снятой цензурой (abliterated). Q5_K_M ~2.6 ГБ. Отказы упали с 96/100 до 5/100, способности к рассуждениям и коду сохранены. Режим размышлений <think> работает. Для тех случаев, когда обычная Parable отказывается, а ответ нужен. "
         ),
 
-        // ===== 17. NVIDIA NEMOTRON-3-NANO-4B — ОТ NVIDIA, MoE (Q5_K_M) =====
+                // ===== 17. NVIDIA NEMOTRON-3-NANO-4B — ОТ NVIDIA, MoE (iMatrix Q4_K_M) =====
         ModelInfo(
             id = "nemotron_3_nano_4b",
             name = "NVIDIA Nemotron-3-Nano-4B — от NVIDIA, MoE",
-            url = BART + "nvidia_Nemotron-3-Nano-4B-GGUF/resolve/main/Nemotron-3-Nano-4B-Q5_K_M.gguf",
-            fileName = "nemotron_3_nano_4b_q5.gguf",
-            description = "NVIDIA Nemotron-3-Nano-4B — модель от мирового лидера, заточена под edge-устройства (NPC, ассистенты, IoT). Q5_K_M ~3.21 ГБ. Архитектура MoE. Русский язык входит в обучающий корпус (15 языков). Отличная скорость на реальном железе. ВАЖНО: Q5_K_M может не влезть в 3 ГБ — если не грузится, используй Q4_K_M. "
+            url = BART + "nvidia_Nemotron-3-Nano-4B-GGUF/resolve/main/nvidia_Nemotron-3-Nano-4B-Q4_K_M.gguf",
+            fileName = "nemotron_3_nano_4b_q4.gguf",
+            description = "NVIDIA Nemotron-3-Nano-4B — модель от мирового лидера, заточена под edge-устройства (NPC, ассистенты, IoT). Q4_K_M ~2.98 ГБ, iMatrix-квантование от bartowski. Архитектура MoE. Русский язык входит в обучающий корпус. Отличная скорость на реальном железе. "
         ),
 
         // ===== 18. QWEN3.5-4B — 262K КОНТЕКСТ (Q5_K_M) =====
