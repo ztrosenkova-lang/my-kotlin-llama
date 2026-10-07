@@ -603,10 +603,11 @@ fun ChatScreen(
         }
     }
 
-    if (showBrainEditorState) {
+        if (showBrainEditorState) {
         BrainEditorDialog(
             initialText = viewModel.readBrain(),
             onSave = { viewModel.overwriteBrain(it) },
+            onRestoreBase = { viewModel.restoreBaseBrain() },
             onDismiss = { viewModel.hideBrainEditor() },
             colors = colors,
             isDarkTheme = isDarkTheme
@@ -5594,6 +5595,7 @@ private fun MemoryEditorDialog(
 private fun BrainEditorDialog(
     initialText: String,
     onSave: (String) -> Unit,
+    onRestoreBase: () -> Unit,
     onDismiss: () -> Unit,
     colors: AppColors,
     isDarkTheme: Boolean
@@ -5626,14 +5628,62 @@ private fun BrainEditorDialog(
                     )
                 )
             },
-            confirmButton = {
-                Button(onClick = { onSave(text); onDismiss() }, colors = ButtonDefaults.buttonColors(containerColor = colors.accent)) {
-                    Text("Сохранить", color = colors.background)
+                        confirmButton = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = { onSave(text); onDismiss() },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = colors.accent,
+                                contentColor = colors.background
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, colors.borderGray),
+                            modifier = Modifier.weight(1f).height(38.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                        ) {
+                            Text("Сохранить", color = colors.background, fontSize = 12.sp)
+                        }
+
+                        Button(
+                            onClick = onDismiss,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = colors.accent,
+                                contentColor = colors.background
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, colors.borderGray),
+                            modifier = Modifier.weight(1f).height(38.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                        ) {
+                            Text("Закрыть", color = colors.background, fontSize = 12.sp)
+                        }
+                    }
+
+                    Button(
+                        onClick = { onRestoreBase(); onDismiss() },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = colors.borderGray,
+                            contentColor = colors.text
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, colors.borderGray),
+                        modifier = Modifier.fillMaxWidth(0.6f).height(36.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                    ) {
+                        Text("📚 Восстановить базовые", color = colors.text, fontSize = 11.sp)
+                    }
                 }
             },
-            dismissButton = {
-                TextButton(onClick = onDismiss) { Text("Закрыть", color = colors.text) }
-            }
+            dismissButton = null
         )
     }
 }
