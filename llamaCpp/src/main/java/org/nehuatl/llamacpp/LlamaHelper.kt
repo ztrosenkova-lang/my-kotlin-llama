@@ -203,14 +203,24 @@ class LlamaHelper(
         // Стоп-слова в зависимости от формата модели
         val stopWords = getStopWords()
         
-        val params = mutableMapOf<String, Any>(
+                val params = mutableMapOf<String, Any>(
             "prompt" to fullPrompt,
             "emit_partial_completion" to true,
             "temperature" to 0.7,
             "n_predict" to maxTokens,
             "top_k" to 40,
             "top_p" to 0.95,
-            "stop" to stopWords
+            "stop" to stopWords,
+            // DRY (Don't Repeat Yourself) — против зацикливания на фразах и абзацах.
+            // multiplier > 0 включает DRY. 0.8 — рекомендуемое значение.
+            "dry_multiplier" to 0.8,
+            // base — база экспоненциального штрафа. 1.75 — стандарт llama.cpp.
+            "dry_base" to 1.75,
+            // allowed_length — минимальная длина повтора (в токенах), после которой DRY срабатывает.
+            // 3 — значит, повтор из 3+ токенов будет штрафоваться.
+            "dry_allowed_length" to 3,
+            // penalty_last_n — сколько последних токенов проверять. 0 = весь контекст.
+            "dry_penalty_last_n" to 0
         )
         
         imagePath?.let {
