@@ -5158,14 +5158,40 @@ private fun SettingsPanel(
                 colors = SliderDefaults.colors(thumbColor = colors.accent, activeTrackColor = colors.accent, inactiveTrackColor = colors.borderGray)
             )
             Spacer(modifier = Modifier.height(12.dp))
-            Text(text = "Размер контекстного окна: $contextSize", color = colors.text)
+                        // Цвет зависит от размера контекста:
+            // зелёный — безопасно (≤ 8192), оранжевый — на грани (≤ 16384), красный — рискованно (> 16384)
+            val contextColor = when {
+                contextSize <= 8192 -> colors.green
+                contextSize <= 16384 -> Color(0xFFFFA500)
+                else -> Color.Red
+            }
+
+            Text(
+                text = "Размер контекстного окна: $contextSize" +
+                        when {
+                            contextSize <= 8192 -> " (безопасно)"
+                            contextSize <= 16384 -> " (на грани)"
+                            else -> " (может не хватить RAM)"
+                        },
+                color = contextColor
+            )
             Slider(
                 value = contextSize.toFloat(),
                 onValueChange = { onContextSizeChange(it.toInt()) },
-                valueRange = 512f..8192f,
-                steps = 15,
+                valueRange = 512f..65536f,
+                steps = 31,
                 modifier = Modifier.fillMaxWidth(),
-                colors = SliderDefaults.colors(thumbColor = colors.accent, activeTrackColor = colors.accent, inactiveTrackColor = colors.borderGray)
+                colors = SliderDefaults.colors(
+                    thumbColor = contextColor,
+                    activeTrackColor = contextColor,
+                    inactiveTrackColor = colors.borderGray
+                )
+            )
+            Text(
+                text = "Для 6 ГБ RAM безопасно до 8192. Больше — только на телефонах с 8+ ГБ.",
+                color = colors.text.copy(alpha = 0.6f),
+                fontSize = 10.sp,
+                modifier = Modifier.padding(top = 2.dp)
             )
             Spacer(modifier = Modifier.height(12.dp))
             Button(
