@@ -12,6 +12,7 @@ import android.speech.RecognizerIntent
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -242,7 +243,54 @@ fun ChatScreen(
     val isSmartMode by viewModel.isSmartMode.collectAsStateWithLifecycle(initialValue = false)
     val activeTranslationPrompt by viewModel.activeTranslationPrompt.collectAsStateWithLifecycle(initialValue = null)
 
-    val colors = if (isDarkTheme) DarkColors else LightColors
+   // Плавная интерполяция цветов между светлой и тёмной темой
+val background by animateColorAsState(
+    targetValue = if (isDarkTheme) DarkColors.background else LightColors.background,
+    animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
+    label = "bg_color"
+)
+val surfaceGray by animateColorAsState(
+    targetValue = if (isDarkTheme) DarkColors.surfaceGray else LightColors.surfaceGray,
+    animationSpec = tween(400, easing = FastOutSlowInEasing),
+    label = "surface_color"
+)
+val borderGray by animateColorAsState(
+    targetValue = if (isDarkTheme) DarkColors.borderGray else LightColors.borderGray,
+    animationSpec = tween(400, easing = FastOutSlowInEasing),
+    label = "border_color"
+)
+val accent by animateColorAsState(
+    targetValue = if (isDarkTheme) DarkColors.accent else LightColors.accent,
+    animationSpec = tween(400, easing = FastOutSlowInEasing),
+    label = "accent_color"
+)
+val text by animateColorAsState(
+    targetValue = if (isDarkTheme) DarkColors.text else LightColors.text,
+    animationSpec = tween(400, easing = FastOutSlowInEasing),
+    label = "text_color"
+)
+val green by animateColorAsState(
+    targetValue = if (isDarkTheme) DarkColors.green else LightColors.green,
+    animationSpec = tween(400, easing = FastOutSlowInEasing),
+    label = "green_color"
+)
+val paleYellow by animateColorAsState(
+    targetValue = if (isDarkTheme) DarkColors.paleYellow else LightColors.paleYellow,
+    animationSpec = tween(400, easing = FastOutSlowInEasing),
+    label = "pale_yellow_color"
+)
+
+// Собираем AppColors с анимированными значениями
+val colors = AppColors(
+    background = background,
+    surfaceGray = surfaceGray,
+    borderGray = borderGray,
+    accent = accent,
+    text = text,
+    chatFont = if (isDarkTheme) DarkColors.chatFont else LightColors.chatFont,
+    green = green,
+    paleYellow = paleYellow
+)
 
     var promptInput by remember { mutableStateOf("") }
     var showModelDialog by remember { mutableStateOf(false) }
