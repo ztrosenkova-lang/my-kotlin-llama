@@ -2144,8 +2144,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             return
         }
 
-        val effectivePrompt = if (imagePath != null && prompt.isBlank()) {
-            "Опиши подробно, что изображено на этой картинке. Опиши все объекты, людей, текст, цвета и обстановку."
+               val effectivePrompt = if (imagePath != null && prompt.isBlank()) {
+            // Короткий английский промпт — SmolVLM и другие VLM-модели
+            // обучены на английском и лучше понимают короткие команды.
+            "Describe this image in detail."
         } else {
             prompt
         }
