@@ -751,12 +751,15 @@ val colors = AppColors(
         ) {
                         TopBarWithSwitch(
                 currentMode = currentMode,
-                onModeChange = { newMode ->
+                                onModeChange = { newMode ->
                     viewModel.setCurrentMode(newMode)
                     if (newMode == AIMode.NEUTRAL) {
                         viewModel.releaseModel()
                         viewModel.clearCloudConfig()
                         viewModel.appendSystemMessage("📢 ИИ выгружен из памяти")
+                        // Сбрасываем выбранные модель и проектор,
+                        // чтобы в диалоге выбора модели поля были пустыми
+                        (context as? MainActivity)?.clearSelectedModelAndMmproj()
                     }
                 },
                 isModelLoaded = isModelLoaded,
