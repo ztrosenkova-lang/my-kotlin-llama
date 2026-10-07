@@ -922,9 +922,11 @@ val colors = AppColors(
                                     "assistant" -> colors.text
                                     else -> colors.text
                                 }
-                                Column(modifier = Modifier.padding(vertical = 2.dp)) {
+                                                                Column(modifier = Modifier.padding(vertical = 2.dp)) {
+                                    // Если у сообщения есть картинка — показываем иконку 📷 перед текстом
+                                    val imagePrefix = if (message.hasImage) "📷 " else ""
                                     Text(
-                                        text = prefix + message.text,
+                                        text = prefix + imagePrefix + message.text,
                                         color = textColor,
                                         fontFamily = colors.chatFont,
                                         fontSize = 10.sp
