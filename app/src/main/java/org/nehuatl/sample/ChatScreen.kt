@@ -5937,8 +5937,8 @@ private fun ModelPickerDialog(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("Языковая модель", color = colors.text, fontSize = 14.sp)
-                    val displayModelPath = currentModelPath?.substringAfterLast("/")?.replace("primary%3AModels%", "") ?: "Не выбрана"
+                                        Text("Языковая модель", color = colors.text, fontSize = 14.sp)
+                    val displayModelPath = cleanModelName(currentModelPath).ifEmpty { "Не выбрана" }
                     Text(
                         text = "Текущая модель: $displayModelPath",
                         style = MaterialTheme.typography.bodySmall,
@@ -5968,8 +5968,8 @@ private fun ModelPickerDialog(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("Мультимодальный проектор", color = colors.text, fontSize = 14.sp)
-                    val displayMmprojPath = mmprojPath?.substringAfterLast("/")?.replace("primary%3AModels%", "") ?: "Не выбран"
+                                        Text("Мультимодальный проектор", color = colors.text, fontSize = 14.sp)
+                    val displayMmprojPath = cleanModelName(mmprojPath).ifEmpty { "Не выбран" }
                     Text(
                         text = "Текущий проектор: $displayMmprojPath",
                         style = MaterialTheme.typography.bodySmall,
