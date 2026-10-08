@@ -86,12 +86,22 @@
             android:exported="false"
             android:process=":tts"
             android:foregroundServiceType="mediaPlayback" />
-      <!-- Плавающий сервис робота -->
+              <!-- Плавающий сервис робота -->
         <service
             android:name=".FloatingRobotService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
     </application>
 
