@@ -219,6 +219,16 @@ object ModelCatalog {
             mmprojUrl = "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-500M-Video-Instruct-f16.gguf",
             mmprojFileName = "smolvlm2_500m_mmproj.gguf",
             description = "Vision-модель от HuggingFace. 500M, ~500 МБ (модель + проектор). Контекст 4K. Умеет: описание картинок, визуальный Q&A, OCR, анализ сцен. Английский. Скорость 15–20 токенов/с на телефоне. Качество выше, чем у 256M. "
+        ),
+                // ===== 23. QWEN2-VL-2B — КАРТИНКИ, ЛЁГКАЯ (Q6_K) =====
+        ModelInfo(
+            id = "qwen2_vl_2b",
+            name = "Qwen2-VL-2B — картинки, лёгкая",
+            url = "https://huggingface.co/ggml-org/Qwen2-VL-2B-Instruct-GGUF/resolve/main/Qwen2-VL-2B-Instruct-Q6_K.gguf",
+            fileName = "qwen2_vl_2b_q6.gguf",
+            mmprojUrl = "https://huggingface.co/ggml-org/Qwen2-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen2-VL-2B-Instruct-Q8_0.gguf",
+            mmprojFileName = "qwen2_vl_2b_mmproj_q8.gguf",
+            description = "Qwen2-VL-2B от Alibaba. ~1.27 ГБ модель + ~676 МБ проектор = ~1.95 ГБ. Понимает картинки: описание, OCR (текст с фото), вопросы по изображению. Стандартная архитектура Qwen — работает в llama.cpp из коробки. Лёгкая и быстрая для телефона."
         )
     )
 }
