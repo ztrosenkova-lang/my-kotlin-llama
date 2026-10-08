@@ -149,6 +149,10 @@ import kotlin.math.sqrt
 import androidx.compose.animation.core.keyframes
 import java.util.Random
 import androidx.compose.runtime.rememberUpdatedState
+// Длительность плавной смены темы. 600–900 мс — комфортно.
+// Хочешь затянуть — ставь 1200–1500. Больше 1500 — уже раздражает.
+private const val THEME_ANIMATION_MS = 1500
+
 private data class AppColors(
     val background: Color,
     val surfaceGray: Color,
@@ -182,6 +186,12 @@ private val DarkColors = AppColors(
     paleYellow = Color(0xFF2A2A1E)
 )
 
+// Глобальный доступ к анимированным цветам темы из любого экрана.
+// Позволяет вложенным диалогам получать те же плавно меняющиеся цвета,
+// что и основной экран.
+private val LocalAppColors = staticCompositionLocalOf<AppColors> {
+    error("LocalAppColors not provided")
+}
 enum class AIMode {
     LOCAL,
     NEUTRAL,
@@ -261,55 +271,50 @@ fun ChatScreen(
     val isSmartMode by viewModel.isSmartMode.collectAsStateWithLifecycle(initialValue = false)
     val activeTranslationPrompt by viewModel.activeTranslationPrompt.collectAsStateWithLifecycle(initialValue = null)
 
-   // Плавная интерполяция цветов между светлой и тёмной темой
-val background by animateColorAsState(
-    targetValue = if (isDarkTheme) DarkColors.background else LightColors.background,
-    animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
-    label = "bg_color"
-)
-val surfaceGray by animateColorAsState(
-    targetValue = if (isDarkTheme) DarkColors.surfaceGray else LightColors.surfaceGray,
-    animationSpec = tween(400, easing = FastOutSlowInEasing),
-    label = "surface_color"
-)
-val borderGray by animateColorAsState(
-    targetValue = if (isDarkTheme) DarkColors.borderGray else LightColors.borderGray,
-    animationSpec = tween(400, easing = FastOutSlowInEasing),
-    label = "border_color"
-)
-val accent by animateColorAsState(
-    targetValue = if (isDarkTheme) DarkColors.accent else LightColors.accent,
-    animationSpec = tween(400, easing = FastOutSlowInEasing),
-    label = "accent_color"
-)
-val text by animateColorAsState(
-    targetValue = if (isDarkTheme) DarkColors.text else LightColors.text,
-    animationSpec = tween(400, easing = FastOutSlowInEasing),
-    label = "text_color"
-)
-val green by animateColorAsState(
-    targetValue = if (isDarkTheme) DarkColors.green else LightColors.green,
-    animationSpec = tween(400, easing = FastOutSlowInEasing),
-    label = "green_color"
-)
-val paleYellow by animateColorAsState(
-    targetValue = if (isDarkTheme) DarkColors.paleYellow else LightColors.paleYellow,
-    animationSpec = tween(400, easing = FastOutSlowInEasing),
-    label = "pale_yellow_color"
-)
+       // Единый Transition для всех цветов темы — плавная одновременная смена
+    val themeTransition = updateTransition(
+        targetState = isDarkTheme,
+        label = "theme_transition"
+    )
 
-// Собираем AppColors с анимированными значениями
-val colors = AppColors(
-    background = background,
-    surfaceGray = surfaceGray,
-    borderGray = borderGray,
-    accent = accent,
-    text = text,
-    chatFont = if (isDarkTheme) DarkColors.chatFont else LightColors.chatFont,
-    green = green,
-    paleYellow = paleYellow
-)
+    val themeSpec = tween<Color>(
+        durationMillis = THEME_ANIMATION_MS,
+        easing = FastOutSlowInEasing
+    )
 
+    val background by themeTransition.animateColor(transitionSpec = { themeSpec }, label = "bg_color") {
+        if (it) DarkColors.background else LightColors.background
+    }
+    val surfaceGray by themeTransition.animateColor(transitionSpec = { themeSpec }, label = "surface_color") {
+        if (it) DarkColors.surfaceGray else LightColors.surfaceGray
+    }
+    val borderGray by themeTransition.animateColor(transitionSpec = { themeSpec }, label = "border_color") {
+        if (it) DarkColors.borderGray else LightColors.borderGray
+    }
+    val accent by themeTransition.animateColor(transitionSpec = { themeSpec }, label = "accent_color") {
+        if (it) DarkColors.accent else LightColors.accent
+    }
+    val text by themeTransition.animateColor(transitionSpec = { themeSpec }, label = "text_color") {
+        if (it) DarkColors.text else LightColors.text
+    }
+    val green by themeTransition.animateColor(transitionSpec = { themeSpec }, label = "green_color") {
+        if (it) DarkColors.green else LightColors.green
+    }
+    val paleYellow by themeTransition.animateColor(transitionSpec = { themeSpec }, label = "pale_yellow_color") {
+        if (it) DarkColors.paleYellow else LightColors.paleYellow
+    }
+
+    val colors = AppColors(
+        background = background,
+        surfaceGray = surfaceGray,
+        borderGray = borderGray,
+        accent = accent,
+        text = text,
+        chatFont = if (isDarkTheme) DarkColors.chatFont else LightColors.chatFont,
+        green = green,
+        paleYellow = paleYellow
+    )
+    CompositionLocalProvider(LocalAppColors provides colors) {
     var promptInput by remember { mutableStateOf("") }
     var showModelDialog by remember { mutableStateOf(false) }
     var showDownloadDialog by remember { mutableStateOf(false) }
@@ -1389,7 +1394,7 @@ val colors = AppColors(
                         growBigSignal = false
                     }
                 }
-                                LaunchedEffect(shrinkSmallSignal) {
+             LaunchedEffect(shrinkSmallSignal) {
                     if (shrinkSmallSignal) {
                         delay(3000)
                         robotOffsetX = 0f
@@ -1401,6 +1406,7 @@ val colors = AppColors(
             }
         }
     }
+    } // Закрытие CompositionLocalProvider
 }
 
 @Composable
