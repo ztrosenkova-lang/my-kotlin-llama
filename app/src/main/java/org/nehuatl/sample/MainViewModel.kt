@@ -185,8 +185,16 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private var androidTts: TextToSpeech? = null
     private var androidTtsReady = false
 
-    private val brainFile: File by lazy {
+        private val brainFile: File by lazy {
         File(getApplication<Application>().filesDir, "brain.txt")
+    }
+
+    private val bibliotekaDir: File by lazy {
+        File(getApplication<Application>().filesDir, "biblioteka").apply { mkdirs() }
+    }
+
+    private val bibliotekaFile: File by lazy {
+        File(bibliotekaDir, "biblioteka.txt")
     }
 
     private val memorySearchEngine by lazy {
@@ -946,6 +954,43 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             _downloadProgress.value = _downloadProgress.value + (modelId to DownloadProgress(percent, status))
         } else {
             _mmprojDownloadProgress.value = _mmprojDownloadProgress.value + (modelId to DownloadProgress(percent, status))
+        }
+    }
+
+        fun openBiblioteka() {
+        try {
+            if (!bibliotekaFile.exists()) {
+                getApplication<Application>().assets.open("biblioteka.txt").use { input ->
+                    bibliotekaFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                Log.d(TAG, "biblioteka.txt copied from assets to filesDir/biblioteka/")
+            }
+
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                getApplication(),
+                "${getApplication<Application>().packageName}.fileprovider",
+                bibliotekaFile
+            )
+
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "text/plain")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+
+            val chooser = Intent.createChooser(intent, "Открыть библиотеку").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+
+            getApplication<Application>().startActivity(chooser)
+            appendSystemMessage("📖 Открываю biblioteka.txt")
+            Log.d(TAG, "biblioteka.txt opened via ACTION_VIEW")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to open biblioteka.txt: ${e.message}", e)
+            appendSystemMessage("❌ Не удалось открыть библиотеку: ${e.message}")
         }
     }
 
@@ -1891,8 +1936,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         val isTranslator = currentModelName.contains("Hy-MT2", ignoreCase = true) ||
                            currentModelName.contains("hy_mt2", ignoreCase = true)
 
-        if (!isTranslator) {
+                if (!isTranslator) {
             when {
+                lowerText.contains("библиотека") -> {
+                    openBiblioteka()
+                    return
+                }
                 lowerText.contains(BRAIN_EDIT_COMMAND) -> {
                     showBrainEditor()
                     appendSystemMessage("🧠 Открыт редактор Brain.txt")
