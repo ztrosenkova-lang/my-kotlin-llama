@@ -2163,7 +2163,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     path,
                     contextSize.value,
                     if (mmprojPath.isNullOrEmpty()) null else mmprojPath,
-                                        { id ->
+                                                               { id ->
                         _state.value = GenerationState.ModelLoaded(path)
                         _isModelLoaded.value = true
                         val uri = Uri.parse(path)
@@ -2179,9 +2179,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             appendSystemMessage("🔄 Промпт переводчика сброшен — загружена не модель-переводчик")
                         }
 
-                                                // Подсказка для модели-переводчика Hy-MT2
-                        if (currentModelName.contains("Hy-MT2", ignoreCase = true) ||
-                            currentModelName.contains("hy_mt2", ignoreCase = true)) {
+                        // Ищем загруженную модель в каталоге по имени файла
+                        val modelInfo = ModelCatalog.models.find { it.fileName == currentModelName }
+
+                        if (isTranslator) {
+                            // Подсказка для модели-переводчика Hy-MT2
                             val translationButtons = listOf(
                                 PromptButton(
                                     label = "🇷🇺 На русский",
@@ -2220,6 +2222,19 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                 "• Пишешь по-русски, промпт «на испанский» → получаешь испанский перевод.\n\n" +
                                 "Язык перевода задаётся ПРОМПТОМ, а не тем, на каком языке ты пишешь.",
                                 translationButtons
+                            )
+                        } else if (modelInfo != null) {
+                            // Для всех остальных моделей — карточка с описанием
+                            appendSystemMessage(
+                                "✅ Загружена модель:\n\n" +
+                                "📦 ${modelInfo.name}\n\n" +
+                                "${modelInfo.description}"
+                            )
+                        } else {
+                            // Файл не из каталога (пользователь выбрал свою модель)
+                            appendSystemMessage(
+                                "✅ Модель загружена: $currentModelName\n\n" +
+                                "(Описание недоступно — модель выбрана не из каталога приложения)"
                             )
                         }
                     }
