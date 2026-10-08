@@ -405,6 +405,9 @@ val colors = AppColors(
                                 context.startService(stopIntent)
                             }
                         }
+                                               command == "библиотека" -> {
+                            viewModel.openBiblioteka()
+                        }
                         command == "умный режим" -> {
                             viewModel.enableSmartMode()
                         }
