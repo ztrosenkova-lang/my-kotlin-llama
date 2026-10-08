@@ -94,7 +94,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         private const val KEY_SMART_MODE = "smart_mode"
         private const val SMART_MODE_MAX_CHARS = 8000
 
-                private val CATEGORIES = listOf("[ПАРОЛЬ]", "[КОНТАКТ]", "[ПРАЙС]", "[ИНСТРУКЦИЯ]", "[АДРЕС]", "[ДАТА]", "[ОБЩЕЕ]", "[ТРАВЫ]", "[ГРИБЫ]", "[ОРИЕНТИРОВАНИЕ]")
+        // Авто-тема по времени
+        private const val KEY_MANUAL_THEME_UNTIL = "manual_theme_until"
+        private const val DAY_START_HOUR = 7      // 07:00 — начало светлой темы
+        private const val NIGHT_START_HOUR = 19   // 19:00 — начало тёмной темы
+        private const val MANUAL_OVERRIDE_MS = 6 * 60 * 60 * 1000L  // 6 часов
+
+    private val CATEGORIES = listOf("[ПАРОЛЬ]", "[КОНТАКТ]", "[ПРАЙС]", "[ИНСТРУКЦИЯ]", "[АДРЕС]", "[ДАТА]", "[ОБЩЕЕ]", "[ТРАВЫ]", "[ГРИБЫ]", "[ОРИЕНТИРОВАНИЕ]")
     }
 
     private val viewModelJob = SupervisorJob()
@@ -436,6 +442,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _isDarkTheme.value = prefs.getBoolean(KEY_DARK_THEME, false)
         _isSmartMode.value = prefs.getBoolean(KEY_SMART_MODE, false)
         _isFirstLaunch.value = prefs.getBoolean("first_launch", true)
+
+        // Авто-тема по времени: применить при запуске, если ручной приоритет истёк
+        applyAutoTheme()
         if (_isFirstLaunch.value) {
             prefs.edit().putBoolean("first_launch", false).apply()
         }
@@ -568,6 +577,15 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         scope.launch(Dispatchers.Default) {
             while (true) {
                 updateRemainingTime()
+                delay(60000)
+            }
+        }
+
+        // Авто-тема: проверять раз в минуту, менять если время суток сменилось
+        // и ручной приоритет истёк
+        scope.launch(Dispatchers.Default) {
+            while (true) {
+                applyAutoTheme()
                 delay(60000)
             }
         }
@@ -807,9 +825,45 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-        fun toggleTheme() {
+           /**
+     * Возвращает true, если сейчас ночь (19:00 – 07:00).
+     */
+    private fun isNightNow(): Boolean {
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        return hour >= NIGHT_START_HOUR || hour < DAY_START_HOUR
+    }
+
+    /**
+     * Применяет авто-тему по времени, если ручной приоритет истёк.
+     * Если ручной приоритет ещё активен — ничего не делает.
+     */
+    private fun applyAutoTheme() {
+        val manualUntil = prefs.getLong(KEY_MANUAL_THEME_UNTIL, 0L)
+        if (System.currentTimeMillis() < manualUntil) {
+            // Ручной приоритет ещё действует — не трогаем тему
+            return
+        }
+
+        val shouldBeDark = isNightNow()
+        if (_isDarkTheme.value != shouldBeDark) {
+            _isDarkTheme.value = shouldBeDark
+            prefs.edit().putBoolean(KEY_DARK_THEME, shouldBeDark).apply()
+            Log.d(TAG, "Auto theme applied: dark=$shouldBeDark")
+        }
+    }
+
+    /**
+     * Ручное переключение темы.
+     * Устанавливает приоритет ручного выбора на 6 часов вперёд.
+     */
+    fun toggleTheme() {
         _isDarkTheme.value = !_isDarkTheme.value
         prefs.edit().putBoolean(KEY_DARK_THEME, _isDarkTheme.value).apply()
+
+        // Откладываем авто-тему на 6 часов
+        val until = System.currentTimeMillis() + MANUAL_OVERRIDE_MS
+        prefs.edit().putLong(KEY_MANUAL_THEME_UNTIL, until).apply()
+        Log.d(TAG, "Manual theme set. Auto theme delayed until ${Date(until)}")
     }
 
     // ========== ЗАГРУЗКА МОДЕЛЕЙ ЧЕРЕЗ DOWNLOADMANAGER ==========
