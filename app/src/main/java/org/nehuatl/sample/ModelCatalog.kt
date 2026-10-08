@@ -82,22 +82,22 @@ object ModelCatalog {
             description = "Химический репетитор на базе Phi-4-mini (3.8B), дообучен через RL (GRPO) специально для химии. Q4_K_M ~2.6 ГБ. Разбирает молекулярные взаимодействия, стехиометрию, формулы пошагово. Показывает цепочку размышлений <think>, финальный ответ в \\boxed{}. ⚠️ ТОЛЬКО АНГЛИЙСКИЙ — задавай вопросы через переводчик Hy-MT2. "
         ),
 
-        // ===== 8. MINICPM5-2B — 131K, ЛЁГКАЯ (Q6_K) =====
+                       // ===== 8. LFM2.5-2.6B — 128K, 16 ЯЗЫКОВ, АГЕНТНАЯ =====
         ModelInfo(
-            id = "minicpm5_2b",
-            name = "MiniCPM5-2B — лёгкая, 131K",
-            url = "https://huggingface.co/prithivMLmods/MiniCPM5-2B-GGUF/resolve/main/MiniCPM5-2B.Q6_K.gguf",
-            fileName = "minicpm5_2b_q6.gguf",
-            description = "MiniCPM5-2B от OpenBMB, Q6_K ~2.0 ГБ. 131K контекст! Огромный контекст при малом размере. EN/ZH двуязычная, нативная поддержка tool calling. Русского нет, но для английского — отлично. Быстрая даже на CPU. "
+            id = "lfm25_2_6b",
+            name = "LFM2.5-2.6B — 128K, 16 языков",
+            url = "https://huggingface.co/LiquidAI/LFM2.5-2.6B-GGUF/resolve/main/LFM2.5-2.6B-Q4_K_M.gguf",
+            fileName = "lfm25_2_6b_q4.gguf",
+            description = "LFM2.5-2.6B от Liquid AI. 2.6B параметров, ~2.5 ГБ. Контекст 128K. 16 языков, включая русский. Главная фишка — это локальный агент: сама планирует, вызывает инструменты и делает многошаговые задачи прямо на телефоне. Обгоняет Gemma 4 и Qwen3.5-4B по следованию инструкциям. Скорость до 30 токенов/с на телефоне. Идеальна для автономной работы без облака. Слабое место — глубокие знания и код."
         ),
 
-        // ===== 9. QWEN3.8-2B — 262K, ДУМАЮЩАЯ (Q5_K_M) =====
+                // ===== 9. QWEN3.8-2B — 262K, ДУМАЮЩАЯ (Q5_K_M) =====
         ModelInfo(
             id = "qwen38_2b",
             name = "Qwen3.8-2B — 262K, думающая",
             url = "https://huggingface.co/empero-ai/Qwen3.8-2B-Distill-GGUF/resolve/main/Qwen3.8-2B-Q5_K_M.gguf",
             fileName = "qwen38_2b_q5.gguf",
-            description = "Qwen3.8-2B, Q5_K_M ~1.46 ГБ. 262K контекст! Дистиллирована с Qwen3.8 2.4T. Режим размышлений, function calling. Огромный контекст за минимальный размер. Русский — как у Qwen (средне-хороший). "
+            description = "Qwen3.8-2B, Q5_K_M ~2 ГБ. 262K контекст! Дистиллирована с Qwen3.8 2.4T. Режим размышлений, function calling. Огромный контекст за минимальный размер. Русский — как у Qwen (средне-хороший). "
         ),
 
         // ===== 10. VIBETHINKER-3B HERETIC — БЕЗ ЦЕНЗУРЫ (Q5_K_M) =====
@@ -127,13 +127,13 @@ object ModelCatalog {
             description = "Nova-LFM 1.2B Thinking, Q5_K_M ~0.9 ГБ. «System 2 Thinking»: останавливается, проверяет логику, исправляет ошибки. GSM8K 53.5% — лучше Llama 3.2 1B и Gemma 2 2B. Думающая, но очень лёгкая. Идеальна для слабых телефонов. Английский. "
         ),
 
-        // ===== 13. GEMMA 2 2B — СЛАБАЯ, ДЛЯ СРАВНЕНИЯ (Q6_K) =====
+               // ===== 13. JAMBA REASONING 3B — 256K, ДУМАЮЩАЯ =====
         ModelInfo(
-            id = "gemma2_2b",
-            name = "Gemma 2 2B — слабая (как сейчас)",
-            url = BART + "gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q6_K.gguf",
-            fileName = "gemma2_2b_q6.gguf",
-            description = "Оставляем как эталон слабой модели. 2B, Q6_K ~2.1 ГБ. Контекст 8K — мало для «вспомни». Быстрая, но не умная. Для сравнения. "
+            id = "jamba_reasoning_3b",
+            name = "Jamba Reasoning 3B — 256K, думающая",
+            url = "https://huggingface.co/bartowski/ai21labs_AI21-Jamba-Reasoning-3B-GGUF/resolve/main/ai21labs_AI21-Jamba-Reasoning-3B-Q4_K_M.gguf",
+            fileName = "jamba_reasoning_3b_q4.gguf",
+            description = "Jamba Reasoning 3B от AI21 Labs. 3B параметров, Q4_K_M ~1.93 ГБ. Контекст 256K (до 1M). Гибридная SSM-Transformer архитектура — работает на телефонах и ноутбуках. Обгоняет Qwen3-4B и Gemma 3 4B по следованию инструкциям (IFBench 52% против 33% и 28%). Apache 2.0 — свободная лицензия. Языки: английский, испанский, французский, немецкий, арабский и др. Русского в списке нет."
         ),
 
                 // ===== 14. VIKHR-QWEN 0.5B — РУССКИЙ, СЛАБАЯ (Q8_0) =====
