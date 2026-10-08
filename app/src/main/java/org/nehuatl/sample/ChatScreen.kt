@@ -550,7 +550,7 @@ fun ChatScreen(
         }
     }
 
-    if (isAppLocked) {
+        if (isAppLocked) {
         LockScreen(
             secretPhrase = secretPhraseInput,
             onSecretPhraseChange = { secretPhraseInput = it },
@@ -562,8 +562,7 @@ fun ChatScreen(
             isPermanentlyBlocked = isPermanentlyBlocked,
             colors = colors
         )
-        return
-    }
+    } else {
 
         if (showModelDialog) {
         ModelPickerDialog(
@@ -1398,7 +1397,7 @@ fun ChatScreen(
                     }
                 }
              LaunchedEffect(shrinkSmallSignal) {
-                    if (shrinkSmallSignal) {
+                if (shrinkSmallSignal) {
                         delay(3000)
                         robotOffsetX = 0f
                         robotOffsetY = 0f
@@ -1409,6 +1408,7 @@ fun ChatScreen(
             }
         }
     }
+    } // Закрытие else
     } // Закрытие CompositionLocalProvider
 }
 
