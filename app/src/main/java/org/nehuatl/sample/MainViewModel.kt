@@ -341,16 +341,22 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _overlayHeadNod = MutableStateFlow(0f)
     val overlayHeadNod: StateFlow<Float> = _overlayHeadNod.asStateFlow()
 
+    // Направление махания рукой робота 2 при тапе
+    private val _overlayTapWaveDirection = MutableStateFlow(0f)
+    val overlayTapWaveDirection: StateFlow<Float> = _overlayTapWaveDirection.asStateFlow()
+
     private var overlayHeadResetJob: Job? = null
 
-    fun triggerOverlayHeadTilt(direction: Float) {
+        fun triggerOverlayHeadTilt(direction: Float) {
         overlayHeadResetJob?.cancel()
-        _overlayHeadTilt.value = direction * 8f
-        _overlayHeadNod.value = 0.3f
+        _overlayHeadTilt.value = direction * 15f
+        _overlayHeadNod.value = 0.5f
+        _overlayTapWaveDirection.value = direction
         overlayHeadResetJob = scope.launch {
-            delay(500)
+            delay(800)
             _overlayHeadTilt.value = 0f
             _overlayHeadNod.value = 0f
+            _overlayTapWaveDirection.value = 0f
         }
     }
     // Сигнал «микрофон overlay слушает» — для робота 2 (глаза расширяются)
