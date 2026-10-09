@@ -1372,16 +1372,15 @@ fun ChatScreen(
                     label = "animated_scale"
                 )
 
-                               Box(
+                    Box(
                     modifier = Modifier
-                        .offset(
-    x = with(LocalDensity.current) { animatedOffsetX.toDp() },
-    y = with(LocalDensity.current) { animatedOffsetY.toDp() }
-)
                         .size(70.dp)
                         .graphicsLayer(
+                            translationX = animatedOffsetX,
+                            translationY = animatedOffsetY,
                             scaleX = animatedScale,
-                            scaleY = animatedScale
+                            scaleY = animatedScale,
+                            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f)
                         )
                                                 // ПЕРВЫЙ pointerInput — обработка ТАПОВ (одиночный и двойной).
                         // Идёт ПЕРВЫМ, чтобы тап не конфликтовал с перетаскиванием.
@@ -1409,16 +1408,20 @@ fun ChatScreen(
                         }
                         // ВТОРОЙ pointerInput — обработка ПЕРЕТАСКИВАНИЯ и ЗУМА.
                         // Идёт ВТОРЫМ, чтобы тап имел приоритет.
-                        .pointerInput(Unit) {
+                            .pointerInput(Unit) {
                             detectTransformGestures { _, pan, zoom, _ ->
-                                // Позиция по X — мгновенно при перетаскивании.
-                                // coerceIn ограничивает, чтобы робот не ушёл за левый (0) и правый край экрана.
-                                robotOffsetX = (robotOffsetX + pan.x).coerceIn(0f, screenWidthPx - robotSizePx * robotScale)
-                                // Позиция по Y — то же самое, но для вертикали.
-                                robotOffsetY = (robotOffsetY + pan.y).coerceIn(0f, screenHeightPx - robotSizePx * robotScale)
-                                // Масштаб — мгновенно меняется в robotScale, но отображается плавно через animatedScale.
-                                // coerceIn ограничивает: минимум 0.5x, максимум 3x.
-                                robotScale = (robotScale * zoom).coerceIn(0.5f, 3f)
+                                // Сначала применяем масштаб, потом считаем границы по НОВОМУ размеру.
+                                val newScale = (robotScale * zoom).coerceIn(0.5f, 3f)
+                                robotScale = newScale
+
+                                // Визуальный размер робота с учётом масштаба — по нему и ограничиваем.
+                                val visualSize = robotSizePx * newScale
+                                val maxX = (screenWidthPx - visualSize).coerceAtLeast(0f)
+                                val maxY = (screenHeightPx - visualSize).coerceAtLeast(0f)
+
+                                // Позиция по X и Y — мгновенно при перетаскивании.
+                                robotOffsetX = (robotOffsetX + pan.x).coerceIn(0f, maxX)
+                                robotOffsetY = (robotOffsetY + pan.y).coerceIn(0f, maxY)
                             }
                         }
                 ) {
