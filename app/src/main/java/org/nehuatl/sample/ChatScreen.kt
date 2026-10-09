@@ -359,6 +359,9 @@ fun ChatScreen(
     var welcomeStarted by remember { mutableStateOf(false) }
     var welcomeTextPrinted by remember { mutableStateOf(false) }
     var pendingTextPrinted by remember { mutableStateOf(false) }
+    // Диалог разблокировки по команде «режим админа» (только в NEUTRAL)
+    var showAdminUnlockDialog by remember { mutableStateOf(false) }
+    var adminPhraseInput by remember { mutableStateOf("") }
         // Сигнал для махания рукой — устанавливается, когда нужно помахать
     var waveSignal by remember { mutableStateOf(false) }
         // Сигнал для полёта в центр экрана и увеличения
@@ -443,6 +446,14 @@ fun ChatScreen(
                         }
                         command == "режим калькулятора" -> {
                             viewModel.disableSmartMode()
+                        }
+                        command == "режим админа" -> {
+                            if (currentMode == AIMode.NEUTRAL) {
+                                adminPhraseInput = ""
+                                showAdminUnlockDialog = true
+                            } else {
+                                viewModel.appendSystemMessage("⚠️ Команда «режим админа» работает только в нейтральном режиме")
+                            }
                         }
                         else -> {
                             viewModel.sendUserMessage(recognizedText)
@@ -572,7 +583,7 @@ fun ChatScreen(
         }
     }
 
-        if (isAppLocked) {
+            if (isAppLocked) {
         LockScreen(
             secretPhrase = secretPhraseInput,
             onSecretPhraseChange = { secretPhraseInput = it },
@@ -586,6 +597,26 @@ fun ChatScreen(
         )
     } else {
 
+    // Диалог разблокировки по команде «режим админа» — показывается поверх чата
+    if (showAdminUnlockDialog) {
+        LockScreen(
+            secretPhrase = adminPhraseInput,
+            onSecretPhraseChange = { adminPhraseInput = it },
+            onVerify = {
+                val success = viewModel.verifySecretPhrase(adminPhraseInput)
+                adminPhraseInput = ""
+                if (success) {
+                    showAdminUnlockDialog = false
+                    viewModel.appendSystemMessage("✅ Режим админа: приложение разблокировано навсегда")
+                }
+                // Если фраза неверная — verifySecretPhrase уже заблокировала приложение навсегда,
+                // диалог закроется автоматически, потому что isAppLocked станет true.
+            },
+            viewModel = viewModel,
+            isPermanentlyBlocked = isPermanentlyBlocked,
+            colors = colors
+        )
+    }
         if (showModelDialog) {
         ModelPickerDialog(
             currentModelPath = currentModelPath,
@@ -1090,8 +1121,17 @@ fun ChatScreen(
                             viewModel.enableSmartMode()
                             promptInput = ""
                         }
-                        command == "режим калькулятора" -> {
+                                                command == "режим калькулятора" -> {
                             viewModel.disableSmartMode()
+                            promptInput = ""
+                        }
+                        command == "режим админа" -> {
+                            if (currentMode == AIMode.NEUTRAL) {
+                                adminPhraseInput = ""
+                                showAdminUnlockDialog = true
+                            } else {
+                                viewModel.appendSystemMessage("⚠️ Команда «режим админа» работает только в нейтральном режиме")
+                            }
                             promptInput = ""
                         }
                                                else -> {
