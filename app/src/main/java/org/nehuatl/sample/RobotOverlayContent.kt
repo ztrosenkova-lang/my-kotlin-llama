@@ -25,6 +25,7 @@ fun RobotOverlayContent(
     val overlayListening by viewModel.overlayListening.collectAsStateWithLifecycle(initialValue = false)
     val overlayHeadTilt by viewModel.overlayHeadTilt.collectAsStateWithLifecycle(initialValue = 0f)
     val overlayHeadNod by viewModel.overlayHeadNod.collectAsStateWithLifecycle(initialValue = 0f)
+    val overlayTapWaveDirection by viewModel.overlayTapWaveDirection.collectAsStateWithLifecycle(initialValue = 0f)
 
     val isThinking = state is GenerationState.Generating ||
                      cloudState is CloudAIState.Generating
@@ -48,6 +49,7 @@ fun RobotOverlayContent(
             headNod = overlayHeadNod,
             uDivisor = 350f,
             yOffsetUnits = 24f,
+            tapWaveDirection = overlayTapWaveDirection,
             modifier = Modifier.fillMaxHeight()
         )
     }
