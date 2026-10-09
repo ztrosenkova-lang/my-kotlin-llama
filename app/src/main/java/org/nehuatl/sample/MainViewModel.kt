@@ -1797,32 +1797,136 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    private fun searchBrain(query: String): String {
+        private fun searchBrain(query: String): String {
         val brainData = readBrain()
         if (brainData.isEmpty()) return ""
 
-        val lines = brainData.split("\n").filter { it.isNotEmpty() }
-        
+        val lines = brainData.split("\n")
+
+        // Регулярка метки даты: [2026-09-15 19:42]
+        val dateRegex = Regex("^\\[\\d{4}-\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}\\]$")
+
+        // Разбиваем brain на блоки. Каждый блок начинается с метки даты.
+        // В блоке храним: индекс строки с датой и список строк между этой датой
+        // и следующей датой (не включая сами метки дат).
+        data class BrainBlock(
+            val dateStr: String,       // "2026-09-15"
+            val content: List<String>  // строки блока БЕЗ метки даты
+        )
+
+        val blocks = mutableListOf<BrainBlock>()
+        var currentDateStr: String? = null
+        var currentContent = mutableListOf<String>()
+
+        for (line in lines) {
+            val trimmed = line.trim()
+            if (dateRegex.matches(trimmed)) {
+                // Закрываем предыдущий блок
+                if (currentDateStr != null) {
+                    blocks.add(BrainBlock(currentDateStr, currentContent.toList()))
+                }
+                // Начинаем новый — дату извлекаем
+                currentDateStr = Regex("\\d{4}-\\d{2}-\\d{2}").find(trimmed)?.value ?: ""
+                currentContent = mutableListOf()
+            } else {
+                if (currentDateStr != null) {
+                    currentContent.add(line)
+                }
+            }
+        }
+        // Закрываем последний блок
+        if (currentDateStr != null) {
+            blocks.add(BrainBlock(currentDateStr, currentContent.toList()))
+        }
+
+        if (blocks.isEmpty()) return ""
+
+        // ========== 1. ПОИСК ПО ДАТЕ ==========
         val dateMatches = Regex("\\d{4}-\\d{2}-\\d{2}").findAll(query).map { it.value }.toList()
         if (dateMatches.isNotEmpty()) {
-            val dateFiltered = lines.filter { line ->
-                dateMatches.any { date -> line.contains(date) }
+            val matched = blocks.filter { block ->
+                dateMatches.any { d -> block.dateStr == d }
             }
-            if (dateFiltered.isNotEmpty()) {
-                return dateFiltered.joinToString("\n")
+            if (matched.isNotEmpty()) {
+                return matched.joinToString("\n\n") { block ->
+                    block.content.joinToString("\n").trim()
+                }
             }
         }
 
+        // ========== 2. ПОИСК ПО [ ... ] (кроме дат) ==========
+        // Собираем все фрагменты в квадратных скобках, которые НЕ являются датами.
+        // Формат подписи: [Разговор про скорость света во вселенной:]
+        val bracketRegex = Regex("\\[([^\\]]+)\\]")
+        val queryLower = query.lowercase()
+
+        val matchedBlocks = mutableListOf<BrainBlock>()
+        for (block in blocks) {
+            // Ищем в блоке все [...] кроме дат
+            var blockMatched = false
+            for (line in block.content) {
+                val matches = bracketRegex.findAll(line)
+                for (m in matches) {
+                    val inner = m.groupValues[1].trim()
+                    // Пропускаем даты
+                    if (dateRegex.matches("[$inner]")) continue
+                    if (inner.isEmpty()) continue
+
+                    // Проверяем: содержится ли inner в запросе или запрос в inner
+                    val innerLower = inner.lowercase()
+                    if (queryLower.contains(innerLower) || innerLower.contains(queryLower)) {
+                        blockMatched = true
+                        break
+                    }
+
+                    // Или совпадение по ключевым словам внутри [...]
+                    val innerWords = innerLower
+                        .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
+                        .split(Regex("\\s+"))
+                        .filter { it.length > 2 }
+
+                    val queryWords = queryLower
+                        .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
+                        .split(Regex("\\s+"))
+                        .filter { it.length > 2 }
+
+                    if (innerWords.isNotEmpty() && queryWords.isNotEmpty()) {
+                        val common = innerWords.intersect(queryWords.toSet())
+                        // Порог: минимум 2 общих слова или 1 слово длиной >= 5
+                        if (common.size >= 2 ||
+                            common.any { it.length >= 5 }) {
+                            blockMatched = true
+                            break
+                        }
+                    }
+                }
+                if (blockMatched) break
+            }
+            if (blockMatched) {
+                matchedBlocks.add(block)
+            }
+        }
+
+        if (matchedBlocks.isNotEmpty()) {
+            return matchedBlocks.joinToString("\n\n") { block ->
+                block.content.joinToString("\n").trim()
+            }
+        }
+
+        // ========== 3. ПОИСК ПО КЛЮЧЕВЫМ СЛОВАМ ==========
         val keywords = extractKeywords(query)
+        if (keywords.isEmpty()) return ""
 
-        return if (keywords.isNotEmpty()) {
-            lines.filter { line ->
-                val lowerLine = line.lowercase()
-                keywords.any { keyword -> lowerLine.contains(keyword) }
-            }.joinToString("\n")
-        } else {
-            ""
-        }
+        return blocks.joinToString("\n\n") { block ->
+            val blockText = block.content.joinToString("\n")
+            val lowerBlock = blockText.lowercase()
+            // Оставляем блок, если в нём есть хотя бы одно ключевое слово
+            if (keywords.any { keyword -> lowerBlock.contains(keyword) }) {
+                blockText.trim()
+            } else {
+                ""
+            }
+        }.trim().replace(Regex("\n{3,}"), "\n\n")
     }
 
     private fun searchChat(query: String): String {
