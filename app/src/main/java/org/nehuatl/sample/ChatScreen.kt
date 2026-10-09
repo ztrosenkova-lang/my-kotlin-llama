@@ -154,7 +154,7 @@ import java.util.Random
 import androidx.compose.runtime.rememberUpdatedState
 // Длительность плавной смены темы. 600–900 мс — комфортно.
 // Хочешь затянуть — ставь 1200–1500. Больше 1500 — уже раздражает.
-private const val THEME_ANIMATION_MS = 1500
+private const val THEME_ANIMATION_MS = 4500
 
 private data class AppColors(
     val background: Color,
