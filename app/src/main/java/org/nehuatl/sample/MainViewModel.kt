@@ -36,7 +36,10 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.nehuatl.llamacpp.LlamaHelper
+import java.util.concurrent.TimeUnit
 import java.io.File
 import java.security.KeyStore
 import java.security.MessageDigest
@@ -869,7 +872,39 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         Log.d(TAG, "Manual theme set. Auto theme delayed until ${Date(until)}")
     }
 
-    // ========== ЗАГРУЗКА МОДЕЛЕЙ ЧЕРЕЗ DOWNLOADMANAGER ==========
+        // ========== ЗАГРУЗКА МОДЕЛЕЙ ЧЕРЕЗ DOWNLOADMANAGER ==========
+
+    /**
+     * Резолвит финальный URL после всех редиректов (Hugging Face → CDN).
+     * DownloadManager не умеет проходить цепочки редиректов HF, поэтому
+     * мы сначала получаем прямую ссылку на CDN через OkHttp (HEAD-запрос).
+     * Если резолв не удался — возвращаем исходный URL.
+     */
+    private fun resolveRedirectUrl(originalUrl: String): String {
+        return try {
+            val client = OkHttpClient.Builder()
+                .followRedirects(true)
+                .followSslRedirects(true)
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .build()
+
+            val request = Request.Builder()
+                .url(originalUrl)
+                .head()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                // OkHttp уже прошёл все редиректы, берём финальный URL
+                val finalUrl = response.request.url.toString()
+                Log.d(TAG, "Resolved URL: $originalUrl -> $finalUrl")
+                finalUrl
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to resolve redirect for $originalUrl: ${e.message}")
+            originalUrl
+        }
+    }
 
         fun startModelDownload(modelId: String, url: String, fileName: String) {
         // Основная модель
@@ -894,9 +929,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         try {
             val dm = getApplication<Application>().getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
 
-            // Запуск основной модели — только если ещё не скачана
+                       // Запуск основной модели — только если ещё не скачана
             if (!mainAlreadyDone) {
-                val mainRequest = DownloadManager.Request(Uri.parse(url))
+                // Резолвим редирект HF → CDN перед передачей в DownloadManager
+                val resolvedUrl = resolveRedirectUrl(url)
+
+                val mainRequest = DownloadManager.Request(Uri.parse(resolvedUrl))
                     .setTitle(fileName)
                     .setDescription("Загрузка модели ИИ-Друг")
                     .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
@@ -917,7 +955,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
             // Запуск проектора — только если есть и ещё не скачан
             if (hasMmproj && !mmprojAlreadyDone) {
-                val mmprojRequest = DownloadManager.Request(Uri.parse(mmprojUrl!!))
+                // Резолвим редирект HF → CDN перед передачей в DownloadManager
+                val resolvedMmprojUrl = resolveRedirectUrl(mmprojUrl!!)
+
+                val mmprojRequest = DownloadManager.Request(Uri.parse(resolvedMmprojUrl))
                     .setTitle(mmprojFileName!!)
                     .setDescription("Загрузка проектора ИИ-Друг")
                     .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
