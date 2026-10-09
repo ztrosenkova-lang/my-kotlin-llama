@@ -382,9 +382,11 @@ fun ChatScreen(
         // Флаг «палец сейчас двигает робота» — защита от откатов при перетаскивании
     var isRobotDragging by remember { mutableStateOf(false) }
 
-    // Реакции робота на пользователя
+       // Реакции робота на пользователя
     var headTiltTarget by remember { mutableStateOf(0f) }
     var headNodTarget by remember { mutableStateOf(0f) }
+    // Направление махания рукой при тапе: -1f влево, +1f вправо, 0f нет
+    var tapWaveDirection by remember { mutableStateOf(0f) }
 
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -763,18 +765,19 @@ fun ChatScreen(
         isRobotDragging = false
     }
 
-    // Автосброс реакций головы через 0.5 сек после срабатывания
+       // Автосброс реакций головы через 0.8 сек после срабатывания
     LaunchedEffect(headTiltTarget) {
         if (headTiltTarget != 0f) {
-            delay(500)
+            delay(800)
             headTiltTarget = 0f
+            tapWaveDirection = 0f
         }
     }
 
-    // Автосброс кивка через 0.5 сек
+    // Автосброс кивка через 0.8 сек
     LaunchedEffect(headNodTarget) {
         if (headNodTarget != 0f) {
-            delay(500)
+            delay(800)
             headNodTarget = 0f
         }
     }
@@ -1386,7 +1389,7 @@ fun ChatScreen(
                         // Идёт ПЕРВЫМ, чтобы тап не конфликтовал с перетаскиванием.
                         .pointerInput(Unit) {
                             detectTapGestures(
-                                onTap = { offset ->
+                                    onTap = { offset ->
                                     // Одиночный тап — «повернулся к тебе».
                                     // offset — координаты тапа ВНУТРИ Box робота (0 .. size.width).
                                     // Центр робота — это size.width / 2.
@@ -1394,10 +1397,12 @@ fun ChatScreen(
                                     // Если тап слева от центра → -1f (наклон влево),
                                     // если справа → +1f (наклон вправо).
                                     val tiltDirection = if (offset.x < robotCenterX) -1f else 1f
-                                    // Наклон головы на 8 градусов в сторону тапа.
-                                    headTiltTarget = tiltDirection * 8f
-                                    // Лёгкий кивок вниз (0.3 — небольшая величина).
-                                    headNodTarget = 0.3f
+                                    // Наклон головы на 15 градусов в сторону тапа.
+                                    headTiltTarget = tiltDirection * 15f
+                                    // Лёгкий кивок вниз (0.5 — заметная величина).
+                                    headNodTarget = 0.5f
+                                    // Махание рукой в сторону наклона
+                                    tapWaveDirection = tiltDirection
                                 },
                                 onDoubleTap = {
                                     // Двойной тап на робота 1 — как команда «выйди из матрицы»,
@@ -1425,7 +1430,7 @@ fun ChatScreen(
                             }
                         }
                 ) {
-                                                ThinkingRobotAnimation(
+                 ThinkingRobotAnimation(
                         height = 70.dp,
                         isActive = true,
                         isSpeaking = isSpeaking,
@@ -1436,6 +1441,7 @@ fun ChatScreen(
                         isSmartMode = isSmartMode,
                         headTilt = headTiltTarget,
                         headNod = headNodTarget,
+                        tapWaveDirection = tapWaveDirection,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -1669,7 +1675,10 @@ fun ThinkingRobotAnimation(
     headBob: Float = 0f,
     headNod: Float = 0f,
     uDivisor: Float = 200f,
-    yOffsetUnits: Float = 0f
+    yOffsetUnits: Float = 0f,
+    // Направление махания от тапа: -1f — влево, +1f — вправо, 0f — нет.
+    // Когда != 0f, соответствующая рука машет приветственно.
+    tapWaveDirection: Float = 0f
 ) {
     val transition = rememberInfiniteTransition(label = "robot")
 
@@ -1855,10 +1864,29 @@ fun ThinkingRobotAnimation(
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
 
-    val animatedScale by animateFloatAsState(
+        val animatedScale by animateFloatAsState(
         targetValue = commandScale ?: 1f,
         animationSpec = tween(durationMillis = 3000, easing = FastOutSlowInEasing),
         label = "command_scale"
+    )
+
+    // Плавный наклон головы — вместо мгновенного rotate(headTilt, ...)
+    val animatedHeadTilt by animateFloatAsState(
+        targetValue = headTilt,
+        animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
+        label = "head_tilt_animated"
+    )
+    val animatedHeadNod by animateFloatAsState(
+        targetValue = headNod,
+        animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
+        label = "head_nod_animated"
+    )
+
+    // Плавная величина махания от тапа (0..1)
+    val tapWaveAmount by animateFloatAsState(
+        targetValue = if (tapWaveDirection != 0f) 1f else 0f,
+        animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
+        label = "tap_wave_amount"
     )
 
     Canvas(
@@ -1883,7 +1911,7 @@ fun ThinkingRobotAnimation(
         // Смещение головы — независимо от тела.
         // 5f для headOffsetY — чтобы наклон вниз был заметен.
         val headOffsetX = headBob * 1.5f * u
-        val headOffsetY = headNod * 5f * u
+        val headOffsetY = animatedHeadNod * 5f * u
         val whiteBody = Color(0xFFF4F6F8)
         val whiteHighlight = Color(0xFFFFFFFF)
         val lightGray = Color(0xFFD9DEE3)
@@ -1927,7 +1955,24 @@ fun ThinkingRobotAnimation(
         val forearmWaveAngle = -50f * waveAmount
         val handWiggle = sin(armPhase * 2f) * 18f * waveAmount
 
-        // ================= ЛЕВАЯ РУКА =================
+        // Махание от тапа: рука поднимается и качается в сторону наклона головы.
+        // tapWaveDirection > 0f — правая рука, < 0f — левая.
+        val tapWaveRight = if (tapWaveDirection > 0f) tapWaveAmount else 0f
+        val tapWaveLeft = if (tapWaveDirection < 0f) tapWaveAmount else 0f
+
+        // Углы подъёма руки при махании от тапа.
+        val tapShoulderWaveRight = -70f * tapWaveRight
+        val tapForearmWaveRight = -45f * tapWaveRight
+        val tapHandWiggleRight = sin(armPhase * 3f) * 20f * tapWaveRight
+
+        val tapShoulderWaveLeft = -70f * tapWaveLeft
+        val tapForearmWaveLeft = -45f * tapWaveLeft
+        val tapHandWiggleLeft = sin(armPhase * 3f) * 20f * tapWaveLeft
+
+                // ================= ЛЕВАЯ РУКА =================
+        // Оборачиваем всю левую руку в rotate() — чтобы можно было махать ею при тапе.
+        // Знак минус — потому что левая рука «зеркальная».
+        rotate(-tapShoulderWaveLeft, pivot = pt(-46f, 96f)) {
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(whiteHighlight, lightGray),
@@ -2114,16 +2159,17 @@ fun ThinkingRobotAnimation(
             size = Size(5f * u, 10f * u),
             cornerRadius = CornerRadius(2.5f * u)
         )
-        drawRoundRect(
+                drawRoundRect(
             color = darkGray,
             topLeft = pt(-51f, 156f + leftArmOffsetY),
             size = Size(5f * u, 10f * u),
             cornerRadius = CornerRadius(2.5f * u),
             style = Stroke(width = 0.9f * u)
         )
+        } // конец rotate для левой руки
 
         // ================= ПРАВАЯ РУКА =================
-        rotate(shoulderWaveAngle, pivot = pt(46f, 96f)) {
+        rotate(shoulderWaveAngle + tapShoulderWaveRight, pivot = pt(46f, 96f)) {
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(whiteHighlight, lightGray),
@@ -2177,7 +2223,7 @@ fun ThinkingRobotAnimation(
                 style = Stroke(width = 1.3f * u)
             )
 
-            rotate(forearmWaveAngle + handWiggle, pivot = pt(46f, 126f + rightArmOffsetY)) {
+        rotate(forearmWaveAngle + handWiggle + tapForearmWaveRight + tapHandWiggleRight, pivot = pt(46f, 126f + rightArmOffsetY)) {
                 drawRoundRect(
                     color = lightGray,
                     topLeft = pt(33.04f, 128f + rightArmOffsetY),
@@ -3027,7 +3073,7 @@ fun ThinkingRobotAnimation(
 
         // ================= ГОЛОВА И ВСЁ, ЧТО С НЕЙ СВЯЗАНО =================
         // Оборачиваем в rotate(headTilt) — голова наклоняется вокруг основания шеи
-        rotate(headTilt, pivot = pt(0f, 62f)) {
+                rotate(animatedHeadTilt, pivot = pt(0f, 62f)) {
 
             // ================= ШЕЯ =================
             drawRoundRect(
