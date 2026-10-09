@@ -2423,20 +2423,20 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             return
         }
 
-                             val effectivePrompt = if (imagePath != null && prompt.isBlank()) {
-            // Разные VLM-модели лучше понимают разные промпты.
-            // Qwen2-VL обучена на других данных, чем SmolVLM, поэтому
-            // для неё используем более естественную формулировку.
-            val isQwenModel = currentModelName.contains("Qwen", ignoreCase = true) ||
-                              currentModelName.contains("qwen", ignoreCase = true)
-            if (isQwenModel) {
-                "Опиши это изображение."
-            } else {
-                "Describe this image in detail."
-            }
-        } else {
-            prompt
-        }
+                            val effectivePrompt = if (imagePath != null && prompt.isBlank()) {
+    // Разные VLM-модели лучше понимают разные промпты.
+    val isQwenModel = currentModelName.contains("Qwen", ignoreCase = true) ||
+                      currentModelName.contains("qwen", ignoreCase = true)
+    val isGemmaModel = currentModelName.contains("gemma", ignoreCase = true) ||
+                       currentModelName.contains("Gemma", ignoreCase = true)
+    when {
+        isQwenModel -> "Опиши это изображение."
+        isGemmaModel -> "Describe this image."
+        else -> "Describe this image in detail."
+    }
+} else {
+    prompt
+}
 
         val isSearchCommand = if (imagePath != null) {
             false
