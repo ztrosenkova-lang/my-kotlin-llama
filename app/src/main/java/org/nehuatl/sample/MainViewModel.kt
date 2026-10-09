@@ -98,7 +98,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         private const val KEY_MANUAL_THEME_UNTIL = "manual_theme_until"
         private const val DAY_START_HOUR = 7      // 07:00 — начало светлой темы
         private const val NIGHT_START_HOUR = 19   // 19:00 — начало тёмной темы
-        private const val MANUAL_OVERRIDE_MS = 6 * 60 * 60 * 1000L  // 6 часов
+        private const val MANUAL_OVERRIDE_MS = 1 * 60 * 60 * 1000L  // 6 часов
 
     private val CATEGORIES = listOf("[ПАРОЛЬ]", "[КОНТАКТ]", "[ПРАЙС]", "[ИНСТРУКЦИЯ]", "[АДРЕС]", "[ДАТА]", "[ОБЩЕЕ]", "[ТРАВЫ]", "[ГРИБЫ]", "[ОРИЕНТИРОВАНИЕ]")
     }
@@ -443,7 +443,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _isSmartMode.value = prefs.getBoolean(KEY_SMART_MODE, false)
         _isFirstLaunch.value = prefs.getBoolean("first_launch", true)
 
-        // Авто-тема по времени: применить при запуске, если ручной приоритет истёк
+                // При запуске всегда применяем авто-тему по времени суток.
+        // Ручной приоритет сбрасывается — иначе после ручного переключения
+        // тема не менялась бы при старте в течение часа.
+        prefs.edit().putLong(KEY_MANUAL_THEME_UNTIL, 0L).apply()
         applyAutoTheme()
         if (_isFirstLaunch.value) {
             prefs.edit().putBoolean("first_launch", false).apply()
