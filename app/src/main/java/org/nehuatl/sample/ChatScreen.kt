@@ -164,7 +164,10 @@ private data class AppColors(
     val text: Color,
     val chatFont: FontFamily,
     val green: Color,
-    val paleYellow: Color
+    val paleYellow: Color,
+    val gradTop: Color,
+    val gradMid: Color,
+    val gradBottom: Color
 )
 
 private val LightColors = AppColors(
@@ -175,7 +178,10 @@ private val LightColors = AppColors(
     text = Color(0xFF212529),
     chatFont = FontFamily.Monospace,
     green = Color(0xFF2E7D32),
-    paleYellow = Color(0xFFFFF9DB)
+    paleYellow = Color(0xFFFFF9DB),
+    gradTop = Color(0xFFFFFDF5),
+    gradMid = Color(0xFFFFF8DC),
+    gradBottom = Color(0xFFF0E0B8)
 )
 
 private val DarkColors = AppColors(
@@ -186,7 +192,10 @@ private val DarkColors = AppColors(
     text = Color(0xFFE0E0E0),
     chatFont = FontFamily.Monospace,
     green = Color(0xFF81C784),
-    paleYellow = Color(0xFF2A2A1E)
+    paleYellow = Color(0xFF2A2A1E),
+    gradTop = Color(0xFF3A3A2E),
+    gradMid = Color(0xFF2A2A1E),
+    gradBottom = Color(0xFF1A1A10)
 )
 
 // Глобальный доступ к анимированным цветам темы из любого экрана.
@@ -303,8 +312,18 @@ fun ChatScreen(
     val green by themeTransition.animateColor(transitionSpec = { themeSpec }, label = "green_color") {
         if (it) DarkColors.green else LightColors.green
     }
-    val paleYellow by themeTransition.animateColor(transitionSpec = { themeSpec }, label = "pale_yellow_color") {
+       val paleYellow by themeTransition.animateColor(transitionSpec = { themeSpec }, label = "pale_yellow_color") {
         if (it) DarkColors.paleYellow else LightColors.paleYellow
+    }
+
+    val gradTop by themeTransition.animateColor(transitionSpec = { themeSpec }, label = "grad_top_color") {
+        if (it) DarkColors.gradTop else LightColors.gradTop
+    }
+    val gradMid by themeTransition.animateColor(transitionSpec = { themeSpec }, label = "grad_mid_color") {
+        if (it) DarkColors.gradMid else LightColors.gradMid
+    }
+    val gradBottom by themeTransition.animateColor(transitionSpec = { themeSpec }, label = "grad_bottom_color") {
+        if (it) DarkColors.gradBottom else LightColors.gradBottom
     }
 
     val colors = AppColors(
@@ -315,7 +334,10 @@ fun ChatScreen(
         text = text,
         chatFont = if (isDarkTheme) DarkColors.chatFont else LightColors.chatFont,
         green = green,
-        paleYellow = paleYellow
+        paleYellow = paleYellow,
+        gradTop = gradTop,
+        gradMid = gradMid,
+        gradBottom = gradBottom
     )
     CompositionLocalProvider(LocalAppColors provides colors) {
     var promptInput by remember { mutableStateOf("") }
@@ -4397,24 +4419,14 @@ private fun TopBarWithSwitch(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    brush = if (!isDarkTheme) {
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0xFFFFFDF5),
-                                Color(0xFFFFF8DC),
-                                Color(0xFFF0E0B8)
-                            )
+                                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            colors.gradTop,
+                            colors.gradMid,
+                            colors.gradBottom
                         )
-                    } else {
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0xFF3A3A2E),
-                                Color(0xFF2A2A1E),
-                                Color(0xFF1A1A10)
-                            )
-                        )
-                    },
+                    ),
                     shape = RoundedCornerShape(8.dp)
                 )
                 .border(1.dp, colors.borderGray, RoundedCornerShape(8.dp))
@@ -4439,24 +4451,14 @@ private fun TopBarWithSwitch(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
-                    .background(
-                        brush = if (!isDarkTheme) {
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color(0xFFFFFFFF),
-                                    Color(0xFFF5F7FA),
-                                    Color(0xFFE8ECF1)
-                                )
+                                        .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                colors.gradTop,
+                                colors.gradMid,
+                                colors.gradBottom
                             )
-                        } else {
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color(0xFF3A3A2E),
-                                    Color(0xFF2A2A1E),
-                                    Color(0xFF1A1A10)
-                                )
-                            )
-                        },
+                        ),
                         shape = RoundedCornerShape(8.dp)
                     )
                     .border(1.dp, colors.borderGray, RoundedCornerShape(8.dp))
@@ -5051,24 +5053,14 @@ private fun ControlPanel(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                    brush = if (!isDarkTheme) {
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0xFFFFFFFF),
-                                Color(0xFFF5F7FA),
-                                Color(0xFFE8ECF1)
-                            )
+                                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            colors.gradTop,
+                            colors.gradMid,
+                            colors.gradBottom
                         )
-                    } else {
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0xFF3A3A2E),
-                                Color(0xFF2A2A1E),
-                                Color(0xFF1A1A10)
-                            )
-                        )
-                    },
+                    ),
                     shape = RoundedCornerShape(12.dp)
                 )
                 .padding(4.dp),
@@ -6445,24 +6437,14 @@ private fun PromptInput(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                    brush = if (!isDarkTheme) {
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0xFFFFFDF5),
-                                Color(0xFFFFF8DC),
-                                Color(0xFFF0E0B8)
-                            )
+                                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            colors.gradTop,
+                            colors.gradMid,
+                            colors.gradBottom
                         )
-                                        } else {
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0xFF3A3A2E),
-                                Color(0xFF2A2A1E),
-                                Color(0xFF1A1A10)
-                            )
-                        )
-                    },
+                    ),
                     shape = RoundedCornerShape(24.dp)
                 )
                 .padding(horizontal = 8.dp, vertical = 4.dp)
