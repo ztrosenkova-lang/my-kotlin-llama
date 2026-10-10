@@ -597,28 +597,8 @@ fun ChatScreen(
             isPermanentlyBlocked = isPermanentlyBlocked,
             colors = colors
         )
-    } else {
+       } else {
 
-    // Диалог разблокировки по команде «режим админа» — показывается поверх чата
-    if (showAdminUnlockDialog) {
-        LockScreen(
-            secretPhrase = adminPhraseInput,
-            onSecretPhraseChange = { adminPhraseInput = it },
-            onVerify = {
-                val success = viewModel.verifySecretPhrase(adminPhraseInput)
-                adminPhraseInput = ""
-                if (success) {
-                    showAdminUnlockDialog = false
-                    viewModel.appendSystemMessage("✅ Режим админа: приложение разблокировано навсегда")
-                }
-                // Если фраза неверная — verifySecretPhrase уже заблокировала приложение навсегда,
-                // диалог закроется автоматически, потому что isAppLocked станет true.
-            },
-            viewModel = viewModel,
-            isPermanentlyBlocked = isPermanentlyBlocked,
-            colors = colors
-        )
-    }
         if (showModelDialog) {
         ModelPickerDialog(
             currentModelPath = currentModelPath,
@@ -1478,6 +1458,24 @@ fun ChatScreen(
                 }
             }
         }
+      }
+    // Диалог разблокировки по команде «режим админа» — рисуется поверх чата
+    if (showAdminUnlockDialog) {
+        LockScreen(
+            secretPhrase = adminPhraseInput,
+            onSecretPhraseChange = { adminPhraseInput = it },
+            onVerify = {
+                val success = viewModel.verifySecretPhrase(adminPhraseInput)
+                adminPhraseInput = ""
+                if (success) {
+                    showAdminUnlockDialog = false
+                    viewModel.appendSystemMessage("✅ Режим админа: приложение разблокировано навсегда")
+                }
+            },
+            viewModel = viewModel,
+            isPermanentlyBlocked = isPermanentlyBlocked,
+            colors = colors
+        )
     }
     } // Закрытие else
     } // Закрытие CompositionLocalProvider
