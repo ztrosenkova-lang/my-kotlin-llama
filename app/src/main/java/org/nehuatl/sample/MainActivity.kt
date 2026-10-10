@@ -702,8 +702,22 @@ fun clearSelectedModelAndMmproj() {
         checkPasswordAndProceed()
     }
 
-    override fun onResume() {
+        override fun onResume() {
         super.onResume()
+
+        // Если приложение вышло на передний план — убираем робота 2 из overlay,
+        // чтобы на экране был только робот 1 внутри приложения.
+        if (FloatingRobotService.isRunning) {
+            try {
+                val stopIntent = Intent(this, FloatingRobotService::class.java).apply {
+                    action = FloatingRobotService.ACTION_STOP
+                }
+                startService(stopIntent)
+                Log.d(TAG, "FloatingRobotService stopped on app resume")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to stop FloatingRobotService on resume: ${e.message}")
+            }
+        }
     }
 
     private fun checkPasswordAndProceed() {
