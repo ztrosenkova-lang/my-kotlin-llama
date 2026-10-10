@@ -233,9 +233,20 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         getApplication<Application>().getSystemService(Context.ALARM_SERVICE) as AlarmManager
     }
 
-    private val _currentMode = MutableStateFlow(AIMode.NEUTRAL)
+        private val _currentMode = MutableStateFlow(AIMode.NEUTRAL)
     val currentMode = _currentMode.asStateFlow()
 
+    // ========== АКТИВНОСТЬ CHATSCREEN ==========
+    // true, когда ChatScreen виден на экране (activity на переднем плане).
+    // Нужно для разделения логики: обычный диалог (печатная машинка работает)
+    // vs overlay (ответ пишется сразу в _chatHistory, без анимации).
+    private val _isChatScreenVisible = MutableStateFlow(false)
+    val isChatScreenVisible: StateFlow<Boolean> = _isChatScreenVisible.asStateFlow()
+
+    fun setChatScreenVisible(visible: Boolean) {
+        _isChatScreenVisible.value = visible
+        Log.d(TAG, "ChatScreen visible = $visible")
+    }
     fun setCurrentMode(mode: AIMode) {
         _currentMode.value = mode
     }
