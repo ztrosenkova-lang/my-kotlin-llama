@@ -367,9 +367,19 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _overlayListening.value = listening
     }
 
-    // Сигнал «привет» — для робота 1 (машет рукой сам)
+       // Сигнал «привет» — для робота 1 (машет рукой сам)
     private val _robotGreetingSignal = MutableStateFlow(false)
     val robotGreetingSignal: StateFlow<Boolean> = _robotGreetingSignal.asStateFlow()
+
+    // ========== АВТО-АНИМАЦИИ РОБОТОВ (раз в минуту, по циклу) ==========
+    // 0 — нет анимации
+    // 1 — махание правой рукой
+    // 2 — наклон головы влево
+    // 3 — махание левой рукой
+    // 4 — наклон головы вправо
+    // 5 — приветственное махание правой рукой
+    private val _robotAutoAnimation = MutableStateFlow(0)
+    val robotAutoAnimation: StateFlow<Int> = _robotAutoAnimation.asStateFlow()
 
     fun triggerRobotGreeting() {
         _robotGreetingSignal.value = true
@@ -593,12 +603,34 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
 
-        // Авто-тема: проверять раз в минуту, менять если время суток сменилось
+               // Авто-тема: проверять раз в минуту, менять если время суток сменилось
         // и ручной приоритет истёк
         scope.launch(Dispatchers.Default) {
             while (true) {
                 applyAutoTheme()
                 delay(60000)
+            }
+        }
+
+        // ========== АВТО-АНИМАЦИИ РОБОТОВ ==========
+        // Каждые 60 секунд запускаем одну анимацию из цикла:
+        // 1 → махание правой рукой, 2 → наклон головы влево,
+        // 3 → махание левой рукой, 4 → наклон головы вправо,
+        // 5 → приветственное махание правой рукой.
+        // Длительность каждой — 2.5 секунды.
+        scope.launch(Dispatchers.Default) {
+            val animationSequence = listOf(1, 2, 3, 4, 5)
+            var index = 0
+            // Первая анимация через 60 секунд после запуска
+            delay(60000)
+            while (true) {
+                val anim = animationSequence[index]
+                _robotAutoAnimation.value = anim
+                delay(2500)
+                _robotAutoAnimation.value = 0
+                index = (index + 1) % animationSequence.size
+                // Ждём до следующей минуты (60 сек минус уже прошедшие 2.5 сек)
+                delay(60000 - 2500)
             }
         }
 
