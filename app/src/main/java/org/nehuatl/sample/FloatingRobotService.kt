@@ -33,9 +33,8 @@ class FloatingRobotService : LifecycleService() {
             private set
     }
 
-    private lateinit var windowManager: WindowManager
+        private lateinit var windowManager: WindowManager
     private var robotView: ComposeOverlayView? = null
-    private var micView: ImageButton? = null
     private var voiceRecognizer: VoiceRecognizer? = null
 
         override fun onCreate() {
@@ -44,7 +43,7 @@ class FloatingRobotService : LifecycleService() {
         isRunning = true
         MainViewModel.instance?.setFloatingRunning(true)
 
-        windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
@@ -52,44 +51,40 @@ class FloatingRobotService : LifecycleService() {
         // Инициализируем распознавание речи
         voiceRecognizer = VoiceRecognizer(
             context = applicationContext,
-                                   onResult = { text ->
+                                              onResult = { text ->
                 Log.d(TAG, "Voice result: $text")
                 val vm = MainViewModel.instance
                 if (vm == null) {
                     Log.w(TAG, "MainViewModel.instance is null, cannot send message")
                 } else {
-             val command = text.trim().lowercase()
-                                        when (command) {
-            "махни рукой" -> vm.triggerOverlayWave()
-                       "уйди" -> {
-                // Останавливаем сервис — робот и микрофон исчезают
-                val stopIntent = Intent(this@FloatingRobotService, FloatingRobotService::class.java).apply {
-                    action = ACTION_STOP
-                }
-                startService(stopIntent)
+                    val command = text.trim().lowercase()
+                    when (command) {
+                        "махни рукой" -> vm.triggerOverlayWave()
+                        "уйди" -> {
+                            val stopIntent = Intent(this@FloatingRobotService, FloatingRobotService::class.java).apply {
+                                action = ACTION_STOP
+                            }
+                            startService(stopIntent)
 
-                // Поднимаем MainActivity на передний план
-                try {
-                    val intent = Intent(this@FloatingRobotService, MainActivity::class.java).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                                Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
-                    }
-                    startActivity(intent)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to bring MainActivity to front: ${e.message}")
-                }
-            }
+                            try {
+                                val intent = Intent(this@FloatingRobotService, MainActivity::class.java).apply {
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                                            Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                                }
+                                startActivity(intent)
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Failed to bring MainActivity to front: ${e.message}")
+                            }
+                        }
                         "умный режим" -> vm.enableSmartMode()
                         "режим калькулятора" -> vm.disableSmartMode()
                         else -> vm.sendUserMessage(text)
                     }
                 }
-                updateMicIcon(listening = false)
                 MainViewModel.instance?.setOverlayListening(false)
             },
             onError = { error ->
                 Log.w(TAG, "Voice error: $error")
-                updateMicIcon(listening = false)
                 MainViewModel.instance?.setOverlayListening(false)
             }
         )
@@ -104,9 +99,8 @@ class FloatingRobotService : LifecycleService() {
                 stopSelf()
                 return START_NOT_STICKY
             }
-            else -> {
+                       else -> {
                 if (robotView == null) addRobotOverlay()
-                if (micView == null) addMicOverlay()
             }
         }
         return START_STICKY
@@ -115,7 +109,6 @@ class FloatingRobotService : LifecycleService() {
         override fun onDestroy() {
         super.onDestroy()
         removeRobotOverlay()
-        removeMicOverlay()
         voiceRecognizer?.destroy()
         voiceRecognizer = null
         isRunning = false
@@ -159,14 +152,16 @@ class FloatingRobotService : LifecycleService() {
         y = 300
     }
 
-        // Перетаскивание + двойной тап для поднятия приложения из фона
-    view.setOnTouchListener(object : View.OnTouchListener {
+          view.setOnTouchListener(object : View.OnTouchListener {
         private var initialX = 0
         private var initialY = 0
         private var touchX = 0f
         private var touchY = 0f
         private var downTime = 0L
         private var lastTapTime = 0L
+        // Джоб для отложенного запуска распознавания (задержка 400 мс для отсечения двойного тапа)
+        private var tapCheckJob: android.os.Handler? = null
+        private var tapCheckRunnable: Runnable? = null
 
         override fun onTouch(v: View, event: MotionEvent): Boolean {
             when (event.action) {
@@ -179,9 +174,16 @@ class FloatingRobotService : LifecycleService() {
                     return true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    params.x = initialX + (event.rawX - touchX).toInt()
-                    params.y = initialY + (event.rawY - touchY).toInt()
-                    windowManager.updateViewLayout(view, params)
+                    val dxTotal = event.rawX - touchX
+                    val dyTotal = event.rawY - touchY
+                    val moved = kotlin.math.abs(dxTotal) > 15 || kotlin.math.abs(dyTotal) > 15
+
+                    if (moved) {
+                        // Перетаскивание робота
+                        params.x = initialX + dxTotal.toInt()
+                        params.y = initialY + dyTotal.toInt()
+                        windowManager.updateViewLayout(view, params)
+                    }
                     return true
                 }
                 MotionEvent.ACTION_UP -> {
@@ -189,20 +191,32 @@ class FloatingRobotService : LifecycleService() {
                     val dy = kotlin.math.abs(event.rawY - touchY)
                     val dt = System.currentTimeMillis() - downTime
 
-                                       // Считаем тапом только если не двигали и быстро отпустили
-                                        if (dx < 15 && dy < 15 && dt < 300) {
+                    // СВАЙП: быстрое движение (<300 мс) с большим смещением (>50 px)
+                    // по X. Свайп по Y не обрабатываем — он используется для drag.
+                    if (dt < 300 && dx > 50 && dx > dy * 1.5f) {
+                        val direction = if (event.rawX < touchX) -1f else 1f
+                        val vm = MainViewModel.instance
+                        vm?.triggerOverlayHeadTilt(direction)
+                        return true
+                    }
+
+                    // ТАП: не двигались и быстро отпустили
+                    if (dx < 15 && dy < 15 && dt < 300) {
                         val now = System.currentTimeMillis()
                         if (now - lastTapTime < 400) {
-                            // Двойной тап — убираем робота и микрофон, поднимаем приложение
+                            // ДВОЙНОЙ ТАП — отменяем отложенный запуск распознавания
+                            tapCheckRunnable?.let { tapCheckJob?.removeCallbacks(it) }
+                            tapCheckRunnable = null
+
                             lastTapTime = 0L
 
-                            // 1. Останавливаем сервис — робот и микрофон исчезают
+                            // Останавливаем сервис
                             val stopIntent = Intent(this@FloatingRobotService, FloatingRobotService::class.java).apply {
                                 action = ACTION_STOP
                             }
                             startService(stopIntent)
 
-                            // 2. Поднимаем MainActivity на передний план
+                            // Поднимаем MainActivity
                             try {
                                 val intent = Intent(this@FloatingRobotService, MainActivity::class.java).apply {
                                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or
@@ -213,12 +227,29 @@ class FloatingRobotService : LifecycleService() {
                                 Log.w(TAG, "Failed to bring MainActivity to front: ${e.message}")
                             }
                         } else {
-                            // Одиночный тап — наклон головы робота
+                            // ОДИНОЧНЫЙ ТАП (возможный) — запускаем распознавание с задержкой 400 мс.
+                            // Если за это время придёт второй тап — распознавание отменится.
                             lastTapTime = now
-                            val vm = MainViewModel.instance
-                            val robotCenterX = params.x + widthPx / 2f
-                            val direction = if (event.rawX < robotCenterX) -1f else 1f
-                            vm?.triggerOverlayHeadTilt(direction)
+                            val handler = android.os.Handler(android.os.Looper.getMainLooper())
+                            tapCheckJob = handler
+                            val r = Runnable {
+                                tapCheckRunnable = null
+                                lastTapTime = 0L
+
+                                val vm = MainViewModel.instance ?: return@Runnable
+
+                                // Если уже слушаем — останавливаем (повторный тап во время прослушивания)
+                                if (vm.overlayListening.value) {
+                                    voiceRecognizer?.stop()
+                                    vm.setOverlayListening(false)
+                                } else {
+                                    // Запускаем распознавание
+                                    vm.setOverlayListening(true)
+                                    voiceRecognizer?.start()
+                                }
+                            }
+                            tapCheckRunnable = r
+                            handler.postDelayed(r, 400)
                         }
                     }
                     return true
@@ -236,7 +267,7 @@ class FloatingRobotService : LifecycleService() {
         Log.e(TAG, "Failed to add robot overlay: ${e.message}", e)
     }
 }
-    private fun removeRobotOverlay() {
+        private fun removeRobotOverlay() {
         robotView?.let {
             try {
                 windowManager.removeView(it)
@@ -247,121 +278,6 @@ class FloatingRobotService : LifecycleService() {
             robotView = null
         }
     }
-
-    // ========== OVERLAY МИКРОФОНА ==========
-
-   private fun addMicOverlay() {
-    val button = ImageButton(this).apply {
-        setImageResource(android.R.drawable.ic_btn_speak_now)
-        contentDescription = "Голосовой ввод"
-        setPadding(24, 24, 24, 24)
-
-        val shape = android.graphics.drawable.GradientDrawable().apply {
-            this.shape = android.graphics.drawable.GradientDrawable.OVAL
-            setColor(Color.parseColor("#CC74C0FC"))
-        }
-        background = shape
-    }
-
-    val sizePx = (72 * resources.displayMetrics.density).toInt()
-
-    val params = WindowManager.LayoutParams(
-        sizePx,
-        sizePx,
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        else
-            @Suppress("DEPRECATION")
-            WindowManager.LayoutParams.TYPE_PHONE,
-        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-        PixelFormat.TRANSLUCENT
-    ).apply {
-        gravity = Gravity.TOP or Gravity.START
-        x = 100
-        y = 800
-    }
-
-    button.setOnTouchListener(object : View.OnTouchListener {
-        private var initialX = 0
-        private var initialY = 0
-        private var touchX = 0f
-        private var touchY = 0f
-
-        override fun onTouch(v: View, event: MotionEvent): Boolean {
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    initialX = params.x
-                    initialY = params.y
-                    touchX = event.rawX
-                    touchY = event.rawY
-                    return true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    params.x = initialX + (event.rawX - touchX).toInt()
-                    params.y = initialY + (event.rawY - touchY).toInt()
-                    windowManager.updateViewLayout(button, params)
-                    return true
-                }
-                MotionEvent.ACTION_UP -> {
-                    val dx = kotlin.math.abs(event.rawX - touchX)
-                    val dy = kotlin.math.abs(event.rawY - touchY)
-                    if (dx < 15 && dy < 15) {
-                        onMicClicked()
-                        return true
-                    }
-                }
-            }
-            return false
-        }
-    })
-
-    try {
-        windowManager.addView(button, params)
-        micView = button
-        Log.d(TAG, "Mic overlay added")
-    } catch (e: Exception) {
-        Log.e(TAG, "Failed to add mic overlay: ${e.message}", e)
-    }
-}
-   private fun removeMicOverlay() {
-    micView?.let {
-        try {
-            windowManager.removeView(it)
-            Log.d(TAG, "Mic overlay removed")
-        } catch (e: Exception) {
-            Log.w(TAG, "removeMicOverlay failed: ${e.message}")
-        }
-        micView = null
-    }
-}
-
-    // ========== ЛОГИКА МИКРОФОНА ==========
-
-        private fun onMicClicked() {
-        val vm = MainViewModel.instance
-        if (vm == null) {
-            Log.w(TAG, "MainViewModel.instance is null, cannot recognize")
-            return
-        }
-
-        Log.d(TAG, "Mic clicked, starting recognition")
-        updateMicIcon(listening = true)
-        vm.setOverlayListening(true)
-        voiceRecognizer?.start()
-    }
-
-   private fun updateMicIcon(listening: Boolean) {
-    micView?.let {
-        val shape = android.graphics.drawable.GradientDrawable().apply {
-            this.shape = android.graphics.drawable.GradientDrawable.OVAL
-            setColor(
-                if (listening) Color.parseColor("#FF2E7D32")
-                else Color.parseColor("#CC74C0FC")
-            )
-        }
-        it.background = shape
-    }
-}
 
     // ========== NOTIFICATION ==========
 
