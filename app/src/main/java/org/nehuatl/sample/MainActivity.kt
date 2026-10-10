@@ -175,10 +175,14 @@ class MainActivity : ComponentActivity() {
         prefs.edit().putString(KEY_PASSWORD_HASH, hashPassword(password)).apply()
     }
 
-    private fun createStyledEditText(hintText: String): android.widget.EditText {
+        private fun createStyledEditText(hintText: String): android.widget.EditText {
         return android.widget.EditText(this).apply {
             hint = hintText
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            // Используем обычный текст + PasswordTransformationMethod вместо
+            // TYPE_TEXT_VARIATION_PASSWORD. На Huawei первый вариант
+            // не отображает точки/звёздочки — это известная проблема.
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+            transformationMethod = android.text.method.PasswordTransformationMethod.getInstance()
             gravity = android.view.Gravity.CENTER
             setOnFocusChangeListener { _, hasFocus ->
                 if (hasFocus) {
