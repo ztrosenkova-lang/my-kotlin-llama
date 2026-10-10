@@ -277,6 +277,7 @@ fun ChatScreen(
     val isSpeaking by viewModel.isSpeaking.collectAsStateWithLifecycle(initialValue = false)
     val speakStartTrigger by viewModel.speakStartTrigger.collectAsStateWithLifecycle(initialValue = false)
     val robotGreetingSignal by viewModel.robotGreetingSignal.collectAsStateWithLifecycle(initialValue = false)
+    val robotAutoAnimation by viewModel.robotAutoAnimation.collectAsStateWithLifecycle(initialValue = 0)
     val pendingTextToPrint by viewModel.pendingTextToPrint.collectAsStateWithLifecycle(initialValue = "")
     val isDarkTheme by viewModel.isDarkTheme.collectAsStateWithLifecycle(initialValue = false)
     val showBrainEditorState by viewModel.showBrainEditor.collectAsStateWithLifecycle(initialValue = false)
@@ -1208,7 +1209,7 @@ fun ChatScreen(
                             rotationZ = (orbitAngle * 180f / PI.toFloat()) + 90f
                         )
                 ) {
-                ThinkingRobotAnimation(
+                                        ThinkingRobotAnimation(
                         height = robotSizeDp,
                         isActive = false,
                         isSpeaking = false,
@@ -1290,7 +1291,7 @@ fun ChatScreen(
                         .offset(x = offsetXDp, y = offsetYDp)
                         .size(currentSizeDp)
                 ) {
-                ThinkingRobotAnimation(
+                                ThinkingRobotAnimation(
                         height = currentSizeDp,
                         isActive = false,
                         isSpeaking = false,
@@ -1298,6 +1299,7 @@ fun ChatScreen(
                         isIdle = true,
                         shouldWave = waveSignal,
                         isAiReady = isModelLoaded || (cloudState is CloudAIState.Ready),
+                        autoAnimation = robotAutoAnimation,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -1414,7 +1416,7 @@ fun ChatScreen(
                             }
                         }
                 ) {
-                 ThinkingRobotAnimation(
+                                  ThinkingRobotAnimation(
                         height = 70.dp,
                         isActive = true,
                         isSpeaking = isSpeaking,
@@ -1426,6 +1428,7 @@ fun ChatScreen(
                         headTilt = headTiltTarget,
                         headNod = headNodTarget,
                         tapWaveDirection = tapWaveDirection,
+                        autoAnimation = robotAutoAnimation,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -1680,7 +1683,11 @@ fun ThinkingRobotAnimation(
     yOffsetUnits: Float = 0f,
     // Направление махания от тапа: -1f — влево, +1f — вправо, 0f — нет.
     // Когда != 0f, соответствующая рука машет приветственно.
-    tapWaveDirection: Float = 0f
+    tapWaveDirection: Float = 0f,
+    // Авто-анимация по циклу (из MainViewModel):
+    // 0 — нет, 1 — махание правой, 2 — наклон головы влево,
+    // 3 — махание левой, 4 — наклон головы вправо, 5 — приветственное махание правой.
+    autoAnimation: Int = 0
 ) {
     val transition = rememberInfiniteTransition(label = "robot")
 
@@ -1835,7 +1842,7 @@ fun ThinkingRobotAnimation(
         label = "smart_pulse"
     )
 
-    var externalWave by remember { mutableStateOf(false) }
+        var externalWave by remember { mutableStateOf(false) }
     LaunchedEffect(shouldWave) {
         if (shouldWave) {
             externalWave = true
@@ -1844,18 +1851,9 @@ fun ThinkingRobotAnimation(
         }
     }
 
-    var randomWave by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            val nextDelay = (60..240).random() * 1000L
-            delay(nextDelay)
-            randomWave = true
-            delay(2000)
-            randomWave = false
-        }
-    }
+    // randomWave удалён — заменён на цикл авто-анимаций через MainViewModel
 
-    val isWaving = externalWave || randomWave
+    val isWaving = externalWave
 
     val waveAmount by animateFloatAsState(
         targetValue = if (isWaving) 1f else 0f,
@@ -1884,13 +1882,47 @@ fun ThinkingRobotAnimation(
         label = "head_nod_animated"
     )
 
-    // Плавная величина махания от тапа (0..1)
+        // Плавная величина махания от тапа (0..1)
     val tapWaveAmount by animateFloatAsState(
         targetValue = if (tapWaveDirection != 0f) 1f else 0f,
         animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
         label = "tap_wave_amount"
     )
 
+    // ========== АВТО-АНИМАЦИИ ==========
+    // Из autoAnimation вычисляем:
+    //  - autoTilt: наклон головы (для 2 = влево, 4 = вправо)
+    //  - autoWaveDir: направление махания (для 1,5 = +1 правая; 3 = -1 левая)
+    val autoTilt: Float = when (autoAnimation) {
+        2 -> -15f   // наклон головы влево
+        4 -> 15f    // наклон головы вправо
+        else -> 0f
+    }
+    val autoWaveDir: Float = when (autoAnimation) {
+        1 -> 1f     // махание правой
+        3 -> -1f    // махание левой
+        5 -> 1f     // приветственное махание правой
+        else -> 0f
+    }
+
+    // Плавный наклон от авто-анимации
+    val autoTiltAnimated by animateFloatAsState(
+        targetValue = autoTilt,
+        animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
+        label = "auto_tilt"
+    )
+
+    // Плавная величина авто-махания (0..1)
+    val autoWaveAmount by animateFloatAsState(
+        targetValue = if (autoWaveDir != 0f) 1f else 0f,
+        animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
+        label = "auto_wave_amount"
+    )
+
+    // Итоговые наклон и махание: тап и авто складываются
+    val effectiveHeadTilt = headTilt + autoTiltAnimated
+    val effectiveTapWaveDirection = if (tapWaveDirection != 0f) tapWaveDirection else autoWaveDir
+    val effectiveTapWaveAmount = if (tapWaveDirection != 0f) tapWaveAmount else autoWaveAmount
     Canvas(
         modifier = modifier
             .height(height)
@@ -1910,7 +1942,7 @@ fun ThinkingRobotAnimation(
         val panelOpen = headPanelOpenAmount
         val panelLift = panelOpen * 20f * u
 
-        // Смещение головы — независимо от тела.
+               // Смещение головы — независимо от тела.
         // 5f для headOffsetY — чтобы наклон вниз был заметен.
         val headOffsetX = headBob * 1.5f * u
         val headOffsetY = animatedHeadNod * 5f * u
@@ -2139,10 +2171,10 @@ fun ThinkingRobotAnimation(
         val forearmWaveAngle = -50f * waveAmount
         val handWiggle = sin(armPhase * 2f) * 18f * waveAmount
 
-        // Махание от тапа: рука поднимается и качается в сторону наклона головы.
-        // tapWaveDirection > 0f — правая рука, < 0f — левая.
-        val tapWaveRight = if (tapWaveDirection > 0f) tapWaveAmount else 0f
-        val tapWaveLeft = if (tapWaveDirection < 0f) tapWaveAmount else 0f
+                // Махание от тапа или авто-анимации: рука поднимается и качается.
+        // effectiveTapWaveDirection > 0f — правая рука, < 0f — левая.
+        val tapWaveRight = if (effectiveTapWaveDirection > 0f) effectiveTapWaveAmount else 0f
+        val tapWaveLeft = if (effectiveTapWaveDirection < 0f) effectiveTapWaveAmount else 0f
 
         // Углы подъёма руки при махании от тапа.
         val tapShoulderWaveRight = -70f * tapWaveRight
@@ -3257,7 +3289,7 @@ fun ThinkingRobotAnimation(
 
         // ================= ГОЛОВА И ВСЁ, ЧТО С НЕЙ СВЯЗАНО =================
         // Оборачиваем в rotate(headTilt) — голова наклоняется вокруг основания шеи
-                rotate(animatedHeadTilt, pivot = pt(0f, 62f)) {
+                        rotate(effectiveHeadTilt, pivot = pt(0f, 62f)) {
 
             // ================= ШЕЯ =================
             drawRoundRect(
