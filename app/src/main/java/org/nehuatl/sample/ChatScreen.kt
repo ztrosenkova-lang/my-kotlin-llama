@@ -1931,12 +1931,194 @@ fun ThinkingRobotAnimation(
             neonBlue
         }
 
-        fun pt(x: Float, y: Float) = Offset(cx + x * u, y * u + bobOffset + staticYOffset)
+                fun pt(x: Float, y: Float) = Offset(cx + x * u, y * u + bobOffset + staticYOffset)
 
         // Функция для элементов головы — добавляет смещение головы
         fun ptHead(x: Float, y: Float): Offset {
             val base = pt(x, y)
             return Offset(base.x + headOffsetX, base.y + headOffsetY)
+        }
+
+        // ================= ДЫМКА ПРОСЛУШИВАНИЯ =================
+        // Когда робот слушает (isListening), вокруг него появляется пульсирующая
+        // сине-неоновая электрическая дымка. Она рисуется ЗА роботом,
+        // поэтому вызывается до отрисовки рук и тела.
+        if (isListening) {
+            val auraPulse = 0.5f + 0.5f * sin(pulse * 3f)
+            val auraFast = 0.5f + 0.5f * sin(pulse * 7f)
+            val auraPhase = pulse * 2f
+
+            // Центр дымки — центр туловища робота
+            val auraCenter = pt(0f, 115f)
+            // Базовый радиус — чуть больше робота
+            val auraRadius = 95f * u
+
+            // 1. Очень мягкий внешний ореол — большой, едва заметный
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF00D9FF).copy(alpha = 0.10f + 0.06f * auraPulse),
+                        Color(0xFF0088FF).copy(alpha = 0.06f + 0.04f * auraPulse),
+                        Color(0xFF0044AA).copy(alpha = 0.02f),
+                        Color.Transparent
+                    ),
+                    center = auraCenter,
+                    radius = auraRadius * 1.6f
+                ),
+                radius = auraRadius * 1.6f,
+                center = auraCenter
+            )
+
+            // 2. Средний слой дымки — сине-голубой, пульсирует
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF00E5FF).copy(alpha = 0.18f + 0.10f * auraPulse),
+                        Color(0xFF00BFFF).copy(alpha = 0.12f + 0.06f * auraPulse),
+                        Color(0xFF0044FF).copy(alpha = 0.05f),
+                        Color.Transparent
+                    ),
+                    center = auraCenter,
+                    radius = auraRadius * 1.2f
+                ),
+                radius = auraRadius * 1.2f,
+                center = auraCenter
+            )
+
+            // 3. Внутренний яркий слой — прямо возле робота
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF80EFFF).copy(alpha = 0.22f + 0.12f * auraFast),
+                        Color(0xFF00D9FF).copy(alpha = 0.14f + 0.08f * auraPulse),
+                        Color.Transparent
+                    ),
+                    center = auraCenter,
+                    radius = auraRadius * 0.85f
+                ),
+                radius = auraRadius * 0.85f,
+                center = auraCenter
+            )
+
+            // 4. Электрические дуги — тонкие светящиеся кольца, вращаются
+            val arcCount = 5
+            for (i in 0 until arcCount) {
+                val angle = (i.toFloat() / arcCount) * 2f * PI.toFloat() + auraPhase
+                val arcRadius = auraRadius * (0.9f + 0.15f * sin(auraPhase * 1.3f + i))
+                val arcAlpha = 0.35f + 0.35f * sin(auraPhase * 2f + i * 0.7f)
+
+                // Точка на орбите
+                val px = auraCenter.x + cos(angle) * arcRadius
+                val py = auraCenter.y + sin(angle) * arcRadius * 0.9f
+
+                // Свечение вокруг точки
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFF80EFFF).copy(alpha = arcAlpha * 0.5f),
+                            Color(0xFF00D9FF).copy(alpha = arcAlpha * 0.25f),
+                            Color.Transparent
+                        ),
+                        center = Offset(px, py),
+                        radius = 12f * u
+                    ),
+                    radius = 12f * u,
+                    center = Offset(px, py)
+                )
+
+                // Ядро дуги
+                drawCircle(
+                    color = Color.White.copy(alpha = arcAlpha * 0.9f),
+                    radius = 1.2f * u,
+                    center = Offset(px, py)
+                )
+            }
+
+            // 5. Второй слой дуг — медленнее, в другую сторону
+            val arcCount2 = 7
+            for (i in 0 until arcCount2) {
+                val angle = (i.toFloat() / arcCount2) * 2f * PI.toFloat() - auraPhase * 0.6f
+                val arcRadius = auraRadius * (0.6f + 0.2f * sin(auraPhase + i * 0.9f))
+                val arcAlpha = 0.25f + 0.3f * sin(auraPhase * 1.7f + i * 0.5f)
+
+                val px = auraCenter.x + cos(angle) * arcRadius
+                val py = auraCenter.y + sin(angle) * arcRadius * 0.8f
+
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFF00FFFF).copy(alpha = arcAlpha * 0.4f),
+                            Color.Transparent
+                        ),
+                        center = Offset(px, py),
+                        radius = 8f * u
+                    ),
+                    radius = 8f * u,
+                    center = Offset(px, py)
+                )
+            }
+
+            // 6. Разряды-молнии — короткие линии от центра к краям
+            val boltCount = 6
+            for (i in 0 until boltCount) {
+                val baseAngle = (i.toFloat() / boltCount) * 2f * PI.toFloat() + auraPhase * 1.5f
+                val boltLength = auraRadius * (0.7f + 0.3f * auraFast)
+                val boltAlpha = (0.4f + 0.6f * auraFast) * (0.5f + 0.5f * sin(auraPhase * 3f + i))
+
+                if (boltAlpha > 0.3f) {
+                    val segments = 4
+                    var prevX = auraCenter.x
+                    var prevY = auraCenter.y
+
+                    for (s in 1..segments) {
+                        val t = s.toFloat() / segments
+                        val jitter = sin(auraPhase * 5f + s * 2.3f + i) * 6f * u * t
+                        val angle = baseAngle + jitter / (boltLength * t + 1f)
+                        val r = boltLength * t
+                        val nx = auraCenter.x + cos(angle) * r
+                        val ny = auraCenter.y + sin(angle) * r * 0.9f
+
+                        drawLine(
+                            color = Color(0xFF80EFFF).copy(alpha = boltAlpha * (1f - t * 0.5f) * 0.7f),
+                            start = Offset(prevX, prevY),
+                            end = Offset(nx, ny),
+                            strokeWidth = (1.5f - t * 0.8f) * u
+                        )
+                        prevX = nx
+                        prevY = ny
+                    }
+                }
+            }
+
+            // 7. Мелкие искры — много мелких точек, быстро мигают
+            val sparkCount = 14
+            for (i in 0 until sparkCount) {
+                val sparkAngle = (i * 2.399f) + auraPhase * 2f
+                val sparkRadius = auraRadius * (0.5f + 0.5f * (0.5f + 0.5f * sin(auraPhase * 2f + i * 1.7f)))
+                val sparkAlpha = 0.4f + 0.6f * (0.5f + 0.5f * sin(auraPhase * 4f + i * 2.1f))
+
+                val px = auraCenter.x + cos(sparkAngle) * sparkRadius
+                val py = auraCenter.y + sin(sparkAngle) * sparkRadius * 0.9f
+                val sparkSize = (0.8f + 0.8f * sin(auraPhase * 5f + i)) * u
+
+                drawCircle(
+                    color = Color.White.copy(alpha = sparkAlpha),
+                    radius = sparkSize,
+                    center = Offset(px, py)
+                )
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFF00FFFF).copy(alpha = sparkAlpha * 0.6f),
+                            Color.Transparent
+                        ),
+                        center = Offset(px, py),
+                        radius = sparkSize * 5f
+                    ),
+                    radius = sparkSize * 5f,
+                    center = Offset(px, py)
+                )
+            }
         }
 
         // ================= АНИМАЦИЯ РУК =================
