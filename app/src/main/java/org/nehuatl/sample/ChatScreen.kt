@@ -391,12 +391,30 @@ fun ChatScreen(
     // Направление махания рукой при тапе: -1f влево, +1f вправо, 0f нет
     var tapWaveDirection by remember { mutableStateOf(0f) }
 
-    val focusRequester = remember { FocusRequester() }
+        val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     val scrollState = rememberScrollState()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val coroutineScope = rememberCoroutineScope()
+
+    // ========== СООБЩАЕМ MAINVIEWMODEL О ВИДИМОСТИ CHATSCREEN ==========
+    // Нужно, чтобы MainViewModel знал: писать ответ через печатную машинку
+    // (ChatScreen активен) или сразу в _chatHistory (ChatScreen в фоне).
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> viewModel.setChatScreenVisible(true)
+                Lifecycle.Event.ON_PAUSE -> viewModel.setChatScreenVisible(false)
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.setChatScreenVisible(false)
+        }
+    }
 
     val speechRecognizerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
