@@ -95,6 +95,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         private const val KEY_DARK_THEME = "dark_theme"
         private const val KEY_SMART_MODE = "smart_mode"
+        private const val KEY_SESSION_UNLOCKED = "session_unlocked"
         private const val SMART_MODE_MAX_CHARS = 8000
 
         // Авто-тема по времени
@@ -554,12 +555,23 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         )
 
+                // Проверяем флаг «сессия разблокирована» — если пользователь уже вводил
+        // пароль в этой сессии и процесс не убивался, не показываем LockScreen снова.
+        val sessionUnlocked = prefs.getBoolean(KEY_SESSION_UNLOCKED, false)
+
         if (prefs.getBoolean("is_permanently_blocked", false)) {
             Log.e(TAG, "App is permanently blocked.")
             _isAppLocked.value = true
             _isDeviceBound.value = false
             _isPermanentlyBlocked.value = true
             _remainingTimeText.value = "🔴 Приложение заблокировано"
+        } else if (sessionUnlocked) {
+            // Сессия уже разблокирована — не спрашиваем пароль
+            Log.i(TAG, "Session already unlocked — skipping password")
+            _isAppLocked.value = false
+            _isDeviceBound.value = true
+            _isPermanentlyUnlocked.value = true
+            _remainingTimeText.value = "✅ Приложение разблокировано"
         } else {
             isUnlockedPermanently = prefs.getBoolean("unlocked_permanently", false)
             if (isUnlockedPermanently) {
@@ -1352,7 +1364,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     fun verifySecretPhrase(input: String): Boolean {
         val inputHash = hashStringSha256(input)
         val isMatch = MessageDigest.isEqual(inputHash.toByteArray(), SECRET_PHRASE_HASH.toByteArray())
-        if (isMatch) {
+                if (isMatch) {
             isUnlockedPermanently = true
             _isPermanentlyUnlocked.value = true
             _isPermanentlyBlocked.value = false
@@ -1362,6 +1374,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             prefs.edit().putLong("app_start_time", System.currentTimeMillis()).apply()
             prefs.edit().putBoolean("unlocked_permanently", true).apply()
             prefs.edit().putBoolean("is_permanently_blocked", false).apply()
+            // Запоминаем, что сессия разблокирована — чтобы не спрашивать пароль снова
+            prefs.edit().putBoolean(KEY_SESSION_UNLOCKED, true).apply()
             Log.i(TAG, "Device permanently unlocked with secret phrase.")
         } else {
             Log.w(TAG, "Incorrect secret phrase entered. Permanent block.")
