@@ -1347,11 +1347,10 @@ fun ChatScreen(
                     shrinkSmallSignal -> logoCenterXPx - robotSizePx * 0.5f * 0.5f
                     else -> robotOffsetX
                 }
-                val targetOffsetY = when {
+                 val targetOffsetY = when {
                     growBigSignal -> (screenHeightPx - robotSizePx * 3f) / 2f
                     shrinkSmallSignal -> logoCenterYPx - robotSizePx * 0.5f * 0.5f
                     else -> robotOffsetY
-                }
                 }
                 val targetScale = when {
                     growBigSignal -> 3f
@@ -1491,7 +1490,6 @@ fun ChatScreen(
                 }
             }
         }
-      }
     // Диалог разблокировки по команде «режим админа» — рисуется поверх чата
     if (showAdminUnlockDialog) {
         LockScreen(
