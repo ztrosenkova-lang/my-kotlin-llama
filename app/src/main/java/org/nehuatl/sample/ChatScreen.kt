@@ -248,6 +248,8 @@ fun ChatScreen(
     viewModel: MainViewModel,
     currentModelPath: String?,
     mmprojPath: String?,
+    modelDisplayName: String? = null,
+    mmprojDisplayName: String? = null,
     onPickModel: () -> Unit,
     onPickMmproj: () -> Unit,
     onPickImage: () -> Unit,
@@ -600,9 +602,11 @@ fun ChatScreen(
        } else {
 
         if (showModelDialog) {
-        ModelPickerDialog(
+                ModelPickerDialog(
             currentModelPath = currentModelPath,
             mmprojPath = mmprojPath,
+            modelDisplayName = modelDisplayName,
+            mmprojDisplayName = mmprojDisplayName,
             onPickModel = onPickModel,
             onPickMmproj = onPickMmproj,
             onLoad = {
@@ -6003,6 +6007,8 @@ private fun StatusBar(
 private fun ModelPickerDialog(
     currentModelPath: String?,
     mmprojPath: String?,
+    modelDisplayName: String? = null,
+    mmprojDisplayName: String? = null,
     onPickModel: () -> Unit,
     onPickMmproj: () -> Unit,
     onLoad: () -> Unit,
@@ -6057,7 +6063,8 @@ private fun ModelPickerDialog(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                                         Text("Языковая модель", color = colors.text, fontSize = 14.sp)
-                    val displayModelPath = cleanModelName(currentModelPath).ifEmpty { "Не выбрана" }
+                                        val displayModelPath = modelDisplayName
+                        ?: cleanModelName(currentModelPath).ifEmpty { "Не выбрана" }
                     Text(
                         text = "Текущая модель: $displayModelPath",
                         style = MaterialTheme.typography.bodySmall,
@@ -6088,7 +6095,8 @@ private fun ModelPickerDialog(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                                         Text("Мультимодальный проектор", color = colors.text, fontSize = 14.sp)
-                    val displayMmprojPath = cleanModelName(mmprojPath).ifEmpty { "Не выбран" }
+                                       val displayMmprojPath = mmprojDisplayName
+                        ?: cleanModelName(mmprojPath).ifEmpty { "Не выбран" }
                     Text(
                         text = "Текущий проектор: $displayMmprojPath",
                         style = MaterialTheme.typography.bodySmall,
