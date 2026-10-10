@@ -1337,15 +1337,21 @@ fun ChatScreen(
                 val isCommandActive = growBigSignal || shrinkSmallSignal
 
                 // Целевые позиция и масштаб
+                // Центр кнопки-логотипа «ИИ-Друг» в шапке.
+                // Позиция подобрана по скриншоту: ~5.5% ширины и ~6% высоты экрана.
+                val logoCenterXPx = screenWidthPx * 0.055f
+                val logoCenterYPx = screenHeightPx * 0.060f
+
                 val targetOffsetX = when {
                     growBigSignal -> (screenWidthPx - robotSizePx * 3f) / 2f
-                    shrinkSmallSignal -> 0f
+                    shrinkSmallSignal -> logoCenterXPx - robotSizePx * 0.5f * 0.5f
                     else -> robotOffsetX
                 }
                 val targetOffsetY = when {
                     growBigSignal -> (screenHeightPx - robotSizePx * 3f) / 2f
-                    shrinkSmallSignal -> 0f
+                    shrinkSmallSignal -> logoCenterYPx - robotSizePx * 0.5f * 0.5f
                     else -> robotOffsetY
+                }
                 }
                 val targetScale = when {
                     growBigSignal -> 3f
@@ -1472,11 +1478,13 @@ fun ChatScreen(
                         growBigSignal = false
                     }
                 }
-             LaunchedEffect(shrinkSmallSignal) {
+                LaunchedEffect(shrinkSmallSignal) {
                 if (shrinkSmallSignal) {
                         delay(3000)
-                        robotOffsetX = 0f
-                        robotOffsetY = 0f
+                        val logoCenterXPx = screenWidthPx * 0.055f
+                        val logoCenterYPx = screenHeightPx * 0.060f
+                        robotOffsetX = logoCenterXPx - robotSizePx * 0.5f * 0.5f
+                        robotOffsetY = logoCenterYPx - robotSizePx * 0.5f * 0.5f
                         robotScale = 0.5f
                         shrinkSmallSignal = false
                     }
@@ -2248,7 +2256,7 @@ fun ThinkingRobotAnimation(
             cornerRadius = CornerRadius(1.5f * u)
         )
 
-        drawCircle(
+                drawCircle(
             color = mediumGray,
             radius = 7f * u,
             center = pt(-46f, 126f + leftArmOffsetY)
@@ -2259,6 +2267,13 @@ fun ThinkingRobotAnimation(
             center = pt(-46f, 126f + leftArmOffsetY),
             style = Stroke(width = 1.3f * u)
         )
+
+        // ========== ПРЕДПЛЕЧЬЕ ЛЕВОЙ РУКИ — СГИБАНИЕ В ЛОКТЕ ==========
+        // Правая рука уже сгибается через rotate(forearmWaveAngle + handWiggle, ...).
+        // Левая — тоже, но со сдвигом фазы, чтобы руки двигались вразнобой.
+        // Поворот вокруг локтя (pt(-46f, 126f + leftArmOffsetY)).
+        // Знак "+" (а не "-") — левая рука зеркальная.
+        rotate(-(forearmWaveAngle + handWiggle) * 0.8f - tapForearmWaveLeft * 0.8f, pivot = pt(-46f, 126f + leftArmOffsetY)) {
 
         drawRoundRect(
             color = lightGray,
@@ -2393,14 +2408,15 @@ fun ThinkingRobotAnimation(
             size = Size(5f * u, 10f * u),
             cornerRadius = CornerRadius(2.5f * u)
         )
-                drawRoundRect(
+                                drawRoundRect(
             color = darkGray,
             topLeft = pt(-51f, 156f + leftArmOffsetY),
             size = Size(5f * u, 10f * u),
             cornerRadius = CornerRadius(2.5f * u),
             style = Stroke(width = 0.9f * u)
         )
-        } // конец rotate для левой руки
+        } // конец rotate предплечья левой руки (локоть)
+        } // конец rotate для левой руки (плечо)
 
         // ================= ПРАВАЯ РУКА =================
         rotate(shoulderWaveAngle + tapShoulderWaveRight, pivot = pt(46f, 96f)) {
