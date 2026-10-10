@@ -690,6 +690,7 @@ fun clearSelectedModelAndMmproj() {
         enableEdgeToEdge()
 
         checkAndRequestAllPermissions()
+        startKeepAliveService()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val alarmManager = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
@@ -750,6 +751,37 @@ fun clearSelectedModelAndMmproj() {
      * Запрашивает разрешение overlay один раз при первом запуске приложения.
      * Если разрешение уже получено или уже запрашивалось — ничего не делает.
      */
+        // ========== KEEP ALIVE SERVICE ==========
+    private fun startKeepAliveService() {
+        try {
+            val intent = Intent(this, KeepAliveService::class.java).apply {
+                action = KeepAliveService.ACTION_START
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+            Log.d(TAG, "KeepAliveService started")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start KeepAliveService: ${e.message}")
+        }
+    }
+
+    // ========== ЗАПРОС ОТКЛЮЧЕНИЯ ОПТИМИЗАЦИИ БАТАРЕИ ==========
+    private fun requestIgnoreBatteryOptimizations() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            try {
+                val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = android.net.Uri.parse("package:$packageName")
+                }
+                startActivity(intent)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to request battery optimization ignore: ${e.message}")
+            }
+        }
+    }
+
     private fun requestOverlayPermissionIfNeeded() {
         if (hasOverlayPermission()) {
             Log.d(TAG, "Overlay permission already granted")
