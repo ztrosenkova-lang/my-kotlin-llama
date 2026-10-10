@@ -2226,8 +2226,15 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     appendSystemMessage("🧠 Открыт редактор Brain.txt")
                     return
                 }
-                lowerText.contains(REMEMBER_COMMAND) -> {
-                    val cleanText = text.substringAfter(REMEMBER_COMMAND).trim()
+                                lowerText.contains(REMEMBER_COMMAND) -> {
+                    // Ищем «запомни» в нижнем регистре, но отрезаем от оригинала
+                    // по позиции — чтобы работало с «Запомни», «ЗАПОМНИ» и т.д.
+                    val lowerIndex = lowerText.indexOf(REMEMBER_COMMAND)
+                    val cleanText = if (lowerIndex >= 0) {
+                        text.substring(lowerIndex + REMEMBER_COMMAND.length).trim()
+                    } else {
+                        text.trim()
+                    }
                     if (cleanText.isNotEmpty()) {
                         saveToLongTermMemory(cleanText)
                     } else {
@@ -2324,8 +2331,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     fun generateCloud(prompt: String) {
         val lowerPrompt = prompt.trim().lowercase()
 
-        if (lowerPrompt.startsWith(REMEMBER_COMMAND)) {
-            val cleanText = prompt.substringAfter(REMEMBER_COMMAND).trim()
+                if (lowerPrompt.startsWith(REMEMBER_COMMAND)) {
+            val cleanText = prompt.substring(REMEMBER_COMMAND.length).trim()
             if (cleanText.isNotEmpty()) {
                 saveToLongTermMemory(cleanText)
             } else {
@@ -2480,8 +2487,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             return
         }
 
-        if (lowerPrompt.startsWith(REMEMBER_COMMAND)) {
-            val cleanText = prompt.substringAfter(REMEMBER_COMMAND).trim()
+                if (lowerPrompt.startsWith(REMEMBER_COMMAND)) {
+            val cleanText = prompt.substring(REMEMBER_COMMAND.length).trim()
             if (cleanText.isNotEmpty()) {
                 saveToLongTermMemory(cleanText)
             } else {
