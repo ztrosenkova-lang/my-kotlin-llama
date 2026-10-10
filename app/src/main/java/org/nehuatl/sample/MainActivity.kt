@@ -35,6 +35,9 @@ class MainActivity : ComponentActivity() {
     private var modelPath by mutableStateOf<String?>(null)
     private var mmprojPath by mutableStateOf<String?>(null)
     private var imagePath by mutableStateOf<String?>(null)
+    // Реальные имена файлов (для DownloadManager URI с числовым ID)
+    private var modelDisplayName by mutableStateOf<String?>(null)
+    private var mmprojDisplayName by mutableStateOf<String?>(null)
 
         companion object {
         private const val PREFS_NAME = "app_security"
@@ -48,7 +51,7 @@ class MainActivity : ComponentActivity() {
         getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
 
-    private val modelPickerLauncher = registerForActivityResult(
+        private val modelPickerLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         uri?.let {
@@ -57,10 +60,11 @@ class MainActivity : ComponentActivity() {
                 Intent.FLAG_GRANT_READ_URI_PERMISSION
             )
             modelPath = it.toString()
+            modelDisplayName = getFileNameFromUri(contentResolver, it)
         }
     }
 
-    private val mmprojPickerLauncher = registerForActivityResult(
+        private val mmprojPickerLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         uri?.let {
@@ -69,6 +73,7 @@ class MainActivity : ComponentActivity() {
                 Intent.FLAG_GRANT_READ_URI_PERMISSION
             )
             mmprojPath = it.toString()
+            mmprojDisplayName = getFileNameFromUri(contentResolver, it)
         }
     }
 
@@ -126,6 +131,26 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
             Log.w(TAG, "Vibration failed", e)
         }
+    }
+
+       // ========== ЧТЕНИЕ ИМЕНИ ФАЙЛА ИЗ URI ==========
+    private fun getFileNameFromUri(contentResolver: android.content.ContentResolver, uri: android.net.Uri): String {
+        var name = ""
+        try {
+            val cursor = contentResolver.query(uri, null, null, null, null)
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val index = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (index != -1) name = it.getString(index)
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "Ошибка чтения имени файла: ${e.message}")
+        }
+        if (name.isEmpty()) {
+            name = uri.lastPathSegment ?: ""
+        }
+        return name
     }
 
     // ========== ФУНКЦИИ РАБОТЫ С ПАРОЛЕМ ==========
@@ -616,6 +641,8 @@ fun forceStartFloatingAndMinimize() {
 fun clearSelectedModelAndMmproj() {
     modelPath = null
     mmprojPath = null
+    modelDisplayName = null
+    mmprojDisplayName = null
     Log.d(TAG, "Selected model and mmproj cleared")
 }
 
@@ -632,11 +659,13 @@ fun clearSelectedModelAndMmproj() {
                     }
                 }
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    ChatScreen(
+                                        ChatScreen(
                         modifier = Modifier.padding(innerPadding),
                         viewModel = viewModel,
                         currentModelPath = modelPath,
                         mmprojPath = mmprojPath,
+                        modelDisplayName = modelDisplayName,
+                        mmprojDisplayName = mmprojDisplayName,
                         onPickModel = { modelPickerLauncher.launch(arrayOf("*/*")) },
                         onPickMmproj = { mmprojPickerLauncher.launch(arrayOf("*/*")) },
                         onPickImage = { imagePickerLauncher.launch(arrayOf("image/*")) },
