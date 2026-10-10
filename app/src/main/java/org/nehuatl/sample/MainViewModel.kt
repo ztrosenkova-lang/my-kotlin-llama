@@ -706,7 +706,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             _cloudState.value = currentState.copy(tokensGenerated = event.tokenCount)
                         }
                     }
-                                        is CloudAIEvent.Done -> {
+                                                                               is CloudAIEvent.Done -> {
     _cloudState.value = CloudAIState.Completed(event.tokenCount, event.duration)
     val fullText = event.fullText
     if (fullText.isNotEmpty()) {
@@ -728,7 +728,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         } else {
             _cloudGeneratedText.value = fullText
-            _pendingTextToPrint.value = fullText
+            if (_isChatScreenVisible.value) {
+                // ChatScreen активен → печатная машинка
+                _pendingTextToPrint.value = fullText
+            } else {
+                // ChatScreen в фоне (overlay) → сразу пишем ответ в историю
+                _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
+                _pendingTextToPrint.value = ""
+            }
             speakText(fullText)
         }
     } else {
@@ -796,7 +803,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             _state.value = currentState.copy(tokensGenerated = event.tokenCount)
                         }
                     }
-                                                                              is LlamaHelper.LLMEvent.Done -> {
+                                                                                                                                                          is LlamaHelper.LLMEvent.Done -> {
     _state.value = GenerationState.Completed(event.tokenCount, event.duration)
     val fullText = event.fullText
     if (fullText.isNotEmpty()) {
@@ -817,7 +824,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         } else {
             _generatedText.value = fullText
-            _pendingTextToPrint.value = fullText
+            if (_isChatScreenVisible.value) {
+                // ChatScreen активен → печатная машинка
+                _pendingTextToPrint.value = fullText
+            } else {
+                // ChatScreen в фоне (overlay) → сразу пишем ответ в историю
+                _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
+                _pendingTextToPrint.value = ""
+            }
             speakText(fullText)
         }
     } else {
