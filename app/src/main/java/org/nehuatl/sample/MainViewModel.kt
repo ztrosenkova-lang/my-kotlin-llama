@@ -214,7 +214,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private var isCompressionRequest = false
     private var userMessageCount = 0
 
-    private var isTtsEnabled = false
+        private var isTtsEnabled = false
+    // Флаг «TTS выключается прямо сейчас». Пока он true — ACTION_TTS_READY
+    // игнорируется, чтобы запоздавший broadcast от убитого сервиса
+    // не включал кнопку обратно.
+    @Volatile
+    private var isTtsShuttingDown = false
     private val _isTtsReady = MutableStateFlow(false)
     val isTtsReady: StateFlow<Boolean> = _isTtsReady.asStateFlow()
 
@@ -486,7 +491,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         ttsReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 when (intent?.action) {
-                    TtsService.ACTION_TTS_READY -> {
+                                        TtsService.ACTION_TTS_READY -> {
+                        // Игнорируем запоздавший broadcast, если TTS выключается прямо сейчас
+                        if (isTtsShuttingDown) {
+                            Log.d(TAG, "TTS ready broadcast ignored (shutting down)")
+                            return
+                        }
                         val message = intent.getStringExtra(TtsService.EXTRA_MESSAGE) ?: "✅ Офлайн голосовой движок успешно загружен"
                         _isTtsReady.value = true
                         isTtsEnabled = true
@@ -1415,7 +1425,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         return digest.joinToString("") { "%02x".format(it) }
     }
 
-       fun enableTts() {
+           fun enableTts() {
+        // Если TTS выключается прямо сейчас — не даём включить, чтобы
+        // не было гонки между ACTION_STOP и ACTION_TTS_READY.
+        if (isTtsShuttingDown) {
+            appendSystemMessage("⏳ Подождите, TTS выключается...")
+            return
+        }
+
         // Уже включено и готово
         if (_isTtsReady.value && isTtsEnabled) {
             appendSystemMessage("🔊 Озвучка уже включена")
@@ -1450,15 +1467,17 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-       fun disableTts() {
+           fun disableTts() {
         isTtsEnabled = false
         _isSpeaking.value = false
         _isTtsReady.value = false
+        // Ставим флаг «выключаемся», чтобы запоздавший ACTION_TTS_READY
+        // от убитого сервиса не включил кнопку обратно.
+        isTtsShuttingDown = true
         appendSystemMessage("🔇 Озвучка отключена, TTS выгружен из памяти")
         Log.d(TAG, "TTS disabled")
 
-        // Шлём ACTION_STOP — сервис снимет foreground и остановится сам.
-        // stopService() для foreground-сервиса не всегда срабатывает.
+        // Шлём ACTION_STOP, чтобы сервис снял foreground и остановился сам.
         val ttsStopIntent = Intent(getApplication<Application>(), TtsService::class.java).apply {
             action = TtsService.ACTION_STOP
         }
@@ -1466,14 +1485,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             getApplication<Application>().startService(ttsStopIntent)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to send ACTION_STOP to TtsService: ${e.message}")
-            // Fallback — если startService не сработал, пробуем stopService
-            try {
-                getApplication<Application>().stopService(
-                    Intent(getApplication<Application>(), TtsService::class.java)
-                )
-            } catch (e2: Exception) {
-                Log.w(TAG, "Fallback stopService also failed: ${e2.message}")
-            }
+        }
+
+        // Снимаем флаг через 3 секунды — этого хватит, чтобы сервис успел
+        // умереть и не прислал ACTION_TTS_READY повторно.
+        scope.launch {
+            delay(3000)
+            isTtsShuttingDown = false
         }
     }
        private fun filterTextForSpeech(text: String): String {
