@@ -24,8 +24,10 @@ class FloatingRobotService : LifecycleService() {
         private const val CHANNEL_ID = "floating_robot_channel"
         private const val NOTIFICATION_ID = 1001
 
-        const val ACTION_START = "org.nehuatl.sample.START_FLOATING"
+                const val ACTION_START = "org.nehuatl.sample.START_FLOATING"
         const val ACTION_STOP = "org.nehuatl.sample.STOP_FLOATING"
+        const val ACTION_HIDE = "org.nehuatl.sample.HIDE_FLOATING"
+        const val ACTION_SHOW = "org.nehuatl.sample.SHOW_FLOATING"
 
         @Volatile
         var isRunning: Boolean = false
@@ -93,13 +95,22 @@ class FloatingRobotService : LifecycleService() {
         super.onStartCommand(intent, flags, startId)
         Log.d(TAG, "onStartCommand: action=${intent?.action}")
 
-        when (intent?.action) {
+                when (intent?.action) {
             ACTION_STOP -> {
                 stopSelf()
                 return START_NOT_STICKY
             }
-                       else -> {
+            ACTION_HIDE -> {
+                robotView?.visibility = android.view.View.GONE
+                Log.d(TAG, "Robot overlay hidden (app in foreground)")
+            }
+            ACTION_SHOW -> {
+                robotView?.visibility = android.view.View.VISIBLE
+                Log.d(TAG, "Robot overlay shown (app in background)")
+            }
+            else -> {
                 if (robotView == null) addRobotOverlay()
+                robotView?.visibility = android.view.View.VISIBLE
             }
         }
         return START_STICKY
