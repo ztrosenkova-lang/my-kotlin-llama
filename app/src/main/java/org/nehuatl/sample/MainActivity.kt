@@ -702,20 +702,40 @@ fun clearSelectedModelAndMmproj() {
         checkPasswordAndProceed()
     }
 
-        override fun onResume() {
+                  override fun onResume() {
         super.onResume()
 
-        // Если приложение вышло на передний план — убираем робота 2 из overlay,
+        // Если приложение вышло на передний план — прячем робота 2 из overlay,
         // чтобы на экране был только робот 1 внутри приложения.
+        // Сервис НЕ останавливаем — SpeechRecognizer и MainViewModel остаются живы.
         if (FloatingRobotService.isRunning) {
             try {
-                val stopIntent = Intent(this, FloatingRobotService::class.java).apply {
-                    action = FloatingRobotService.ACTION_STOP
+                val hideIntent = Intent(this, FloatingRobotService::class.java).apply {
+                    action = FloatingRobotService.ACTION_HIDE
                 }
-                startService(stopIntent)
-                Log.d(TAG, "FloatingRobotService stopped on app resume")
+                startService(hideIntent)
+                Log.d(TAG, "FloatingRobotService overlay hidden on app resume")
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to stop FloatingRobotService on resume: ${e.message}")
+                Log.w(TAG, "Failed to hide FloatingRobotService on resume: ${e.message}")
+            }
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+
+        // Приложение уходит в фон — показываем робота 2 обратно.
+        // Проверяем isChangingConfigurations, чтобы не мигать overlay
+        // при повороте экрана и других пересозданиях активити.
+        if (!isChangingConfigurations && FloatingRobotService.isRunning) {
+            try {
+                val showIntent = Intent(this, FloatingRobotService::class.java).apply {
+                    action = FloatingRobotService.ACTION_SHOW
+                }
+                startService(showIntent)
+                Log.d(TAG, "FloatingRobotService overlay shown on app stop")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to show FloatingRobotService on stop: ${e.message}")
             }
         }
     }
