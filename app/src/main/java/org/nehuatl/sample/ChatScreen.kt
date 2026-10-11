@@ -2211,10 +2211,11 @@ fun ThinkingRobotAnimation(
         val tapForearmWaveLeft = -45f * tapWaveLeft
         val tapHandWiggleLeft = sin(armPhase * 3f) * 20f * tapWaveLeft
 
-                // ================= ЛЕВАЯ РУКА =================
-        // Оборачиваем всю левую руку в rotate() — чтобы можно было махать ею при тапе.
-        // Знак минус — потому что левая рука «зеркальная».
-        rotate(-tapShoulderWaveLeft, pivot = pt(-46f, 96f)) {
+                               // ================= ЛЕВАЯ РУКА =================
+        // Левая рука теперь машет ТОЧНО ТАК ЖЕ, как правая, но зеркально:
+        // учитывает и общее махание (shoulderWaveAngle), и от тапа (tapShoulderWaveLeft).
+        // Знак минус — потому что левая рука зеркальная.
+        rotate(-(shoulderWaveAngle + tapShoulderWaveLeft), pivot = pt(-46f, 96f)) {
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(whiteHighlight, lightGray),
@@ -2268,12 +2269,12 @@ fun ThinkingRobotAnimation(
             style = Stroke(width = 1.3f * u)
         )
 
-        // ========== ПРЕДПЛЕЧЬЕ ЛЕВОЙ РУКИ — СГИБАНИЕ В ЛОКТЕ ==========
-        // Правая рука уже сгибается через rotate(forearmWaveAngle + handWiggle, ...).
-        // Левая — тоже, но со сдвигом фазы, чтобы руки двигались вразнобой.
+                // ========== ПРЕДПЛЕЧЬЕ ЛЕВОЙ РУКИ — СГИБАНИЕ В ЛОКТЕ ==========
+        // Как правая рука, но зеркально: учитываем и общее махание (forearmWaveAngle + handWiggle),
+        // и махание от тапа (tapForearmWaveLeft).
         // Поворот вокруг локтя (pt(-46f, 126f + leftArmOffsetY)).
-        // Знак "+" (а не "-") — левая рука зеркальная.
-        rotate(-(forearmWaveAngle + handWiggle) * 0.8f - tapForearmWaveLeft * 0.8f, pivot = pt(-46f, 126f + leftArmOffsetY)) {
+        // Знак минус — потому что левая рука зеркальная.
+        rotate(-(forearmWaveAngle + handWiggle + tapForearmWaveLeft + tapHandWiggleLeft), pivot = pt(-46f, 126f + leftArmOffsetY)) {
 
         drawRoundRect(
             color = lightGray,
