@@ -742,15 +742,32 @@ class LlamaHelper(
             .trim()
     }
 
-    fun stopPrediction() {
+        fun stopPrediction() {
         val id = currentContext ?: return
-        scope.launch {
-            llama.stopCompletion(id)
-        }
+
+        // Отменяем Job ДО запуска stopCompletion, чтобы не гонять
+        // корутину, если генерация уже завершилась сама.
         completionJob?.cancel()
+        completionJob = null
+
+        scope.launch {
+            try {
+                llama.stopCompletion(id)
+            } catch (e: Exception) {
+                // Контекст мог быть уже освобождён — это не ошибка,
+                // просто логируем и не падаем.
+                Log.w("LlamaHelper", "stopCompletion failed: ${e.message}")
+            }
+        }
     }
 
-    fun release() {
+        fun release() {
+        // Сначала останавливаем текущую генерацию, чтобы нативный код
+        // не работал с контекстом после его освобождения.
+        stopPrediction()
+        completionJob?.cancel()
+        completionJob = null
+
         currentContext?.let { id ->
             llama.releaseContext(id)
         }
