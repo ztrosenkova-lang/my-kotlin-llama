@@ -23,6 +23,12 @@ class LlamaHelper(
     private var allText = ""
     private var currentModelFormat: ModelFormat = ModelFormat.LLAMA2
 
+    // Семафор от гонки двух predict на одном llama_context.
+    // Нативный llama.cpp не потокобезопасен для одного ctx:
+    // два параллельных launchCompletion валят процесс SIGSEGV без Java-стектрейса.
+    // tryAcquire() атомарный: если уже занято — второй predict просто пропускается.
+    private val predictSemaphore = java.util.concurrent.Semaphore(1)
+
     fun getContextId(): Int? = currentContext
 
     // Определение формата модели по имени файла
@@ -181,7 +187,7 @@ class LlamaHelper(
         }
     }
 
-                    fun predict(
+                        fun predict(
         prompt: String,
         imagePath: String? = null,
         systemPrompt: String? = null,
@@ -189,6 +195,15 @@ class LlamaHelper(
         chatHistory: List<Pair<String, String>> = emptyList()
     ) {
         val context = currentContext ?: throw Exception("Model was not loaded yet")
+
+        // Если уже идёт генерация — не запускаем вторую.
+        // tryAcquire атомарный, поэтому два параллельных вызова
+        // не смогут одновременно пройти проверку.
+        if (!predictSemaphore.tryAcquire()) {
+            Log.w("LlamaHelper", "predict skipped: context is busy")
+            return
+        }
+
         val startTime = System.currentTimeMillis()
         tokenCount = 0
         allText = ""
@@ -227,18 +242,24 @@ class LlamaHelper(
             }
         }
 
-        completionJob = scope.launch {
-            sharedFlow.tryEmit(LLMEvent.Started(prompt))
-            llama.launchCompletion(
-                id = context,
-                params = params
-            )
-            val duration = System.currentTimeMillis() - startTime
-            
-            // Очищаем ответ от маркеров форматирования
-            val cleanedText = cleanResponse(allText)
-            
-            sharedFlow.tryEmit(LLMEvent.Done(cleanedText, tokenCount, duration))
+               completionJob = scope.launch {
+            try {
+                sharedFlow.tryEmit(LLMEvent.Started(prompt))
+                llama.launchCompletion(
+                    id = context,
+                    params = params
+                )
+                val duration = System.currentTimeMillis() - startTime
+
+                // Очищаем ответ от маркеров форматирования
+                val cleanedText = cleanResponse(allText)
+
+                sharedFlow.tryEmit(LLMEvent.Done(cleanedText, tokenCount, duration))
+            } finally {
+                // Семафор освобождаем в finally, чтобы при любом исходе
+                // (ошибка, отмена, успех) следующий predict мог стартовать.
+                predictSemaphore.release()
+            }
         }
     }
 
