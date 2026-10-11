@@ -14,7 +14,6 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
-import android.widget.ImageButton
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LifecycleService
 
@@ -33,7 +32,7 @@ class FloatingRobotService : LifecycleService() {
             private set
     }
 
-        private lateinit var windowManager: WindowManager
+    private lateinit var windowManager: WindowManager
     private var robotView: ComposeOverlayView? = null
     private var voiceRecognizer: VoiceRecognizer? = null
 
@@ -312,7 +311,7 @@ class FloatingRobotService : LifecycleService() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("ИИ-Друг работает")
-            .setContentText("Робот на экране. Нажмите микрофон для вопроса.")
+            .setContentText("Робот на экране. Коснитесь робота для вопроса.")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(openIntent)
             .addAction(
