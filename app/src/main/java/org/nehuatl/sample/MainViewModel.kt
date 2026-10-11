@@ -661,18 +661,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             try {
                 if (!brainFile.exists()) brainFile.createNewFile()
 
-                // Базовая база знаний: записываем при первом запуске или если файл пустой
-                                if (!memoryFile.exists() || memoryFile.readText().isBlank()) {
-                    val baseMemory = readBaseMemoryFromAssets()
-                    if (baseMemory.isNotEmpty()) {
-                        memoryFile.writeText(baseMemory)
-                        memorySearchEngine.clearCache()
-                        Log.d(TAG, "Base memory initialized from assets")
-                    } else {
-                        Log.e(TAG, "Base memory file is empty or missing")
-                    }
-                } else {
-                    Log.d(TAG, "Memory file already has content, skipping base initialization")
+                // База знаний: создаём ПУСТОЙ файл при первом запуске.
+                // Наполнение — только вручную, по кнопке «Восстановить базовые»
+                // в редакторе базы знаний. Автозаполнение из assets убрано,
+                // чтобы пользователь сам решал, что в базе лежит.
+                if (!memoryFile.exists()) {
+                    memoryFile.createNewFile()
+                    memorySearchEngine.clearCache()
+                    Log.d(TAG, "memory.txt created empty")
                 }
                 Log.d(TAG, "Local storage files initialized successfully.")
             } catch (e: Exception) {
