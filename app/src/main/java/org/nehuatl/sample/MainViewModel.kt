@@ -1419,38 +1419,67 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         return digest.joinToString("") { "%02x".format(it) }
     }
 
-    fun enableTts() {
+       fun enableTts() {
+        // Уже включено и готово
         if (_isTtsReady.value && isTtsEnabled) {
             appendSystemMessage("🔊 Озвучка уже включена")
             return
         }
 
+        // Включено, но сервис ещё не готов — просто ставим флаг
         if (_isTtsReady.value && !isTtsEnabled) {
             isTtsEnabled = true
             appendSystemMessage("🔊 Озвучка включена")
             return
         }
 
+        // Нужно запустить сервис заново
         isTtsEnabled = true
         _isTtsReady.value = false
         appendSystemMessage("🔄 Инициализация офлайн голосового движка...")
         Log.d(TAG, "TTS service starting")
 
         val ttsStartIntent = Intent(getApplication<Application>(), TtsService::class.java)
-        getApplication<Application>().startService(ttsStartIntent)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                getApplication<Application>().startForegroundService(ttsStartIntent)
+            } else {
+                getApplication<Application>().startService(ttsStartIntent)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start TtsService: ${e.message}")
+            isTtsEnabled = false
+            _isTtsReady.value = false
+            appendSystemMessage("❌ Не удалось запустить TTS: ${e.message}")
+        }
     }
 
-    fun disableTts() {
+       fun disableTts() {
         isTtsEnabled = false
         _isSpeaking.value = false
         _isTtsReady.value = false
         appendSystemMessage("🔇 Озвучка отключена, TTS выгружен из памяти")
         Log.d(TAG, "TTS disabled")
 
-        val ttsStopIntent = Intent(getApplication<Application>(), TtsService::class.java)
-        getApplication<Application>().stopService(ttsStopIntent)
+        // Шлём ACTION_STOP — сервис снимет foreground и остановится сам.
+        // stopService() для foreground-сервиса не всегда срабатывает.
+        val ttsStopIntent = Intent(getApplication<Application>(), TtsService::class.java).apply {
+            action = TtsService.ACTION_STOP
+        }
+        try {
+            getApplication<Application>().startService(ttsStopIntent)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to send ACTION_STOP to TtsService: ${e.message}")
+            // Fallback — если startService не сработал, пробуем stopService
+            try {
+                getApplication<Application>().stopService(
+                    Intent(getApplication<Application>(), TtsService::class.java)
+                )
+            } catch (e2: Exception) {
+                Log.w(TAG, "Fallback stopService also failed: ${e2.message}")
+            }
+        }
     }
-
        private fun filterTextForSpeech(text: String): String {
         var cleanText = text
 
@@ -1519,7 +1548,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         speakWithSherpa(text)
     }
 
-    private fun speakWithSherpa(text: String) {
+       private fun speakWithSherpa(text: String) {
+        // Проверяем, что TTS включён. Если выключен — не шлём ничего,
+        // иначе сервис перезапустится и уведомление вернётся.
+        if (!isTtsEnabled) {
+            Log.d(TAG, "speakWithSherpa: TTS disabled, skipping")
+            return
+        }
         val filteredText = filterTextForSpeech(text)
         if (filteredText.isBlank()) {
             return
