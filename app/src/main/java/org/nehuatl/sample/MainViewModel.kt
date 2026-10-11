@@ -1739,9 +1739,16 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         return if (word.length < 2) lowerWord else word
     }
 
-        private fun triggerBackgroundDialogueCompression(history: List<ChatMessage>) {
+            private fun triggerBackgroundDialogueCompression(history: List<ChatMessage>) {
         if (history.size < AUTO_BRAIN_COMPRESSION_THRESHOLD) return
         if (_isCompressing.value) return
+
+        // Если основной predict ещё не завершён — откладываем сжатие.
+        // Иначе два launchCompletion на одном контексте валят процесс.
+        if (_state.value.isActive() || _cloudState.value.isActive()) {
+            Log.d(TAG, "Compression deferred: AI busy")
+            return
+        }
 
         _isCompressing.value = true
 
