@@ -152,16 +152,16 @@ class FloatingRobotService : LifecycleService() {
         y = 300
     }
 
-          view.setOnTouchListener(object : View.OnTouchListener {
+                   view.setOnTouchListener(object : View.OnTouchListener {
         private var initialX = 0
         private var initialY = 0
         private var touchX = 0f
         private var touchY = 0f
         private var downTime = 0L
         private var lastTapTime = 0L
-        // Джоб для отложенного запуска распознавания (задержка 400 мс для отсечения двойного тапа)
-        private var tapCheckJob: android.os.Handler? = null
-        private var tapCheckRunnable: Runnable? = null
+        // Флаг: тап был обработан как одиночный — если в течение 400 мс придёт
+        // второй тап, он будет считаться двойным, но распознавание уже запущено.
+        private var singleTapHandled = false
 
         override fun onTouch(v: View, event: MotionEvent): Boolean {
             when (event.action) {
@@ -203,20 +203,23 @@ class FloatingRobotService : LifecycleService() {
                     // ТАП: не двигались и быстро отпустили
                     if (dx < 15 && dy < 15 && dt < 300) {
                         val now = System.currentTimeMillis()
-                        if (now - lastTapTime < 400) {
-                            // ДВОЙНОЙ ТАП — отменяем отложенный запуск распознавания
-                            tapCheckRunnable?.let { tapCheckJob?.removeCallbacks(it) }
-                            tapCheckRunnable = null
+                        val isDoubleTap = (now - lastTapTime < 400) && singleTapHandled
 
+                        if (isDoubleTap) {
+                            // ДВОЙНОЙ ТАП — останавливаем сервис, поднимаем MainActivity.
+                            // Распознавание, если уже было запущено одиночным тапом,
+                            // останавливаем перед этим.
+                            singleTapHandled = false
                             lastTapTime = 0L
 
-                            // Останавливаем сервис
+                            voiceRecognizer?.stop()
+                            MainViewModel.instance?.setOverlayListening(false)
+
                             val stopIntent = Intent(this@FloatingRobotService, FloatingRobotService::class.java).apply {
                                 action = ACTION_STOP
                             }
                             startService(stopIntent)
 
-                            // Поднимаем MainActivity
                             try {
                                 val intent = Intent(this@FloatingRobotService, MainActivity::class.java).apply {
                                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or
@@ -227,29 +230,27 @@ class FloatingRobotService : LifecycleService() {
                                 Log.w(TAG, "Failed to bring MainActivity to front: ${e.message}")
                             }
                         } else {
-                            // ОДИНОЧНЫЙ ТАП (возможный) — запускаем распознавание с задержкой 400 мс.
-                            // Если за это время придёт второй тап — распознавание отменится.
+                            // ОДИНОЧНЫЙ ТАП — сразу, без Handler, как было с микрофоном.
+                            singleTapHandled = true
                             lastTapTime = now
-                            val handler = android.os.Handler(android.os.Looper.getMainLooper())
-                            tapCheckJob = handler
-                            val r = Runnable {
-                                tapCheckRunnable = null
-                                lastTapTime = 0L
 
-                                val vm = MainViewModel.instance ?: return@Runnable
+                            val vm = MainViewModel.instance ?: return true
 
-                                // Если уже слушаем — останавливаем (повторный тап во время прослушивания)
-                                if (vm.overlayListening.value) {
-                                    voiceRecognizer?.stop()
-                                    vm.setOverlayListening(false)
-                                } else {
-                                    // Запускаем распознавание
-                                    vm.setOverlayListening(true)
-                                    voiceRecognizer?.start()
-                                }
+                            // Не запускаем распознавание, пока робот говорит или модель думает.
+                            if (vm.isSpeaking.value || vm.state.value.isActive()) {
+                                Log.d(TAG, "Robot busy — skip voice recognition")
+                                return true
                             }
-                            tapCheckRunnable = r
-                            handler.postDelayed(r, 400)
+
+                            if (vm.overlayListening.value) {
+                                // Уже слушаем — останавливаем
+                                voiceRecognizer?.stop()
+                                vm.setOverlayListening(false)
+                            } else {
+                                // Запускаем распознавание — сразу, в том же потоке.
+                                vm.setOverlayListening(true)
+                                voiceRecognizer?.start()
+                            }
                         }
                     }
                     return true
