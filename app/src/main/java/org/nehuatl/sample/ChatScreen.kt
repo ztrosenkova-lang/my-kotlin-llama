@@ -1489,7 +1489,9 @@ fun ChatScreen(
                     }
                 }
             }
-        }
+           }// закрытие if (robotIsLanded ...)
+    }// закрытие главного Box
+    
     // Диалог разблокировки по команде «режим админа» — рисуется поверх чата
     if (showAdminUnlockDialog) {
         LockScreen(
