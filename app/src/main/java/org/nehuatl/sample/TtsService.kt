@@ -65,8 +65,17 @@ class TtsService : Service() {
                     }
                 }
             }
-            ACTION_STOP -> {
+                       ACTION_STOP -> {
                 stopSpeaking()
+                // Снимаем foreground и полностью останавливаем сервис,
+                // чтобы уведомление «Озвучка активна» исчезло.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                } else {
+                    @Suppress("DEPRECATION")
+                    stopForeground(true)
+                }
+                stopSelf()
             }
         }
         return START_NOT_STICKY
@@ -74,11 +83,18 @@ class TtsService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    override fun onDestroy() {
+        override fun onDestroy() {
         stopSpeaking()
         offlineTts?.release()
         offlineTts = null
         serviceScope.cancel()
+        // Снимаем foreground, чтобы уведомление точно исчезло
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
         super.onDestroy()
     }
 
