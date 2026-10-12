@@ -1939,40 +1939,48 @@ fun ThinkingRobotAnimation(
         label = "command_scale"
     )
 
-    // ========== АНИМАЦИЯ ПРЫЖКА ==========
-    // 0 мс — старт (0)
-    // 400 мс — верх (1)
-    // 600 мс — зависание (1)
-    // 1000 мс — низ (0)
-    // 1200 мс — конец
-    // jumpProgress — прогресс подъёма/спуска (0..1).
-    // flameIntensity — множитель пламени (1..3).
-    val jumpProgress by animateFloatAsState(
-        targetValue = if (isJumping) 1f else 0f,
-        animationSpec = keyframes {
-            durationMillis = 1200
-            0f at 0
-            1f at 400 using FastOutSlowInEasing
-            1f at 600 using LinearEasing
-            0f at 1000 using FastOutSlowInEasing
-            0f at 1200
-        },
-        label = "jump_progress"
-    )
+        // ========== АНИМАЦИЯ ПРЫЖКА ==========
+    // Управляется вручную через Animatable и LaunchedEffect.
+    // Когда isJumping становится true — проигрываем всю анимацию целиком
+    // (0→1→0 за 1200 мс), независимо от того, что isJumping уже сбросился.
+    // Иначе keyframes прерывался бы на середине и робот дёргался.
 
-    // Пламя: 1 → 3 на пике, обратно к 1 в конце.
-    // Отдельная анимация — с задержкой на успокоение 200 мс.
-    val flameIntensity by animateFloatAsState(
-        targetValue = if (isJumping) 1f else 0f,
-        animationSpec = keyframes {
-            durationMillis = 1200
-            0f at 0
-            1f at 300
-            1f at 700
-            0f at 1200
-        },
-        label = "flame_intensity"
-    )
+    val jumpProgressAnim = remember { Animatable(0f) }
+    val flameIntensityAnim = remember { Animatable(0f) }
+
+    LaunchedEffect(isJumping) {
+        if (isJumping) {
+            // Запускаем обе анимации параллельно.
+            launch {
+                jumpProgressAnim.animateTo(
+                    targetValue = 1f,
+                    animationSpec = keyframes {
+                        durationMillis = 1200
+                        0f at 0 using FastOutSlowInEasing
+                        1f at 400 using FastOutSlowInEasing
+                        1f at 600 using LinearEasing
+                        0f at 1000 using FastOutSlowInEasing
+                        0f at 1200
+                    }
+                )
+            }
+            launch {
+                flameIntensityAnim.animateTo(
+                    targetValue = 0f,
+                    animationSpec = keyframes {
+                        durationMillis = 1200
+                        0f at 0
+                        1f at 300
+                        1f at 700
+                        0f at 1200
+                    }
+                )
+            }
+        }
+    }
+
+    val jumpProgress = jumpProgressAnim.value
+    val flameIntensity = flameIntensityAnim.value
 
     // Плавный наклон головы — вместо мгновенного rotate(headTilt, ...)
     val animatedHeadTilt by animateFloatAsState(
@@ -3714,9 +3722,33 @@ fun ThinkingRobotAnimation(
             )
         )
 
-        // ================= ГОЛОВА И ВСЁ, ЧТО С НЕЙ СВЯЗАНО =================
-        // Оборачиваем в rotate(headTilt) — голова наклоняется вокруг основания шеи
-                        rotate(effectiveHeadTilt, pivot = pt(0f, 62f)) {
+                // ================= ГОЛОВА И ВСЁ, ЧТО С НЕЙ СВЯЗАНО =================
+        // Оборачиваем в rotate(headTilt) — голова наклоняется вокруг основания шеи.
+        // Плюс поворот вокруг вертикальной оси (headTurn) — эмуляция 3D-вращения:
+        // сжатие головы по X + сдвиг в сторону поворота.
+        //
+        // Максимальный угол поворота — 55°.
+        // cos(55°) ≈ 0.57 — при полном повороте голова сжимается до 57% ширины.
+        // Этого достаточно, чтобы визуально читалось «голова повёрнута».
+        val headTurnMaxAngle = 55f * PI.toFloat() / 180f
+        val headTurnRad = effectiveHeadTurn * headTurnMaxAngle
+        val headScaleX = cos(headTurnRad).coerceAtLeast(0.5f)
+
+        // Точка вращения — центр головы по X, середина головы по Y.
+        // Координата головы в pt: центр по X, примерно 45f по Y (середина шлема).
+        val headPivot = pt(0f, 45f)
+
+        // Дополнительный сдвиг всей головы в сторону поворота.
+        // При повороте вправо (effectiveHeadTurn > 0) — лицо уходит вправо.
+        val headTurnShiftX = effectiveHeadTurn * 4f * u
+
+        rotate(effectiveHeadTilt, pivot = pt(0f, 62f)) {
+            scale(
+                scaleX = headScaleX,
+                scaleY = 1f,
+                pivot = headPivot
+            ) {
+                translate(left = headTurnShiftX) {
 
             // ================= ШЕЯ =================
             drawRoundRect(
@@ -4963,7 +4995,7 @@ fun ThinkingRobotAnimation(
                 }
             }
 
-            if (!isSpeaking) {
+                       if (!isSpeaking) {
                 drawLine(
                     color = mediumGray.copy(alpha = 0.4f),
                     start = ptHead(-15f, mouthY + 8f),
@@ -4971,7 +5003,9 @@ fun ThinkingRobotAnimation(
                     strokeWidth = 0.5f * u
                 )
             }
-             }
+                } // закрытие translate(headTurnShiftX)
+            } // закрытие scale(headScaleX)
+             } // закрытие rotate(effectiveHeadTilt)
     }
 }
 
