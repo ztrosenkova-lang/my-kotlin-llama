@@ -4362,20 +4362,6 @@ rotate(-12f, pivot = ptFace(42f, 45f)) {
                 style = Stroke(width = 1f * u, cap = StrokeCap.Round)
             )
 
-            val rightHeadLinePath = Path().apply {
-                moveTo(ptHead(16f, -4f).x, ptHead(16f, -4f).y)
-                cubicTo(
-                    ptHead(16f, 2f).x, ptHead(16f, 2f).y,
-                    ptHead(15.5f, 8f).x, ptHead(15.5f, 8f).y,
-                    ptHead(15f, 14f).x, ptHead(15f, 14f).y
-                )
-            }
-            drawPath(
-                rightHeadLinePath,
-                color = darkGray,
-                style = Stroke(width = 1f * u, cap = StrokeCap.Round)
-            )
-
             // ================= ВИЗОР =================
             val topRadius = 4f * u
             val bottomRadius = 13f * u
