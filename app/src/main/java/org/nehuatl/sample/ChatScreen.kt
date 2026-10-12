@@ -3127,14 +3127,43 @@ fun ThinkingRobotAnimation(
             else -> null
         }
 
-        if (statusText != null) {
-            // Размер шрифта привязан к размеру робота.
-            // 2.8f * u — стартовое, чтобы точно влезть по высоте пояса (beltHeight = 5f * u).
-            val statusFontSizePx = 2.8f * u
+              if (statusText != null) {
+            // Размер шрифта подбирается по ВЫСОТЕ пояса.
+            // Пояс: beltHeight = 5f * u.
+            // Оставляем зазор сверху и снизу, чтобы текст не упирался в края.
+            // beltHeight * 0.7 = 3.5f * u — итоговая максимальная высота текста.
+            val beltHeightPx = beltHeight  // = 5f * u
+            val maxTextHeightPx = beltHeightPx * 0.7f
+
+            // Стартовое значение в px.
+            val startFontSizePx = maxTextHeightPx
+
+            // Измеряем с пробным размером, чтобы понять реальную высоту глифа.
+            val probeStyle = TextStyle(
+                color = Color(0xFF80EFFF),
+                fontSize = with(density) { startFontSizePx.toSp() },
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Light
+            )
+            val probeLayout = textMeasurer.measure(
+                text = "Mg",
+                style = probeStyle
+            )
+            // Реальная высота строки шрифта при стартовом размере.
+            val probeHeightPx = probeLayout.size.height.toFloat()
+
+            // Коэффициент подгонки: если реальная высота больше допустимой —
+            // уменьшаем размер шрифта пропорционально.
+            val heightScale = if (probeHeightPx > 0f) {
+                (maxTextHeightPx / probeHeightPx).coerceAtMost(1f)
+            } else {
+                1f
+            }
+            val finalFontSizePx = startFontSizePx * heightScale
 
             val statusStyle = TextStyle(
                 color = Color(0xFF80EFFF),
-                fontSize = with(density) { statusFontSizePx.toSp() },
+                fontSize = with(density) { finalFontSizePx.toSp() },
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Light
             )
@@ -3152,38 +3181,36 @@ fun ThinkingRobotAnimation(
             )
             val fullTextWidthPx = fullTextLayout.size.width.toFloat()
 
-            // Позиция индикатора в долях пояса (0..1).
+                        // Позиция индикатора в долях пояса (0..1).
             val headProgress = chargeProgress
 
-            // Голова (индикатор) в пикселях относительно левого края пояса.
-            val headOffsetPx = beltWidth * headProgress
-
             // Хвост: буквы идут СПРАВА от индикатора с той же скоростью.
-            // Первая буква — сразу за индикатором, остальные — дальше.
+            // Точка отсчёта — центр пояса.
             // Для бесконечной ленты используем смещение, которое циклится по
             // общей длине ленты (текст + зазор до следующего повтора).
             val gapPx = 6f * u  // зазор между текстом и следующим повтором ленты
             val tapeLengthPx = fullTextWidthPx + gapPx
 
             // Сколько пикселей лента уже проехала с момента старта цикла.
-            // Индикатор бежит со скоростью beltWidth / (2π) единиц за единицу pulse.
-            // Полный цикл pulse = 2π, значит за цикл индикатор проходит весь пояс.
-            // Текст едет с той же скоростью.
+            // Едет со скоростью beltWidth за один цикл pulse.
             val tapeTravelPx = beltWidth * headProgress
 
-            // Стартовая позиция ленты (левый край первой буквы) в системе пояса.
-            // Она уезжает влево по мере движения.
-            // Модуль по длине ленты даёт бесконечный повтор.
-            val tapeStartPx = (tapeTravelPx % tapeLengthPx) - tapeLengthPx
+            // Стартовая позиция ленты (левый край первой буквы).
+            // tapeStartPx = сколько уже проехали по модулю длины ленты, минус одна длина.
+            // Это создаёт эффект бесконечной ленты, текущей справа налево.
+            val tapeStartPx = -(tapeTravelPx % tapeLengthPx)
+
+            // Центр пояса в экранных пикселях.
+            val beltCenterPx = pt(0f, beltTop).x
 
             // Рисуем столько повторов ленты, сколько влезает в пояс + запас.
             val beltLeftPx = pt(beltLeft, beltTop).x
             val beltRightPx = pt(beltLeft + 30f, beltTop).x
-
-            var repetition = 0
+                       var repetition = 0
             while (true) {
                 val repeatOffsetPx = tapeStartPx + repetition * tapeLengthPx
-                val firstLetterLeftPx = headOffsetPx + repeatOffsetPx
+                // Точка отсчёта — центр пояса. Лента едет справа налево.
+                val firstLetterLeftPx = beltWidth / 2f + repeatOffsetPx
                 val lastLetterRightPx = firstLetterLeftPx + fullTextWidthPx
 
                 // Если начало этого повтора уже правее правого края пояса — прекращаем.
@@ -3191,7 +3218,23 @@ fun ThinkingRobotAnimation(
 
                 // Рисуем посимвольно: каждая буква на своём месте.
                 // Буква i смещена вправо на i * letterWidthPx от начала повтора.
-                val letterTop = pt(0f, beltCenterY).y - fullTextLayout.size.height / 2f
+                                // Центр пояса по вертикали.
+                val beltCenterYpx = pt(0f, beltCenterY).y
+                // Сдвигаем текст так, чтобы центр ГЛИФОВ (а не строки) совпал
+                // с центром пояса. У моноширинного шрифта глифы смещены
+                // в нижнюю часть строки, поэтому просто центрировать
+                // по size.height — мало.
+                // Baseline первой строки:
+                val baselineOffset = if (fullTextLayout.lineCount > 0) {
+                    fullTextLayout.getLineBaseline(0)
+                } else {
+                    fullTextLayout.size.height
+                }
+                // Верх текста: центр пояса минус половина высоты глифов.
+                // Высота глифов примерно = baseline * 2 (от верха строки до baseline,
+                // и столько же — визуальный запас ниже baseline для глифов без хвостов).
+                // Проще — центрируем по baseline: topLeft.y = центр - baseline / 2.
+                val letterTop = beltCenterYpx - baselineOffset / 2f
 
                 for (i in statusText.indices) {
                     val letterX = beltLeftPx + firstLetterLeftPx + i * letterWidthPx
