@@ -3846,36 +3846,39 @@ fun ThinkingRobotAnimation(
                 cornerRadius = CornerRadius(1f * u)
             )
 
-            // ================= ЛЕВЫЙ НАУШНИК =================
-            rotate(12f, pivot = ptHead(-42f, 45f)) {
+                        // ================= ЛЕВЫЙ НАУШНИК =================
+    val leftEarScale = (1f + effectiveHeadTurn * 0.4f).coerceIn(0.4f, 1.6f)
+
+     rotate(12f, pivot = ptFace(-42f, 45f)) {
+    scale(scaleX = leftEarScale, scaleY = 1f, pivot = ptFace(-42f, 45f)) {
                 val leftEarOuterPath = Path().apply {
-                    moveTo(ptHead(-42f, 18f).x, ptHead(-42f, 18f).y)
+                    moveTo(ptFace(-42f, 18f).x, ptFace(-42f, 18f).y)
                     cubicTo(
-                        ptHead(-56.4f, 20f).x, ptHead(-56.4f, 20f).y,
-                        ptHead(-56.4f, 43f).x, ptHead(-56.4f, 43f).y,
-                        ptHead(-42f, 45f).x, ptHead(-42f, 45f).y
+                        ptFace(-56.4f, 20f).x, ptFace(-56.4f, 20f).y,
+                        ptFace(-56.4f, 43f).x, ptFace(-56.4f, 43f).y,
+                        ptFace(-42f, 45f).x, ptFace(-42f, 45f).y
                     )
-                    lineTo(ptHead(-42f, 18f).x, ptHead(-42f, 18f).y)
+                    lineTo(ptFace(-42f, 18f).x, ptFace(-42f, 18f).y)
                     close()
                 }
                 drawPath(
                     leftEarOuterPath,
                     brush = Brush.horizontalGradient(
                         colors = listOf(lightGray, whiteBody),
-                        startX = ptHead(-56.4f, 32f).x,
-                        endX = ptHead(-42f, 32f).x
+                        startX = ptFace(-56.4f, 32f).x,
+                        endX = ptFace(-42f, 32f).x
                     )
                 )
                 drawPath(leftEarOuterPath, color = darkGray, style = Stroke(width = 1.3f * u))
 
                 val leftEarInnerPath = Path().apply {
-                    moveTo(ptHead(-47f, 23f).x, ptHead(-47f, 23f).y)
+                    moveTo(ptFace(-47f, 23f).x, ptFace(-47f, 23f).y)
                     cubicTo(
-                        ptHead(-55f, 25f).x, ptHead(-55f, 25f).y,
-                        ptHead(-55f, 38f).x, ptHead(-55f, 38f).y,
-                        ptHead(-47f, 40f).x, ptHead(-47f, 40f).y
+                        ptFace(-55f, 25f).x, ptFace(-55f, 25f).y,
+                        ptFace(-55f, 38f).x, ptFace(-55f, 38f).y,
+                        ptFace(-47f, 40f).x, ptFace(-47f, 40f).y
                     )
-                    lineTo(ptHead(-47f, 23f).x, ptHead(-47f, 23f).y)
+                    lineTo(ptFace(-47f, 23f).x, ptFace(-47f, 23f).y)
                     close()
                 }
                 drawPath(leftEarInnerPath, color = mediumGray)
@@ -3884,19 +3887,19 @@ fun ThinkingRobotAnimation(
                 drawCircle(
                     color = darkerGray,
                     radius = 2.8f * u,
-                    center = ptHead(-50f, 31f)
+                    center = ptFace(-50f, 31f)
                 )
 
                 drawLine(
                     color = darkGray,
-                    start = ptHead(-46f, 18f),
-                    end = ptHead(-46f, -4f),
+                    start = ptFace(-46f, 18f),
+                    end = ptFace(-46f, -4f),
                     strokeWidth = 1.8f * u,
                     cap = StrokeCap.Round
                 )
                 drawRoundRect(
                     color = darkerGray,
-                    topLeft = ptHead(-48f, 17f),
+                    topLeft = ptFace(-48f, 17f),
                     size = Size(4f * u, 3f * u),
                     cornerRadius = CornerRadius(1.5f * u)
                 )
@@ -3911,69 +3914,73 @@ fun ThinkingRobotAnimation(
                                 neonBlue.copy(alpha = 0.25f * pulseAmount),
                                 Color.Transparent
                             ),
-                            center = ptHead(-46f, -4f),
+                            center = ptFace(-46f, -4f),
                             radius = currentRadius * 4f
                         ),
                         radius = currentRadius * 4f,
-                        center = ptHead(-46f, -4f)
+                        center = ptFace(-46f, -4f)
                     )
 
                     drawCircle(
                         color = neonBlue.copy(alpha = 0.85f),
                         radius = currentRadius,
-                        center = ptHead(-46f, -4f)
+                        center = ptFace(-46f, -4f)
                     )
                     drawCircle(
                         color = Color.White.copy(alpha = 0.9f),
                         radius = currentRadius,
-                        center = ptHead(-46f, -4f),
+                        center = ptFace(-46f, -4f),
                         style = Stroke(width = 0.8f * u)
                     )
                 } else {
                     drawCircle(
                         color = mediumGray,
                         radius = 1.8f * u,
-                        center = ptHead(-46f, -4f)
+                        center = ptFace(-46f, -4f)
                     )
                     drawCircle(
                         color = darkGray,
                         radius = 1.8f * u,
-                        center = ptHead(-46f, -4f),
+                        center = ptFace(-46f, -4f),
                         style = Stroke(width = 0.8f * u)
                     )
                 }
+                }
             }
 
-            // ================= ПРАВЫЙ НАУШНИК =================
-            rotate(-12f, pivot = ptHead(42f, 45f)) {
+                        // ================= ПРАВЫЙ НАУШНИК =================
+            val rightEarScale = (1f - effectiveHeadTurn * 0.4f).coerceIn(0.4f, 1.6f)
+
+rotate(-12f, pivot = ptFace(42f, 45f)) {
+    scale(scaleX = rightEarScale, scaleY = 1f, pivot = ptFace(42f, 45f)) {
                 val rightEarOuterPath = Path().apply {
-                    moveTo(ptHead(42f, 18f).x, ptHead(42f, 18f).y)
+                    moveTo(ptFace(42f, 18f).x, ptFace(42f, 18f).y)
                     cubicTo(
-                        ptHead(56.4f, 20f).x, ptHead(56.4f, 20f).y,
-                        ptHead(56.4f, 43f).x, ptHead(56.4f, 43f).y,
-                        ptHead(42f, 45f).x, ptHead(42f, 45f).y
+                        ptFace(56.4f, 20f).x, ptFace(56.4f, 20f).y,
+                        ptFace(56.4f, 43f).x, ptFace(56.4f, 43f).y,
+                        ptFace(42f, 45f).x, ptFace(42f, 45f).y
                     )
-                    lineTo(ptHead(42f, 18f).x, ptHead(42f, 18f).y)
+                    lineTo(ptFace(42f, 18f).x, ptFace(42f, 18f).y)
                     close()
                 }
                 drawPath(
                     rightEarOuterPath,
                     brush = Brush.horizontalGradient(
                         colors = listOf(whiteBody, lightGray),
-                        startX = ptHead(42f, 32f).x,
-                        endX = ptHead(56.4f, 32f).x
+                        startX = ptFace(42f, 32f).x,
+                        endX = ptFace(56.4f, 32f).x
                     )
                 )
                 drawPath(rightEarOuterPath, color = darkGray, style = Stroke(width = 1.3f * u))
 
                 val rightEarInnerPath = Path().apply {
-                    moveTo(ptHead(47f, 23f).x, ptHead(47f, 23f).y)
+                    moveTo(ptFace(47f, 23f).x, ptFace(47f, 23f).y)
                     cubicTo(
-                        ptHead(55f, 25f).x, ptHead(55f, 25f).y,
-                        ptHead(55f, 38f).x, ptHead(55f, 38f).y,
-                        ptHead(47f, 40f).x, ptHead(47f, 40f).y
+                        ptFace(55f, 25f).x, ptFace(55f, 25f).y,
+                        ptFace(55f, 38f).x, ptFace(55f, 38f).y,
+                        ptFace(47f, 40f).x, ptFace(47f, 40f).y
                     )
-                    lineTo(ptHead(47f, 23f).x, ptHead(47f, 23f).y)
+                    lineTo(ptFace(47f, 23f).x, ptFace(47f, 23f).y)
                     close()
                 }
                 drawPath(rightEarInnerPath, color = mediumGray)
@@ -3982,19 +3989,19 @@ fun ThinkingRobotAnimation(
                 drawCircle(
                     color = darkerGray,
                     radius = 2.8f * u,
-                    center = ptHead(50f, 31f)
+                    center = ptFace(50f, 31f)
                 )
 
                 drawLine(
                     color = darkGray,
-                    start = ptHead(46f, 18f),
-                    end = ptHead(46f, -4f),
+                    start = ptFace(46f, 18f),
+                    end = ptFace(46f, -4f),
                     strokeWidth = 1.8f * u,
                     cap = StrokeCap.Round
                 )
                 drawRoundRect(
                     color = darkerGray,
-                    topLeft = ptHead(44f, 17f),
+                    topLeft = ptFace(44f, 17f),
                     size = Size(4f * u, 3f * u),
                     cornerRadius = CornerRadius(1.5f * u)
                 )
@@ -4009,36 +4016,37 @@ fun ThinkingRobotAnimation(
                                 neonBlue.copy(alpha = 0.25f * pulseAmount),
                                 Color.Transparent
                             ),
-                            center = ptHead(46f, -4f),
+                            center = ptFace(46f, -4f),
                             radius = currentRadius * 4f
                         ),
                         radius = currentRadius * 4f,
-                        center = ptHead(46f, -4f)
+                        center = ptFace(46f, -4f)
                     )
 
                     drawCircle(
                         color = neonBlue.copy(alpha = 0.85f),
                         radius = currentRadius,
-                        center = ptHead(46f, -4f)
+                        center = ptFace(46f, -4f)
                     )
                     drawCircle(
                         color = Color.White.copy(alpha = 0.9f),
                         radius = currentRadius,
-                        center = ptHead(46f, -4f),
+                        center = ptFace(46f, -4f),
                         style = Stroke(width = 0.8f * u)
                     )
                 } else {
                     drawCircle(
                         color = mediumGray,
                         radius = 1.8f * u,
-                        center = ptHead(46f, -4f)
+                        center = ptFace(46f, -4f)
                     )
                     drawCircle(
                         color = darkGray,
                         radius = 1.8f * u,
-                        center = ptHead(46f, -4f),
+                        center = ptFace(46f, -4f),
                         style = Stroke(width = 0.8f * u)
                     )
+                }
                 }
             }
 
