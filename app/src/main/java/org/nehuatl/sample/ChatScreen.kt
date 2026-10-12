@@ -1714,9 +1714,11 @@ fun ThinkingRobotAnimation(
     // Направление махания от тапа: -1f — влево, +1f — вправо, 0f — нет.
     // Когда != 0f, соответствующая рука машет приветственно.
     tapWaveDirection: Float = 0f,
-    // Авто-анимация по циклу (из MainViewModel):
+        // Авто-анимация по циклу (из MainViewModel):
     // 0 — нет, 1 — махание правой, 2 — наклон головы влево,
-    // 3 — махание левой, 4 — наклон головы вправо, 5 — приветственное махание правой.
+    // 3 — махание левой, 4 — наклон головы вправо, 5 — приветственное махание правой,
+    // 6 — поворот головы влево, 7 — поворот головы вправо,
+    // 8 — осмотр вправо-влево, 9 — осмотр вверх-вниз.
     autoAnimation: Int = 0
 ) {
     val transition = rememberInfiniteTransition(label = "robot")
@@ -1923,7 +1925,7 @@ fun ThinkingRobotAnimation(
     // Из autoAnimation вычисляем:
     //  - autoTilt: наклон головы (для 2 = влево, 4 = вправо)
     //  - autoWaveDir: направление махания (для 1,5 = +1 правая; 3 = -1 левая)
-    val autoTilt: Float = when (autoAnimation) {
+       val autoTilt: Float = when (autoAnimation) {
         2 -> -15f   // наклон головы влево
         4 -> 15f    // наклон головы вправо
         else -> 0f
@@ -1935,7 +1937,7 @@ fun ThinkingRobotAnimation(
         else -> 0f
     }
 
-    // Плавный наклон от авто-анимации
+       // Плавный наклон от авто-анимации
     val autoTiltAnimated by animateFloatAsState(
         targetValue = autoTilt,
         animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
@@ -1949,8 +1951,68 @@ fun ThinkingRobotAnimation(
         label = "auto_wave_amount"
     )
 
+    // ========== АВТО-ПОВОРОТ ГОЛОВЫ (6, 7, 8) ==========
+    // 6 — поворот влево, 7 — поворот вправо,
+    // 8 — осмотр: сначала вправо, потом влево.
+    var autoHeadTurnSweepFlip by remember { mutableStateOf(false) }
+    LaunchedEffect(autoAnimation) {
+        if (autoAnimation == 8) {
+            autoHeadTurnSweepFlip = false
+            delay(1200)
+            autoHeadTurnSweepFlip = true
+            delay(1200)
+            autoHeadTurnSweepFlip = false
+        } else {
+            autoHeadTurnSweepFlip = false
+        }
+    }
+
+    val autoHeadTurnTarget: Float = when (autoAnimation) {
+        6 -> -1f
+        7 -> 1f
+        8 -> if (autoHeadTurnSweepFlip) -1f else 1f
+        else -> 0f
+    }
+
+    val autoHeadTurnAnimated by animateFloatAsState(
+        targetValue = autoHeadTurnTarget,
+        animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing),
+        label = "auto_head_turn"
+    )
+
+    // ========== АВТО-ОСМОТР ВВЕРХ-ВНИЗ (9) ==========
+    // 9 — голова вверх, потом вниз.
+    var autoNodUpDownPhase by remember { mutableStateOf(0) }
+    LaunchedEffect(autoAnimation) {
+        if (autoAnimation == 9) {
+            autoNodUpDownPhase = 1  // вверх
+            delay(1000)
+            autoNodUpDownPhase = 2  // обратно в 0
+            delay(500)
+            autoNodUpDownPhase = 3  // вниз
+            delay(1000)
+            autoNodUpDownPhase = 0  // обратно в 0
+        } else {
+            autoNodUpDownPhase = 0
+        }
+    }
+
+    val autoNodUpDownTarget: Float = when (autoNodUpDownPhase) {
+        1 -> -1f
+        3 -> 1f
+        else -> 0f
+    }
+
+    val autoNodUpDownAnimated by animateFloatAsState(
+        targetValue = autoNodUpDownTarget,
+        animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
+        label = "auto_nod_up_down"
+    )
+
     // Итоговые наклон и махание: тап и авто складываются
     val effectiveHeadTilt = headTilt + autoTiltAnimated
+    val effectiveHeadTurn = autoHeadTurnAnimated
+    val effectiveHeadNod = headNod + autoNodUpDownAnimated
     val effectiveTapWaveDirection = if (tapWaveDirection != 0f) tapWaveDirection else autoWaveDir
     val effectiveTapWaveAmount = if (tapWaveDirection != 0f) tapWaveAmount else autoWaveAmount
     Canvas(
@@ -1974,8 +2036,11 @@ fun ThinkingRobotAnimation(
 
                // Смещение головы — независимо от тела.
         // 5f для headOffsetY — чтобы наклон вниз был заметен.
-        val headOffsetX = headBob * 1.5f * u
-        val headOffsetY = animatedHeadNod * 5f * u
+        // Смещение головы по X: наклон корпуса (headBob) + поворот головы (autoHeadTurn).
+        // Поворот головы сдвигает всю голову и её элементы в сторону.
+        val headTurnOffsetX = effectiveHeadTurn * 8f * u
+        val headOffsetX = headBob * 1.5f * u + headTurnOffsetX
+        val headOffsetY = effectiveHeadNod * 5f * u
         val whiteBody = Color(0xFFF4F6F8)
         val whiteHighlight = Color(0xFFFFFFFF)
         val lightGray = Color(0xFFD9DEE3)
