@@ -384,9 +384,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _overlayListening.value = listening
     }
 
-       // Сигнал «привет» — для робота 1 (машет рукой сам)
+           // Сигнал «привет» — для робота 1 (машет рукой сам)
     private val _robotGreetingSignal = MutableStateFlow(false)
     val robotGreetingSignal: StateFlow<Boolean> = _robotGreetingSignal.asStateFlow()
+
+    // Сигнал «прыжок» — включается при свайпе вверх по роботу.
+    // Читается роботом 1 и роботом 2. Авто-сброс через 1200 мс.
+    private val _robotJumpSignal = MutableStateFlow(false)
+    val robotJumpSignal: StateFlow<Boolean> = _robotJumpSignal.asStateFlow()
 
     // ========== АВТО-АНИМАЦИИ РОБОТОВ (раз в минуту, по циклу) ==========
     // 0 — нет анимации
@@ -398,11 +403,20 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _robotAutoAnimation = MutableStateFlow(0)
     val robotAutoAnimation: StateFlow<Int> = _robotAutoAnimation.asStateFlow()
 
-    fun triggerRobotGreeting() {
+        fun triggerRobotGreeting() {
         _robotGreetingSignal.value = true
         scope.launch {
             delay(2500)
             _robotGreetingSignal.value = false
+        }
+    }
+
+    fun triggerRobotJump() {
+        if (_robotJumpSignal.value) return
+        _robotJumpSignal.value = true
+        scope.launch {
+            delay(1200)
+            _robotJumpSignal.value = false
         }
     }
 
