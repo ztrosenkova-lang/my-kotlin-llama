@@ -278,6 +278,7 @@ fun ChatScreen(
     val speakStartTrigger by viewModel.speakStartTrigger.collectAsStateWithLifecycle(initialValue = false)
     val robotGreetingSignal by viewModel.robotGreetingSignal.collectAsStateWithLifecycle(initialValue = false)
     val robotAutoAnimation by viewModel.robotAutoAnimation.collectAsStateWithLifecycle(initialValue = 0)
+    val robotJumpSignal by viewModel.robotJumpSignal.collectAsStateWithLifecycle(initialValue = false)
     val pendingTextToPrint by viewModel.pendingTextToPrint.collectAsStateWithLifecycle(initialValue = "")
     val isDarkTheme by viewModel.isDarkTheme.collectAsStateWithLifecycle(initialValue = false)
     val showBrainEditorState by viewModel.showBrainEditor.collectAsStateWithLifecycle(initialValue = false)
@@ -1420,7 +1421,7 @@ fun ChatScreen(
                                 }
                             )
                         }
-                        // ВТОРОЙ pointerInput — обработка ПЕРЕТАСКИВАНИЯ и ЗУМА.
+                                               // ВТОРОЙ pointerInput — обработка ПЕРЕТАСКИВАНИЯ и ЗУМА.
                         // Идёт ВТОРЫМ, чтобы тап имел приоритет.
                             .pointerInput(Unit) {
                             detectTransformGestures { _, pan, zoom, _ ->
@@ -1438,8 +1439,41 @@ fun ChatScreen(
                                 robotOffsetY = (robotOffsetY + pan.y).coerceIn(0f, maxY)
                             }
                         }
+                        // ТРЕТИЙ pointerInput — обработка СВАЙПА ВВЕРХ.
+                        // Быстрое вертикальное движение вверх без бокового сноса.
+                        // Триггерит прыжок робота.
+                        .pointerInput(Unit) {
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                val startX = down.position.x
+                                val startY = down.position.y
+                                val downTime = System.currentTimeMillis()
+
+                                var lastX = startX
+                                var lastY = startY
+
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                    lastX = change.position.x
+                                    lastY = change.position.y
+                                    if (!change.pressed) break
+                                }
+
+                                val dx = abs(lastX - startX)
+                                val dy = lastY - startY  // отрицательное — движение вверх
+                                val dt = System.currentTimeMillis() - downTime
+
+                                // Свайп вверх: быстро (<300 мс), вверх (dy < -50),
+                                // без большого бокового сноса (dx < dy_abs * 0.6).
+                                val dyAbs = abs(dy)
+                                if (dt < 300 && dy < -50f && dx < dyAbs * 0.6f) {
+                                    viewModel.triggerRobotJump()
+                                }
+                            }
+                        }
                 ) {
-                                                   ThinkingRobotAnimation(
+                                                                   ThinkingRobotAnimation(
                         height = 70.dp,
                         isActive = true,
                         isSpeaking = isSpeaking,
@@ -1454,6 +1488,7 @@ fun ChatScreen(
                         autoAnimation = robotAutoAnimation,
                         isCompressing = isCompressing,
                         isLoadingModel = state is GenerationState.LoadingModel,
+                        isJumping = robotJumpSignal,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -1714,12 +1749,14 @@ fun ThinkingRobotAnimation(
     // Направление махания от тапа: -1f — влево, +1f — вправо, 0f — нет.
     // Когда != 0f, соответствующая рука машет приветственно.
     tapWaveDirection: Float = 0f,
-        // Авто-анимация по циклу (из MainViewModel):
+           // Авто-анимация по циклу (из MainViewModel):
     // 0 — нет, 1 — махание правой, 2 — наклон головы влево,
     // 3 — махание левой, 4 — наклон головы вправо, 5 — приветственное махание правой,
     // 6 — поворот головы влево, 7 — поворот головы вправо,
     // 8 — осмотр вправо-влево, 9 — осмотр вверх-вниз.
-    autoAnimation: Int = 0
+    autoAnimation: Int = 0,
+    // Прыжок: пламя усиливается, появляется пыль и искры, робот подпрыгивает.
+    isJumping: Boolean = false
 ) {
     val transition = rememberInfiniteTransition(label = "robot")
 
@@ -1893,13 +1930,48 @@ fun ThinkingRobotAnimation(
         label = "wave_amount"
     )
 
-    val textMeasurer = rememberTextMeasurer()
+        val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
 
         val animatedScale by animateFloatAsState(
         targetValue = commandScale ?: 1f,
         animationSpec = tween(durationMillis = 3000, easing = FastOutSlowInEasing),
         label = "command_scale"
+    )
+
+    // ========== АНИМАЦИЯ ПРЫЖКА ==========
+    // 0 мс — старт (0)
+    // 400 мс — верх (1)
+    // 600 мс — зависание (1)
+    // 1000 мс — низ (0)
+    // 1200 мс — конец
+    // jumpProgress — прогресс подъёма/спуска (0..1).
+    // flameIntensity — множитель пламени (1..3).
+    val jumpProgress by animateFloatAsState(
+        targetValue = if (isJumping) 1f else 0f,
+        animationSpec = keyframes {
+            durationMillis = 1200
+            0f at 0
+            1f at 400 using FastOutSlowInEasing
+            1f at 600 using LinearEasing
+            0f at 1000 using FastOutSlowInEasing
+            0f at 1200
+        },
+        label = "jump_progress"
+    )
+
+    // Пламя: 1 → 3 на пике, обратно к 1 в конце.
+    // Отдельная анимация — с задержкой на успокоение 200 мс.
+    val flameIntensity by animateFloatAsState(
+        targetValue = if (isJumping) 1f else 0f,
+        animationSpec = keyframes {
+            durationMillis = 1200
+            0f at 0
+            1f at 300
+            1f at 700
+            0f at 1200
+        },
+        label = "flame_intensity"
     )
 
     // Плавный наклон головы — вместо мгновенного rotate(headTilt, ...)
@@ -2027,6 +2099,8 @@ fun ThinkingRobotAnimation(
         val u = size.height / uDivisor
         val cx = size.width / 2f
         val bobOffset = if (isActive) sin(bob) * 10f * u else 0f
+        // Смещение корпуса от прыжка: 20 единиц u на пике.
+        val jumpOffset = jumpProgress * 20f * u
         val lookOffsetX = lookX * 1f * u
         val lookOffsetY = lookY * 0.8f * u
         val currentBlink = if (isActive) blink else 1f
@@ -2058,7 +2132,7 @@ fun ThinkingRobotAnimation(
             neonBlue
         }
 
-                fun pt(x: Float, y: Float) = Offset(cx + x * u, y * u + bobOffset + staticYOffset)
+    fun pt(x: Float, y: Float) = Offset(cx + x * u, y * u + bobOffset + staticYOffset - jumpOffset)
 
         // Функция для элементов головы — добавляет смещение головы
         fun ptHead(x: Float, y: Float): Offset {
@@ -3325,7 +3399,9 @@ fun ThinkingRobotAnimation(
         val flameFlickerX = sin(flamePhase * 3.7f) * 1.5f
         val flamePulse = 0.7f + 0.3f * sin(flamePhase * 6f)
 
-        drawCircle(
+        // Множитель пламени от прыжка: 1 → 2.8 на пике.
+        val jumpFlameMult = 1f + flameIntensity * 1.8f
+                drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(
                     Color(0xFF00AAFF).copy(alpha = 0.4f * flamePulse),
@@ -3333,35 +3409,35 @@ fun ThinkingRobotAnimation(
                     Color.Transparent
                 ),
                 center = pt(0f, 195f).copy(x = pt(0f, 195f).x + flameFlickerX * u),
-                radius = 30f * u
+                radius = 30f * u * jumpFlameMult
             ),
-            radius = 30f * u,
+            radius = 30f * u * jumpFlameMult,
             center = pt(0f, 195f).copy(x = pt(0f, 195f).x + flameFlickerX * u)
         )
 
-        val outerFlamePath = Path().apply {
+                val outerFlamePath = Path().apply {
             moveTo(pt(-14.4f, nozzleBottom + 2f).x, pt(-14.4f, nozzleBottom + 2f).y)
             quadraticBezierTo(
-                pt(-12f + flameFlickerX * 0.5f, nozzleBottom + 15f).x,
-                pt(-12f + flameFlickerX * 0.5f, nozzleBottom + 15f).y,
-                pt(-9.6f + flameFlickerX * 0.3f, nozzleBottom + 25f).x,
-                pt(-9.6f + flameFlickerX * 0.3f, nozzleBottom + 25f).y
+                pt(-12f + flameFlickerX * 0.5f, nozzleBottom + 15f * jumpFlameMult).x,
+                pt(-12f + flameFlickerX * 0.5f, nozzleBottom + 15f * jumpFlameMult).y,
+                pt(-9.6f + flameFlickerX * 0.3f, nozzleBottom + 25f * jumpFlameMult).x,
+                pt(-9.6f + flameFlickerX * 0.3f, nozzleBottom + 25f * jumpFlameMult).y
             )
             quadraticBezierTo(
-                pt(0f, nozzleBottom + 30f + flameFlicker).x,
-                pt(0f, nozzleBottom + 30f + flameFlicker).y,
-                pt(9.6f + flameFlickerX * 0.3f, nozzleBottom + 25f).x,
-                pt(9.6f + flameFlickerX * 0.3f, nozzleBottom + 25f).y
+                pt(0f, nozzleBottom + (30f + flameFlicker) * jumpFlameMult).x,
+                pt(0f, nozzleBottom + (30f + flameFlicker) * jumpFlameMult).y,
+                pt(9.6f + flameFlickerX * 0.3f, nozzleBottom + 25f * jumpFlameMult).x,
+                pt(9.6f + flameFlickerX * 0.3f, nozzleBottom + 25f * jumpFlameMult).y
             )
             quadraticBezierTo(
-                pt(12f + flameFlickerX * 0.5f, nozzleBottom + 15f).x,
-                pt(12f + flameFlickerX * 0.5f, nozzleBottom + 15f).y,
+                pt(12f + flameFlickerX * 0.5f, nozzleBottom + 15f * jumpFlameMult).x,
+                pt(12f + flameFlickerX * 0.5f, nozzleBottom + 15f * jumpFlameMult).y,
                 pt(14.4f, nozzleBottom + 2f).x, pt(14.4f, nozzleBottom + 2f).y
             )
             close()
         }
 
-        drawPath(
+                drawPath(
             outerFlamePath,
             brush = Brush.verticalGradient(
                 colors = listOf(
@@ -3371,27 +3447,27 @@ fun ThinkingRobotAnimation(
                     Color(0xFFFF8800).copy(alpha = 0.7f)
                 ),
                 startY = pt(0f, nozzleBottom).y,
-                endY = pt(0f, nozzleBottom + 30f).y
+                endY = pt(0f, nozzleBottom + 30f * jumpFlameMult).y
             )
         )
 
-        val middleFlamePath = Path().apply {
+                val middleFlamePath = Path().apply {
             moveTo(pt(-8.4f, nozzleBottom + 3f).x, pt(-8.4f, nozzleBottom + 3f).y)
             quadraticBezierTo(
-                pt(-6f, nozzleBottom + 12f).x, pt(-6f, nozzleBottom + 12f).y,
-                pt(-3.6f, nozzleBottom + 20f).x, pt(-3.6f, nozzleBottom + 20f).y
+                pt(-6f, nozzleBottom + 12f * jumpFlameMult).x, pt(-6f, nozzleBottom + 12f * jumpFlameMult).y,
+                pt(-3.6f, nozzleBottom + 20f * jumpFlameMult).x, pt(-3.6f, nozzleBottom + 20f * jumpFlameMult).y
             )
             quadraticBezierTo(
-                pt(0f, nozzleBottom + 23f).x, pt(0f, nozzleBottom + 23f).y,
-                pt(3.6f, nozzleBottom + 20f).x, pt(3.6f, nozzleBottom + 20f).y
+                pt(0f, nozzleBottom + 23f * jumpFlameMult).x, pt(0f, nozzleBottom + 23f * jumpFlameMult).y,
+                pt(3.6f, nozzleBottom + 20f * jumpFlameMult).x, pt(3.6f, nozzleBottom + 20f * jumpFlameMult).y
             )
             quadraticBezierTo(
-                pt(6f, nozzleBottom + 12f).x, pt(6f, nozzleBottom + 12f).y,
+                pt(6f, nozzleBottom + 12f * jumpFlameMult).x, pt(6f, nozzleBottom + 12f * jumpFlameMult).y,
                 pt(8.4f, nozzleBottom + 3f).x, pt(8.4f, nozzleBottom + 3f).y
             )
             close()
         }
-        drawPath(
+                drawPath(
             middleFlamePath,
             brush = Brush.verticalGradient(
                 colors = listOf(
@@ -3401,7 +3477,7 @@ fun ThinkingRobotAnimation(
                     Color(0xFFFFE066).copy(alpha = 0.8f)
                 ),
                 startY = pt(0f, nozzleBottom).y,
-                endY = pt(0f, nozzleBottom + 25f).y
+                endY = pt(0f, nozzleBottom + 25f * jumpFlameMult).y
             )
         )
 
@@ -3432,20 +3508,20 @@ fun ThinkingRobotAnimation(
             )
         }
 
-        val innerFlamePath = Path().apply {
+               val innerFlamePath = Path().apply {
             moveTo(pt(-4.8f, nozzleBottom + 4f).x, pt(-4.8f, nozzleBottom + 4f).y)
             quadraticBezierTo(
-                pt(-2.4f, nozzleBottom + 10f).x, pt(-2.4f, nozzleBottom + 10f).y,
-                pt(0f, nozzleBottom + 15f).x, pt(0f, nozzleBottom + 15f).y
+                pt(-2.4f, nozzleBottom + 10f * jumpFlameMult).x, pt(-2.4f, nozzleBottom + 10f * jumpFlameMult).y,
+                pt(0f, nozzleBottom + 15f * jumpFlameMult).x, pt(0f, nozzleBottom + 15f * jumpFlameMult).y
             )
             quadraticBezierTo(
-                pt(2.4f, nozzleBottom + 10f).x, pt(2.4f, nozzleBottom + 10f).y,
+                pt(2.4f, nozzleBottom + 10f * jumpFlameMult).x, pt(2.4f, nozzleBottom + 10f * jumpFlameMult).y,
                 pt(4.8f, nozzleBottom + 4f).x, pt(4.8f, nozzleBottom + 4f).y
             )
             close()
         }
 
-        drawPath(
+                drawPath(
             innerFlamePath,
             brush = Brush.verticalGradient(
                 colors = listOf(
@@ -3454,16 +3530,16 @@ fun ThinkingRobotAnimation(
                     Color(0xFFFFE066).copy(alpha = 0.7f)
                 ),
                 startY = pt(0f, nozzleBottom).y,
-                endY = pt(0f, nozzleBottom + 18f).y
+                endY = pt(0f, nozzleBottom + 18f * jumpFlameMult).y
             )
         )
 
-        val sparkCount = 10
+                val sparkCount = 10
         for (i in 0 until sparkCount) {
             val sparkPhase = (flamePhase * 3f + i * 0.6f) % (2f * PI.toFloat())
             val sparkProgress = sparkPhase / (2f * PI.toFloat())
 
-            val sparkY = nozzleBottom + 5f + sparkProgress * 35f
+            val sparkY = nozzleBottom + 5f + sparkProgress * 35f * jumpFlameMult
             val sparkX = -9.6f + i * 2.16f + sin(sparkPhase * 4f) * 3f
             val sparkAlpha = (1f - sparkProgress) * 0.9f
             val sparkR = (1f - sparkProgress * 0.7f) * u
@@ -3479,6 +3555,97 @@ fun ThinkingRobotAnimation(
                     radius = sparkR * 0.5f,
                     center = pt(sparkX, sparkY)
                 )
+            }
+        }
+
+        // ================= ПЫЛЬ И ИСКРЫ ПРИ ПРЫЖКЕ =================
+        // Появляются только когда идёт прыжок (flameIntensity > 0).
+        // Пыль — сине-голубая, расходится вниз и в стороны от сопла.
+        // Искры — 15 штук, летят вниз. Защита от нулевого радиуса обязательна.
+        if (flameIntensity > 0.01f) {
+            val dustCenter = pt(0f, nozzleBottom + 5f)
+            val dustAlphaBase = flameIntensity
+
+            // 1. Общее облако пыли под соплом.
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF80EFFF).copy(alpha = 0.25f * dustAlphaBase),
+                        Color(0xFF00BFFF).copy(alpha = 0.15f * dustAlphaBase),
+                        Color(0xFF0044AA).copy(alpha = 0.05f * dustAlphaBase),
+                        Color.Transparent
+                    ),
+                    center = dustCenter,
+                    radius = 40f * u * dustAlphaBase
+                ),
+                radius = 40f * u * dustAlphaBase,
+                center = dustCenter
+            )
+
+            // 2. Расходящиеся клубы пыли — 6 штук, летят вниз-в стороны.
+            val dustPuffCount = 6
+            for (i in 0 until dustPuffCount) {
+                val puffAngle = (i.toFloat() / dustPuffCount) * PI.toFloat() + PI.toFloat()
+                val puffDist = (10f + i * 3f) * u * dustAlphaBase
+                val puffRadius = (6f + i * 0.8f) * u * dustAlphaBase
+
+                if (puffRadius > 0.01f) {
+                    val puffX = dustCenter.x + cos(puffAngle) * puffDist
+                    val puffY = dustCenter.y + abs(sin(puffAngle)) * puffDist * 0.8f
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFF80EFFF).copy(alpha = 0.35f * dustAlphaBase),
+                                Color(0xFF00BFFF).copy(alpha = 0.15f * dustAlphaBase),
+                                Color.Transparent
+                            ),
+                            center = Offset(puffX, puffY),
+                            radius = puffRadius
+                        ),
+                        radius = puffRadius,
+                        center = Offset(puffX, puffY)
+                    )
+                }
+            }
+
+            // 3. Искры — 15 штук, летят вниз.
+            val jumpSparkCount = 15
+            for (i in 0 until jumpSparkCount) {
+                val jumpSparkPhase = (flamePhase * 4f + i * 0.42f) % (2f * PI.toFloat())
+                val jumpSparkProgress = jumpSparkPhase / (2f * PI.toFloat())
+
+                // Искра летит от сопла вниз.
+                val sparkDist = jumpSparkProgress * 45f * u * dustAlphaBase
+                val sparkAngleSide = sin(flamePhase * 2f + i * 1.3f) * 0.6f
+                val sparkX = sparkAngleSide * 10f * u + (i - jumpSparkCount / 2f) * 0.8f * u
+                val sparkY = nozzleBottom + 5f + sparkDist / u
+
+                val jumpSparkAlpha = (1f - jumpSparkProgress) * dustAlphaBase
+                val jumpSparkR = (1f - jumpSparkProgress * 0.6f) * 1.2f * u
+
+                // Обязательная защита: радиус должен быть > 0.
+                if (jumpSparkAlpha > 0.05f && jumpSparkR > 0.01f) {
+                    // Ядро искры — белое.
+                    drawCircle(
+                        color = Color.White.copy(alpha = jumpSparkAlpha),
+                        radius = jumpSparkR,
+                        center = pt(sparkX, sparkY)
+                    )
+                    // Свечение вокруг — сине-голубое.
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFF80EFFF).copy(alpha = jumpSparkAlpha * 0.6f),
+                                Color(0xFF00BFFF).copy(alpha = jumpSparkAlpha * 0.3f),
+                                Color.Transparent
+                            ),
+                            center = pt(sparkX, sparkY),
+                            radius = jumpSparkR * 4f
+                        ),
+                        radius = jumpSparkR * 4f,
+                        center = pt(sparkX, sparkY)
+                    )
+                }
             }
         }
 
