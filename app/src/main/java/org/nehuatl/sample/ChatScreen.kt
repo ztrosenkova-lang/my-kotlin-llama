@@ -2155,27 +2155,29 @@ fun ThinkingRobotAnimation(
                 val sparkRadius = auraRadius * (0.5f + 0.5f * (0.5f + 0.5f * sin(auraPhase * 2f + i * 1.7f)))
                 val sparkAlpha = 0.4f + 0.6f * (0.5f + 0.5f * sin(auraPhase * 4f + i * 2.1f))
 
-                val px = auraCenter.x + cos(sparkAngle) * sparkRadius
+                               val px = auraCenter.x + cos(sparkAngle) * sparkRadius
                 val py = auraCenter.y + sin(sparkAngle) * sparkRadius * 0.9f
                 val sparkSize = (0.8f + 0.8f * sin(auraPhase * 5f + i)) * u
 
-                drawCircle(
-                    color = Color.White.copy(alpha = sparkAlpha),
-                    radius = sparkSize,
-                    center = Offset(px, py)
-                )
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFF00FFFF).copy(alpha = sparkAlpha * 0.6f),
-                            Color.Transparent
+                if (sparkSize > 0f) {
+                    drawCircle(
+                        color = Color.White.copy(alpha = sparkAlpha),
+                        radius = sparkSize,
+                        center = Offset(px, py)
+                    )
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFF00FFFF).copy(alpha = sparkAlpha * 0.6f),
+                                Color.Transparent
+                            ),
+                            center = Offset(px, py),
+                            radius = sparkSize * 5f
                         ),
-                        center = Offset(px, py),
-                        radius = sparkSize * 5f
-                    ),
-                    radius = sparkSize * 5f,
-                    center = Offset(px, py)
-                )
+                        radius = sparkSize * 5f,
+                        center = Offset(px, py)
+                    )
+                }
             }
         }
 
