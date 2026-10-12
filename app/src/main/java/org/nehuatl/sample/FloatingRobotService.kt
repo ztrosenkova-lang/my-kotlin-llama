@@ -196,15 +196,24 @@ class FloatingRobotService : LifecycleService() {
                     }
                     return true
                 }
-                MotionEvent.ACTION_UP -> {
-                    val dx = kotlin.math.abs(event.rawX - touchX)
-                    val dy = kotlin.math.abs(event.rawY - touchY)
+                               MotionEvent.ACTION_UP -> {
+                    val dxSigned = event.rawX - touchX
+                    val dySigned = event.rawY - touchY
+                    val dx = kotlin.math.abs(dxSigned)
+                    val dy = kotlin.math.abs(dySigned)
                     val dt = System.currentTimeMillis() - downTime
 
-                    // СВАЙП: быстрое движение (<300 мс) с большим смещением (>50 px)
-                    // по X. Свайп по Y не обрабатываем — он используется для drag.
+                    // СВАЙП ВВЕРХ: быстрое движение (<300 мс), вверх (>50 px),
+                    // без большого бокового сноса. Триггерит прыжок.
+                    if (dt < 300 && dySigned < -50f && dx < dy * 0.6f) {
+                        MainViewModel.instance?.triggerRobotJump()
+                        return true
+                    }
+
+                    // СВАЙП ВЛЕВО/ВПРАВО: быстрое движение (<300 мс), по X (>50 px),
+                    // без большого вертикального сноса. Триггерит наклон головы.
                     if (dt < 300 && dx > 50 && dx > dy * 1.5f) {
-                        val direction = if (event.rawX < touchX) -1f else 1f
+                        val direction = if (dxSigned < 0f) -1f else 1f
                         val vm = MainViewModel.instance
                         vm?.triggerOverlayHeadTilt(direction)
                         return true
