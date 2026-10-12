@@ -1439,7 +1439,7 @@ fun ChatScreen(
                             }
                         }
                 ) {
-                                  ThinkingRobotAnimation(
+                                                   ThinkingRobotAnimation(
                         height = 70.dp,
                         isActive = true,
                         isSpeaking = isSpeaking,
@@ -1452,6 +1452,8 @@ fun ChatScreen(
                         headNod = headNodTarget,
                         tapWaveDirection = tapWaveDirection,
                         autoAnimation = robotAutoAnimation,
+                        isCompressing = isCompressing,
+                        isLoadingModel = state is GenerationState.LoadingModel,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -1702,6 +1704,8 @@ fun ThinkingRobotAnimation(
     isAiReady: Boolean = false,
     isSmartMode: Boolean = false,
     isListening: Boolean = false,
+    isCompressing: Boolean = false,
+    isLoadingModel: Boolean = false,
     headTilt: Float = 0f,
     headBob: Float = 0f,
     headNod: Float = 0f,
@@ -2948,7 +2952,7 @@ fun ThinkingRobotAnimation(
             )
         }
 
-        val beltTop = beltCenterY - beltHeight / (2f * u)
+              val beltTop = beltCenterY - beltHeight / (2f * u)
         val beltWidth = 60f * u
         val beltLeft = -30f
 
@@ -2958,7 +2962,7 @@ fun ThinkingRobotAnimation(
             size = Size(beltWidth, beltHeight),
             cornerRadius = CornerRadius(2f * u)
         )
-        drawRoundRect(
+                drawRoundRect(
             color = darkGray,
             topLeft = pt(beltLeft, beltTop),
             size = Size(beltWidth, beltHeight),
@@ -2966,13 +2970,124 @@ fun ThinkingRobotAnimation(
             style = Stroke(width = 1f * u)
         )
 
+        // Прогресс бегущего индикатора (0..1).
+        // Объявлен здесь, потому что используется и индикатором, и текстом ниже.
+        val chargeProgress = ((pulse % (2f * PI.toFloat())) / (2f * PI.toFloat())).toFloat()
+
+        // ===== БЕГУЩИЙ ТЕКСТ СОСТОЯНИЯ НА ПОЯСЕ =====
+        // Индикатор — «голова», текст — «хвост» справа от него.
+        // Едут вместе с одинаковой скоростью (chargeProgress).
+        // Лента бесконечная: ушла за правый край — снова выезжает слева.
+        // Когда робот не занят — едет только индикатор.
+        val statusText: String? = when {
+            isSpeaking -> "Говорю"
+            isListening -> "Обработка речи"
+            isThinking -> "Модель думает"
+            isCompressing -> "Сжимаю беседу"
+            isLoadingModel -> "Загружаю модель"
+            else -> null
+        }
+
+        if (statusText != null) {
+            // Размер шрифта привязан к размеру робота.
+            // 2.8f * u — стартовое, чтобы точно влезть по высоте пояса (beltHeight = 5f * u).
+            val statusFontSizePx = 2.8f * u
+
+            val statusStyle = TextStyle(
+                color = Color(0xFF80EFFF),
+                fontSize = with(density) { statusFontSizePx.toSp() },
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Light
+            )
+
+            // Измеряем ширину одной буквы и всего текста.
+            val letterLayout = textMeasurer.measure(
+                text = "M",
+                style = statusStyle
+            )
+            val letterWidthPx = letterLayout.size.width.toFloat()
+
+            val fullTextLayout = textMeasurer.measure(
+                text = statusText,
+                style = statusStyle
+            )
+            val fullTextWidthPx = fullTextLayout.size.width.toFloat()
+
+            // Позиция индикатора в долях пояса (0..1).
+            val headProgress = chargeProgress
+
+            // Голова (индикатор) в пикселях относительно левого края пояса.
+            val headOffsetPx = beltWidth * headProgress
+
+            // Хвост: буквы идут СПРАВА от индикатора с той же скоростью.
+            // Первая буква — сразу за индикатором, остальные — дальше.
+            // Для бесконечной ленты используем смещение, которое циклится по
+            // общей длине ленты (текст + зазор до следующего повтора).
+            val gapPx = 6f * u  // зазор между текстом и следующим повтором ленты
+            val tapeLengthPx = fullTextWidthPx + gapPx
+
+            // Сколько пикселей лента уже проехала с момента старта цикла.
+            // Индикатор бежит со скоростью beltWidth / (2π) единиц за единицу pulse.
+            // Полный цикл pulse = 2π, значит за цикл индикатор проходит весь пояс.
+            // Текст едет с той же скоростью.
+            val tapeTravelPx = beltWidth * headProgress
+
+            // Стартовая позиция ленты (левый край первой буквы) в системе пояса.
+            // Она уезжает влево по мере движения.
+            // Модуль по длине ленты даёт бесконечный повтор.
+            val tapeStartPx = (tapeTravelPx % tapeLengthPx) - tapeLengthPx
+
+            // Рисуем столько повторов ленты, сколько влезает в пояс + запас.
+            val beltLeftPx = pt(beltLeft, beltTop).x
+            val beltRightPx = pt(beltLeft + 30f, beltTop).x
+
+            var repetition = 0
+            while (true) {
+                val repeatOffsetPx = tapeStartPx + repetition * tapeLengthPx
+                val firstLetterLeftPx = headOffsetPx + repeatOffsetPx
+                val lastLetterRightPx = firstLetterLeftPx + fullTextWidthPx
+
+                // Если начало этого повтора уже правее правого края пояса — прекращаем.
+                if (firstLetterLeftPx > beltWidth + gapPx) break
+
+                // Рисуем посимвольно: каждая буква на своём месте.
+                // Буква i смещена вправо на i * letterWidthPx от начала повтора.
+                val letterTop = pt(0f, beltCenterY).y - fullTextLayout.size.height / 2f
+
+                for (i in statusText.indices) {
+                    val letterX = beltLeftPx + firstLetterLeftPx + i * letterWidthPx
+                    // Пропускаем буквы, которые целиком за левым или правым краем пояса.
+                    if (letterX + letterWidthPx < beltLeftPx) continue
+                    if (letterX > beltRightPx) break
+
+                    val singleLetterLayout = textMeasurer.measure(
+                        text = statusText[i].toString(),
+                        style = statusStyle
+                    )
+                    drawText(
+                        textLayoutResult = singleLetterLayout,
+                        topLeft = Offset(
+                            x = letterX,
+                            y = letterTop
+                        )
+                    )
+                }
+
+                // Если правый край этого повтора уже за левым краем пояса — можно
+                // пропустить остальные повторы, они все тоже за краем.
+                if (lastLetterRightPx < 0f && repetition > 0) break
+
+                repetition++
+                // Страховка от бесконечного цикла.
+                if (repetition > 20) break
+            }
+        }
+
         val chargeBarLeft = beltLeft + 2f
         val chargeBarRight = beltLeft + 30f + 28f - 2f
         val chargeBarWidth = chargeBarRight - chargeBarLeft
         val chargeBarHeight = 1.5f
         val chargeBarY = beltTop + (beltHeight / (2f * u)) - chargeBarHeight / 2f
-
-        val chargeProgress = ((pulse % (2f * PI.toFloat())) / (2f * PI.toFloat())).toFloat()
 
         drawRoundRect(
             Color(0xFF0A1520),
