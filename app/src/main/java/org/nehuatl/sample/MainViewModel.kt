@@ -645,23 +645,35 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
 
-        // ========== АВТО-АНИМАЦИИ РОБОТОВ ==========
-        // Каждые 60 секунд запускаем одну анимацию из цикла:
+               // ========== АВТО-АНИМАЦИИ РОБОТОВ ==========
+        // Каждые 60 секунд запускаем одну анимацию из перемешанного набора:
         // 1 → махание правой рукой, 2 → наклон головы влево,
         // 3 → махание левой рукой, 4 → наклон головы вправо,
-        // 5 → приветственное махание правой рукой.
+        // 5 → приветственное махание правой рукой,
+        // 6 → поворот головы влево, 7 → поворот головы вправо,
+        // 8 → осмотр вправо-влево, 9 → осмотр вверх-вниз.
         // Длительность каждой — 2.5 секунды.
+        // Порядок перемешивается заново после каждого полного круга.
         scope.launch(Dispatchers.Default) {
-            val animationSequence = listOf(1, 2, 3, 4, 5)
+            val basePool = listOf(1, 2, 3, 4, 5, 6, 7, 8, 9)
+            var shuffled = basePool.shuffled()
             var index = 0
+
             // Первая анимация через 60 секунд после запуска
             delay(60000)
             while (true) {
-                val anim = animationSequence[index]
+                val anim = shuffled[index]
                 _robotAutoAnimation.value = anim
                 delay(2500)
                 _robotAutoAnimation.value = 0
-                index = (index + 1) % animationSequence.size
+
+                index++
+                if (index >= shuffled.size) {
+                    // Прошли весь круг — тасуем заново
+                    shuffled = basePool.shuffled()
+                    index = 0
+                }
+
                 // Ждём до следующей минуты (60 сек минус уже прошедшие 2.5 сек)
                 delay(60000 - 2500)
             }
