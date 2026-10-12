@@ -210,20 +210,24 @@ class FloatingRobotService : LifecycleService() {
                         return true
                     }
 
-                    // ТАП: не двигались и быстро отпустили
+                                       // ТАП: не двигались и быстро отпустили
                     if (dx < 15 && dy < 15 && dt < 300) {
                         val now = System.currentTimeMillis()
+                        val vm = MainViewModel.instance ?: return true
+
+                        val isListening = vm.overlayListening.value
                         val isDoubleTap = (now - lastTapTime < 400) && singleTapHandled
 
                         if (isDoubleTap) {
-                            // ДВОЙНОЙ ТАП — останавливаем сервис, поднимаем MainActivity.
-                            // Распознавание, если уже было запущено одиночным тапом,
-                            // останавливаем перед этим.
+                            // ДВОЙНОЙ ТАП — убираем overlay, поднимаем MainActivity.
+                            // Распознавание, если работает, глушим жёстко.
                             singleTapHandled = false
                             lastTapTime = 0L
 
                             voiceRecognizer?.stop()
-                            MainViewModel.instance?.setOverlayListening(false)
+                            voiceRecognizer?.destroy()
+                            voiceRecognizer = null
+                            vm.setOverlayListening(false)
 
                             val stopIntent = Intent(this@FloatingRobotService, FloatingRobotService::class.java).apply {
                                 action = ACTION_STOP
@@ -239,12 +243,22 @@ class FloatingRobotService : LifecycleService() {
                             } catch (e: Exception) {
                                 Log.w(TAG, "Failed to bring MainActivity to front: ${e.message}")
                             }
+                        } else if (isListening) {
+                            // ОДИНОЧНЫЙ ТАП В РЕЖИМЕ СЛУШАНИЯ — отмена.
+                            // Жёстко убиваем recognizer, чтобы отменить отложенный onResult,
+                            // и сбрасываем флаг, чтобы аура погасла. Overlay остаётся.
+                            Log.d(TAG, "Single tap while listening — cancel recognition")
+                            singleTapHandled = false
+                            lastTapTime = 0L
+
+                            voiceRecognizer?.stop()
+                            voiceRecognizer?.destroy()
+                            voiceRecognizer = null
+                            vm.setOverlayListening(false)
                         } else {
-                            // ОДИНОЧНЫЙ ТАП — сразу, без Handler, как было с микрофоном.
+                            // ОДИНОЧНЫЙ ТАП В РЕЖИМЕ ПОКОЯ — запуск распознавания.
                             singleTapHandled = true
                             lastTapTime = now
-
-                            val vm = MainViewModel.instance ?: return true
 
                             // Не запускаем распознавание, пока робот говорит или модель думает.
                             if (vm.isSpeaking.value || vm.state.value.isActive()) {
@@ -252,15 +266,8 @@ class FloatingRobotService : LifecycleService() {
                                 return true
                             }
 
-                            if (vm.overlayListening.value) {
-                                // Уже слушаем — останавливаем
-                                voiceRecognizer?.stop()
-                                vm.setOverlayListening(false)
-                            } else {
-                                // Запускаем распознавание — сразу, в том же потоке.
-                                vm.setOverlayListening(true)
-                                voiceRecognizer?.start()
-                            }
+                            vm.setOverlayListening(true)
+                            voiceRecognizer?.start()
                         }
                     }
                     return true
