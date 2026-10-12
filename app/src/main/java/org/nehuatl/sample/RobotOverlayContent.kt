@@ -27,6 +27,7 @@ fun RobotOverlayContent(
     val overlayHeadNod by viewModel.overlayHeadNod.collectAsStateWithLifecycle(initialValue = 0f)
     val overlayTapWaveDirection by viewModel.overlayTapWaveDirection.collectAsStateWithLifecycle(initialValue = 0f)
     val robotAutoAnimation by viewModel.robotAutoAnimation.collectAsStateWithLifecycle(initialValue = 0)
+    val isCompressing by viewModel.isCompressing.collectAsStateWithLifecycle(initialValue = false)
 
     val isThinking = state is GenerationState.Generating ||
                      cloudState is CloudAIState.Generating
@@ -36,7 +37,7 @@ fun RobotOverlayContent(
         modifier = Modifier.fillMaxHeight(),
         contentAlignment = Alignment.Center
     ) {
-        ThinkingRobotAnimation(
+            ThinkingRobotAnimation(
             height = 72.dp,
             isActive = true,
             isSpeaking = isSpeaking,
@@ -52,6 +53,8 @@ fun RobotOverlayContent(
             yOffsetUnits = 24f,
             tapWaveDirection = overlayTapWaveDirection,
             autoAnimation = robotAutoAnimation,
+            isCompressing = isCompressing,
+            isLoadingModel = state is GenerationState.LoadingModel,
             modifier = Modifier.fillMaxHeight()
         )
     }
