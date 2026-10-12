@@ -28,6 +28,7 @@ fun RobotOverlayContent(
     val overlayTapWaveDirection by viewModel.overlayTapWaveDirection.collectAsStateWithLifecycle(initialValue = 0f)
     val robotAutoAnimation by viewModel.robotAutoAnimation.collectAsStateWithLifecycle(initialValue = 0)
     val isCompressing by viewModel.isCompressing.collectAsStateWithLifecycle(initialValue = false)
+    val robotJumpSignal by viewModel.robotJumpSignal.collectAsStateWithLifecycle(initialValue = false)
 
     val isThinking = state is GenerationState.Generating ||
                      cloudState is CloudAIState.Generating
@@ -55,6 +56,7 @@ fun RobotOverlayContent(
             autoAnimation = robotAutoAnimation,
             isCompressing = isCompressing,
             isLoadingModel = state is GenerationState.LoadingModel,
+            isJumping = robotJumpSignal,
             modifier = Modifier.fillMaxHeight()
         )
     }
