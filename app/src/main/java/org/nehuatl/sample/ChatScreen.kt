@@ -107,9 +107,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -2116,12 +2119,12 @@ fun ThinkingRobotAnimation(
         val panelOpen = headPanelOpenAmount
         val panelLift = panelOpen * 20f * u
 
-               // Смещение головы — независимо от тела.
+        // Смещение головы — независимо от тела.
         // 5f для headOffsetY — чтобы наклон вниз был заметен.
-        // Смещение головы по X: наклон корпуса (headBob) + поворот головы (autoHeadTurn).
-        // Поворот головы сдвигает всю голову и её элементы в сторону.
-        val headTurnOffsetX = effectiveHeadTurn * 8f * u
-        val headOffsetX = headBob * 1.5f * u + headTurnOffsetX
+        // Смещение головы по X — только от наклона корпуса (headBob).
+        // Поворот головы (headTurn) теперь делается через scale+translate
+        // внутри блока головы, а не через сдвиг всего headOffset.
+        val headOffsetX = headBob * 1.5f * u
         val headOffsetY = effectiveHeadNod * 5f * u
         val whiteBody = Color(0xFFF4F6F8)
         val whiteHighlight = Color(0xFFFFFFFF)
@@ -2142,10 +2145,18 @@ fun ThinkingRobotAnimation(
 
     fun pt(x: Float, y: Float) = Offset(cx + x * u, y * u + bobOffset + staticYOffset - jumpOffset)
 
-        // Функция для элементов головы — добавляет смещение головы
+                // Функция для элементов головы — добавляет смещение головы
         fun ptHead(x: Float, y: Float): Offset {
             val base = pt(x, y)
             return Offset(base.x + headOffsetX, base.y + headOffsetY)
+        }
+
+        // Функция для элементов ЛИЦА (панель мозга, визор, глаза, брови, рот).
+        // При повороте головы они смещаются по X на headTurnShiftX.
+        // Шлем, уши, шея используют ptHead — не смещаются.
+        fun ptFace(x: Float, y: Float): Offset {
+            val base = ptHead(x, y)
+            return Offset(base.x + headTurnShiftX, base.y)
         }
 
         // ================= ДЫМКА ПРОСЛУШИВАНИЯ =================
@@ -3722,33 +3733,17 @@ fun ThinkingRobotAnimation(
             )
         )
 
-                // ================= ГОЛОВА И ВСЁ, ЧТО С НЕЙ СВЯЗАНО =================
+                                // ================= ГОЛОВА И ВСЁ, ЧТО С НЕЙ СВЯЗАНО =================
         // Оборачиваем в rotate(headTilt) — голова наклоняется вокруг основания шеи.
-        // Плюс поворот вокруг вертикальной оси (headTurn) — эмуляция 3D-вращения:
-        // сжатие головы по X + сдвиг в сторону поворота.
-        //
-        // Максимальный угол поворота — 55°.
-        // cos(55°) ≈ 0.57 — при полном повороте голова сжимается до 57% ширины.
-        // Этого достаточно, чтобы визуально читалось «голова повёрнута».
+        // Поворот головы (headTurn) — это НЕ сжатие и НЕ сдвиг всей головы.
+        // Шлем и уши остаются на месте. Поворачиваются только элементы «лица»
+        // (панель мозга, визор, глаза, брови, рот) — через функцию ptFace.
         val headTurnMaxAngle = 55f * PI.toFloat() / 180f
         val headTurnRad = effectiveHeadTurn * headTurnMaxAngle
-        val headScaleX = cos(headTurnRad).coerceAtLeast(0.5f)
-
-        // Точка вращения — центр головы по X, середина головы по Y.
-        // Координата головы в pt: центр по X, примерно 45f по Y (середина шлема).
-        val headPivot = pt(0f, 45f)
-
-        // Дополнительный сдвиг всей головы в сторону поворота.
-        // При повороте вправо (effectiveHeadTurn > 0) — лицо уходит вправо.
-        val headTurnShiftX = effectiveHeadTurn * 4f * u
+        // Радиус головы в единицах u — примерно 42.
+        val headTurnShiftX = sin(headTurnRad) * 42f * u
 
         rotate(effectiveHeadTilt, pivot = pt(0f, 62f)) {
-            scale(
-                scaleX = headScaleX,
-                scaleY = 1f,
-                pivot = headPivot
-            ) {
-                translate(left = headTurnShiftX) {
 
             // ================= ШЕЯ =================
             drawRoundRect(
@@ -4140,25 +4135,30 @@ fun ThinkingRobotAnimation(
                 center = ptHead(38.25f, 52.42f)
             )
 
-            // ================= МОЗГ =================
-            if (panelOpen > 0.05f) {
+                        // ================= МОЗГ =================
+            // Обрезаем всё «лицо» по контуру шлема.
+            // Без этого при повороте головы визор/глаза/рот вылезали бы за шлем.
+            // Шлем рисуется ДО этого clipPath — он не обрезается.
+            clipPath(headPath) {
+
+                       if (panelOpen > 0.05f) {
                 val brainClipPath = Path().apply {
-                    moveTo(ptHead(-16f, -4f).x, ptHead(-16f, -4f).y)
+                    moveTo(ptFace(-16f, -4f).x, ptFace(-16f, -4f).y)
                     cubicTo(
-                        ptHead(-8f, -6f).x, ptHead(-8f, -6f).y,
-                        ptHead(8f, -6f).x, ptHead(8f, -6f).y,
-                        ptHead(16f, -4f).x, ptHead(16f, -4f).y
+                        ptFace(-8f, -6f).x, ptFace(-8f, -6f).y,
+                        ptFace(8f, -6f).x, ptFace(8f, -6f).y,
+                        ptFace(16f, -4f).x, ptFace(16f, -4f).y
                     )
                     cubicTo(
-                        ptHead(16f, 2f).x, ptHead(16f, 2f).y,
-                        ptHead(15.5f, 8f).x, ptHead(15.5f, 8f).y,
-                        ptHead(15f, 14f).x, ptHead(15f, 14f).y
+                        ptFace(16f, 2f).x, ptFace(16f, 2f).y,
+                        ptFace(15.5f, 8f).x, ptFace(15.5f, 8f).y,
+                        ptFace(15f, 14f).x, ptFace(15f, 14f).y
                     )
-                    lineTo(ptHead(-15f, 14f).x, ptHead(-15f, 14f).y)
+                    lineTo(ptFace(-15f, 14f).x, ptFace(-15f, 14f).y)
                     cubicTo(
-                        ptHead(-15.5f, 8f).x, ptHead(-15.5f, 8f).y,
-                        ptHead(-16f, 2f).x, ptHead(-16f, 2f).y,
-                        ptHead(-16f, -4f).x, ptHead(-16f, -4f).y
+                        ptFace(-15.5f, 8f).x, ptFace(-15.5f, 8f).y,
+                        ptFace(-16f, 2f).x, ptFace(-16f, 2f).y,
+                        ptFace(-16f, -4f).x, ptFace(-16f, -4f).y
                     )
                     close()
                 }
@@ -4171,7 +4171,7 @@ fun ThinkingRobotAnimation(
                             Color(0xFF0A0518),
                             Color(0xFF000000)
                         ),
-                        center = ptHead(0f, 5f),
+                        center = ptFace(0f, 5f),
                         radius = 20f * u
                     )
                 )
@@ -4184,27 +4184,27 @@ fun ThinkingRobotAnimation(
                 drawOval(
                     brush = Brush.radialGradient(
                         colors = listOf(brainColor1, brainColor2, Color.Transparent),
-                        center = ptHead(-6f, 4f),
+                        center = ptFace(-6f, 4f),
                         radius = 8f * u
                     ),
-                    topLeft = ptHead(-12f, -1f),
+                    topLeft = ptFace(-12f, -1f),
                     size = Size(12f * u, 12f * u)
                 )
 
                 drawOval(
                     brush = Brush.radialGradient(
                         colors = listOf(brainColor1, brainColor2, Color.Transparent),
-                        center = ptHead(6f, 4f),
+                        center = ptFace(6f, 4f),
                         radius = 8f * u
                     ),
-                    topLeft = ptHead(0f, -1f),
+                    topLeft = ptFace(0f, -1f),
                     size = Size(12f * u, 12f * u)
                 )
 
                 drawLine(
                     color = Color(0xFF3A1A5C),
-                    start = ptHead(0f, -2f),
-                    end = ptHead(0f, 12f),
+                    start = ptFace(0f, -2f),
+                    end = ptFace(0f, 12f),
                     strokeWidth = 0.8f * u,
                     cap = StrokeCap.Round
                 )
@@ -4215,16 +4215,16 @@ fun ThinkingRobotAnimation(
                     val yStart = -1f + i * 3f
 
                     val wrinklePath = Path().apply {
-                        moveTo(ptHead(-11f, yStart).x, ptHead(-11f, yStart).y)
+                        moveTo(ptFace(-11f, yStart).x, ptFace(-11f, yStart).y)
                         cubicTo(
-                            ptHead(-7f, yStart - amplitude).x, ptHead(-7f, yStart - amplitude).y,
-                            ptHead(-3f, yStart + amplitude).x, ptHead(-3f, yStart + amplitude).y,
-                            ptHead(0f, yStart).x, ptHead(0f, yStart).y
+                            ptFace(-7f, yStart - amplitude).x, ptFace(-7f, yStart - amplitude).y,
+                            ptFace(-3f, yStart + amplitude).x, ptFace(-3f, yStart + amplitude).y,
+                            ptFace(0f, yStart).x, ptFace(0f, yStart).y
                         )
                         cubicTo(
-                            ptHead(3f, yStart - amplitude).x, ptHead(3f, yStart - amplitude).y,
-                            ptHead(7f, yStart + amplitude).x, ptHead(7f, yStart + amplitude).y,
-                            ptHead(11f, yStart).x, ptHead(11f, yStart).y
+                            ptFace(3f, yStart - amplitude).x, ptFace(3f, yStart - amplitude).y,
+                            ptFace(7f, yStart + amplitude).x, ptFace(7f, yStart + amplitude).y,
+                            ptFace(11f, yStart).x, ptFace(11f, yStart).y
                         )
                     }
                     drawPath(
@@ -4239,10 +4239,10 @@ fun ThinkingRobotAnimation(
                     val orbitPhase = orbit * 2.1f
                     val orbitTilt = orbit * 30f
 
-                    rotate(orbitTilt, pivot = ptHead(0f, 5f)) {
+                    rotate(orbitTilt, pivot = ptFace(0f, 5f)) {
                         drawOval(
                             color = brainColor3.copy(alpha = 0.2f),
-                            topLeft = ptHead(-(6f + orbit * 2f), 5f - (4f + orbit * 1.5f)),
+                            topLeft = ptFace(-(6f + orbit * 2f), 5f - (4f + orbit * 1.5f)),
                             size = Size(
                                 (12f + orbit * 4f) * u,
                                 (8f + orbit * 3f) * u
@@ -4265,40 +4265,39 @@ fun ThinkingRobotAnimation(
                                         Color(0xFF00D9FF).copy(alpha = ballAlpha * 0.6f),
                                         Color.Transparent
                                     ),
-                                    center = ptHead(bx, by),
+                                    center = ptFace(bx, by),
                                     radius = 2.5f * u
                                 ),
                                 radius = 2.5f * u,
-                                center = ptHead(bx, by)
+                                center = ptFace(bx, by)
                             )
 
                             drawCircle(
                                 color = Color.White.copy(alpha = ballAlpha),
                                 radius = 0.8f * u,
-                                center = ptHead(bx, by)
+                                center = ptFace(bx, by)
                             )
                         }
                     }
                 }
             }
-
-            val headPanelPath = Path().apply {
-                moveTo(ptHead(-16f, -4f).x, ptHead(-16f, -4f).y + panelLift)
+                        val headPanelPath = Path().apply {
+                moveTo(ptFace(-16f, -4f).x, ptFace(-16f, -4f).y + panelLift)
                 cubicTo(
-                    ptHead(-8f, -6f).x, ptHead(-8f, -6f).y + panelLift,
-                    ptHead(8f, -6f).x, ptHead(8f, -6f).y + panelLift,
-                    ptHead(16f, -4f).x, ptHead(16f, -4f).y + panelLift
+                    ptFace(-8f, -6f).x, ptFace(-8f, -6f).y + panelLift,
+                    ptFace(8f, -6f).x, ptFace(8f, -6f).y + panelLift,
+                    ptFace(16f, -4f).x, ptFace(16f, -4f).y + panelLift
                 )
                 cubicTo(
-                    ptHead(16f, 2f).x, ptHead(16f, 2f).y + panelLift,
-                    ptHead(15.5f, 8f).x, ptHead(15.5f, 8f).y + panelLift,
-                    ptHead(15f, 14f).x, ptHead(15f, 14f).y + panelLift
+                    ptFace(16f, 2f).x, ptFace(16f, 2f).y + panelLift,
+                    ptFace(15.5f, 8f).x, ptFace(15.5f, 8f).y + panelLift,
+                    ptFace(15f, 14f).x, ptFace(15f, 14f).y + panelLift
                 )
-                lineTo(ptHead(-15f, 14f).x, ptHead(-15f, 14f).y + panelLift)
+                lineTo(ptFace(-15f, 14f).x, ptFace(-15f, 14f).y + panelLift)
                 cubicTo(
-                    ptHead(-15.5f, 8f).x, ptHead(-15.5f, 8f).y + panelLift,
-                    ptHead(-16f, 2f).x, ptHead(-16f, 2f).y + panelLift,
-                    ptHead(-16f, -4f).x, ptHead(-16f, -4f).y + panelLift
+                    ptFace(-15.5f, 8f).x, ptFace(-15.5f, 8f).y + panelLift,
+                    ptFace(-16f, 2f).x, ptFace(-16f, 2f).y + panelLift,
+                    ptFace(-16f, -4f).x, ptFace(-16f, -4f).y + panelLift
                 )
                 close()
             }
@@ -4310,16 +4309,16 @@ fun ThinkingRobotAnimation(
                         Color(0xFFD9DEE3),
                         Color(0xFFC4CAD1)
                     ),
-                    startY = ptHead(0f, -4f).y,
-                    endY = ptHead(0f, 14f).y
+                    startY = ptFace(0f, -4f).y,
+                    endY = ptFace(0f, 14f).y
                 )
             )
 
             val headPanelHighlight = Path().apply {
-                moveTo(ptHead(-9f, -2f).x, ptHead(-9f, -2f).y + panelLift)
-                lineTo(ptHead(-4f, -2f).x, ptHead(-4f, -2f).y + panelLift)
-                lineTo(ptHead(-4f, 12f).x, ptHead(-4f, 12f).y + panelLift)
-                lineTo(ptHead(-9f, 12f).x, ptHead(-9f, 12f).y + panelLift)
+                moveTo(ptFace(-9f, -2f).x, ptFace(-9f, -2f).y + panelLift)
+                lineTo(ptFace(-4f, -2f).x, ptFace(-4f, -2f).y + panelLift)
+                lineTo(ptFace(-4f, 12f).x, ptFace(-4f, 12f).y + panelLift)
+                lineTo(ptFace(-9f, 12f).x, ptFace(-9f, 12f).y + panelLift)
                 close()
             }
             drawPath(
@@ -4328,15 +4327,29 @@ fun ThinkingRobotAnimation(
             )
 
             val leftHeadLinePath = Path().apply {
-                moveTo(ptHead(-16f, -4f).x, ptHead(-16f, -4f).y)
+                moveTo(ptFace(-16f, -4f).x, ptFace(-16f, -4f).y)
                 cubicTo(
-                    ptHead(-16f, 2f).x, ptHead(-16f, 2f).y,
-                    ptHead(-15.5f, 8f).x, ptHead(-15.5f, 8f).y,
-                    ptHead(-15f, 14f).x, ptHead(-15f, 14f).y
+                    ptFace(-16f, 2f).x, ptFace(-16f, 2f).y,
+                    ptFace(-15.5f, 8f).x, ptFace(-15.5f, 8f).y,
+                    ptFace(-15f, 14f).x, ptFace(-15f, 14f).y
                 )
             }
             drawPath(
                 leftHeadLinePath,
+                color = darkGray,
+                style = Stroke(width = 1f * u, cap = StrokeCap.Round)
+            )
+
+            val rightHeadLinePath = Path().apply {
+                moveTo(ptFace(16f, -4f).x, ptFace(16f, -4f).y)
+                cubicTo(
+                    ptFace(16f, 2f).x, ptFace(16f, 2f).y,
+                    ptFace(15.5f, 8f).x, ptFace(15.5f, 8f).y,
+                    ptFace(15f, 14f).x, ptFace(15f, 14f).y
+                )
+            }
+            drawPath(
+                rightHeadLinePath,
                 color = darkGray,
                 style = Stroke(width = 1f * u, cap = StrokeCap.Round)
             )
@@ -4359,62 +4372,62 @@ fun ThinkingRobotAnimation(
             val topRadius = 4f * u
             val bottomRadius = 13f * u
 
-            val visorPath = Path().apply {
-                moveTo(ptHead(-34f + topRadius, 14f).x, ptHead(-34f + topRadius, 14f).y)
-                lineTo(ptHead(34f - topRadius, 14f).x, ptHead(34f - topRadius, 14f).y)
+                       val visorPath = Path().apply {
+                moveTo(ptFace(-34f + topRadius, 14f).x, ptFace(-34f + topRadius, 14f).y)
+                lineTo(ptFace(34f - topRadius, 14f).x, ptFace(34f - topRadius, 14f).y)
                 arcTo(
                     rect = Rect(
-                        left = ptHead(34f - 2f * topRadius, 14f).x,
-                        top = ptHead(34f - 2f * topRadius, 14f).y,
-                        right = ptHead(34f, 14f).x,
-                        bottom = ptHead(34f, 14f + 2f * topRadius).y
+                        left = ptFace(34f - 2f * topRadius, 14f).x,
+                        top = ptFace(34f - 2f * topRadius, 14f).y,
+                        right = ptFace(34f, 14f).x,
+                        bottom = ptFace(34f, 14f + 2f * topRadius).y
                     ),
                     startAngleDegrees = 270f,
                     sweepAngleDegrees = 90f,
                     forceMoveTo = false
                 )
-                lineTo(ptHead(34f, 42f - bottomRadius).x, ptHead(34f, 42f - bottomRadius).y)
+                lineTo(ptFace(34f, 42f - bottomRadius).x, ptFace(34f, 42f - bottomRadius).y)
                 arcTo(
                     rect = Rect(
-                        left = ptHead(34f - 2f * bottomRadius, 42f - 2f * bottomRadius).x,
-                        top = ptHead(34f - 2f * bottomRadius, 42f - 2f * bottomRadius).y,
-                        right = ptHead(34f, 42f).x,
-                        bottom = ptHead(34f, 42f).y
+                        left = ptFace(34f - 2f * bottomRadius, 42f - 2f * bottomRadius).x,
+                        top = ptFace(34f - 2f * bottomRadius, 42f - 2f * bottomRadius).y,
+                        right = ptFace(34f, 42f).x,
+                        bottom = ptFace(34f, 42f).y
                     ),
                     startAngleDegrees = 0f,
                     sweepAngleDegrees = 90f,
                     forceMoveTo = false
                 )
-                lineTo(ptHead(10f, 42f).x, ptHead(10f, 42f).y)
+                lineTo(ptFace(10f, 42f).x, ptFace(10f, 42f).y)
                 cubicTo(
-                    ptHead(6f, 40f).x, ptHead(6f, 40f).y,
-                    ptHead(3f, 37f).x, ptHead(3f, 37f).y,
-                    ptHead(0f, 37f).x, ptHead(0f, 37f).y
+                    ptFace(6f, 40f).x, ptFace(6f, 40f).y,
+                    ptFace(3f, 37f).x, ptFace(3f, 37f).y,
+                    ptFace(0f, 37f).x, ptFace(0f, 37f).y
                 )
                 cubicTo(
-                    ptHead(-3f, 37f).x, ptHead(-3f, 37f).y,
-                    ptHead(-6f, 40f).x, ptHead(-6f, 40f).y,
-                    ptHead(-10f, 42f).x, ptHead(-10f, 42f).y
+                    ptFace(-3f, 37f).x, ptFace(-3f, 37f).y,
+                    ptFace(-6f, 40f).x, ptFace(-6f, 40f).y,
+                    ptFace(-10f, 42f).x, ptFace(-10f, 42f).y
                 )
-                lineTo(ptHead(-34f + bottomRadius, 42f).x, ptHead(-34f + bottomRadius, 42f).y)
+                lineTo(ptFace(-34f + bottomRadius, 42f).x, ptFace(-34f + bottomRadius, 42f).y)
                 arcTo(
                     rect = Rect(
-                        left = ptHead(-34f, 42f - 2f * bottomRadius).x,
-                        top = ptHead(-34f, 42f - 2f * bottomRadius).y,
-                        right = ptHead(-34f + 2f * bottomRadius, 42f).x,
-                        bottom = ptHead(-34f + 2f * bottomRadius, 42f).y
+                        left = ptFace(-34f, 42f - 2f * bottomRadius).x,
+                        top = ptFace(-34f, 42f - 2f * bottomRadius).y,
+                        right = ptFace(-34f + 2f * bottomRadius, 42f).x,
+                        bottom = ptFace(-34f + 2f * bottomRadius, 42f).y
                     ),
                     startAngleDegrees = 90f,
                     sweepAngleDegrees = 90f,
                     forceMoveTo = false
                 )
-                lineTo(ptHead(-34f, 14f + topRadius).x, ptHead(-34f, 14f + topRadius).y)
+                lineTo(ptFace(-34f, 14f + topRadius).x, ptFace(-34f, 14f + topRadius).y)
                 arcTo(
                     rect = Rect(
-                        left = ptHead(-34f, 14f).x,
-                        top = ptHead(-34f, 14f).y,
-                        right = ptHead(-34f + 2f * topRadius, 14f).x,
-                        bottom = ptHead(-34f + 2f * topRadius, 14f + 2f * topRadius).y
+                        left = ptFace(-34f, 14f).x,
+                        top = ptFace(-34f, 14f).y,
+                        right = ptFace(-34f + 2f * topRadius, 14f).x,
+                        bottom = ptFace(-34f + 2f * topRadius, 14f + 2f * topRadius).y
                     ),
                     startAngleDegrees = 180f,
                     sweepAngleDegrees = 90f,
@@ -4427,8 +4440,8 @@ fun ThinkingRobotAnimation(
                 visorPath,
                 brush = Brush.verticalGradient(
                     colors = listOf(visorGlass, visorDark),
-                    startY = ptHead(0f, 14f).y,
-                    endY = ptHead(0f, 42f).y
+                    startY = ptFace(0f, 14f).y,
+                    endY = ptFace(0f, 42f).y
                 )
             )
 
@@ -4635,7 +4648,7 @@ fun ThinkingRobotAnimation(
 
             val leftEyeCenterX = -12f + lookOffsetX / u
             val leftEyeCenterY = 26f + lookOffsetY / u
-            val leftCenter = ptHead(leftEyeCenterX, leftEyeCenterY)
+            val leftCenter = ptFace(leftEyeCenterX, leftEyeCenterY)
 
             val leftEyePath = createPredatorEyePath(leftCenter.x, leftCenter.y, eyeW, eyeH, isLeft = true)
 
@@ -4729,7 +4742,7 @@ fun ThinkingRobotAnimation(
 
             val rightEyeCenterX = 12f + lookOffsetX / u
             val rightEyeCenterY = 26f + lookOffsetY / u
-            val rightCenter = ptHead(rightEyeCenterX, rightEyeCenterY)
+            val rightCenter = ptFace(rightEyeCenterX, rightEyeCenterY)
 
             val rightEyePath = createPredatorEyePath(rightCenter.x, rightCenter.y, eyeW, eyeH, isLeft = false)
 
@@ -4836,7 +4849,7 @@ fun ThinkingRobotAnimation(
                 0f
             }
 
-            if (isSpeaking) {
+                       if (isSpeaking) {
                 val widthOscillate = 1f + 0.25f * sin(mouthPhase * 1.7f)
                 val heightOscillate = 1f + 0.35f * sin(mouthPhase * 2.3f)
 
@@ -4846,8 +4859,8 @@ fun ThinkingRobotAnimation(
                 val halfH = currentHeight / 2f
 
                 val outerMouthPath = Path().apply {
-                    val cx = ptHead(0f, mouthY).x
-                    val cy = ptHead(0f, mouthY).y
+                    val cx = ptFace(0f, mouthY).x
+                    val cy = ptFace(0f, mouthY).y
                     moveTo(cx - halfW, cy)
                     cubicTo(
                         cx - halfW * 0.6f, cy - halfH,
@@ -4865,8 +4878,8 @@ fun ThinkingRobotAnimation(
                 drawPath(outerMouthPath, color = darkerGray)
 
                 val innerMouthPath = Path().apply {
-                    val cx = ptHead(0f, mouthY).x
-                    val cy = ptHead(0f, mouthY).y
+                    val cx = ptFace(0f, mouthY).x
+                    val cy = ptFace(0f, mouthY).y
                     val iw = halfW * 0.78f
                     val ih = halfH * 0.78f
                     moveTo(cx - iw, cy)
@@ -4892,11 +4905,11 @@ fun ThinkingRobotAnimation(
                             neonBlue.copy(alpha = 0.25f * glowPulse),
                             Color.Transparent
                         ),
-                        center = ptHead(0f, mouthY),
+                        center = ptFace(0f, mouthY),
                         radius = currentWidth * 1.1f
                     ),
                     radius = currentWidth * 1.1f,
-                    center = ptHead(0f, mouthY)
+                    center = ptFace(0f, mouthY)
                 )
 
                 if (currentHeight > 3f * u) {
@@ -4908,7 +4921,7 @@ fun ThinkingRobotAnimation(
                                 neonBlue.copy(alpha = 0.5f * glowPulse),
                                 Color.Transparent
                             ),
-                            center = ptHead(0f, mouthY),
+                            center = ptFace(0f, mouthY),
                             radius = currentWidth * 0.6f
                         )
                     )
@@ -4931,7 +4944,7 @@ fun ThinkingRobotAnimation(
 
                     drawRoundRect(
                         color = barColor,
-                        topLeft = ptHead(barX - barW / 2f, mouthY - barH / 2f / u),
+                        topLeft = ptFace(barX - barW / 2f, mouthY - barH / 2f / u),
                         size = Size(barW, barH),
                         cornerRadius = CornerRadius(barW / 2f)
                     )
@@ -4943,19 +4956,19 @@ fun ThinkingRobotAnimation(
                                     neonBlue.copy(alpha = 0.5f),
                                     Color.Transparent
                                 ),
-                                center = ptHead(barX, mouthY),
+                                center = ptFace(barX, mouthY),
                                 radius = barW * 3f
                             ),
                             radius = barW * 3f,
-                            center = ptHead(barX, mouthY)
+                            center = ptFace(barX, mouthY)
                         )
                     }
                 }
 
-            } else if (isThinking) {
+                       } else if (isThinking) {
                 val twitchPath = Path().apply {
-                    moveTo(ptHead(-10f, mouthY + thinkingTwitch).x, ptHead(-10f, mouthY + thinkingTwitch).y)
-                    lineTo(ptHead(10f, mouthY + thinkingTwitch).x, ptHead(10f, mouthY + thinkingTwitch).y)
+                    moveTo(ptFace(-10f, mouthY + thinkingTwitch).x, ptFace(-10f, mouthY + thinkingTwitch).y)
+                    lineTo(ptFace(10f, mouthY + thinkingTwitch).x, ptFace(10f, mouthY + thinkingTwitch).y)
                 }
 
                 drawPath(
@@ -4972,11 +4985,11 @@ fun ThinkingRobotAnimation(
 
             } else {
                 val smilePath = Path().apply {
-                    moveTo(ptHead(-10f, mouthY - 2f).x, ptHead(-10f, mouthY - 2f).y)
+                    moveTo(ptFace(-10f, mouthY - 2f).x, ptFace(-10f, mouthY - 2f).y)
                     cubicTo(
-                        ptHead(-5f, mouthY + 3f).x, ptHead(-5f, mouthY + 3f).y,
-                        ptHead(5f, mouthY + 3f).x, ptHead(5f, mouthY + 3f).y,
-                        ptHead(10f, mouthY - 2f).x, ptHead(10f, mouthY - 2f).y
+                        ptFace(-5f, mouthY + 3f).x, ptFace(-5f, mouthY + 3f).y,
+                        ptFace(5f, mouthY + 3f).x, ptFace(5f, mouthY + 3f).y,
+                        ptFace(10f, mouthY - 2f).x, ptFace(10f, mouthY - 2f).y
                     )
                 }
 
@@ -4995,16 +5008,15 @@ fun ThinkingRobotAnimation(
                 }
             }
 
-                       if (!isSpeaking) {
+     if (!isSpeaking) {
                 drawLine(
                     color = mediumGray.copy(alpha = 0.4f),
-                    start = ptHead(-15f, mouthY + 8f),
-                    end = ptHead(15f, mouthY + 8f),
+                    start = ptFace(-15f, mouthY + 8f),
+                    end = ptFace(15f, mouthY + 8f),
                     strokeWidth = 0.5f * u
                 )
             }
-                } // закрытие translate(headTurnShiftX)
-            } // закрытие scale(headScaleX)
+            } // закрытие clipPath(headPath)
              } // закрытие rotate(effectiveHeadTilt)
     }
 }
