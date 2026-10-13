@@ -263,13 +263,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _floatingRobotRunning.value = running
     }
 
-    // ========== МАСШТАБ РОБОТА В OVERLAY ==========
+        // ========== МАСШТАБ РОБОТА В OVERLAY ==========
     // Управляется жестом pinch в FloatingRobotService.
     // Читается в RobotOverlayContent для расчёта высоты канваса.
     // Сохраняется в SharedPreferences, чтобы пережить перезапуск сервиса.
-    private val _overlayRobotScale = MutableStateFlow(
-        prefs.getFloat("overlay_robot_scale", 1.0f).coerceIn(0.5f, 4.0f)
-    )
+    // Начальное значение 1.0f — реальное подтягивается в init-блоке,
+    // когда prefs уже инициализирован.
+    private val _overlayRobotScale = MutableStateFlow(1.0f)
     val overlayRobotScale: StateFlow<Float> = _overlayRobotScale.asStateFlow()
 
     fun setOverlayRobotScale(scale: Float) {
@@ -279,7 +279,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             prefs.edit().putFloat("overlay_robot_scale", coerced).apply()
         }
     }
-
     // ========== УМНЫЙ РЕЖИМ ==========
     // При включении в каждый запрос к локальной модели добавляется
     // последнее сообщение пользователя + хвост истории чата (до 8000 символов).
@@ -510,6 +509,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _isSmartMode.value = prefs.getBoolean(KEY_SMART_MODE, false)
         _isFirstLaunch.value = prefs.getBoolean("first_launch", true)
 
+        // Восстанавливаем сохранённый масштаб робота в overlay.
+        // Здесь prefs уже инициализирован — в отличие от места объявления
+        // самого _overlayRobotScale.
+        _overlayRobotScale.value = prefs.getFloat("overlay_robot_scale", 1.0f).coerceIn(0.5f, 4.0f)
                 // При запуске всегда применяем авто-тему по времени суток.
         // Ручной приоритет сбрасывается — иначе после ручного переключения
         // тема не менялась бы при старте в течение часа.
