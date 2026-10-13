@@ -273,8 +273,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     val overlayRobotScale: StateFlow<Float> = _overlayRobotScale.asStateFlow()
 
         fun setOverlayRobotScale(scale: Float) {
-        val coerced = scale.coerceIn(0.5f, 4.0f)
-        android.util.Log.d("RobotScale", "setOverlayRobotScale: input=$scale, coerced=$coerced")
+        val coerced = scale.coerceIn(0.5f, 3.0f)
         if (_overlayRobotScale.value != coerced) {
             _overlayRobotScale.value = coerced
             prefs.edit().putFloat("overlay_robot_scale", coerced).apply()
@@ -510,10 +509,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _isSmartMode.value = prefs.getBoolean(KEY_SMART_MODE, false)
         _isFirstLaunch.value = prefs.getBoolean("first_launch", true)
 
-        // Восстанавливаем сохранённый масштаб робота в overlay.
-        // Здесь prefs уже инициализирован — в отличие от места объявления
-        // самого _overlayRobotScale.
-        _overlayRobotScale.value = prefs.getFloat("overlay_robot_scale", 1.0f).coerceIn(0.5f, 4.0f)
+               // Восстанавливаем сохранённый масштаб робота в overlay.
+        _overlayRobotScale.value = prefs.getFloat("overlay_robot_scale", 1.0f).coerceIn(0.5f, 3.0f)
                 // При запуске всегда применяем авто-тему по времени суток.
         // Ручной приоритет сбрасывается — иначе после ручного переключения
         // тема не менялась бы при старте в течение часа.
