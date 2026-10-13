@@ -170,8 +170,8 @@ class FloatingRobotService : LifecycleService() {
         }
     }
 
-    val widthPx = (220 * resources.displayMetrics.density).toInt()
-    val heightPx = (300 * resources.displayMetrics.density).toInt()
+        val widthPx = (280 * resources.displayMetrics.density).toInt()
+    val heightPx = (320 * resources.displayMetrics.density).toInt()
 
     val params = WindowManager.LayoutParams(
         widthPx,
