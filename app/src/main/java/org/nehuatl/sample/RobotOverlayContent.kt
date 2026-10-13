@@ -34,12 +34,12 @@ fun RobotOverlayContent(
                      cloudState is CloudAIState.Generating
     val isIdle = !isSpeaking && !isThinking
 
-         Box(
+            Box(
         modifier = Modifier.fillMaxHeight(),
         contentAlignment = Alignment.Center
     ) {
             ThinkingRobotAnimation(
-            height = 72.dp,
+            height = 300.dp,
             isActive = true,
             isSpeaking = isSpeaking,
             isThinking = isThinking,
@@ -50,14 +50,14 @@ fun RobotOverlayContent(
             isSmartMode = isSmartMode,
             headTilt = overlayHeadTilt,
             headNod = overlayHeadNod,
-            uDivisor = 350f,
-            yOffsetUnits = 24f,
+            uDivisor = 285f,
+            yOffsetUnits = 10f,
             tapWaveDirection = overlayTapWaveDirection,
             autoAnimation = robotAutoAnimation,
             isCompressing = isCompressing,
             isLoadingModel = state is GenerationState.LoadingModel,
             isJumping = robotJumpSignal,
-            modifier = Modifier
+            modifier = Modifier.fillMaxHeight()
         )
     }
 }
