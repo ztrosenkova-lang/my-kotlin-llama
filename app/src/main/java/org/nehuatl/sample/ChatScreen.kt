@@ -2034,35 +2034,34 @@ fun ThinkingRobotAnimation(
         label = "auto_wave_amount"
     )
 
-    // ========== АВТО-ПОВОРОТ ГОЛОВЫ (6, 7, 8) ==========
-    // 6 — поворот влево, 7 — поворот вправо,
-    // 8 — осмотр: сначала вправо, потом влево.
-    var autoHeadTurnSweepFlip by remember { mutableStateOf(false) }
+       // ========== АВТО-ПОКАЧИВАНИЕ КОРПУСА (6, 7, 8) ==========
+    // 6 — наклон корпуса влево, 7 — наклон корпуса вправо,
+    // 8 — двойное покачивание: влево, потом вправо.
+    var autoBodySwayFlip by remember { mutableStateOf(false) }
     LaunchedEffect(autoAnimation) {
         if (autoAnimation == 8) {
-            autoHeadTurnSweepFlip = false
+            autoBodySwayFlip = false
             delay(1200)
-            autoHeadTurnSweepFlip = true
+            autoBodySwayFlip = true
             delay(1200)
-            autoHeadTurnSweepFlip = false
+            autoBodySwayFlip = false
         } else {
-            autoHeadTurnSweepFlip = false
+            autoBodySwayFlip = false
         }
     }
 
-    val autoHeadTurnTarget: Float = when (autoAnimation) {
+    val autoBodySwayTarget: Float = when (autoAnimation) {
         6 -> -1f
         7 -> 1f
-        8 -> if (autoHeadTurnSweepFlip) -1f else 1f
+        8 -> if (autoBodySwayFlip) 1f else -1f
         else -> 0f
     }
 
-    val autoHeadTurnAnimated by animateFloatAsState(
-        targetValue = autoHeadTurnTarget,
+    val autoBodySwayAnimated by animateFloatAsState(
+        targetValue = autoBodySwayTarget,
         animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing),
-        label = "auto_head_turn"
+        label = "auto_body_sway"
     )
-
     // ========== АВТО-ОСМОТР ВВЕРХ-ВНИЗ (9) ==========
     // 9 — голова вверх, потом вниз.
     var autoNodUpDownPhase by remember { mutableStateOf(0) }
@@ -2092,9 +2091,8 @@ fun ThinkingRobotAnimation(
         label = "auto_nod_up_down"
     )
 
-    // Итоговые наклон и махание: тап и авто складываются
+        // Итоговые наклон и махание: тап и авто складываются
     val effectiveHeadTilt = headTilt + autoTiltAnimated
-    val effectiveHeadTurn = autoHeadTurnAnimated
     val effectiveHeadNod = headNod + autoNodUpDownAnimated
     val effectiveTapWaveDirection = if (tapWaveDirection != 0f) tapWaveDirection else autoWaveDir
     val effectiveTapWaveAmount = if (tapWaveDirection != 0f) tapWaveAmount else autoWaveAmount
@@ -2151,18 +2149,11 @@ fun ThinkingRobotAnimation(
             return Offset(base.x + headOffsetX, base.y + headOffsetY)
         }
 
-        // Смещение лица при повороте головы.
-        // Объявлено ДО ptFace, потому что ptFace его использует.
-        val headTurnMaxAngle = 55f * PI.toFloat() / 180f
-        val headTurnRad = effectiveHeadTurn * headTurnMaxAngle
-        val headTurnShiftX = sin(headTurnRad) * 42f * u
-
-        // Функция для элементов ЛИЦА (панель мозга, визор, глаза, брови, рот).
-        // При повороте головы они смещаются по X на headTurnShiftX.
-        // Шлем, шея используют ptHead — не смещаются.
+                // Функция для элементов лица и ушей.
+        // Раньше смещала лицо при повороте головы — теперь поворота нет,
+        // поэтому лицо и уши привязаны к ptHead (не смещаются).
         fun ptFace(x: Float, y: Float): Offset {
-            val base = ptHead(x, y)
-            return Offset(base.x + headTurnShiftX, base.y)
+            return ptHead(x, y)
         }
 
         // ================= ДЫМКА ПРОСЛУШИВАНИЯ =================
@@ -2348,6 +2339,14 @@ fun ThinkingRobotAnimation(
                 }
             }
         }
+
+                // ================= ПОКАЧИВАНИЕ КОРПУСА =================
+        // При авто-анимациях 6, 7, 8 всё тело робота наклоняется
+        // влево/вправо вокруг нижней точки туловища (уровень сопла).
+        // Угол небольшой (8°), чтобы робот не «падал».
+        val bodySwayAngle = autoBodySwayAnimated * 8f
+
+        rotate(bodySwayAngle, pivot = pt(0f, 160f)) {
 
         // ================= АНИМАЦИЯ РУК =================
         val armSway = sin(armPhase)
@@ -3849,11 +3848,8 @@ fun ThinkingRobotAnimation(
                 cornerRadius = CornerRadius(1f * u)
             )
 
-                        // ================= ЛЕВЫЙ НАУШНИК =================
-    val leftEarScale = (1f + effectiveHeadTurn * 0.4f).coerceIn(0.4f, 1.6f)
-
+     // ================= ЛЕВЫЙ НАУШНИК =================
      rotate(12f, pivot = ptFace(-42f, 45f)) {
-    scale(scaleX = leftEarScale, scaleY = 1f, pivot = ptFace(-42f, 45f)) {
                 val leftEarOuterPath = Path().apply {
                     moveTo(ptFace(-42f, 18f).x, ptFace(-42f, 18f).y)
                     cubicTo(
@@ -3948,14 +3944,11 @@ fun ThinkingRobotAnimation(
                         style = Stroke(width = 0.8f * u)
                     )
                 }
-                }
+                             }
             }
 
-                        // ================= ПРАВЫЙ НАУШНИК =================
-            val rightEarScale = (1f - effectiveHeadTurn * 0.4f).coerceIn(0.4f, 1.6f)
-
-rotate(-12f, pivot = ptFace(42f, 45f)) {
-    scale(scaleX = rightEarScale, scaleY = 1f, pivot = ptFace(42f, 45f)) {
+             // ================= ПРАВЫЙ НАУШНИК =================
+               rotate(-12f, pivot = ptFace(42f, 45f)) {
                 val rightEarOuterPath = Path().apply {
                     moveTo(ptFace(42f, 18f).x, ptFace(42f, 18f).y)
                     cubicTo(
@@ -4049,8 +4042,7 @@ rotate(-12f, pivot = ptFace(42f, 45f)) {
                         center = ptFace(46f, -4f),
                         style = Stroke(width = 0.8f * u)
                     )
-                }
-                }
+                         }
             }
 
             // ================= ГОЛОВА =================
@@ -5013,8 +5005,9 @@ rotate(-12f, pivot = ptFace(42f, 45f)) {
                     strokeWidth = 0.5f * u
                 )
             }
-            } // закрытие clipPath(headPath)
+                       } // закрытие clipPath(headPath)
              } // закрытие rotate(effectiveHeadTilt)
+        } // закрытие rotate(bodySwayAngle) — покачивание корпуса
     }
 }
 
