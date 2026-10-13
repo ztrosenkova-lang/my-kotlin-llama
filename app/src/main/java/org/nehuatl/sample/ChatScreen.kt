@@ -3190,10 +3190,10 @@ fun ThinkingRobotAnimation(
               if (statusText != null) {
             // Размер шрифта подбирается по ВЫСОТЕ пояса.
             // Пояс: beltHeight = 5f * u.
-            // Оставляем зазор сверху и снизу, чтобы текст не упирался в края.
-            // beltHeight * 0.7 = 3.5f * u — итоговая максимальная высота текста.
+            // Множитель 2.0f — текст крупнее пояса, но подгонка heightScale
+            // всё равно впишет его в реальные границы.
             val beltHeightPx = beltHeight  // = 5f * u
-            val maxTextHeightPx = beltHeightPx * 1.0f
+            val maxTextHeightPx = beltHeightPx * 2.0f
 
             // Стартовое значение в px.
             val startFontSizePx = maxTextHeightPx
@@ -3253,9 +3253,12 @@ fun ThinkingRobotAnimation(
             val beltLeftPx = pt(beltLeft, beltTop).x
             val beltRightPx = pt(beltLeft + 60f, beltTop).x
 
-            // Стартовая позиция ленты ПРИВЯЗАНА К ИНДИКАТОРУ:
-            // первая буква всегда справа от индикатора на gapPx.
-            val rawTapeStartPx = pt(headIndicatorX + gapPx, beltTop).x
+                       // Стартовая позиция ленты ПРИВЯЗАНА К ИНДИКАТОРУ:
+            // Индикатор бежит ВПЕРЕДИ, текст следует ЗА ним справа.
+            // Первая буква текста — справа от индикатора на gapPx.
+            // Чтобы индикатор был впереди, текст должен быть СМЕЩЁН НАЗАД
+            // относительно индикатора, а не совпадать с ним.
+            val rawTapeStartPx = pt(headIndicatorX - gapPx, beltTop).x - fullTextWidthPx
 
             // Бесконечная лента: если первая буква ушла правее правого края пояса,
             // сдвигаем её назад на длину ленты, пока не вернётся в видимую зону.
