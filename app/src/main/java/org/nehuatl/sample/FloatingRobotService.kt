@@ -59,9 +59,16 @@ class FloatingRobotService : LifecycleService() {
     // на старое место.
     @Volatile private var baselineY: Int = -1
 
-    // Флаг «палец сейчас на роботе». Пока true — корутина анимации
+        // Флаг «палец сейчас на роботе». Пока true — корутина анимации
     // пропускает итерации, чтобы не дёргать окно под пальцем.
     @Volatile private var isDragging: Boolean = false
+
+    // Pinch-жест: масштаб робота в overlay.
+    // Расстояние между пальцами при ACTION_POINTER_DOWN запоминается как опорное.
+    // Текущий масштаб = опорный масштаб * (текущее расстояние / опорное расстояние).
+    private var pinchBaseDistance: Float = 0f
+    private var pinchBaseScale: Float = 1f
+    private var isPinching: Boolean = false
 
         override fun onCreate() {
         super.onCreate()
@@ -306,7 +313,7 @@ class FloatingRobotService : LifecycleService() {
         y = 300
     }
 
-                   view.setOnTouchListener(object : View.OnTouchListener {
+                                      view.setOnTouchListener(object : View.OnTouchListener {
         private var initialX = 0
         private var initialY = 0
         private var touchX = 0f
@@ -317,9 +324,18 @@ class FloatingRobotService : LifecycleService() {
         // второй тап, он будет считаться двойным, но распознавание уже запущено.
         private var singleTapHandled = false
 
+        // Расстояние между двумя пальцами в текущем событии.
+        // Возвращает -1, если пальцев меньше двух.
+        private fun pinchDistance(e: MotionEvent): Float {
+            if (e.pointerCount < 2) return -1f
+            val dx = e.getX(0) - e.getX(1)
+            val dy = e.getY(0) - e.getY(1)
+            return kotlin.math.sqrt(dx * dx + dy * dy)
+        }
+
         override fun onTouch(v: View, event: MotionEvent): Boolean {
-            when (event.action) {
-                               MotionEvent.ACTION_DOWN -> {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
                     initialX = params.x
                     initialY = params.y
                     touchX = event.rawX
@@ -327,27 +343,62 @@ class FloatingRobotService : LifecycleService() {
                     downTime = System.currentTimeMillis()
                     // Пока палец на роботе — корутина анимации не двигает окно.
                     isDragging = true
+                    isPinching = false
+                    pinchBaseDistance = 0f
                     return true
                 }
+
+                MotionEvent.ACTION_POINTER_DOWN -> {
+                    // Второй палец коснулся экрана — начинаем pinch.
+                    // Перетаскивание одним пальцем отключается на время pinch.
+                    val dist = pinchDistance(event)
+                    if (dist > 0f) {
+                        pinchBaseDistance = dist
+                        pinchBaseScale = MainViewModel.instance?.overlayRobotScale?.value ?: 1f
+                        isPinching = true
+                    }
+                    return true
+                }
+
                 MotionEvent.ACTION_MOVE -> {
+                    if (isPinching && event.pointerCount >= 2) {
+                        val dist = pinchDistance(event)
+                        if (dist > 0f && pinchBaseDistance > 0f) {
+                            val ratio = dist / pinchBaseDistance
+                            val newScale = (pinchBaseScale * ratio).coerceIn(0.5f, 4.0f)
+                            MainViewModel.instance?.setOverlayRobotScale(newScale)
+                        }
+                        return true
+                    }
+
+                    // Один палец — перетаскивание.
                     val dxTotal = event.rawX - touchX
                     val dyTotal = event.rawY - touchY
                     val moved = kotlin.math.abs(dxTotal) > 15 || kotlin.math.abs(dyTotal) > 15
 
                     if (moved) {
-                        // Перетаскивание робота
                         params.x = initialX + dxTotal.toInt()
                         params.y = initialY + dyTotal.toInt()
                         windowManager.updateViewLayout(view, params)
-                        // Обновляем базовую позицию, чтобы корутина анимации
-                        // не вернула окно на старое место после отпускания пальца.
                         baselineY = params.y
                     }
                     return true
                 }
+
+                MotionEvent.ACTION_POINTER_UP -> {
+                    // Один из двух пальцев поднят. Pinch заканчивается.
+                    // Оставшийся палец больше не тащит окно до нового ACTION_DOWN —
+                    // иначе окно дёрнется на разницу между позицией пальцев.
+                    isPinching = false
+                    pinchBaseDistance = 0f
+                    return true
+                }
+
                  MotionEvent.ACTION_UP -> {
                     // Палец отпущен — анимация снова может двигать окно.
                     isDragging = false
+                    isPinching = false
+                    pinchBaseDistance = 0f
 
                     val dxSigned = event.rawX - touchX
                     val dySigned = event.rawY - touchY
