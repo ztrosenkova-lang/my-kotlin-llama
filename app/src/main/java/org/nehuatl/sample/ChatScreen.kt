@@ -2143,7 +2143,7 @@ fun ThinkingRobotAnimation(
             neonBlue
         }
 
-    fun pt(x: Float, y: Float) = Offset(cx + x * u, y * u + bobOffset + staticYOffset - jumpOffset)
+        fun pt(x: Float, y: Float) = Offset(cx + x * u, y * u + bobOffset + staticYOffset - jumpOffset)
 
                 // Функция для элементов головы — добавляет смещение головы
         fun ptHead(x: Float, y: Float): Offset {
@@ -2151,9 +2151,15 @@ fun ThinkingRobotAnimation(
             return Offset(base.x + headOffsetX, base.y + headOffsetY)
         }
 
+        // Смещение лица при повороте головы.
+        // Объявлено ДО ptFace, потому что ptFace его использует.
+        val headTurnMaxAngle = 55f * PI.toFloat() / 180f
+        val headTurnRad = effectiveHeadTurn * headTurnMaxAngle
+        val headTurnShiftX = sin(headTurnRad) * 42f * u
+
         // Функция для элементов ЛИЦА (панель мозга, визор, глаза, брови, рот).
         // При повороте головы они смещаются по X на headTurnShiftX.
-        // Шлем, уши, шея используют ptHead — не смещаются.
+        // Шлем, шея используют ptHead — не смещаются.
         fun ptFace(x: Float, y: Float): Offset {
             val base = ptHead(x, y)
             return Offset(base.x + headTurnShiftX, base.y)
@@ -3152,7 +3158,7 @@ fun ThinkingRobotAnimation(
             // Оставляем зазор сверху и снизу, чтобы текст не упирался в края.
             // beltHeight * 0.7 = 3.5f * u — итоговая максимальная высота текста.
             val beltHeightPx = beltHeight  // = 5f * u
-            val maxTextHeightPx = beltHeightPx * 0.7f
+            val maxTextHeightPx = beltHeightPx * 0.9f
 
             // Стартовое значение в px.
             val startFontSizePx = maxTextHeightPx
@@ -3200,40 +3206,55 @@ fun ThinkingRobotAnimation(
             )
             val fullTextWidthPx = fullTextLayout.size.width.toFloat()
 
-                        // Позиция индикатора в долях пояса (0..1).
+                                               // Позиция индикатора (0..1) — той же скорости, что и лента.
             val headProgress = chargeProgress
 
-            // Хвост: буквы идут СПРАВА от индикатора с той же скоростью.
-            // Точка отсчёта — центр пояса.
-            // Для бесконечной ленты используем смещение, которое циклится по
-            // общей длине ленты (текст + зазор до следующего повтора).
-            val gapPx = 6f * u  // зазор между текстом и следующим повтором ленты
+            // Индикатор едет по поясу: его X в тех же единицах, что и лента.
+            // chargeBarLeft / chargeBarWidth — те же, что ниже для отрисовки индикатора.
+            // Считаем позицию головы индикатора так же, как для chargeBarStart.
+            val headIndicatorX = chargeBarLeft + chargeBarWidth * headProgress
+
+            // Зазор между индикатором и первой буквой текста.
+            val gapPx = 8f * u
+            // Длина одного повтора ленты: текст + зазор до следующего повтора.
             val tapeLengthPx = fullTextWidthPx + gapPx
 
-            // Сколько пикселей лента уже проехала с момента старта цикла.
-            // Едет со скоростью beltWidth за один цикл pulse.
-            val tapeTravelPx = beltWidth * headProgress
+            // Стартовая позиция ленты ПРИВЯЗАНА К ИНДИКАТОРУ:
+            // первая буква всегда справа от индикатора на gapPx,
+            // а когда уходит за правый край — снова выезжает слева.
+            val rawTapeStartPx = headIndicatorX + gapPx
+            val beltLeftUnits = beltLeft
+            val beltRightUnits = beltLeft + 30f
+            val beltWidthUnits = beltRightUnits - beltLeftUnits
+            val beltLeftPx = pt(beltLeftUnits, beltTop).x
+            val beltRightPx = pt(beltRightUnits, beltTop).x
 
-            // Стартовая позиция ленты (левый край первой буквы).
-            // tapeStartPx = сколько уже проехали по модулю длины ленты, минус одна длина.
-            // Это создаёт эффект бесконечной ленты, текущей справа налево.
-            val tapeStartPx = -(tapeTravelPx % tapeLengthPx)
+            // Бесконечная лента: если первая буква ушла правее правого края пояса,
+            // сдвигаем её назад на длину ленты, пока не вернётся в видимую зону.
+            var tapeStartPx = rawTapeStartPx
+            while (tapeStartPx > beltRightPx) {
+                tapeStartPx -= tapeLengthPx
+            }
+            // Если лента уехала слишком далеко влево (не видно) — тоже подтягиваем.
+            while (tapeStartPx + fullTextWidthPx < beltLeftPx - tapeLengthPx) {
+                tapeStartPx += tapeLengthPx
+            }
 
-            // Центр пояса в экранных пикселях.
-            val beltCenterPx = pt(0f, beltTop).x
-
-            // Рисуем столько повторов ленты, сколько влезает в пояс + запас.
-            val beltLeftPx = pt(beltLeft, beltTop).x
-            val beltRightPx = pt(beltLeft + 30f, beltTop).x
-                       var repetition = 0
+            var repetition = 0
             while (true) {
                 val repeatOffsetPx = tapeStartPx + repetition * tapeLengthPx
-                // Точка отсчёта — центр пояса. Лента едет справа налево.
-                val firstLetterLeftPx = beltWidth / 2f + repeatOffsetPx
+                // firstLetterLeftPx — левый край первой буквы повтора в экранных px.
+                val firstLetterLeftPx = repeatOffsetPx
                 val lastLetterRightPx = firstLetterLeftPx + fullTextWidthPx
 
                 // Если начало этого повтора уже правее правого края пояса — прекращаем.
-                if (firstLetterLeftPx > beltWidth + gapPx) break
+                if (firstLetterLeftPx > beltRightPx + gapPx) break
+                // Если весь повтор ушёл левее левого края — пропускаем.
+                if (lastLetterRightPx < beltLeftPx - gapPx) {
+                    repetition++
+                    if (repetition > 20) break
+                    continue
+                }
 
                 // Рисуем посимвольно: каждая буква на своём месте.
                 // Буква i смещена вправо на i * letterWidthPx от начала повтора.
@@ -3245,9 +3266,9 @@ fun ThinkingRobotAnimation(
                 // по size.height — мало.
                 // Baseline первой строки:
                 val baselineOffset = if (fullTextLayout.lineCount > 0) {
-                    fullTextLayout.getLineBaseline(0)
+                    fullTextLayout.getLineBaseline(0).toFloat()
                 } else {
-                    fullTextLayout.size.height
+                    fullTextLayout.size.height.toFloat()
                 }
                 // Верх текста: центр пояса минус половина высоты глифов.
                 // Высота глифов примерно = baseline * 2 (от верха строки до baseline,
@@ -3255,12 +3276,11 @@ fun ThinkingRobotAnimation(
                 // Проще — центрируем по baseline: topLeft.y = центр - baseline / 2.
                 val letterTop = beltCenterYpx - baselineOffset / 2f
 
-                for (i in statusText.indices) {
-                    val letterX = beltLeftPx + firstLetterLeftPx + i * letterWidthPx
+                                for (i in statusText.indices) {
+                    val letterX = firstLetterLeftPx + i * letterWidthPx
                     // Пропускаем буквы, которые целиком за левым или правым краем пояса.
                     if (letterX + letterWidthPx < beltLeftPx) continue
                     if (letterX > beltRightPx) break
-
                     val singleLetterLayout = textMeasurer.measure(
                         text = statusText[i].toString(),
                         style = statusStyle
@@ -3274,11 +3294,7 @@ fun ThinkingRobotAnimation(
                     )
                 }
 
-                // Если правый край этого повтора уже за левым краем пояса — можно
-                // пропустить остальные повторы, они все тоже за краем.
-                if (lastLetterRightPx < 0f && repetition > 0) break
-
-                repetition++
+                               repetition++
                 // Страховка от бесконечного цикла.
                 if (repetition > 20) break
             }
@@ -3733,17 +3749,12 @@ fun ThinkingRobotAnimation(
             )
         )
 
-        // ================= ГОЛОВА И ВСЁ, ЧТО С НЕЙ СВЯЗАНО =================
+    // ================= ГОЛОВА И ВСЁ, ЧТО С НЕЙ СВЯЗАНО =================
         // Оборачиваем в rotate(headTilt) — голова наклоняется вокруг основания шеи.
         // Поворот головы (headTurn) — это НЕ сжатие и НЕ сдвиг всей головы.
         // Шлем и шея остаются на месте. Поворачиваются элементы «лица»
-        // (панель мозга, визор, глаза, брови, рот) и уши — через функцию ptFace.
-        // Уши дополнительно сжимаются по X (leftEarScale / rightEarScale),
-        // создавая эффект объёма при повороте.
-        val headTurnMaxAngle = 55f * PI.toFloat() / 180f
-        val headTurnRad = effectiveHeadTurn * headTurnMaxAngle
-        // Радиус головы в единицах u — примерно 42.
-        val headTurnShiftX = sin(headTurnRad) * 42f * u
+        // (панель мозга, визор, глаза, брови, рот) и уши — через ptFace.
+        // headTurnShiftX объявлен выше, до ptFace.
 
         rotate(effectiveHeadTilt, pivot = pt(0f, 62f)) {
 
