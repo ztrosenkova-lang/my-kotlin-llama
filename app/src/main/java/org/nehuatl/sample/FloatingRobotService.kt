@@ -47,6 +47,10 @@ class FloatingRobotService : LifecycleService() {
     private var robotView: ComposeOverlayView? = null
     private var voiceRecognizer: VoiceRecognizer? = null
 
+    // Флаги для единой анимации окна (bob + jump).
+    // Объявлены как поля класса, чтобы обе корутины видели их.
+    @Volatile private var jumpActive: Boolean = false
+    @Volatile private var jumpElapsedMs: Long = 0L
         override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "Service created")
@@ -119,8 +123,6 @@ class FloatingRobotService : LifecycleService() {
             val baseY = params?.y ?: 0
 
             var bobPhaseMs = 0L
-            var jumpActive = false
-            var jumpElapsedMs = 0L
             val frameMs = 16L
 
             while (true) {
