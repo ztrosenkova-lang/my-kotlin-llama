@@ -272,8 +272,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _overlayRobotScale = MutableStateFlow(1.0f)
     val overlayRobotScale: StateFlow<Float> = _overlayRobotScale.asStateFlow()
 
-    fun setOverlayRobotScale(scale: Float) {
+        fun setOverlayRobotScale(scale: Float) {
         val coerced = scale.coerceIn(0.5f, 4.0f)
+        android.util.Log.d("RobotScale", "setOverlayRobotScale: input=$scale, coerced=$coerced")
         if (_overlayRobotScale.value != coerced) {
             _overlayRobotScale.value = coerced
             prefs.edit().putFloat("overlay_robot_scale", coerced).apply()
