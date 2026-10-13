@@ -34,7 +34,7 @@ fun RobotOverlayContent(
                      cloudState is CloudAIState.Generating
     val isIdle = !isSpeaking && !isThinking
 
-    Box(
+         Box(
         modifier = Modifier.fillMaxHeight(),
         contentAlignment = Alignment.Center
     ) {
@@ -57,7 +57,7 @@ fun RobotOverlayContent(
             isCompressing = isCompressing,
             isLoadingModel = state is GenerationState.LoadingModel,
             isJumping = robotJumpSignal,
-            modifier = Modifier.fillMaxHeight()
+            modifier = Modifier
         )
     }
 }
