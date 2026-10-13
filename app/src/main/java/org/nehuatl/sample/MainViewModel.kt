@@ -670,16 +670,26 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         // 11 → смещение головы влево + наклон влево.
         // Длительность каждой — 2.5 секунды.
         // Порядок перемешивается заново после каждого полного круга.
-                scope.launch(Dispatchers.Default) {
+                        scope.launch(Dispatchers.Default) {
             val basePool = listOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
             var shuffled = basePool.shuffled()
             var index = 0
 
-            // Первая анимация через 60 секунд после запуска
-            delay(60000)
+            // Общий интервал от начала одной анимации до начала следующей —
+            // случайный в диапазоне 15–50 секунд. Так авто-анимации идут
+            // вразнобой, а не «ровно раз в минуту».
+            val minIntervalMs = 15000L
+            val maxIntervalMs = 50000L
+            val random = java.util.Random()
+
+            // Первая анимация — тоже через случайный интервал.
+            delay(minIntervalMs + random.nextLong(maxIntervalMs - minIntervalMs + 1))
+
             while (true) {
                 val anim = shuffled[index]
                 _robotAutoAnimation.value = anim
+
+                // Анимация длится 2500 мс, затем сигнал сбрасывается.
                 delay(2500)
                 _robotAutoAnimation.value = 0
 
@@ -690,8 +700,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     index = 0
                 }
 
-                // Ждём до следующей минуты (60 сек минус уже прошедшие 2.5 сек)
-                delay(60000 - 2500)
+                // Ждём до следующей анимации: случайный общий интервал минус
+                // уже прошедшие 2.5 секунды самой анимации.
+                val nextInterval = minIntervalMs + random.nextLong(maxIntervalMs - minIntervalMs + 1)
+                delay((nextInterval - 2500).coerceAtLeast(0L))
             }
         }
 
