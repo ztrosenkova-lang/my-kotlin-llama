@@ -18,7 +18,7 @@ import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
-
+import kotlinx.coroutines.delay
 class FloatingRobotService : LifecycleService() {
 
     companion object {
@@ -35,8 +35,8 @@ class FloatingRobotService : LifecycleService() {
         var isRunning: Boolean = false
             private set
 
-        // На сколько dp увеличиваем окно overlay при прыжке (вверх).
-        private const val JUMP_WINDOW_EXPAND_DP = 120
+                // На сколько dp окно overlay поднимается при прыжке.
+        private const val JUMP_WINDOW_EXPAND_DP = 40
     }
 
     private lateinit var windowManager: WindowManager
@@ -95,23 +95,47 @@ class FloatingRobotService : LifecycleService() {
             }
         )
 
-        // ========== РЕАКЦИЯ НА ПРЫЖОК ==========
-        // Когда робот прыгает (robotJumpSignal == true), временно увеличиваем
-        // окно overlay ВВЕРХ, сохраняя центр. Иначе голова робота обрезается.
+                // ========== РЕАКЦИЯ НА ПРЫЖОК ==========
+        // Когда робот прыгает (robotJumpSignal == true), окно overlay
+        // плавно сдвигается вверх на 40dp, висит 200 мс, плавно возвращается.
+        // Высота окна не меняется — двигается только params.y.
         lifecycleScope.launch {
             MainViewModel.instance?.robotJumpSignal?.collect { isJumping ->
+                if (!isJumping) return@collect
                 val view = robotView ?: return@collect
                 val params = view.layoutParams as? WindowManager.LayoutParams ?: return@collect
+
+                val jumpHeightPx = (40 * resources.displayMetrics.density).toInt()
+                val startY = params.y
+                val targetY = startY - jumpHeightPx
+
                 try {
-                    if (isJumping) {
-                        val deltaPx = (JUMP_WINDOW_EXPAND_DP * resources.displayMetrics.density).toInt()
-                        params.y -= deltaPx / 2
-                        params.height += deltaPx
-                    } else {
-                        val deltaPx = (JUMP_WINDOW_EXPAND_DP * resources.displayMetrics.density).toInt()
-                        params.y += deltaPx / 2
-                        params.height -= deltaPx
+                    // Плавный подъём: 200 мс, ~16 мс на кадр
+                    val upSteps = 12
+                    for (step in 1..upSteps) {
+                        val t = step.toFloat() / upSteps
+                        // FastOutSlowIn-подобное сглаживание
+                        val eased = t * t * (3f - 2f * t)
+                        params.y = (startY - jumpHeightPx * eased).toInt()
+                        windowManager.updateViewLayout(view, params)
+                        delay(200L / upSteps)
                     }
+                    params.y = targetY
+                    windowManager.updateViewLayout(view, params)
+
+                    // Пауза в верхней точке
+                    delay(200)
+
+                    // Плавный спуск: 200 мс
+                    val downSteps = 12
+                    for (step in 1..downSteps) {
+                        val t = step.toFloat() / downSteps
+                        val eased = t * t * (3f - 2f * t)
+                        params.y = (targetY + jumpHeightPx * eased).toInt()
+                        windowManager.updateViewLayout(view, params)
+                        delay(200L / downSteps)
+                    }
+                    params.y = startY
                     windowManager.updateViewLayout(view, params)
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to update window layout on jump: ${e.message}")
