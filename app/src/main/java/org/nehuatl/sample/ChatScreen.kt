@@ -2015,9 +2015,11 @@ fun ThinkingRobotAnimation(
     // Из autoAnimation вычисляем:
     //  - autoTilt: наклон головы (для 2 = влево, 4 = вправо)
     //  - autoWaveDir: направление махания (для 1,5 = +1 правая; 3 = -1 левая)
-       val autoTilt: Float = when (autoAnimation) {
+          val autoTilt: Float = when (autoAnimation) {
         2 -> -15f   // наклон головы влево
         4 -> 15f    // наклон головы вправо
+        10 -> 15f   // наклон головы вправо (вместе со смещением)
+        11 -> -15f  // наклон головы влево (вместе со смещением)
         else -> 0f
     }
     val autoWaveDir: Float = when (autoAnimation) {
@@ -2027,11 +2029,25 @@ fun ThinkingRobotAnimation(
         else -> 0f
     }
 
-       // Плавный наклон от авто-анимации
+           // Плавный наклон от авто-анимации
     val autoTiltAnimated by animateFloatAsState(
         targetValue = autoTilt,
         animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
         label = "auto_tilt"
+    )
+
+    // Смещение головы по X от авто-анимации (для 10 — вправо, для 11 — влево).
+    // Значение в u-единицах (5f — заметное смещение).
+    val autoHeadOffsetXTarget: Float = when (autoAnimation) {
+        10 -> 5f    // вправо
+        11 -> -5f   // влево
+        else -> 0f
+    }
+
+    val autoHeadOffsetXAnimated by animateFloatAsState(
+        targetValue = autoHeadOffsetXTarget,
+        animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
+        label = "auto_head_offset_x"
     )
 
     // Плавная величина авто-махания (0..1)
@@ -2124,12 +2140,11 @@ fun ThinkingRobotAnimation(
         val panelOpen = headPanelOpenAmount
         val panelLift = panelOpen * 20f * u
 
-        // Смещение головы — независимо от тела.
+               // Смещение головы — независимо от тела.
         // 5f для headOffsetY — чтобы наклон вниз был заметен.
-        // Смещение головы по X — только от наклона корпуса (headBob).
-        // Поворот головы (headTurn) теперь делается через scale+translate
-        // внутри блока головы, а не через сдвиг всего headOffset.
-        val headOffsetX = headBob * 1.5f * u
+        // Смещение головы по X — от наклона корпуса (headBob) плюс
+        // авто-анимации 10/11 (autoHeadOffsetXAnimated).
+        val headOffsetX = (headBob * 1.5f + autoHeadOffsetXAnimated) * u
         val headOffsetY = effectiveHeadNod * 5f * u
         val whiteBody = Color(0xFFF4F6F8)
         val whiteHighlight = Color(0xFFFFFFFF)
