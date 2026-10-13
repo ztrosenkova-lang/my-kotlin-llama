@@ -2254,10 +2254,17 @@ fun ThinkingRobotAnimation(
 
         fun pt(x: Float, y: Float) = Offset(cx + x * u, y * u + bobOffset + staticYOffset - jumpOffset)
 
-                // Функция для элементов головы — добавляет смещение головы
+        // Функция для элементов головы — добавляет смещение головы
         fun ptHead(x: Float, y: Float): Offset {
             val base = pt(x, y)
             return Offset(base.x + headOffsetX, base.y + headOffsetY)
+        }
+
+        // Функция для элементов шеи — БЕЗ смещения головы.
+        // Шея не должна ехать вслед за кивком/сдвигом головы,
+        // иначе она наползает на грудной экран.
+        fun ptNeck(x: Float, y: Float): Offset {
+            return pt(x, y)
         }
 
                 // Функция для элементов лица и ушей.
@@ -3861,16 +3868,18 @@ fun ThinkingRobotAnimation(
 
         rotate(effectiveHeadTilt, pivot = pt(0f, 62f)) {
 
-            // ================= ШЕЯ =================
+                       // ================= ШЕЯ =================
+            // Все элементы шеи рисуются через ptNeck — БЕЗ смещения головы.
+            // Голова кивает и наклоняется, шея остаётся на месте.
             drawRoundRect(
                 color = lightGray,
-                topLeft = ptHead(-14f, 62f),
+                topLeft = ptNeck(-14f, 62f),
                 size = Size(28f * u, 4f * u),
                 cornerRadius = CornerRadius(2f * u)
             )
             drawRoundRect(
                 color = darkGray,
-                topLeft = ptHead(-14f, 62f),
+                topLeft = ptNeck(-14f, 62f),
                 size = Size(28f * u, 4f * u),
                 cornerRadius = CornerRadius(2f * u),
                 style = Stroke(width = 1f * u)
@@ -3878,13 +3887,13 @@ fun ThinkingRobotAnimation(
 
             drawRoundRect(
                 color = mediumGray,
-                topLeft = ptHead(-13f, 66f),
+                topLeft = ptNeck(-13f, 66f),
                 size = Size(26f * u, 3.5f * u),
                 cornerRadius = CornerRadius(1.8f * u)
             )
             drawRoundRect(
                 color = darkGray,
-                topLeft = ptHead(-13f, 66f),
+                topLeft = ptNeck(-13f, 66f),
                 size = Size(26f * u, 3.5f * u),
                 cornerRadius = CornerRadius(1.8f * u),
                 style = Stroke(width = 1f * u)
@@ -3892,13 +3901,13 @@ fun ThinkingRobotAnimation(
 
             drawRoundRect(
                 color = lightGray,
-                topLeft = ptHead(-12f, 69.5f),
+                topLeft = ptNeck(-12f, 69.5f),
                 size = Size(24f * u, 3.5f * u),
                 cornerRadius = CornerRadius(1.8f * u)
             )
             drawRoundRect(
                 color = darkGray,
-                topLeft = ptHead(-12f, 69.5f),
+                topLeft = ptNeck(-12f, 69.5f),
                 size = Size(24f * u, 3.5f * u),
                 cornerRadius = CornerRadius(1.8f * u),
                 style = Stroke(width = 1f * u)
@@ -3906,13 +3915,13 @@ fun ThinkingRobotAnimation(
 
             drawRoundRect(
                 color = mediumGray,
-                topLeft = ptHead(-11f, 73f),
+                topLeft = ptNeck(-11f, 73f),
                 size = Size(22f * u, 3f * u),
                 cornerRadius = CornerRadius(1.5f * u)
             )
             drawRoundRect(
                 color = darkGray,
-                topLeft = ptHead(-11f, 73f),
+                topLeft = ptNeck(-11f, 73f),
                 size = Size(22f * u, 3f * u),
                 cornerRadius = CornerRadius(1.5f * u),
                 style = Stroke(width = 1f * u)
@@ -3920,44 +3929,44 @@ fun ThinkingRobotAnimation(
 
             drawLine(
                 darkerGray,
-                ptHead(-12f, 65.5f),
-                ptHead(12f, 65.5f),
+                ptNeck(-12f, 65.5f),
+                ptNeck(12f, 65.5f),
                 strokeWidth = 0.5f * u
             )
             drawLine(
                 darkerGray,
-                ptHead(-12f, 69f),
-                ptHead(12f, 69f),
+                ptNeck(-12f, 69f),
+                ptNeck(12f, 69f),
                 strokeWidth = 0.5f * u
             )
             drawLine(
                 darkerGray,
-                ptHead(-11f, 72.5f),
-                ptHead(11f, 72.5f),
+                ptNeck(-11f, 72.5f),
+                ptNeck(11f, 72.5f),
                 strokeWidth = 0.5f * u
             )
 
             drawRoundRect(
                 color = whiteHighlight.copy(alpha = 0.6f),
-                topLeft = ptHead(-13f, 62.5f),
+                topLeft = ptNeck(-13f, 62.5f),
                 size = Size(2f * u, 3f * u),
                 cornerRadius = CornerRadius(1f * u)
             )
             drawRoundRect(
                 color = whiteHighlight.copy(alpha = 0.6f),
-                topLeft = ptHead(-12f, 66.5f),
+                topLeft = ptNeck(-12f, 66.5f),
                 size = Size(2f * u, 2.5f * u),
                 cornerRadius = CornerRadius(1f * u)
             )
             drawRoundRect(
                 color = whiteHighlight.copy(alpha = 0.6f),
-                topLeft = ptHead(-11f, 70f),
+                topLeft = ptNeck(-11f, 70f),
                 size = Size(2f * u, 2.5f * u),
                 cornerRadius = CornerRadius(1f * u)
             )
             drawRoundRect(
                 color = whiteHighlight.copy(alpha = 0.6f),
-                topLeft = ptHead(-10f, 73.5f),
+                topLeft = ptNeck(-10f, 73.5f),
                 size = Size(2f * u, 2f * u),
                 cornerRadius = CornerRadius(1f * u)
             )
