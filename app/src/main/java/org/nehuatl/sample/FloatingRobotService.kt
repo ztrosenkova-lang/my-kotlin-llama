@@ -499,8 +499,14 @@ class FloatingRobotService : LifecycleService() {
                             singleTapHandled = true
                             lastTapTime = now
 
-                            // Не запускаем распознавание, пока робот говорит или модель думает.
-                            if (vm.isSpeaking.value || vm.state.value.isActive()) {
+                            // Не запускаем распознавание, пока робот занят:
+                            // говорит, думает, сжимает беседу или загружает модель.
+                            // Иначе можно случайным тапом отправить новое сообщение,
+                            // пока предыдущее ещё не обработано.
+                            if (vm.isSpeaking.value ||
+                                vm.state.value.isActive() ||
+                                vm.isCompressing.value ||
+                                vm.cloudState.value.isActive()) {
                                 Log.d(TAG, "Robot busy — skip voice recognition")
                                 return true
                             }
