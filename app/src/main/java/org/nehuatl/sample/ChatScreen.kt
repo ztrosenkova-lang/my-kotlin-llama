@@ -1759,9 +1759,12 @@ fun ThinkingRobotAnimation(
     // 8 — покачивание корпуса влево-вправо, 9 — осмотр вверх-вниз,
     // 10 — смещение головы вправо + наклон вправо,
     // 11 — смещение головы влево + наклон влево.
-    autoAnimation: Int = 0,
+       autoAnimation: Int = 0,
     // Прыжок: пламя усиливается, появляется пыль и искры, робот подпрыгивает.
-    isJumping: Boolean = false
+    isJumping: Boolean = false,
+    // Амплитуда внутреннего покачивания (bob) в единицах u.
+    // В overlay передаётся 0f, чтобы покачивание делало окно, а не канвас.
+    bobAmplitude: Float = 10f
 ) {
     val transition = rememberInfiniteTransition(label = "robot")
 
@@ -2132,7 +2135,7 @@ fun ThinkingRobotAnimation(
     ) {
         val u = size.height / uDivisor
         val cx = size.width / 2f
-        val bobOffset = if (isActive) sin(bob) * 10f * u else 0f
+        val bobOffset = if (isActive) sin(bob) * bobAmplitude * u else 0f
         // Смещение корпуса от прыжка: 20 единиц u на пике.
                val jumpOffset = 0f
         val lookOffsetX = lookX * 1f * u
