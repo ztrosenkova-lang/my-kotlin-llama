@@ -2016,11 +2016,11 @@ fun ThinkingRobotAnimation(
         label = "tap_wave_amount"
     )
 
-    // ========== АВТО-АНИМАЦИИ ==========
+       // ========== АВТО-АНИМАЦИИ ==========
     // Из autoAnimation вычисляем:
     //  - autoTilt: наклон головы (для 2 = влево, 4 = вправо)
     //  - autoWaveDir: направление махания (для 1,5 = +1 правая; 3 = -1 левая)
-          val autoTilt: Float = when (autoAnimation) {
+    val autoTilt: Float = when (autoAnimation) {
         2 -> -15f   // наклон головы влево
         4 -> 15f    // наклон головы вправо
         10 -> 15f   // наклон головы вправо (вместе со смещением)
@@ -2034,25 +2034,89 @@ fun ThinkingRobotAnimation(
         else -> 0f
     }
 
-           // Плавный наклон от авто-анимации
-    val autoTiltAnimated by animateFloatAsState(
-        targetValue = autoTilt,
-        animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
-        label = "auto_tilt"
+    // ========== АНИМАЦИИ 10 И 11: ТРЁХФАЗНЫЕ ==========
+    // Отличие от 2/4: голова не просто наклоняется, а поворачивается,
+    // сдвигается, кивает и возвращается — с разными задержками фаз.
+    // Взгляд (autoLookXForAnim) синхронизирован с наклоном и «догоняет» его.
+    //
+    // Фазы (мс от начала):
+    //   0–700     — наклон головы (взгляд ещё вперёд)
+    //   700–1400  — сдвиг головы + взгляд в сторону наклона
+    //   1400–2100 — лёгкий кивок (голова уже наклонена и сдвинута)
+    //   2100–2800 — возврат: сначала голова, потом взгляд догоняет
+    val isAnim10or11 = autoAnimation == 10 || autoAnimation == 11
+
+    // Фазовые прогрессы (0..1) — каждый со своей задержкой.
+    // Фаза 1 (наклон): старт 0, длительность 700.
+    // Фаза 2 (сдвиг): старт 700, длительность 700.
+    // Фаза 3 (кивок): старт 1400, длительность 700.
+    // Фаза 4 (возврат): старт 2100, длительность 700.
+    val phase1 by animateFloatAsState(
+        targetValue = if (isAnim10or11) 1f else 0f,
+        animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing),
+        label = "anim10_phase1"
+    )
+    val phase2 by animateFloatAsState(
+        targetValue = if (isAnim10or11) 1f else 0f,
+        animationSpec = tween(durationMillis = 700, delayMillis = 700, easing = FastOutSlowInEasing),
+        label = "anim10_phase2"
+    )
+    val phase3 by animateFloatAsState(
+        targetValue = if (isAnim10or11) 1f else 0f,
+        animationSpec = tween(durationMillis = 700, delayMillis = 1400, easing = FastOutSlowInEasing),
+        label = "anim10_phase3"
     )
 
-    // Смещение головы по X от авто-анимации (для 10 — вправо, для 11 — влево).
-    // Значение в u-единицах (5f — заметное смещение).
-    val autoHeadOffsetXTarget: Float = when (autoAnimation) {
-        10 -> 5f    // вправо
-        11 -> -5f   // влево
+    // Итоговый наклон головы для 10/11 — плавный по фазам.
+    // Фаза 1 даёт наклон, фаза 3 добавляет лёгкий кивок.
+    val anim10HeadTilt: Float = when (autoAnimation) {
+        10 -> 15f
+        11 -> -15f
+        else -> 0f
+    }
+    // Кивок вниз на 3 градуса во время фазы 3.
+    val anim10HeadNod: Float = if (isAnim10or11) phase3 * 3f else 0f
+
+    // Смещение головы по X — включается на фазе 2 и не пропадает до конца.
+    // 8 u — заметное смещение, но не «уезд».
+    val anim10HeadOffsetXTarget: Float = when (autoAnimation) {
+        10 -> 8f
+        11 -> -8f
+        else -> 0f
+    }
+    val anim10HeadOffsetXAnimated: Float = if (isAnim10or11) {
+        anim10HeadOffsetXTarget * phase2
+    } else {
+        0f
+    }
+
+    // Взгляд для 10/11 — уходит в сторону наклона на фазе 2,
+    // возвращается на фазе 4 (phase3 = 1 → 0 через autoAnimation обратно в 0).
+    // Амплитуда 1.2 — чуть больше, чем естественный lookX (1.0),
+    // чтобы взгляд «догонял» голову выразительно.
+    val anim10LookXTarget: Float = when (autoAnimation) {
+        10 -> 1.2f
+        11 -> -1.2f
+        else -> 0f
+    }
+    val anim10LookXAnimated: Float = if (isAnim10or11) {
+        anim10LookXTarget * phase2
+    } else {
+        0f
+    }
+
+    // ========== СТАРЫЕ АНИМАЦИИ 2/4 (наклон без сдвига) ==========
+    // Работают только для 2 и 4 — 10 и 11 идут через фазовые переменные выше.
+    val autoTiltOnly: Float = when (autoAnimation) {
+        2 -> -15f
+        4 -> 15f
         else -> 0f
     }
 
-    val autoHeadOffsetXAnimated by animateFloatAsState(
-        targetValue = autoHeadOffsetXTarget,
-        animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
-        label = "auto_head_offset_x"
+    val autoTiltAnimated by animateFloatAsState(
+        targetValue = autoTiltOnly,
+        animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing),
+        label = "auto_tilt"
     )
 
     // Плавная величина авто-махания (0..1)
@@ -2119,9 +2183,22 @@ fun ThinkingRobotAnimation(
         label = "auto_nod_up_down"
     )
 
-        // Итоговые наклон и махание: тап и авто складываются
-    val effectiveHeadTilt = headTilt + autoTiltAnimated
-    val effectiveHeadNod = headNod + autoNodUpDownAnimated
+                // Итоговые наклон и махание: тап и авто складываются.
+    // Для 10/11 берём фазовый наклон (anim10HeadTilt * phase1) и
+    // фазовый кивок (anim10HeadNod). Для 2/4 — старый autoTiltAnimated.
+    val autoTiltCombined: Float = if (isAnim10or11) {
+        anim10HeadTilt * phase1
+    } else {
+        autoTiltAnimated
+    }
+    val autoNodCombined: Float = if (isAnim10or11) {
+        anim10HeadNod
+    } else {
+        autoNodUpDownAnimated
+    }
+
+    val effectiveHeadTilt = headTilt + autoTiltCombined
+    val effectiveHeadNod = headNod + autoNodCombined
     val effectiveTapWaveDirection = if (tapWaveDirection != 0f) tapWaveDirection else autoWaveDir
     val effectiveTapWaveAmount = if (tapWaveDirection != 0f) tapWaveAmount else autoWaveAmount
     Canvas(
@@ -2138,18 +2215,25 @@ fun ThinkingRobotAnimation(
         val bobOffset = if (isActive) sin(bob) * bobAmplitude * u else 0f
         // Смещение корпуса от прыжка: 20 единиц u на пике.
                val jumpOffset = 0f
-        val lookOffsetX = lookX * 1f * u
+                // Взгляд: естественное блуждание (lookX) + фазовый взгляд для 10/11.
+        // Во время 10/11 фазовый взгляд перебивает естественный — глаза
+        // синхронно смотрят в сторону наклона головы.
+        val lookOffsetX = if (isAnim10or11) {
+            anim10LookXAnimated * u
+        } else {
+            lookX * 1f * u
+        }
         val lookOffsetY = lookY * 0.8f * u
         val currentBlink = if (isActive) blink else 1f
         val staticYOffset = yOffsetUnits * u
         val panelOpen = headPanelOpenAmount
         val panelLift = panelOpen * 20f * u
 
-               // Смещение головы — независимо от тела.
+                      // Смещение головы — независимо от тела.
         // 5f для headOffsetY — чтобы наклон вниз был заметен.
         // Смещение головы по X — от наклона корпуса (headBob) плюс
-        // авто-анимации 10/11 (autoHeadOffsetXAnimated).
-        val headOffsetX = (headBob * 1.5f + autoHeadOffsetXAnimated) * u
+        // фазовое смещение для 10/11 (anim10HeadOffsetXAnimated).
+        val headOffsetX = (headBob * 1.5f + anim10HeadOffsetXAnimated) * u
         val headOffsetY = effectiveHeadNod * 5f * u
         val whiteBody = Color(0xFFF4F6F8)
         val whiteHighlight = Color(0xFFFFFFFF)
