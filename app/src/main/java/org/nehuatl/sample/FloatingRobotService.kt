@@ -360,12 +360,39 @@ class FloatingRobotService : LifecycleService() {
                     return true
                 }
 
-                MotionEvent.ACTION_MOVE -> {
+                               MotionEvent.ACTION_MOVE -> {
                     if (isPinching && event.pointerCount >= 2) {
                         val dist = pinchDistance(event)
                         if (dist > 0f && pinchBaseDistance > 0f) {
                             val ratio = dist / pinchBaseDistance
                             val newScale = (pinchBaseScale * ratio).coerceIn(0.5f, 4.0f)
+
+                            // Запоминаем старые размеры и позицию до изменения.
+                            val oldW = params.width
+                            val oldH = params.height
+                            val oldX = params.x
+                            val oldY = params.y
+
+                            // Новые размеры окна — базовые 340 × 380 dp, умноженные на scale.
+                            val density = resources.displayMetrics.density
+                            val newW = (340 * density * newScale).toInt()
+                            val newH = (380 * density * newScale).toInt()
+
+                            // Сдвигаем позицию так, чтобы центр окна остался на месте.
+                            val deltaX = (newW - oldW) / 2
+                            val deltaY = (newH - oldH) / 2
+
+                            params.width = newW
+                            params.height = newH
+                            params.x = oldX - deltaX
+                            params.y = oldY - deltaY
+
+                            // Синхронизируем baselineY — чтобы bob/jump не дёрнулись.
+                            if (baselineY >= 0) {
+                                baselineY = baselineY - deltaY
+                            }
+
+                            windowManager.updateViewLayout(view, params)
                             MainViewModel.instance?.setOverlayRobotScale(newScale)
                         }
                         return true
