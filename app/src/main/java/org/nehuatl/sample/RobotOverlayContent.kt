@@ -38,8 +38,8 @@ fun RobotOverlayContent(
         modifier = Modifier.fillMaxHeight(),
         contentAlignment = Alignment.Center
     ) {
-            ThinkingRobotAnimation(
-            height = 300.dp,
+                        ThinkingRobotAnimation(
+            height = 322.dp,
             isActive = true,
             isSpeaking = isSpeaking,
             isThinking = isThinking,
@@ -57,6 +57,7 @@ fun RobotOverlayContent(
             isCompressing = isCompressing,
             isLoadingModel = state is GenerationState.LoadingModel,
             isJumping = robotJumpSignal,
+            bobAmplitude = 0f,
             modifier = Modifier.fillMaxHeight()
         )
     }
