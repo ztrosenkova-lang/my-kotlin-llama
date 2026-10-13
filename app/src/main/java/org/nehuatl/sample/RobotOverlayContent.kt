@@ -3,6 +3,8 @@ package org.nehuatl.sample
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -35,8 +37,10 @@ fun RobotOverlayContent(
                      cloudState is CloudAIState.Generating
     val isIdle = !isSpeaking && !isThinking
 
-               Box(
-        modifier = Modifier.fillMaxHeight(),
+                   Box(
+        modifier = Modifier
+            .width(290.dp * overlayRobotScale * 0.85f)
+            .height(290.dp * overlayRobotScale),
         contentAlignment = Alignment.Center
     ) {
             ThinkingRobotAnimation(
