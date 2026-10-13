@@ -364,8 +364,8 @@ class FloatingRobotService : LifecycleService() {
                     if (isPinching && event.pointerCount >= 2) {
                         val dist = pinchDistance(event)
                         if (dist > 0f && pinchBaseDistance > 0f) {
-                                                       val ratio = dist / pinchBaseDistance
-                            val newScale = (pinchBaseScale * ratio).coerceIn(0.5f, 4.0f)
+                            val ratio = dist / pinchBaseDistance
+                            val newScale = (pinchBaseScale * ratio).coerceIn(0.5f, 3.0f)
                             android.util.Log.d(
                                 "RobotPinch",
                                 "ratio=$ratio, baseScale=$pinchBaseScale, newScale=$newScale, dist=$dist, baseDist=$pinchBaseDistance"
