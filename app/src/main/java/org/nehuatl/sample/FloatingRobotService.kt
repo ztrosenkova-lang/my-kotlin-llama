@@ -35,8 +35,12 @@ class FloatingRobotService : LifecycleService() {
         var isRunning: Boolean = false
             private set
 
-                // На сколько dp окно overlay поднимается при прыжке.
-        private const val JUMP_WINDOW_EXPAND_DP = 40
+                       // Амплитуда покачивания окна overlay (bob), в dp.
+        private const val BOB_WINDOW_AMPLITUDE_DP = 11
+        // Период покачивания окна overlay, в мс.
+        private const val BOB_WINDOW_PERIOD_MS = 2400L
+        // Амплитуда прыжка окна overlay, в dp.
+        private const val JUMP_WINDOW_AMPLITUDE_DP = 80
     }
 
     private lateinit var windowManager: WindowManager
@@ -95,50 +99,106 @@ class FloatingRobotService : LifecycleService() {
             }
         )
 
-                // ========== РЕАКЦИЯ НА ПРЫЖОК ==========
-        // Когда робот прыгает (robotJumpSignal == true), окно overlay
-        // плавно сдвигается вверх на 40dp, висит 200 мс, плавно возвращается.
-        // Высота окна не меняется — двигается только params.y.
+                               // ========== ЕДИНАЯ АНИМАЦИЯ ПОЛОЖЕНИЯ ОКНА ==========
+        // Одна корутина управляет params.y, складывая две анимации:
+        //  - bob: непрерывное покачивание окна вверх-вниз (амплитуда 11 dp,
+        //    период 2400 мс, синус). Внутренний bob канваса отключён
+        //    (bobAmplitude = 0f в RobotOverlayContent), чтобы не было наложения.
+        //  - jump: прыжок окна вверх при robotJumpSignal (амплитуда 80 dp,
+        //    тайминги синхронны с внутренним jumpProgressAnim: подъём 200 мс,
+        //    пауза 200 мс, спуск 200 мс).
+        // Пока идёт прыжок, bob приостанавливается, чтобы не конфликтовать.
+        lifecycleScope.launch {
+            val density = resources.displayMetrics.density
+            val bobAmplitudePx = (BOB_WINDOW_AMPLITUDE_DP * density).toInt()
+            val jumpAmplitudePx = (JUMP_WINDOW_AMPLITUDE_DP * density).toInt()
+
+            // Базовая Y-позиция окна. Задаётся один раз при старте сервиса.
+            val view = robotView
+            val params = view?.layoutParams as? WindowManager.LayoutParams
+            val baseY = params?.y ?: 0
+
+            var bobPhaseMs = 0L
+            var jumpActive = false
+            var jumpElapsedMs = 0L
+            val frameMs = 16L
+
+            while (true) {
+                delay(frameMs)
+
+                // Пока идёт прыжок — bob не двигаем, ждём окончания.
+                if (jumpActive) {
+                    jumpElapsedMs += frameMs
+
+                    // Фазы прыжка (синхронно с jumpProgressAnim в ThinkingRobotAnimation):
+                    //   0–250    мс — стоим (пламя разгорается)
+                    //   250–450  мс — подъём на jumpAmplitudePx
+                    //   450–650  мс — стоим в верхней точке
+                    //   650–900  мс — спуск
+                    //   900–1100 мс — стоим (пламя гаснет)
+                    val jumpOffsetPx: Int = when {
+                        jumpElapsedMs < 250L -> 0
+                        jumpElapsedMs < 450L -> {
+                            val t = (jumpElapsedMs - 250L).toFloat() / 200f
+                            val eased = t * t * (3f - 2f * t)
+                            -(jumpAmplitudePx * eased).toInt()
+                        }
+                        jumpElapsedMs < 650L -> -jumpAmplitudePx
+                        jumpElapsedMs < 900L -> {
+                            val t = (jumpElapsedMs - 650L).toFloat() / 250f
+                            val eased = t * t * (3f - 2f * t)
+                            -(jumpAmplitudePx * (1f - eased)).toInt()
+                        }
+                        jumpElapsedMs < 1100L -> 0
+                        else -> {
+                            jumpActive = false
+                            jumpElapsedMs = 0L
+                            0
+                        }
+                    }
+
+                    val currentView = robotView
+                    val currentParams = currentView?.layoutParams as? WindowManager.LayoutParams
+                    if (currentView != null && currentParams != null) {
+                        val newY = (baseY + jumpOffsetPx).coerceAtLeast(0)
+                        if (currentParams.y != newY) {
+                            currentParams.y = newY
+                            try {
+                                windowManager.updateViewLayout(currentView, currentParams)
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Failed to update window layout on jump: ${e.message}")
+                            }
+                        }
+                    }
+                } else {
+                    // Bob: синус, полный цикл туда-обратно за BOB_WINDOW_PERIOD_MS.
+                    bobPhaseMs = (bobPhaseMs + frameMs) % BOB_WINDOW_PERIOD_MS
+                    val phase = (bobPhaseMs.toFloat() / BOB_WINDOW_PERIOD_MS.toFloat()) * 2f * PI.toFloat()
+                    val bobOffsetPx = -(sin(phase) * bobAmplitudePx).toInt()
+
+                    val currentView = robotView
+                    val currentParams = currentView?.layoutParams as? WindowManager.LayoutParams
+                    if (currentView != null && currentParams != null) {
+                        val newY = (baseY + bobOffsetPx).coerceAtLeast(0)
+                        if (currentParams.y != newY) {
+                            currentParams.y = newY
+                            try {
+                                windowManager.updateViewLayout(currentView, currentParams)
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Failed to update window layout on bob: ${e.message}")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Отдельная корутина: следит за сигналом прыжка и взводит флаг.
         lifecycleScope.launch {
             MainViewModel.instance?.robotJumpSignal?.collect { isJumping ->
-                if (!isJumping) return@collect
-                val view = robotView ?: return@collect
-                val params = view.layoutParams as? WindowManager.LayoutParams ?: return@collect
-
-                val jumpHeightPx = (40 * resources.displayMetrics.density).toInt()
-                val startY = params.y
-                val targetY = startY - jumpHeightPx
-
-                try {
-                    // Плавный подъём: 200 мс, ~16 мс на кадр
-                    val upSteps = 12
-                    for (step in 1..upSteps) {
-                        val t = step.toFloat() / upSteps
-                        // FastOutSlowIn-подобное сглаживание
-                        val eased = t * t * (3f - 2f * t)
-                        params.y = (startY - jumpHeightPx * eased).toInt()
-                        windowManager.updateViewLayout(view, params)
-                        delay(200L / upSteps)
-                    }
-                    params.y = targetY
-                    windowManager.updateViewLayout(view, params)
-
-                    // Пауза в верхней точке
-                    delay(200)
-
-                    // Плавный спуск: 200 мс
-                    val downSteps = 12
-                    for (step in 1..downSteps) {
-                        val t = step.toFloat() / downSteps
-                        val eased = t * t * (3f - 2f * t)
-                        params.y = (targetY + jumpHeightPx * eased).toInt()
-                        windowManager.updateViewLayout(view, params)
-                        delay(200L / downSteps)
-                    }
-                    params.y = startY
-                    windowManager.updateViewLayout(view, params)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to update window layout on jump: ${e.message}")
+                if (isJumping) {
+                    jumpActive = true
+                    jumpElapsedMs = 0L
                 }
             }
         }
@@ -194,8 +254,8 @@ class FloatingRobotService : LifecycleService() {
         }
     }
 
-        val widthPx = (280 * resources.displayMetrics.density).toInt()
-    val heightPx = (320 * resources.displayMetrics.density).toInt()
+    val widthPx = (340 * resources.displayMetrics.density).toInt()
+    val heightPx = (380 * resources.displayMetrics.density).toInt()
 
     val params = WindowManager.LayoutParams(
         widthPx,
