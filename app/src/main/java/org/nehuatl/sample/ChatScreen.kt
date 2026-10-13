@@ -2134,7 +2134,7 @@ fun ThinkingRobotAnimation(
         val cx = size.width / 2f
         val bobOffset = if (isActive) sin(bob) * 10f * u else 0f
         // Смещение корпуса от прыжка: 20 единиц u на пике.
-        val jumpOffset = jumpProgress * 20f * u
+               val jumpOffset = 0f
         val lookOffsetX = lookX * 1f * u
         val lookOffsetY = lookY * 0.8f * u
         val currentBlink = if (isActive) blink else 1f
