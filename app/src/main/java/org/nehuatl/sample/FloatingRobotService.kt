@@ -16,6 +16,8 @@ import android.view.View
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LifecycleService
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 class FloatingRobotService : LifecycleService() {
 
@@ -29,9 +31,12 @@ class FloatingRobotService : LifecycleService() {
         const val ACTION_HIDE = "org.nehuatl.sample.HIDE_FLOATING"
         const val ACTION_SHOW = "org.nehuatl.sample.SHOW_FLOATING"
 
-        @Volatile
+               @Volatile
         var isRunning: Boolean = false
             private set
+
+        // На сколько dp увеличиваем окно overlay при прыжке (вверх).
+        private const val JUMP_WINDOW_EXPAND_DP = 120
     }
 
     private lateinit var windowManager: WindowManager
@@ -84,11 +89,35 @@ class FloatingRobotService : LifecycleService() {
                 }
                 MainViewModel.instance?.setOverlayListening(false)
             },
-            onError = { error ->
+                        onError = { error ->
                 Log.w(TAG, "Voice error: $error")
                 MainViewModel.instance?.setOverlayListening(false)
             }
         )
+
+        // ========== РЕАКЦИЯ НА ПРЫЖОК ==========
+        // Когда робот прыгает (robotJumpSignal == true), временно увеличиваем
+        // окно overlay ВВЕРХ, сохраняя центр. Иначе голова робота обрезается.
+        lifecycleScope.launch {
+            MainViewModel.instance?.robotJumpSignal?.collect { isJumping ->
+                val view = robotView ?: return@collect
+                val params = view.layoutParams as? WindowManager.LayoutParams ?: return@collect
+                try {
+                    if (isJumping) {
+                        val deltaPx = (JUMP_WINDOW_EXPAND_DP * resources.displayMetrics.density).toInt()
+                        params.y -= deltaPx / 2
+                        params.height += deltaPx
+                    } else {
+                        val deltaPx = (JUMP_WINDOW_EXPAND_DP * resources.displayMetrics.density).toInt()
+                        params.y += deltaPx / 2
+                        params.height -= deltaPx
+                    }
+                    windowManager.updateViewLayout(view, params)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to update window layout on jump: ${e.message}")
+                }
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
