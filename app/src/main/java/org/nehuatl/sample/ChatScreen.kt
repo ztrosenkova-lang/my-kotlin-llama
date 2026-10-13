@@ -3170,7 +3170,7 @@ fun ThinkingRobotAnimation(
             // Оставляем зазор сверху и снизу, чтобы текст не упирался в края.
             // beltHeight * 0.7 = 3.5f * u — итоговая максимальная высота текста.
             val beltHeightPx = beltHeight  // = 5f * u
-            val maxTextHeightPx = beltHeightPx * 0.9f
+            val maxTextHeightPx = beltHeightPx * 1.0f
 
             // Стартовое значение в px.
             val startFontSizePx = maxTextHeightPx
@@ -3192,7 +3192,7 @@ fun ThinkingRobotAnimation(
             // Коэффициент подгонки: если реальная высота больше допустимой —
             // уменьшаем размер шрифта пропорционально.
             val heightScale = if (probeHeightPx > 0f) {
-                (maxTextHeightPx / probeHeightPx).coerceAtMost(1f)
+                maxTextHeightPx / probeHeightPx
             } else {
                 1f
             }
@@ -3228,7 +3228,7 @@ fun ThinkingRobotAnimation(
 
             // Границы пояса в экранных пикселях.
             val beltLeftPx = pt(beltLeft, beltTop).x
-            val beltRightPx = pt(beltLeft + 30f, beltTop).x
+            val beltRightPx = pt(beltLeft + 60f, beltTop).x
 
             // Стартовая позиция ленты ПРИВЯЗАНА К ИНДИКАТОРУ:
             // первая буква всегда справа от индикатора на gapPx.
