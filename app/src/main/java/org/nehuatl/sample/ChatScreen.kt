@@ -3206,12 +3206,19 @@ fun ThinkingRobotAnimation(
             )
             val fullTextWidthPx = fullTextLayout.size.width.toFloat()
 
-                                               // Позиция индикатора (0..1) — той же скорости, что и лента.
+                                                          // ===== РАСЧЁТ ГЕОМЕТРИИ ИНДИКАТОРА (chargeBar) =====
+            // Эти переменные нужны и ленте, и самому индикатору. Объявляем ЗДЕСЬ,
+            // до ленты, чтобы лента могла использовать chargeBarLeft / chargeBarWidth.
+            val chargeBarLeft = beltLeft + 2f
+            val chargeBarRight = beltLeft + 30f + 28f - 2f
+            val chargeBarWidth = chargeBarRight - chargeBarLeft
+            val chargeBarHeight = 1.5f
+            val chargeBarY = beltTop + (beltHeight / (2f * u)) - chargeBarHeight / 2f
+
+            // Позиция индикатора (0..1) — той же скорости, что и лента.
             val headProgress = chargeProgress
 
-            // Индикатор едет по поясу: его X в тех же единицах, что и лента.
-            // chargeBarLeft / chargeBarWidth — те же, что ниже для отрисовки индикатора.
-            // Считаем позицию головы индикатора так же, как для chargeBarStart.
+            // X-координата индикатора в тех же единицах, что и лента (u-единицы).
             val headIndicatorX = chargeBarLeft + chargeBarWidth * headProgress
 
             // Зазор между индикатором и первой буквой текста.
@@ -3219,15 +3226,13 @@ fun ThinkingRobotAnimation(
             // Длина одного повтора ленты: текст + зазор до следующего повтора.
             val tapeLengthPx = fullTextWidthPx + gapPx
 
+            // Границы пояса в экранных пикселях.
+            val beltLeftPx = pt(beltLeft, beltTop).x
+            val beltRightPx = pt(beltLeft + 30f, beltTop).x
+
             // Стартовая позиция ленты ПРИВЯЗАНА К ИНДИКАТОРУ:
-            // первая буква всегда справа от индикатора на gapPx,
-            // а когда уходит за правый край — снова выезжает слева.
-            val rawTapeStartPx = headIndicatorX + gapPx
-            val beltLeftUnits = beltLeft
-            val beltRightUnits = beltLeft + 30f
-            val beltWidthUnits = beltRightUnits - beltLeftUnits
-            val beltLeftPx = pt(beltLeftUnits, beltTop).x
-            val beltRightPx = pt(beltRightUnits, beltTop).x
+            // первая буква всегда справа от индикатора на gapPx.
+            val rawTapeStartPx = pt(headIndicatorX + gapPx, beltTop).x
 
             // Бесконечная лента: если первая буква ушла правее правого края пояса,
             // сдвигаем её назад на длину ленты, пока не вернётся в видимую зону.
@@ -3235,7 +3240,7 @@ fun ThinkingRobotAnimation(
             while (tapeStartPx > beltRightPx) {
                 tapeStartPx -= tapeLengthPx
             }
-            // Если лента уехала слишком далеко влево (не видно) — тоже подтягиваем.
+            // Если лента уехала слишком далеко влево (не видно) — подтягиваем.
             while (tapeStartPx + fullTextWidthPx < beltLeftPx - tapeLengthPx) {
                 tapeStartPx += tapeLengthPx
             }
@@ -3256,31 +3261,21 @@ fun ThinkingRobotAnimation(
                     continue
                 }
 
-                // Рисуем посимвольно: каждая буква на своём месте.
-                // Буква i смещена вправо на i * letterWidthPx от начала повтора.
-                                // Центр пояса по вертикали.
+                // Центр пояса по вертикали.
                 val beltCenterYpx = pt(0f, beltCenterY).y
-                // Сдвигаем текст так, чтобы центр ГЛИФОВ (а не строки) совпал
-                // с центром пояса. У моноширинного шрифта глифы смещены
-                // в нижнюю часть строки, поэтому просто центрировать
-                // по size.height — мало.
-                // Baseline первой строки:
                 val baselineOffset = if (fullTextLayout.lineCount > 0) {
                     fullTextLayout.getLineBaseline(0).toFloat()
                 } else {
                     fullTextLayout.size.height.toFloat()
                 }
-                // Верх текста: центр пояса минус половина высоты глифов.
-                // Высота глифов примерно = baseline * 2 (от верха строки до baseline,
-                // и столько же — визуальный запас ниже baseline для глифов без хвостов).
-                // Проще — центрируем по baseline: topLeft.y = центр - baseline / 2.
                 val letterTop = beltCenterYpx - baselineOffset / 2f
 
-                                for (i in statusText.indices) {
+                for (i in statusText.indices) {
                     val letterX = firstLetterLeftPx + i * letterWidthPx
                     // Пропускаем буквы, которые целиком за левым или правым краем пояса.
                     if (letterX + letterWidthPx < beltLeftPx) continue
                     if (letterX > beltRightPx) break
+
                     val singleLetterLayout = textMeasurer.measure(
                         text = statusText[i].toString(),
                         style = statusStyle
@@ -3294,18 +3289,13 @@ fun ThinkingRobotAnimation(
                     )
                 }
 
-                               repetition++
+                repetition++
                 // Страховка от бесконечного цикла.
                 if (repetition > 20) break
             }
         }
 
-        val chargeBarLeft = beltLeft + 2f
-        val chargeBarRight = beltLeft + 30f + 28f - 2f
-        val chargeBarWidth = chargeBarRight - chargeBarLeft
-        val chargeBarHeight = 1.5f
-        val chargeBarY = beltTop + (beltHeight / (2f * u)) - chargeBarHeight / 2f
-
+        
         drawRoundRect(
             Color(0xFF0A1520),
             topLeft = pt(chargeBarLeft, chargeBarY),
