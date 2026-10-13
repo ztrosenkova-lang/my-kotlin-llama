@@ -1948,22 +1948,28 @@ fun ThinkingRobotAnimation(
     // (0→1→0 за 1200 мс), независимо от того, что isJumping уже сбросился.
     // Иначе keyframes прерывался бы на середине и робот дёргался.
 
-    val jumpProgressAnim = remember { Animatable(0f) }
+        val jumpProgressAnim = remember { Animatable(0f) }
     val flameIntensityAnim = remember { Animatable(0f) }
 
     LaunchedEffect(isJumping) {
         if (isJumping) {
-            // Запускаем обе анимации параллельно.
+            // Плавный связный прыжок:
+            // 0–250    — пламя разгорается (0 → 1), робот ещё на месте.
+            // 250–450  — робот поднимается (0 → 1), пламя на пике.
+            // 450–650  — робот висит в верхней точке, пламя на пике.
+            // 650–900  — робот опускается (1 → 0), пламя начинает гаснуть.
+            // 900–1100 — пламя гаснет (1 → 0), робот уже на месте.
             launch {
                 jumpProgressAnim.animateTo(
                     targetValue = 1f,
                     animationSpec = keyframes {
-                        durationMillis = 1200
+                        durationMillis = 1100
                         0f at 0 using FastOutSlowInEasing
-                        1f at 400 using FastOutSlowInEasing
-                        1f at 600 using LinearEasing
-                        0f at 1000 using FastOutSlowInEasing
-                        0f at 1200
+                        0f at 250 using LinearEasing
+                        1f at 450 using FastOutSlowInEasing
+                        1f at 650 using LinearEasing
+                        0f at 900 using FastOutSlowInEasing
+                        0f at 1100
                     }
                 )
             }
@@ -1971,11 +1977,12 @@ fun ThinkingRobotAnimation(
                 flameIntensityAnim.animateTo(
                     targetValue = 0f,
                     animationSpec = keyframes {
-                        durationMillis = 1200
+                        durationMillis = 1100
                         0f at 0
-                        1f at 300
-                        1f at 700
-                        0f at 1200
+                        1f at 250
+                        1f at 650
+                        0f at 900
+                        0f at 1100
                     }
                 )
             }
