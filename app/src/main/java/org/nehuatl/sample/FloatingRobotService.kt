@@ -49,10 +49,20 @@ class FloatingRobotService : LifecycleService() {
     private var robotView: ComposeOverlayView? = null
     private var voiceRecognizer: VoiceRecognizer? = null
 
-    // Флаги для единой анимации окна (bob + jump).
+        // Флаги для единой анимации окна (bob + jump).
     // Объявлены как поля класса, чтобы обе корутины видели их.
     @Volatile private var jumpActive: Boolean = false
     @Volatile private var jumpElapsedMs: Long = 0L
+
+    // Базовая Y-позиция окна. Обновляется при перетаскивании робота
+    // пользователем, чтобы корутина анимации не возвращала окно
+    // на старое место.
+    @Volatile private var baselineY: Int = -1
+
+    // Флаг «палец сейчас на роботе». Пока true — корутина анимации
+    // пропускает итерации, чтобы не дёргать окно под пальцем.
+    @Volatile private var isDragging: Boolean = false
+
         override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "Service created")
@@ -136,8 +146,7 @@ class FloatingRobotService : LifecycleService() {
             val bobAmplitudePx = (BOB_WINDOW_AMPLITUDE_DP * density).toInt()
             val jumpAmplitudePx = (JUMP_WINDOW_AMPLITUDE_DP * density).toInt()
 
-            var baseY: Int? = null
-            var bobPhaseMs = 0L
+                        var bobPhaseMs = 0L
             val frameMs = 16L
 
             while (true) {
@@ -146,17 +155,25 @@ class FloatingRobotService : LifecycleService() {
                 val currentView = robotView
                 val currentParams = currentView?.layoutParams as? WindowManager.LayoutParams
 
-                // Если робота ещё нет — ждём. baseY не трогаем.
+                                // Если робота ещё нет — ждём.
                 if (currentView == null || currentParams == null) {
                     continue
                 }
 
-                // При первом появлении робота — запоминаем его текущий Y
-                // как базовый. Дальше работаем только относительно него.
-                if (baseY == null) {
-                    baseY = currentParams.y
+                // Пока палец на роботе — анимация не двигает окно.
+                // Позицию задаёт ACTION_MOVE перетаскиванием.
+                if (isDragging) {
+                    continue
                 }
-                val baseline = baseY ?: continue
+
+                // При первом появлении робота — запоминаем его текущий Y
+                // как базовый. baselineY — поле класса, обновляется при
+                // перетаскивании робота пользователем, чтобы анимация
+                // не возвращала окно на старое место.
+                if (baselineY < 0) {
+                    baselineY = currentParams.y
+                }
+                val baseline = baselineY
 
                 // Пока идёт прыжок — bob не двигаем, ждём окончания.
                 if (jumpActive) {
@@ -207,25 +224,12 @@ class FloatingRobotService : LifecycleService() {
                     val newY = (baseline + bobOffsetPx).coerceAtLeast(0)
                     if (currentParams.y != newY) {
                         currentParams.y = newY
-                        try {
+                                             try {
                             windowManager.updateViewLayout(currentView, currentParams)
                         } catch (e: Exception) {
                             Log.w(TAG, "Failed to update window layout on bob: ${e.message}")
                         }
                     }
-                }
-            }
-        }
-    }
-            }
-        }
-
-        // Отдельная корутина: следит за сигналом прыжка и взводит флаг.
-        lifecycleScope.launch {
-            MainViewModel.instance?.robotJumpSignal?.collect { isJumping ->
-                if (isJumping) {
-                    jumpActive = true
-                    jumpElapsedMs = 0L
                 }
             }
         }
@@ -315,12 +319,14 @@ class FloatingRobotService : LifecycleService() {
 
         override fun onTouch(v: View, event: MotionEvent): Boolean {
             when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
+                               MotionEvent.ACTION_DOWN -> {
                     initialX = params.x
                     initialY = params.y
                     touchX = event.rawX
                     touchY = event.rawY
                     downTime = System.currentTimeMillis()
+                    // Пока палец на роботе — корутина анимации не двигает окно.
+                    isDragging = true
                     return true
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -333,10 +339,16 @@ class FloatingRobotService : LifecycleService() {
                         params.x = initialX + dxTotal.toInt()
                         params.y = initialY + dyTotal.toInt()
                         windowManager.updateViewLayout(view, params)
+                        // Обновляем базовую позицию, чтобы корутина анимации
+                        // не вернула окно на старое место после отпускания пальца.
+                        baselineY = params.y
                     }
                     return true
                 }
-                               MotionEvent.ACTION_UP -> {
+                 MotionEvent.ACTION_UP -> {
+                    // Палец отпущен — анимация снова может двигать окно.
+                    isDragging = false
+
                     val dxSigned = event.rawX - touchX
                     val dySigned = event.rawY - touchY
                     val dx = kotlin.math.abs(dxSigned)
