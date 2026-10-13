@@ -256,11 +256,28 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _currentMode.value = mode
     }
 
-                private val _floatingRobotRunning = MutableStateFlow(false)
+                    private val _floatingRobotRunning = MutableStateFlow(false)
     val floatingRobotRunning: StateFlow<Boolean> = _floatingRobotRunning.asStateFlow()
 
     fun setFloatingRunning(running: Boolean) {
         _floatingRobotRunning.value = running
+    }
+
+    // ========== МАСШТАБ РОБОТА В OVERLAY ==========
+    // Управляется жестом pinch в FloatingRobotService.
+    // Читается в RobotOverlayContent для расчёта высоты канваса.
+    // Сохраняется в SharedPreferences, чтобы пережить перезапуск сервиса.
+    private val _overlayRobotScale = MutableStateFlow(
+        prefs.getFloat("overlay_robot_scale", 1.0f).coerceIn(0.5f, 4.0f)
+    )
+    val overlayRobotScale: StateFlow<Float> = _overlayRobotScale.asStateFlow()
+
+    fun setOverlayRobotScale(scale: Float) {
+        val coerced = scale.coerceIn(0.5f, 4.0f)
+        if (_overlayRobotScale.value != coerced) {
+            _overlayRobotScale.value = coerced
+            prefs.edit().putFloat("overlay_robot_scale", coerced).apply()
+        }
     }
 
     // ========== УМНЫЙ РЕЖИМ ==========
