@@ -2212,6 +2212,11 @@ fun ThinkingRobotAnimation(
     ) {
         val u = size.height / uDivisor
         val cx = size.width / 2f
+
+        android.util.Log.d(
+            "RobotCanvasSize",
+            "canvas=${size.width}x${size.height}, uDivisor=$uDivisor, u=$u, ratio=${size.width / size.height}"
+        )
         val bobOffset = if (isActive) sin(bob) * bobAmplitude * u else 0f
         // Смещение корпуса от прыжка: 20 единиц u на пике.
                val jumpOffset = 0f
