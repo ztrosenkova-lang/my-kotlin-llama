@@ -3272,42 +3272,45 @@ fun ThinkingRobotAnimation(
         // Позиция индикатора (0..1) — той же скорости, что и лента.
         val headProgress = chargeProgress
 
+        // Текст состояния на поясе. Показывается ВМЕСТО индикатора,
+        // мигает по центру пояса. При isSpeaking — не показывается
+        // (звук идёт через TTS, отдельная индикация не нужна).
         val statusText: String? = when {
-            isSpeaking -> "Говорю"
-            isListening -> "Обработка речи"
-            isThinking -> "Модель думает"
-            isCompressing -> "Сжимаю беседу"
-            isLoadingModel -> "Загружаю модель"
+            isThinking -> "ИИ думает..."
+            isCompressing -> "Сжимаю беседу..."
+            isLoadingModel -> "Загружаю модель..."
+            isListening -> "Слушаю..."
             else -> null
         }
 
-              if (statusText != null) {
-            // Размер шрифта подбирается по ВЫСОТЕ пояса.
-            // Пояс: beltHeight = 5f * u.
-            // Множитель 2.0f — текст крупнее пояса, но подгонка heightScale
-            // всё равно впишет его в реальные границы.
-            val beltHeightPx = beltHeight  // = 5f * u
-            val maxTextHeightPx = beltHeightPx * 2.0f
+                      if (statusText != null) {
+            // Мигающий текст по центру пояса.
+            // Мигание — быстрое (0.6 сек цикл), через sin(indicatorPulse).
+            // Прозрачность: 0.3 → 1.0 → 0.3.
+            val blinkAlpha = 0.3f + 0.7f * ((kotlin.math.sin(pulse * 5f) + 1f) / 2f)
 
-            // Стартовое значение в px.
+            // Целевая высота текста — 80% от высоты пояса.
+            // Пояс: beltHeight = 5f * u.
+            val beltHeightPx = beltHeight  // = 5f * u
+            val maxTextHeightPx = beltHeightPx * 0.8f
+
+            // Стартовый размер шрифта = максимально возможная высота.
             val startFontSizePx = maxTextHeightPx
 
-            // Измеряем с пробным размером, чтобы понять реальную высоту глифа.
+            // Пробный замер, чтобы вычислить реальную высоту глифа.
             val probeStyle = TextStyle(
                 color = Color(0xFF80EFFF),
                 fontSize = with(density) { startFontSizePx.toSp() },
                 fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Light
+                fontWeight = FontWeight.Bold
             )
             val probeLayout = textMeasurer.measure(
                 text = "Mg",
                 style = probeStyle
             )
-            // Реальная высота строки шрифта при стартовом размере.
             val probeHeightPx = probeLayout.size.height.toFloat()
 
-            // Коэффициент подгонки: если реальная высота больше допустимой —
-            // уменьшаем размер шрифта пропорционально.
+            // Подгонка по высоте.
             val heightScale = if (probeHeightPx > 0f) {
                 maxTextHeightPx / probeHeightPx
             } else {
@@ -3316,148 +3319,103 @@ fun ThinkingRobotAnimation(
             val finalFontSizePx = startFontSizePx * heightScale
 
             val statusStyle = TextStyle(
-                color = Color(0xFF80EFFF),
+                color = Color(0xFF80EFFF).copy(alpha = blinkAlpha),
                 fontSize = with(density) { finalFontSizePx.toSp() },
                 fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Light
+                fontWeight = FontWeight.Bold
             )
 
-            // Измеряем ширину одной буквы и всего текста.
-            val letterLayout = textMeasurer.measure(
-                text = "M",
-                style = statusStyle
-            )
-            val letterWidthPx = letterLayout.size.width.toFloat()
-
-            val fullTextLayout = textMeasurer.measure(
+            // Измеряем текст ОДИН РАЗ.
+            val textLayout = textMeasurer.measure(
                 text = statusText,
                 style = statusStyle
             )
-            val fullTextWidthPx = fullTextLayout.size.width.toFloat()
 
-                    // X-координата индикатора в тех же единицах, что и лента (u-единицы).
-            val headIndicatorX = chargeBarLeft + chargeBarWidth * headProgress
+            // Центр пояса по X и Y в экранных пикселях.
+            val beltCenterXpx = pt(beltLeft + 30f, beltCenterY).x
+            val beltCenterYpx = pt(0f, beltCenterY).y
 
-            // Зазор между индикатором и первой буквой текста.
-            val gapPx = 8f * u
-            // Длина одного повтора ленты: текст + зазор до следующего повтора.
-            val tapeLengthPx = fullTextWidthPx + gapPx
+            // Левый верхний угол текста так, чтобы он был отцентрирован.
+            val textTopLeft = Offset(
+                x = beltCenterXpx - textLayout.size.width / 2f,
+                y = beltCenterYpx - textLayout.size.height / 2f
+            )
 
-            // Границы пояса в экранных пикселях.
-            val beltLeftPx = pt(beltLeft, beltTop).x
-            val beltRightPx = pt(beltLeft + 60f, beltTop).x
+            // Свечение вокруг текста — тоже мигает, чтобы текст «горел».
+            val glowAlpha = blinkAlpha * 0.4f
+            val textWidthPx = textLayout.size.width.toFloat()
+            val textHeightPx = textLayout.size.height.toFloat()
 
-                       // Стартовая позиция ленты ПРИВЯЗАНА К ИНДИКАТОРУ:
-            // Индикатор бежит ВПЕРЕДИ, текст следует ЗА ним справа.
-            // Первая буква текста — справа от индикатора на gapPx.
-            // Чтобы индикатор был впереди, текст должен быть СМЕЩЁН НАЗАД
-            // относительно индикатора, а не совпадать с ним.
-            val rawTapeStartPx = pt(headIndicatorX - gapPx, beltTop).x - fullTextWidthPx
+            drawRoundRect(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF80EFFF).copy(alpha = glowAlpha),
+                        Color(0xFF00BFFF).copy(alpha = glowAlpha * 0.5f),
+                        Color.Transparent
+                    ),
+                    center = Offset(beltCenterXpx, beltCenterYpx),
+                    radius = kotlin.math.max(textWidthPx, textHeightPx) * 1.2f
+                ),
+                topLeft = Offset(
+                    beltCenterXpx - textWidthPx * 0.7f,
+                    beltCenterYpx - textHeightPx * 1.2f
+                ),
+                size = Size(textWidthPx * 1.4f, textHeightPx * 2.4f),
+                cornerRadius = CornerRadius(textHeightPx)
+            )
 
-            // Бесконечная лента: если первая буква ушла правее правого края пояса,
-            // сдвигаем её назад на длину ленты, пока не вернётся в видимую зону.
-            var tapeStartPx = rawTapeStartPx
-            while (tapeStartPx > beltRightPx) {
-                tapeStartPx -= tapeLengthPx
-            }
-            // Если лента уехала слишком далеко влево (не видно) — подтягиваем.
-            while (tapeStartPx + fullTextWidthPx < beltLeftPx - tapeLengthPx) {
-                tapeStartPx += tapeLengthPx
-            }
-
-            var repetition = 0
-            while (true) {
-                val repeatOffsetPx = tapeStartPx + repetition * tapeLengthPx
-                // firstLetterLeftPx — левый край первой буквы повтора в экранных px.
-                val firstLetterLeftPx = repeatOffsetPx
-                val lastLetterRightPx = firstLetterLeftPx + fullTextWidthPx
-
-                // Если начало этого повтора уже правее правого края пояса — прекращаем.
-                if (firstLetterLeftPx > beltRightPx + gapPx) break
-                // Если весь повтор ушёл левее левого края — пропускаем.
-                if (lastLetterRightPx < beltLeftPx - gapPx) {
-                    repetition++
-                    if (repetition > 20) break
-                    continue
-                }
-
-                // Центр пояса по вертикали.
-                val beltCenterYpx = pt(0f, beltCenterY).y
-                val baselineOffset = if (fullTextLayout.lineCount > 0) {
-                    fullTextLayout.getLineBaseline(0).toFloat()
-                } else {
-                    fullTextLayout.size.height.toFloat()
-                }
-                val letterTop = beltCenterYpx - baselineOffset / 2f
-
-                for (i in statusText.indices) {
-                    val letterX = firstLetterLeftPx + i * letterWidthPx
-                    // Пропускаем буквы, которые целиком за левым или правым краем пояса.
-                    if (letterX + letterWidthPx < beltLeftPx) continue
-                    if (letterX > beltRightPx) break
-
-                    val singleLetterLayout = textMeasurer.measure(
-                        text = statusText[i].toString(),
-                        style = statusStyle
-                    )
-                    drawText(
-                        textLayoutResult = singleLetterLayout,
-                        topLeft = Offset(
-                            x = letterX,
-                            y = letterTop
-                        )
-                    )
-                }
-
-                repetition++
-                // Страховка от бесконечного цикла.
-                if (repetition > 20) break
-            }
+            drawText(
+                textLayoutResult = textLayout,
+                topLeft = textTopLeft
+            )
         }
 
         
-        drawRoundRect(
-            Color(0xFF0A1520),
-            topLeft = pt(chargeBarLeft, chargeBarY),
-            size = Size(chargeBarWidth * u, chargeBarHeight * u),
-            cornerRadius = CornerRadius(0.7f * u)
-        )
-
-        val chargeBarTravel = chargeBarWidth * chargeProgress
-        val chargeBarStart = chargeBarLeft + chargeBarTravel
-
-        if (chargeBarTravel > 0.1f) {
+               // Индикатор на поясе показывается ТОЛЬКО когда нет статусного текста.
+        // Когда текста нет — бегущая полоска работает как обычно.
+        if (statusText == null) {
             drawRoundRect(
-                Brush.horizontalGradient(
-                    listOf(neonBlue, neonBlueGlow, neonBlue),
-                    startX = pt(chargeBarStart, chargeBarY).x,
-                    endX = pt(chargeBarStart + 6f, chargeBarY).x
-                ),
-                topLeft = pt(chargeBarStart, chargeBarY),
-                size = Size(6f * u, chargeBarHeight * u),
+                Color(0xFF0A1520),
+                topLeft = pt(chargeBarLeft, chargeBarY),
+                size = Size(chargeBarWidth * u, chargeBarHeight * u),
                 cornerRadius = CornerRadius(0.7f * u)
             )
 
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        neonBlue.copy(alpha = 0.35f),
-                        Color.Transparent
+            val chargeBarTravel = chargeBarWidth * chargeProgress
+            val chargeBarStart = chargeBarLeft + chargeBarTravel
+
+            if (chargeBarTravel > 0.1f) {
+                drawRoundRect(
+                    Brush.horizontalGradient(
+                        listOf(neonBlue, neonBlueGlow, neonBlue),
+                        startX = pt(chargeBarStart, chargeBarY).x,
+                        endX = pt(chargeBarStart + 6f, chargeBarY).x
                     ),
-                    center = pt(chargeBarStart + 3f, chargeBarY + chargeBarHeight / 2f),
-                    radius = 3f * u
-                ),
-                radius = 3f * u,
-                center = pt(chargeBarStart + 3f, chargeBarY + chargeBarHeight / 2f)
-            )
+                    topLeft = pt(chargeBarStart, chargeBarY),
+                    size = Size(6f * u, chargeBarHeight * u),
+                    cornerRadius = CornerRadius(0.7f * u)
+                )
 
-            drawCircle(
-                color = neonBlueGlow.copy(alpha = 0.9f),
-                radius = 0.5f * u,
-                center = pt(chargeBarStart + 6f, chargeBarY + chargeBarHeight / 2f)
-            )
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            neonBlue.copy(alpha = 0.35f),
+                            Color.Transparent
+                        ),
+                        center = pt(chargeBarStart + 3f, chargeBarY + chargeBarHeight / 2f),
+                        radius = 3f * u
+                    ),
+                    radius = 3f * u,
+                    center = pt(chargeBarStart + 3f, chargeBarY + chargeBarHeight / 2f)
+                )
+
+                drawCircle(
+                    color = neonBlueGlow.copy(alpha = 0.9f),
+                    radius = 0.5f * u,
+                    center = pt(chargeBarStart + 6f, chargeBarY + chargeBarHeight / 2f)
+                )
+            }
         }
-
         val segment3Top = beltCenterY + beltHeight / (2f * u)
         val segment3Bottom = 155f
         val segment3WidthTop = 30f
