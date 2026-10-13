@@ -3968,7 +3968,6 @@ fun ThinkingRobotAnimation(
                         style = Stroke(width = 0.8f * u)
                     )
                 }
-                             }
             }
 
              // ================= ПРАВЫЙ НАУШНИК =================
@@ -4065,8 +4064,8 @@ fun ThinkingRobotAnimation(
                         radius = 1.8f * u,
                         center = ptFace(46f, -4f),
                         style = Stroke(width = 0.8f * u)
-                    )
-                         }
+                   )
+                }
             }
 
             // ================= ГОЛОВА =================
