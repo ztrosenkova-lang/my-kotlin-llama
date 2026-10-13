@@ -19,6 +19,8 @@ import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlin.math.PI
+import kotlin.math.sin
 class FloatingRobotService : LifecycleService() {
 
     companion object {
@@ -103,6 +105,18 @@ class FloatingRobotService : LifecycleService() {
             }
         )
 
+                                       // Отдельная корутина: следит за сигналом прыжка и взводит флаг.
+        // Стартует ДО корутины анимации, чтобы флаг не терялся, если сигнал
+        // придёт в первые миллисекунды. Корректно работает и позже.
+        lifecycleScope.launch {
+            MainViewModel.instance?.robotJumpSignal?.collect { isJumping ->
+                if (isJumping) {
+                    jumpActive = true
+                    jumpElapsedMs = 0L
+                }
+            }
+        }
+
                                // ========== ЕДИНАЯ АНИМАЦИЯ ПОЛОЖЕНИЯ ОКНА ==========
         // Одна корутина управляет params.y, складывая две анимации:
         //  - bob: непрерывное покачивание окна вверх-вниз (амплитуда 11 dp,
@@ -112,21 +126,37 @@ class FloatingRobotService : LifecycleService() {
         //    тайминги синхронны с внутренним jumpProgressAnim: подъём 200 мс,
         //    пауза 200 мс, спуск 200 мс).
         // Пока идёт прыжок, bob приостанавливается, чтобы не конфликтовать.
+        //
+        // baseY определяется ДИНАМИЧЕСКИ: при первом появлении robotView
+        // запоминается его текущий params.y. До появления робота цикл просто
+        // ждёт. Это решает проблему, что onCreate выполняется раньше
+        // onStartCommand (когда robotView ещё null).
         lifecycleScope.launch {
             val density = resources.displayMetrics.density
             val bobAmplitudePx = (BOB_WINDOW_AMPLITUDE_DP * density).toInt()
             val jumpAmplitudePx = (JUMP_WINDOW_AMPLITUDE_DP * density).toInt()
 
-            // Базовая Y-позиция окна. Задаётся один раз при старте сервиса.
-            val view = robotView
-            val params = view?.layoutParams as? WindowManager.LayoutParams
-            val baseY = params?.y ?: 0
-
+            var baseY: Int? = null
             var bobPhaseMs = 0L
             val frameMs = 16L
 
             while (true) {
                 delay(frameMs)
+
+                val currentView = robotView
+                val currentParams = currentView?.layoutParams as? WindowManager.LayoutParams
+
+                // Если робота ещё нет — ждём. baseY не трогаем.
+                if (currentView == null || currentParams == null) {
+                    continue
+                }
+
+                // При первом появлении робота — запоминаем его текущий Y
+                // как базовый. Дальше работаем только относительно него.
+                if (baseY == null) {
+                    baseY = currentParams.y
+                }
+                val baseline = baseY ?: continue
 
                 // Пока идёт прыжок — bob не двигаем, ждём окончания.
                 if (jumpActive) {
@@ -159,17 +189,13 @@ class FloatingRobotService : LifecycleService() {
                         }
                     }
 
-                    val currentView = robotView
-                    val currentParams = currentView?.layoutParams as? WindowManager.LayoutParams
-                    if (currentView != null && currentParams != null) {
-                        val newY = (baseY + jumpOffsetPx).coerceAtLeast(0)
-                        if (currentParams.y != newY) {
-                            currentParams.y = newY
-                            try {
-                                windowManager.updateViewLayout(currentView, currentParams)
-                            } catch (e: Exception) {
-                                Log.w(TAG, "Failed to update window layout on jump: ${e.message}")
-                            }
+                    val newY = (baseline + jumpOffsetPx).coerceAtLeast(0)
+                    if (currentParams.y != newY) {
+                        currentParams.y = newY
+                        try {
+                            windowManager.updateViewLayout(currentView, currentParams)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to update window layout on jump: ${e.message}")
                         }
                     }
                 } else {
@@ -178,20 +204,19 @@ class FloatingRobotService : LifecycleService() {
                     val phase = (bobPhaseMs.toFloat() / BOB_WINDOW_PERIOD_MS.toFloat()) * 2f * PI.toFloat()
                     val bobOffsetPx = -(sin(phase) * bobAmplitudePx).toInt()
 
-                    val currentView = robotView
-                    val currentParams = currentView?.layoutParams as? WindowManager.LayoutParams
-                    if (currentView != null && currentParams != null) {
-                        val newY = (baseY + bobOffsetPx).coerceAtLeast(0)
-                        if (currentParams.y != newY) {
-                            currentParams.y = newY
-                            try {
-                                windowManager.updateViewLayout(currentView, currentParams)
-                            } catch (e: Exception) {
-                                Log.w(TAG, "Failed to update window layout on bob: ${e.message}")
-                            }
+                    val newY = (baseline + bobOffsetPx).coerceAtLeast(0)
+                    if (currentParams.y != newY) {
+                        currentParams.y = newY
+                        try {
+                            windowManager.updateViewLayout(currentView, currentParams)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to update window layout on bob: ${e.message}")
                         }
                     }
                 }
+            }
+        }
+    }
             }
         }
 
