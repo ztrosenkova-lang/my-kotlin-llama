@@ -411,7 +411,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    fun triggerRobotJump() {
+        fun triggerRobotJump() {
         if (_robotJumpSignal.value) return
         _robotJumpSignal.value = true
         scope.launch {
