@@ -3143,6 +3143,18 @@ fun ThinkingRobotAnimation(
         // Едут вместе с одинаковой скоростью (chargeProgress).
         // Лента бесконечная: ушла за правый край — снова выезжает слева.
         // Когда робот не занят — едет только индикатор.
+                       // ===== РАСЧЁТ ГЕОМЕТРИИ ИНДИКАТОРА (chargeBar) =====
+        // Объявлено ЗДЕСЬ, до if (statusText != null), чтобы было видно
+        // и в ленте, и в самом индикаторе ниже.
+        val chargeBarLeft = beltLeft + 2f
+        val chargeBarRight = beltLeft + 30f + 28f - 2f
+        val chargeBarWidth = chargeBarRight - chargeBarLeft
+        val chargeBarHeight = 1.5f
+        val chargeBarY = beltTop + (beltHeight / (2f * u)) - chargeBarHeight / 2f
+
+        // Позиция индикатора (0..1) — той же скорости, что и лента.
+        val headProgress = chargeProgress
+
         val statusText: String? = when {
             isSpeaking -> "Говорю"
             isListening -> "Обработка речи"
@@ -3206,19 +3218,7 @@ fun ThinkingRobotAnimation(
             )
             val fullTextWidthPx = fullTextLayout.size.width.toFloat()
 
-                                                          // ===== РАСЧЁТ ГЕОМЕТРИИ ИНДИКАТОРА (chargeBar) =====
-            // Эти переменные нужны и ленте, и самому индикатору. Объявляем ЗДЕСЬ,
-            // до ленты, чтобы лента могла использовать chargeBarLeft / chargeBarWidth.
-            val chargeBarLeft = beltLeft + 2f
-            val chargeBarRight = beltLeft + 30f + 28f - 2f
-            val chargeBarWidth = chargeBarRight - chargeBarLeft
-            val chargeBarHeight = 1.5f
-            val chargeBarY = beltTop + (beltHeight / (2f * u)) - chargeBarHeight / 2f
-
-            // Позиция индикатора (0..1) — той же скорости, что и лента.
-            val headProgress = chargeProgress
-
-            // X-координата индикатора в тех же единицах, что и лента (u-единицы).
+                    // X-координата индикатора в тех же единицах, что и лента (u-единицы).
             val headIndicatorX = chargeBarLeft + chargeBarWidth * headProgress
 
             // Зазор между индикатором и первой буквой текста.
