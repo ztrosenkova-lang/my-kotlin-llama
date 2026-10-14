@@ -364,12 +364,8 @@ class FloatingRobotService : LifecycleService() {
                     if (isPinching && event.pointerCount >= 2) {
                         val dist = pinchDistance(event)
                         if (dist > 0f && pinchBaseDistance > 0f) {
-                            val ratio = dist / pinchBaseDistance
+                                                        val ratio = dist / pinchBaseDistance
                             val newScale = (pinchBaseScale * ratio).coerceIn(0.5f, 3.0f)
-                            android.util.Log.d(
-                                "RobotPinch",
-                                "ratio=$ratio, baseScale=$pinchBaseScale, newScale=$newScale, dist=$dist, baseDist=$pinchBaseDistance"
-                            )
 
                             // Запоминаем старые размеры и позицию до изменения.
                             val oldW = params.width
@@ -378,9 +374,15 @@ class FloatingRobotService : LifecycleService() {
                             val oldY = params.y
 
                             // Новые размеры окна — базовые 340 × 380 dp, умноженные на scale.
+                            // Но не больше размера экрана: окно останавливается на экране,
+                            // а канвас внутри продолжает расти и обрезается краями окна.
                             val density = resources.displayMetrics.density
-                            val newW = (340 * density * newScale).toInt()
-                            val newH = (380 * density * newScale).toInt()
+                            val screenW = resources.displayMetrics.widthPixels
+                            val screenH = resources.displayMetrics.heightPixels
+                            val wantedW = (340 * density * newScale).toInt()
+                            val wantedH = (380 * density * newScale).toInt()
+                            val newW = wantedW.coerceAtMost(screenW)
+                            val newH = wantedH.coerceAtMost(screenH)
 
                             // Сдвигаем позицию так, чтобы центр окна остался на месте.
                             val deltaX = (newW - oldW) / 2
@@ -390,6 +392,15 @@ class FloatingRobotService : LifecycleService() {
                             params.height = newH
                             params.x = oldX - deltaX
                             params.y = oldY - deltaY
+
+                            // Не выпускаем центр окна за пределы экрана.
+                            // Робот всегда остаётся в видимой части экрана.
+                            val centerX = params.x + newW / 2
+                            val centerY = params.y + newH / 2
+                            val clampedCenterX = centerX.coerceIn(0, screenW)
+                            val clampedCenterY = centerY.coerceIn(0, screenH)
+                            params.x = clampedCenterX - newW / 2
+                            params.y = clampedCenterY - newH / 2
 
                             // Синхронизируем baselineY — чтобы bob/jump не дёрнулись.
                             if (baselineY >= 0) {
