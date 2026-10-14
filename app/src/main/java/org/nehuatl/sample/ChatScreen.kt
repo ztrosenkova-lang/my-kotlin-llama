@@ -475,13 +475,16 @@ fun ChatScreen(
                         command == "режим калькулятора" -> {
                             viewModel.disableSmartMode()
                         }
-                        command == "режим админа" -> {
+             command == "режим админа" -> {
                             if (currentMode == AIMode.NEUTRAL) {
                                 adminPhraseInput = ""
                                 showAdminUnlockDialog = true
                             } else {
                                 viewModel.appendSystemMessage("⚠️ Команда «режим админа» работает только в нейтральном режиме")
                             }
+                        }
+                        command == "редактировать чат" -> {
+                            viewModel.showChatEditor()
                         }
                         else -> {
                             viewModel.sendUserMessage(recognizedText)
@@ -1146,17 +1149,13 @@ fun ChatScreen(
                             viewModel.disableSmartMode()
                             promptInput = ""
                         }
-                                               command == "режим админа" -> {
+                        command == "режим админа" -> {
                             if (currentMode == AIMode.NEUTRAL) {
                                 adminPhraseInput = ""
                                 showAdminUnlockDialog = true
                             } else {
-                viewModel.appendSystemMessage("⚠️ Команда «режим админа» работает только в нейтральном режиме")
-                            
-                        }
-                        command == "редактировать чат" -> {
-                            viewModel.showChatEditor()
-                        }
+                                viewModel.appendSystemMessage("⚠️ Команда «режим админа» работает только в нейтральном режиме")
+                            }
                             promptInput = ""
                         }
                                                else -> {
