@@ -2600,17 +2600,19 @@ fun ThinkingRobotAnimation(
             style = Stroke(width = 1.3f * u)
         )
 
-        val barsCenterX = -46f
+               val barsCenterX = -46f
         val barsCenterY = 140f + leftArmOffsetY
-        val barWidth = 6f * u
-        val barHeight = 1.6f * u
-        val barGap = 1.4f * u
-        val barsTotalHeight = barHeight * 3 + barGap * 2
+        // Все геометрические размеры — в u-единицах.
+        // Пиксели получаются умножением на u только в Size(...).
+        val barWidthU = 6f
+        val barHeightU = 1.6f
+        val barGapU = 1.4f
+        val barsTotalHeightU = barHeightU * 3 + barGapU * 2
 
         for (i in 0..2) {
-            val barY = barsCenterY - barsTotalHeight / 2f + barHeight / 2f + i * (barHeight + barGap)
-            val barTopLeft = pt(barsCenterX - barWidth / 2f, barY - barHeight / 2f)
-            val barSize = Size(barWidth, barHeight)
+            val barYU = barsCenterY - barsTotalHeightU / 2f + barHeightU / 2f + i * (barHeightU + barGapU)
+            val barTopLeft = pt(barsCenterX - barWidthU / 2f, barYU - barHeightU / 2f)
+            val barSize = Size(barWidthU * u, barHeightU * u)
 
             val isBarActive = isThinking && (leftBarsPhase.toInt() == i)
 
@@ -4443,8 +4445,11 @@ fun ThinkingRobotAnimation(
             )
 
             // ================= ВИЗОР =================
-            val topRadius = 4f * u
-            val bottomRadius = 13f * u
+                       // Радиусы в u-единицах, без предварительного умножения на u.
+            // Иначе при передаче в ptFace(...) происходит двойное умножение
+            // на u, и при большом масштабе дуги arcTo строятся криво.
+            val topRadius = 4f
+            val bottomRadius = 13f
 
                        val visorPath = Path().apply {
                 moveTo(ptFace(-34f + topRadius, 14f).x, ptFace(-34f + topRadius, 14f).y)
