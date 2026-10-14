@@ -116,6 +116,12 @@ val ttsModelDir = file("$projectDir/src/main/assets/tts-model")
 val ttsModelArchive = file("${layout.buildDirectory.get().asFile}/tts-model/vits-piper-ru_RU-ruslan-medium.tar.bz2")
 val ttsModelUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-ru_RU-ruslan-medium.tar.bz2"
 
+val visionModelDir = file("$projectDir/src/main/assets/vision")
+val visionModelFile = File(visionModelDir, "smolvlm2_500m.gguf")
+val visionMmprojFile = File(visionModelDir, "smolvlm2_500m_mmproj.gguf")
+val visionModelUrl = "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
+val visionMmprojUrl = "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-500M-Video-Instruct-f16.gguf"
+
 tasks.register("downloadSherpaAar") {
     doLast {
         if (sherpaAarFile.exists() && sherpaAarFile.length() > 1000000) {
@@ -224,7 +230,67 @@ tasks.register("checkTtsModel") {
     }
 }
 
+tasks.register("downloadVisionModel") {
+    doLast {
+        if (visionModelFile.exists() && visionModelFile.length() > 1000000 &&
+            visionMmprojFile.exists() && visionMmprojFile.length() > 1000000) {
+            println("Vision model already exists. Skipping download.")
+            return@doLast
+        }
+
+        visionModelDir.mkdirs()
+
+        println("Downloading SmolVLM2-500M model from $visionModelUrl")
+        val modelConnection = URL(visionModelUrl).openConnection() as HttpURLConnection
+        modelConnection.instanceFollowRedirects = true
+        modelConnection.connectTimeout = 60000
+        modelConnection.readTimeout = 600000
+        modelConnection.inputStream.use { input ->
+            visionModelFile.outputStream().use { output ->
+                input.copyTo(output)
+            }
+        }
+        modelConnection.disconnect()
+        println("Vision model downloaded to $visionModelFile (${visionModelFile.length()} bytes)")
+
+        if (visionModelFile.length() < 1000000) {
+            throw GradleException("Downloaded model is too small (${visionModelFile.length()} bytes). Download failed.")
+        }
+
+        println("Downloading SmolVLM2-500M mmproj from $visionMmprojUrl")
+        val mmprojConnection = URL(visionMmprojUrl).openConnection() as HttpURLConnection
+        mmprojConnection.instanceFollowRedirects = true
+        mmprojConnection.connectTimeout = 60000
+        mmprojConnection.readTimeout = 600000
+        mmprojConnection.inputStream.use { input ->
+            visionMmprojFile.outputStream().use { output ->
+                input.copyTo(output)
+            }
+        }
+        mmprojConnection.disconnect()
+        println("Vision mmproj downloaded to $visionMmprojFile (${visionMmprojFile.length()} bytes)")
+
+        if (visionMmprojFile.length() < 1000000) {
+            throw GradleException("Downloaded mmproj is too small (${visionMmprojFile.length()} bytes). Download failed.")
+        }
+    }
+}
+
+tasks.register("checkVisionModel") {
+    dependsOn("downloadVisionModel")
+    doLast {
+        if (!visionModelFile.exists() || visionModelFile.length() < 1000000) {
+            throw GradleException("Vision model file is missing or too small. Download failed.")
+        }
+        if (!visionMmprojFile.exists() || visionMmprojFile.length() < 1000000) {
+            throw GradleException("Vision mmproj file is missing or too small. Download failed.")
+        }
+        println("Vision model files verified.")
+    }
+}
+
 tasks.named("preBuild") {
     dependsOn("downloadSherpaAar")
     dependsOn("checkTtsModel")
+    dependsOn("checkVisionModel")
 }
