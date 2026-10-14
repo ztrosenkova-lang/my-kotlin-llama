@@ -96,7 +96,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         private const val KEY_DARK_THEME = "dark_theme"
         private const val KEY_SMART_MODE = "smart_mode"
         private const val KEY_SESSION_UNLOCKED = "session_unlocked"
-        private const val SMART_MODE_MAX_CHARS = 8000
+        private const val SMART_MODE_MAX_CHARS = Int.MAX_VALUE
 
         // Авто-тема по времени
         private const val KEY_MANUAL_THEME_UNTIL = "manual_theme_until"
@@ -182,8 +182,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     // Job для анимации бегущих точек в сообщении о сжатии
     private var compressionDotsJob: Job? = null
 
-    private val _showBrainEditor = MutableStateFlow(false)
+       private val _showBrainEditor = MutableStateFlow(false)
     val showBrainEditor: StateFlow<Boolean> = _showBrainEditor.asStateFlow()
+
+    private val _showChatEditor = MutableStateFlow(false)
+    val showChatEditor: StateFlow<Boolean> = _showChatEditor.asStateFlow()
 
             private val memoryFile: File by lazy {
         File(getApplication<Application>().filesDir, "memory.txt")
@@ -195,8 +198,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private var androidTts: TextToSpeech? = null
     private var androidTtsReady = false
 
-        private val brainFile: File by lazy {
+            private val brainFile: File by lazy {
         File(getApplication<Application>().filesDir, "brain.txt")
+    }
+
+    private val chatFile: File by lazy {
+        File(getApplication<Application>().filesDir, "chat.txt")
     }
 
     private val bibliotekaDir: File by lazy {
@@ -326,9 +333,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             history
         }
 
-        // Собираем хвост снизу вверх, пока не наберём SMART_MODE_MAX_CHARS символов
+               // Весь чат без ограничения по объёму
         val tailBuilder = StringBuilder()
-        var totalChars = 0
         for (message in historyWithoutLast.asReversed()) {
             val prefix = when (message.role) {
                 "user" -> "Пользователь: "
@@ -336,11 +342,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 else -> "Система: "
             }
             val line = prefix + message.text + "\n"
-            if (totalChars + line.length > SMART_MODE_MAX_CHARS && tailBuilder.isNotEmpty()) {
-                break
-            }
             tailBuilder.insert(0, line)
-            totalChars += line.length
         }
         val tail = tailBuilder.toString().trim()
 
@@ -352,10 +354,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 append(lastUserMessage.text)
             }
 
-            if (tail.isNotEmpty()) {
-                append("\n\nИСТОРИЯ ЧАТА (последние ~")
-                append(SMART_MODE_MAX_CHARS)
-                append(" символов):\n")
+                if (tail.isNotEmpty()) {
+                append("\n\nИСТОРИЯ ЧАТА:\n")
                 append(tail)
             }
 
@@ -508,6 +508,18 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _isDarkTheme.value = prefs.getBoolean(KEY_DARK_THEME, false)
         _isSmartMode.value = prefs.getBoolean(KEY_SMART_MODE, false)
         _isFirstLaunch.value = prefs.getBoolean("first_launch", true)
+
+        // Читаем chat.txt и восстанавливаем чат
+        try {
+            if (!chatFile.exists()) chatFile.createNewFile()
+            val saved = chatFile.readText().trim()
+            if (saved.isNotEmpty()) {
+                _chatHistory.value = parseChatFromText(saved)
+                Log.d(TAG, "chat.txt loaded (${_chatHistory.value.size} messages)")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка чтения chat.txt: ${e.message}")
+        }
 
                // Восстанавливаем сохранённый масштаб робота в overlay.
         _overlayRobotScale.value = prefs.getFloat("overlay_robot_scale", 1.0f).coerceIn(0.5f, 3.0f)
@@ -797,8 +809,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 _pendingTextToPrint.value = fullText
             } else {
                 // ChatScreen в фоне (overlay) → сразу пишем ответ в историю
-                _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
+        _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
                 _pendingTextToPrint.value = ""
+                syncChatToFile()
             }
             speakText(fullText)
         }
@@ -893,8 +906,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 _pendingTextToPrint.value = fullText
             } else {
                 // ChatScreen в фоне (overlay) → сразу пишем ответ в историю
-                _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
+        _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
                 _pendingTextToPrint.value = ""
+                syncChatToFile()
             }
             speakText(fullText)
         }
@@ -1231,12 +1245,116 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    fun showBrainEditor() {
+        fun showBrainEditor() {
         _showBrainEditor.value = true
     }
 
     fun hideBrainEditor() {
         _showBrainEditor.value = false
+    }
+
+    // ========== РЕДАКТОР ЧАТА ==========
+
+    fun showChatEditor() {
+        _showChatEditor.value = true
+    }
+
+    fun hideChatEditor() {
+        _showChatEditor.value = false
+    }
+
+    /**
+     * Форматирует _chatHistory в текст для редактора.
+     * Формат: "Вы: ", "ИИ-Друг: ", "📢 " + текст сообщения.
+     */
+    fun readChatAsText(): String {
+        val messages = _chatHistory.value
+        if (messages.isEmpty()) return ""
+        val sb = StringBuilder()
+        for (message in messages) {
+            val prefix = when (message.role) {
+                "user" -> "Вы: "
+                "assistant" -> "ИИ-Друг: "
+                "system" -> "📢 "
+                else -> ""
+            }
+            sb.append(prefix).append(message.text).append("\n")
+        }
+        return sb.toString().trim()
+    }
+
+    /**
+     * Парсит текст из редактора обратно в список ChatMessage.
+     * Строка с префиксом начинает новое сообщение, без префикса — продолжение.
+     */
+    private fun parseChatFromText(text: String): List<ChatMessage> {
+        val result = mutableListOf<ChatMessage>()
+        val lines = text.split("\n")
+        var currentRole: String? = null
+        var currentText = StringBuilder()
+
+        fun flush() {
+            if (currentRole != null) {
+                result.add(ChatMessage(currentRole!!, currentText.toString().trimEnd()))
+            }
+            currentText = StringBuilder()
+        }
+
+        for (line in lines) {
+            val role = when {
+                line.startsWith("Вы: ") -> "user"
+                line.startsWith("ИИ-Друг: ") -> "assistant"
+                line.startsWith("📢 ") -> "system"
+                else -> null
+            }
+            if (role != null) {
+                flush()
+                currentRole = role
+                val prefixLength = when (role) {
+                    "user" -> 4       // "Вы: "
+                    "assistant" -> 9  // "ИИ-Друг: "
+                    "system" -> 2     // "📢 "
+                    else -> 0
+                }
+                currentText.append(line.substring(prefixLength))
+            } else {
+                if (currentRole != null) {
+                    currentText.append("\n").append(line)
+                }
+            }
+        }
+        flush()
+        return result
+    }
+
+    /**
+     * Перезаписывает chat.txt текстом из редактора,
+     * парсит его и заменяет _chatHistory.
+     */
+    fun overwriteChatFromText(newText: String) {
+        try {
+            if (!chatFile.exists()) chatFile.createNewFile()
+            chatFile.writeText(newText.trim() + "\n")
+            val parsed = parseChatFromText(newText)
+            _chatHistory.value = parsed
+            Log.d(TAG, "chat.txt overwritten and _chatHistory replaced (${parsed.size} messages)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка перезаписи chat.txt: ${e.message}")
+            appendSystemMessage("❌ Ошибка синхронизации чата")
+        }
+    }
+
+    /**
+     * Записывает текущий _chatHistory в chat.txt.
+     * Вызывается при каждом изменении чата.
+     */
+    private fun syncChatToFile() {
+        try {
+            if (!chatFile.exists()) chatFile.createNewFile()
+            chatFile.writeText(readChatAsText() + "\n")
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка записи chat.txt: ${e.message}")
+        }
     }
 
     fun readBrain(): String {
@@ -1886,7 +2004,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    fun updateLastSystemMessage(newText: String) {
+        fun updateLastSystemMessage(newText: String) {
         val currentList = _chatHistory.value.toMutableList()
         if (currentList.isNotEmpty() && currentList.last().role == "system") {
             currentList[currentList.lastIndex] = ChatMessage("system", newText)
@@ -1894,9 +2012,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         } else {
             _chatHistory.value = currentList + ChatMessage("system", newText)
         }
+        syncChatToFile()
     }
 
-    fun updateAssistantMessage(newText: String) {
+        fun updateAssistantMessage(newText: String) {
         val currentList = _chatHistory.value.toMutableList()
         if (currentList.isNotEmpty() && currentList.last().role == "assistant") {
             currentList[currentList.lastIndex] = ChatMessage("assistant", newText)
@@ -1904,6 +2023,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         } else {
             _chatHistory.value = currentList + ChatMessage("assistant", newText)
         }
+        syncChatToFile()
     }
 
         private fun determineCategory(text: String): String {
@@ -2275,6 +2395,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 text = "[Изображение]",
                 hasImage = true
             )
+            syncChatToFile()
 
             when (_currentMode.value) {
                 AIMode.LOCAL -> {
@@ -2291,11 +2412,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             return
         }
 
-                       _chatHistory.value = _chatHistory.value + ChatMessage(
+        _chatHistory.value = _chatHistory.value + ChatMessage(
             role = "user",
             text = text,
             hasImage = imagePath != null
         )
+        syncChatToFile()
         userMessageCount++
 
         // Модель-переводчик не умеет сжимать диалоги — пропускаем сжатие
@@ -2340,7 +2462,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     appendSystemMessage("🧠 Открыт редактор Brain.txt")
                     return
                 }
-                                lowerText.contains(REMEMBER_COMMAND) -> {
+                lowerText.contains("редактировать чат") -> {
+                    showChatEditor()
+                    return
+                }
+                lowerText.contains(REMEMBER_COMMAND) -> {
                     // Ищем «запомни» в нижнем регистре, но отрезаем от оригинала
                     // по позиции — чтобы работало с «Запомни», «ЗАПОМНИ» и т.д.
                     val lowerIndex = lowerText.indexOf(REMEMBER_COMMAND)
@@ -2760,8 +2886,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-        internal fun appendSystemMessage(text: String) {
+    internal fun appendSystemMessage(text: String) {
         _chatHistory.value = _chatHistory.value + ChatMessage("system", text)
+        syncChatToFile()
     }
 
     internal fun appendSystemMessageWithButtons(text: String, buttons: List<PromptButton>) {
@@ -2959,10 +3086,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    fun clearChat() {
+        fun clearChat() {
         _chatHistory.value = emptyList()
         _generatedText.value = ""
         _cloudGeneratedText.value = ""
+        syncChatToFile()
     }
 
         fun updateSystemPrompt(newPrompt: String) {
