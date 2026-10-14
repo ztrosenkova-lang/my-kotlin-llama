@@ -285,6 +285,7 @@ fun ChatScreen(
     val pendingTextToPrint by viewModel.pendingTextToPrint.collectAsStateWithLifecycle(initialValue = "")
     val isDarkTheme by viewModel.isDarkTheme.collectAsStateWithLifecycle(initialValue = false)
     val showBrainEditorState by viewModel.showBrainEditor.collectAsStateWithLifecycle(initialValue = false)
+    val showChatEditorState by viewModel.showChatEditor.collectAsStateWithLifecycle(initialValue = false)
     val isFloatingRobotRunning by viewModel.floatingRobotRunning.collectAsStateWithLifecycle(initialValue = false)
     val isCompressing by viewModel.isCompressing.collectAsStateWithLifecycle(initialValue = false)
     val isSmartMode by viewModel.isSmartMode.collectAsStateWithLifecycle(initialValue = false)
@@ -741,12 +742,22 @@ fun ChatScreen(
         }
     }
 
-        if (showBrainEditorState) {
+                if (showBrainEditorState) {
         BrainEditorDialog(
             initialText = viewModel.readBrain(),
             onSave = { viewModel.overwriteBrain(it) },
             onRestoreBase = { viewModel.restoreBaseBrain() },
             onDismiss = { viewModel.hideBrainEditor() },
+            colors = colors,
+            isDarkTheme = isDarkTheme
+        )
+    }
+
+        if (showChatEditorState) {
+        ChatEditorDialog(
+            initialText = viewModel.readChatAsText(),
+            onSave = { viewModel.overwriteChatFromText(it) },
+            onDismiss = { viewModel.hideChatEditor() },
             colors = colors,
             isDarkTheme = isDarkTheme
         )
@@ -1135,13 +1146,17 @@ fun ChatScreen(
                             viewModel.disableSmartMode()
                             promptInput = ""
                         }
-                        command == "режим админа" -> {
+                                               command == "режим админа" -> {
                             if (currentMode == AIMode.NEUTRAL) {
                                 adminPhraseInput = ""
                                 showAdminUnlockDialog = true
                             } else {
-                                viewModel.appendSystemMessage("⚠️ Команда «режим админа» работает только в нейтральном режиме")
-                            }
+                viewModel.appendSystemMessage("⚠️ Команда «режим админа» работает только в нейтральном режиме")
+                            
+                        }
+                        command == "редактировать чат" -> {
+                            viewModel.showChatEditor()
+                        }
                             promptInput = ""
                         }
                                                else -> {
@@ -6647,7 +6662,87 @@ private fun BrainEditorDialog(
         )
     }
 }
+@Composable
+private fun ChatEditorDialog(
+    initialText: String,
+    onSave: (String) -> Unit,
+    onDismiss: () -> Unit,
+    colors: AppColors,
+    isDarkTheme: Boolean
+) {
+    var text by remember { mutableStateOf(initialText) }
 
+    MaterialTheme(
+        colorScheme = if (isDarkTheme) darkColorScheme() else lightColorScheme()
+    ) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("💬 Редактор чата", style = MaterialTheme.typography.titleLarge, color = colors.text) },
+            text = {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    placeholder = { Text("История чата появится здесь...", color = colors.text.copy(alpha = 0.5f), fontSize = 10.sp) },
+                    modifier = Modifier.fillMaxWidth().height(400.dp),
+                    maxLines = 1000,
+                    singleLine = false,
+                    textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, color = colors.text),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = colors.text,
+                        unfocusedTextColor = colors.text,
+                        focusedContainerColor = colors.surfaceGray,
+                        unfocusedContainerColor = colors.surfaceGray,
+                        focusedBorderColor = colors.accent,
+                        unfocusedBorderColor = colors.borderGray,
+                        cursorColor = colors.accent
+                    )
+                )
+            },
+            confirmButton = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = { onSave(text); onDismiss() },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = colors.accent,
+                                contentColor = colors.background
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, colors.borderGray),
+                            modifier = Modifier.weight(1f).height(38.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                        ) {
+                            Text("Сохранить", color = colors.background, fontSize = 12.sp)
+                        }
+
+                        Button(
+                            onClick = onDismiss,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = colors.accent,
+                                contentColor = colors.background
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, colors.borderGray),
+                            modifier = Modifier.weight(1f).height(38.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                        ) {
+                            Text("Закрыть", color = colors.background, fontSize = 12.sp)
+                        }
+                    }
+                }
+            },
+            dismissButton = null
+        )
+    }
+}
 @Composable
 private fun ImagePreview(imagePath: String, colors: AppColors) {
     Card(
