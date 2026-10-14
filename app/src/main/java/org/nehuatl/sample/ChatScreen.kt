@@ -2623,8 +2623,9 @@ fun ThinkingRobotAnimation(
                 else -> Color(0xFF1565C0).copy(alpha = 0.5f)
             }
 
-            if (isBarActive) {
-                val barCenter = pt(barsCenterX, barY)
+                       if (isBarActive) {
+                val barCenter = pt(barsCenterX, barYU)
+                val glowRadiusPx = barHeightU * u * 5f
                 drawCircle(
                     brush = Brush.radialGradient(
                         colors = listOf(
@@ -2633,9 +2634,9 @@ fun ThinkingRobotAnimation(
                             Color.Transparent
                         ),
                         center = barCenter,
-                        radius = barHeight * 5f
+                        radius = glowRadiusPx
                     ),
-                    radius = barHeight * 5f,
+                    radius = glowRadiusPx,
                     center = barCenter
                 )
             }
