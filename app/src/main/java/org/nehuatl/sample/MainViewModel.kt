@@ -153,6 +153,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     private var currentModelName: String = ""
+    private var currentModelPath: String? = null
+    private var currentMmprojPath: String? = null
 
     private val _loadedModelName = MutableStateFlow("")
     val loadedModelName: StateFlow<String> = _loadedModelName.asStateFlow()
@@ -291,6 +293,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     // последнее сообщение пользователя + хвост истории чата (до 8000 символов).
     private val _isSmartMode = MutableStateFlow(false)
     val isSmartMode: StateFlow<Boolean> = _isSmartMode.asStateFlow()
+
+    // ========== СОСТОЯНИЕ ДЛЯ VISION-МОДЕЛИ ==========
+    private var savedTemperature: Float = 0.3f
+    private var savedContextSize: Int = 8192
+    private var savedModelPath: String? = null
+    private var savedMmprojPath: String? = null
+    private var isVisionModelLoaded = false
 
     fun enableSmartMode() {
         if (_isSmartMode.value) {
@@ -1245,7 +1254,120 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-        fun showBrainEditor() {
+            // ========== VISION-МОДЕЛЬ (SmolVLM2-500M) ==========
+
+    private fun copyAssetToFiles(assetName: String, destFileName: String): String? {
+        return try {
+            val destFile = File(getApplication<Application>().filesDir, destFileName)
+            if (!destFile.exists()) {
+                getApplication<Application>().assets.open("vision/$assetName").use { input ->
+                    destFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                Log.d(TAG, "Asset $assetName скопирован в ${destFile.absolutePath}")
+            }
+            destFile.absolutePath
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка копирования $assetName: ${e.message}")
+            null
+        }
+    }
+
+    private fun hasEnoughRamForVision(): Boolean {
+        return try {
+            val am = getApplication<Application>().getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            val mi = android.app.ActivityManager.MemoryInfo()
+            am.getMemoryInfo(mi)
+            val availGb = mi.availMem.toDouble() / (1024.0 * 1024.0 * 1024.0)
+            Log.d(TAG, "Свободно RAM: $availGb ГБ")
+            availGb >= 1.5
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка проверки RAM: ${e.message}")
+            false
+        }
+    }
+
+    fun ensureVisionModelLoaded(onReady: () -> Unit) {
+        if (isVisionModelLoaded) {
+            onReady()
+            return
+        }
+
+        if (!hasEnoughRamForVision()) {
+            appendSystemMessage("❌ Недостаточно памяти для загрузки визиона")
+            return
+        }
+
+        appendSystemMessage("🤖 Загружаю зрение...")
+
+        savedTemperature = temperature.value
+        savedContextSize = contextSize.value
+        savedModelPath = if (_isModelLoaded.value) currentModelPath else null
+        savedMmprojPath = if (_isModelLoaded.value) currentMmprojPath else null
+
+        scope.launch(Dispatchers.IO) {
+            try {
+                llamaHelper.release()
+
+                val modelPath = copyAssetToFiles("smolvlm2_500m.gguf", "smolvlm2_500m.gguf")
+                val mmprojPath = copyAssetToFiles("smolvlm2_500m_mmproj.gguf", "smolvlm2_500m_mmproj.gguf")
+
+                if (modelPath == null || mmprojPath == null) {
+                    appendSystemMessage("❌ Не удалось скопировать модель из assets")
+                    return@launch
+                }
+
+                temperature.value = 0.1f
+                contextSize.value = 4096
+
+                llamaHelper.load(
+                    modelPath,
+                    4096,
+                    mmprojPath
+                ) { _ ->
+                    isVisionModelLoaded = true
+                    appendSystemMessage("✅ Зрение загружено")
+                    scope.launch(Dispatchers.Main) {
+                        onReady()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Ошибка загрузки vision: ${e.message}")
+                appendSystemMessage("❌ Ошибка загрузки зрения: ${e.message}")
+            }
+        }
+    }
+
+    fun restorePreviousModelIfNeeded() {
+        if (!isVisionModelLoaded) return
+
+        scope.launch(Dispatchers.IO) {
+            try {
+                llamaHelper.release()
+                isVisionModelLoaded = false
+
+                if (savedModelPath != null) {
+                    appendSystemMessage("🤖 Возвращаю текстовую модель...")
+
+                    temperature.value = savedTemperature
+                    contextSize.value = savedContextSize
+
+                    llamaHelper.load(
+                        savedModelPath!!,
+                        savedContextSize,
+                        savedMmprojPath
+                    ) { _ ->
+                        Log.d(TAG, "Текстовая модель восстановлена")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Ошибка восстановления текстовой модели: ${e.message}")
+            }
+        }
+    }
+
+    fun showBrainEditor() {
         _showBrainEditor.value = true
     }
 
@@ -2387,9 +2509,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
                // Если есть картинка без текста — не пишем пустое сообщение в чат,
         // а сразу отправляем в модель
-                if (text.isBlank() && imagePath != null) {
-            // Добавляем сообщение в чат с пометкой «есть картинка».
-            // Текст — «[Изображение]», чтобы пользователь видел, что отправил фото.
+                                if (text.isBlank() && imagePath != null) {
             _chatHistory.value = _chatHistory.value + ChatMessage(
                 role = "user",
                 text = "[Изображение]",
@@ -2399,10 +2519,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
             when (_currentMode.value) {
                 AIMode.LOCAL -> {
-                    if (_isModelLoaded.value) {
+                    ensureVisionModelLoaded {
                         generateLocal("", imagePath)
-                    } else {
-                        appendSystemMessage("⚠️ Локальная модель не загружена. Загрузите модель через 'движок'.")
+                        restorePreviousModelIfNeeded()
                     }
                 }
                 else -> {
@@ -2617,8 +2736,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _cloudState.value = CloudAIState.Idle
     }
 
-    fun loadModel(path: String, mmprojPath: String? = null) {
+        fun loadModel(path: String, mmprojPath: String? = null) {
         if (path.isEmpty()) return
+
+        currentModelPath = path
+        currentMmprojPath = mmprojPath
 
         if (prefs.getBoolean("engine_permanently_dead", false)) {
             Log.e(TAG, "Engine is permanently dead. Load blocked.")
