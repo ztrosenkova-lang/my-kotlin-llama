@@ -133,11 +133,11 @@ class TtsService : Service() {
                     val ttsConfig = OfflineTtsConfig(
                         model = OfflineTtsModelConfig(
                             vits = modelConfig,
-                            numThreads = 2,
+                numThreads = Runtime.getRuntime().availableProcessors().coerceIn(2, 8),
                             debug = false,
                         ),
                         ruleFsts = "",
-                        maxNumSentences = 5,
+                        maxNumSentences = 1,
                     )
 
                     offlineTts = OfflineTts(assets, ttsConfig)
