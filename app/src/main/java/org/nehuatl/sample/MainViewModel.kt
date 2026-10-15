@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.nehuatl.llamacpp.LlamaHelper
@@ -1312,10 +1313,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         savedMmprojPath = if (_isModelLoaded.value) currentMmprojPath else null
 
         scope.launch(Dispatchers.IO) {
-            try {
+                        try {
                 llamaHelper.release()
+                // Даём время контексту освободиться — иначе load()
+                // может начаться раньше, чем release() завершится.
+                delay(500)
 
-                                val modelPath = copyAssetToFiles("smolvlm2_500m.gguf", "smolvlm2_500m.gguf")
+                val modelPath = copyAssetToFiles("smolvlm2_500m.gguf", "smolvlm2_500m.gguf")
                 val mmprojPath = copyAssetToFiles("smolvlm2_500m_mmproj.gguf", "smolvlm2_500m_mmproj.gguf")
 
                 Log.d(TAG, "ensureVisionModelLoaded: modelPath=$modelPath, mmprojPath=$mmprojPath")
@@ -1333,13 +1337,18 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     modelPath,
                     4096,
                     mmprojPath
-                ) { id ->
+                                ) { id ->
                     Log.d(TAG, "ensureVisionModelLoaded: load callback id=$id")
                     isVisionModelLoaded = true
                     appendSystemMessage("✅ Зрение загружено")
-                    scope.launch(Dispatchers.Main) {
-                        Log.d(TAG, "ensureVisionModelLoaded: onReady, вызываю generateLocal")
-                        onReady()
+                    // Даём время модели полностью инициализироваться,
+                    // прежде чем запускать первый predict.
+                    scope.launch(Dispatchers.IO) {
+                        delay(1500)
+                        withContext(Dispatchers.Main) {
+                            Log.d(TAG, "ensureVisionModelLoaded: onReady, вызываю generateLocal")
+                            onReady()
+                        }
                     }
                 }
             } catch (e: Exception) {
