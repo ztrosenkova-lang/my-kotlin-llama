@@ -876,8 +876,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
 
-        scope.launch {
+                scope.launch {
             _llmFlow.collect { event ->
+                Log.d(TAG, "LLM event: ${event::class.simpleName}")
                 when (event) {
                     is LlamaHelper.LLMEvent.Started -> {
                         _state.value = GenerationState.Generating(prompt = event.prompt, tokensGenerated = 0)
@@ -1302,6 +1303,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             return
         }
 
+        Log.d(TAG, "ensureVisionModelLoaded: START. savedModelPath=$currentModelPath, savedMmprojPath=$currentMmprojPath")
         appendSystemMessage("🤖 Загружаю зрение...")
 
         savedTemperature = temperature.value
@@ -1313,8 +1315,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             try {
                 llamaHelper.release()
 
-                val modelPath = copyAssetToFiles("smolvlm2_500m.gguf", "smolvlm2_500m.gguf")
+                                val modelPath = copyAssetToFiles("smolvlm2_500m.gguf", "smolvlm2_500m.gguf")
                 val mmprojPath = copyAssetToFiles("smolvlm2_500m_mmproj.gguf", "smolvlm2_500m_mmproj.gguf")
+
+                Log.d(TAG, "ensureVisionModelLoaded: modelPath=$modelPath, mmprojPath=$mmprojPath")
 
                 if (modelPath == null || mmprojPath == null) {
                     appendSystemMessage("❌ Не удалось скопировать модель из assets")
@@ -1324,14 +1328,17 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 temperature.value = 0.1f
                 contextSize.value = 4096
 
+                Log.d(TAG, "ensureVisionModelLoaded: вызываю llamaHelper.load(4096)")
                 llamaHelper.load(
                     modelPath,
                     4096,
                     mmprojPath
-                ) { _ ->
+                ) { id ->
+                    Log.d(TAG, "ensureVisionModelLoaded: load callback id=$id")
                     isVisionModelLoaded = true
                     appendSystemMessage("✅ Зрение загружено")
                     scope.launch(Dispatchers.Main) {
+                        Log.d(TAG, "ensureVisionModelLoaded: onReady, вызываю generateLocal")
                         onReady()
                     }
                 }
@@ -2502,17 +2509,26 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-              fun sendUserMessage(text: String, imagePath: String? = null) {
+        fun sendUserMessage(text: String, imagePath: String? = null) {
+        Log.d(TAG, "sendUserMessage: text='$text', imagePath=$imagePath, isVisionModelLoaded=$isVisionModelLoaded, isModelLoaded=${_isModelLoaded.value}, mode=${_currentMode.value}")
         if (_isCompressing.value) {
             appendSystemMessage("⏳ ИИ сжимает беседу, подождите...")
             return
         }
 
-        if (text.isBlank() && imagePath == null) return
+               if (text.isBlank() && imagePath == null) return
+
+        // Если загружена vision и пользователь пишет ТЕКСТ (не картинку) —
+        // выгружаем vision и возвращаем текстовую модель.
+        if (isVisionModelLoaded && imagePath == null) {
+            Log.d(TAG, "Текстовое сообщение при загруженной vision — восстанавливаю текстовую")
+            restorePreviousModelIfNeeded()
+        }
 
                // Если есть картинка без текста — не пишем пустое сообщение в чат,
         // а сразу отправляем в модель
-                                if (text.isBlank() && imagePath != null) {
+                                                               if (text.isBlank() && imagePath != null) {
+            Log.d(TAG, "Картинка без текста. imagePath=$imagePath, currentMmprojPath=$currentMmprojPath, isModelLoaded=${_isModelLoaded.value}")
             _chatHistory.value = _chatHistory.value + ChatMessage(
                 role = "user",
                 text = "[Изображение]",
@@ -2526,12 +2542,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     // работаем с ней напрямую, без выгрузки и assets.
                     // Если загружена текстовая без проектора или модель не загружена —
                     // подгружаем встроенный SmolVLM2.
+                    // restorePreviousModelIfNeeded НЕ вызываем здесь —
+                    // иначе vision выгрузится раньше, чем успеет ответить.
+                    // Текстовая модель вернётся при следующем текстовом сообщении.
                     if (_isModelLoaded.value && currentMmprojPath != null) {
                         generateLocal("", imagePath)
                     } else {
                         ensureVisionModelLoaded {
                             generateLocal("", imagePath)
-                            restorePreviousModelIfNeeded()
                         }
                     }
                 }
@@ -2851,7 +2869,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    fun generateLocal(prompt: String, imagePath: String? = null) {
+        fun generateLocal(prompt: String, imagePath: String? = null) {
+        Log.d(TAG, "generateLocal: prompt='$prompt', imagePath=$imagePath, contextId=${llamaHelper.getContextId()}, isVisionModelLoaded=$isVisionModelLoaded")
         val lowerPrompt = prompt.trim().lowercase()
 
         if (prefs.getBoolean("engine_permanently_dead", false)) {
@@ -2924,9 +2943,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     emptyList()
 }
 
-        _generatedText.value = ""
+                _generatedText.value = ""
         _state.value = GenerationState.Generating(prompt = effectivePrompt, tokensGenerated = 0)
 
+        Log.d(TAG, "generateLocal: вызываю predict. effectivePrompt='$effectivePrompt', imagePath=$imagePath")
         scope.launch {
             try {
                 llamaHelper.predict(
@@ -2936,7 +2956,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     maxTokens = maxTokens.value,
                     chatHistory = historyForPredict
                 )
+                Log.d(TAG, "generateLocal: predict вернул управление")
             } catch (e: Exception) {
+                Log.e(TAG, "generateLocal: исключение в predict: ${e.message}", e)
                 _state.value = GenerationState.Error(e.message ?: "Unknown error")
                 _isModelLoaded.value = false
             }
