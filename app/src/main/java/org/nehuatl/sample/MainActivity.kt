@@ -39,6 +39,7 @@ class MainActivity : ComponentActivity() {
     // Реальные имена файлов (для DownloadManager URI с числовым ID)
     private var modelDisplayName by mutableStateOf<String?>(null)
     private var mmprojDisplayName by mutableStateOf<String?>(null)
+    private var appViewModel: MainViewModel? = null
 
         companion object {
         private const val PREFS_NAME = "app_security"
@@ -90,7 +91,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private val videoPickerLauncher = registerForActivityResult(
+       private val videoPickerLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         uri?.let {
@@ -98,7 +99,7 @@ class MainActivity : ComponentActivity() {
                 it,
                 Intent.FLAG_GRANT_READ_URI_PERMISSION
             )
-            onVideoPicked?.invoke(it)
+            appViewModel?.attachVideo(it)
         }
     }
 
@@ -110,8 +111,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private var pendingCameraFile: File? = null
-    private var onVideoPicked: ((Uri) -> Unit)? = null
+        private var pendingCameraFile: File? = null
 
         private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -679,15 +679,16 @@ fun clearSelectedModelAndMmproj() {
     private fun showMainContent() {
         setContent {
             KotlinLlamaCppTheme {
-                val viewModel: MainViewModel by viewModels {
+                    val viewModel: MainViewModel by viewModels {
                     object : ViewModelProvider.Factory {
                         override fun <T : ViewModel> create(modelClass: Class<T>): T {
                             return MainViewModel(application, contentResolver) as T
                         }
                     }
                 }
+                appViewModel = viewModel
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                                                                                ChatScreen(
+                        ChatScreen(
                         modifier = Modifier.padding(innerPadding),
                         viewModel = viewModel,
                         currentModelPath = modelPath,
@@ -708,7 +709,6 @@ fun clearSelectedModelAndMmproj() {
                             )
                             cameraLauncher.launch(uri)
                         },
-                        onVideoSelected = { uri -> onVideoPicked?.invoke(uri) },
                         imagePath = imagePath,
                         onImageUsed = { imagePath = null }
                     )
