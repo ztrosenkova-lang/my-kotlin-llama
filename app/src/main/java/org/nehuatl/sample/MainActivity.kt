@@ -29,6 +29,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import org.nehuatl.sample.ui.theme.KotlinLlamaCppTheme
 import java.security.MessageDigest
+import java.io.File
 
 class MainActivity : ComponentActivity() {
 
@@ -77,7 +78,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private val imagePickerLauncher = registerForActivityResult(
+        private val imagePickerLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         uri?.let {
@@ -88,6 +89,29 @@ class MainActivity : ComponentActivity() {
             imagePath = it.toString()
         }
     }
+
+    private val videoPickerLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let {
+            contentResolver.takePersistableUriPermission(
+                it,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+            onVideoPicked?.invoke(it)
+        }
+    }
+
+    private val cameraLauncher = registerForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success && pendingCameraFile != null) {
+            imagePath = Uri.fromFile(pendingCameraFile).toString()
+        }
+    }
+
+    private var pendingCameraFile: File? = null
+    private var onVideoPicked: ((Uri) -> Unit)? = null
 
         private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
