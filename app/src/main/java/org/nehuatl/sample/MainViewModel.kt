@@ -2572,10 +2572,15 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
                if (text.isBlank() && imagePath == null) return
 
-                // Если загружена vision и пользователь пишет ТЕКСТ (не картинку) —
+        // Если загружена vision и пользователь пишет ТЕКСТ (не картинку и не видео) —
         // выгружаем vision и возвращаем текстовую модель.
         // Дальше идём ТОЛЬКО после того, как текстовая модель реально загружена.
-        if (isVisionModelLoaded && imagePath == null) {
+        //
+        // Для видео и картинок НЕ восстанавливаем текстовую — они идут в текущую
+        // загруженную vision напрямую. Иначе получится двойная работа:
+        // выгрузка vision → загрузка текстовой → снова выгрузка → загрузка vision.
+        val isMediaRequest = imagePath != null || !videoFrames.isNullOrEmpty()
+        if (isVisionModelLoaded && !isMediaRequest) {
             Log.d(TAG, "Текстовое сообщение при загруженной vision — восстанавливаю текстовую")
             restorePreviousModelIfNeeded {
                 proceedWithUserMessage(text, imagePath, videoFrames, videoDurationSec)
@@ -2961,19 +2966,34 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-            fun generateLocalVideo(prompt: String, frames: List<String>) {
+                        fun generateLocalVideo(prompt: String, frames: List<String>) {
         if (llamaHelper.getContextId() == null) {
             _state.value = GenerationState.Error("Модель не загружена.")
             return
         }
 
+        // Разные VLM — разный формат видео-входа.
+        // SmolVLM2 понимает видеопромпт и последовательность кадров.
+        // Остальные модели (Qwen-VL, Gemma-Vision и пр.) —
+        // обрабатывают кадры как набор изображений с обычным промптом.
+        val isSmolVLM = currentModelName.contains("smolvlm", ignoreCase = true) ||
+                        currentModelName.contains("smol-vlm", ignoreCase = true)
+
         val effectivePrompt = if (prompt.isBlank()) {
-            "What is the main action or notable event happening in this segment? Describe it in one brief sentence."
+            if (isSmolVLM) {
+                "What is the main action or notable event happening in this segment? Describe it in one brief sentence."
+            } else {
+                "Опиши, что происходит на этих кадрах видео. Кратко, по сути."
+            }
         } else {
             prompt
         }
 
-        val videoSystemPrompt = "Focus only on describing the key dramatic action or notable event occurring in this video segment. Look for notable actions of people or notable signals or novel elements in the video."
+        val videoSystemPrompt = if (isSmolVLM) {
+            "Focus only on describing the key dramatic action or notable event occurring in this video segment. Look for notable actions of people or notable signals or novel elements in the video."
+        } else {
+            _systemPrompt.value
+        }
 
         _generatedText.value = ""
         _state.value = GenerationState.Generating(prompt = effectivePrompt, tokensGenerated = 0)
@@ -2995,7 +3015,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
     }
-
     fun generateLocal(prompt: String, imagePath: String? = null) {
         Log.d(TAG, "generateLocal: prompt='$prompt', imagePath=$imagePath, contextId=${llamaHelper.getContextId()}, isVisionModelLoaded=$isVisionModelLoaded")
         val lowerPrompt = prompt.trim().lowercase()
