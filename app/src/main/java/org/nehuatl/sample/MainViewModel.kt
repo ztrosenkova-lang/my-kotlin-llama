@@ -1267,27 +1267,30 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 }
                 Log.d(TAG, "Asset $assetName скопирован в ${destFile.absolutePath}")
             }
-            destFile.absolutePath
+        "file://${destFile.absolutePath}"
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка копирования $assetName: ${e.message}")
             null
         }
     }
 
-    private fun hasEnoughRamForVision(): Boolean {
+       private fun hasEnoughRamForVision(): Boolean {
         return try {
             val am = getApplication<Application>().getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
             val mi = android.app.ActivityManager.MemoryInfo()
             am.getMemoryInfo(mi)
             val availGb = mi.availMem.toDouble() / (1024.0 * 1024.0 * 1024.0)
-            Log.d(TAG, "Свободно RAM: $availGb ГБ")
-            availGb >= 1.5
+            val totalGb = mi.totalMem.toDouble() / (1024.0 * 1024.0 * 1024.0)
+            Log.d(TAG, "RAM: свободно $availGb ГБ, всего $totalGb ГБ")
+
+            // Свободно >= 0.8 ГБ — точно хватит (после выгрузки текстовой модели).
+            // Или всего >= 3 ГБ — телефон достаточно мощный, чтобы загрузить vision.
+            availGb >= 0.8 || totalGb >= 3.0
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка проверки RAM: ${e.message}")
             false
         }
     }
-
     fun ensureVisionModelLoaded(onReady: () -> Unit) {
         if (isVisionModelLoaded) {
             onReady()
@@ -2517,11 +2520,19 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             )
             syncChatToFile()
 
-            when (_currentMode.value) {
+                       when (_currentMode.value) {
                 AIMode.LOCAL -> {
-                    ensureVisionModelLoaded {
+                    // Если модель уже загружена с проектором (vision) —
+                    // работаем с ней напрямую, без выгрузки и assets.
+                    // Если загружена текстовая без проектора или модель не загружена —
+                    // подгружаем встроенный SmolVLM2.
+                    if (_isModelLoaded.value && currentMmprojPath != null) {
                         generateLocal("", imagePath)
-                        restorePreviousModelIfNeeded()
+                    } else {
+                        ensureVisionModelLoaded {
+                            generateLocal("", imagePath)
+                            restorePreviousModelIfNeeded()
+                        }
                     }
                 }
                 else -> {
