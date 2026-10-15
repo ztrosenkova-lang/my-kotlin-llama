@@ -75,6 +75,15 @@ data class DownloadProgress(
     val status: DownloadStatus
 )
 
+enum class VisionPhase {
+    IDLE,                   // ничего не происходит
+    RELEASING_TEXT,         // выгружаю текстовую модель
+    LOADING_VISION,         // загружаю зрение
+    VISION_READY,           // зрение готово, идёт запрос к нему
+    RESTORING_TEXT,         // возвращаю текстовую модель
+    TEXT_RESTORED           // текстовая модель вернулась
+}
+
 class MainViewModel(application: Application, val contentResolver: ContentResolver) : AndroidViewModel(application) {
     companion object {
         @Volatile var instance: MainViewModel? = null
@@ -176,8 +185,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _isFirstLaunch = MutableStateFlow(false)
     val isFirstLaunch: StateFlow<Boolean> = _isFirstLaunch.asStateFlow()
 
-        private val _isCompressing = MutableStateFlow(false)
+    private val _isCompressing = MutableStateFlow(false)
     val isCompressing: StateFlow<Boolean> = _isCompressing.asStateFlow()
+
+    private val _visionPhase = MutableStateFlow(VisionPhase.IDLE)
+    val visionPhase: StateFlow<VisionPhase> = _visionPhase.asStateFlow()
 
     // Отложенное сообщение пользователя — отправляется после завершения сжатия
     private val _pendingUserMessage = MutableStateFlow<String?>(null)
@@ -1293,8 +1305,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             false
         }
     }
-    fun ensureVisionModelLoaded(onReady: () -> Unit) {
+        fun ensureVisionModelLoaded(onReady: () -> Unit) {
         if (isVisionModelLoaded) {
+            _visionPhase.value = VisionPhase.VISION_READY
             onReady()
             return
         }
@@ -1314,17 +1327,20 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         scope.launch(Dispatchers.IO) {
                         try {
+                _visionPhase.value = VisionPhase.RELEASING_TEXT
                 llamaHelper.release()
                 // Даём время контексту освободиться — иначе load()
                 // может начаться раньше, чем release() завершится.
                 delay(500)
 
+                _visionPhase.value = VisionPhase.LOADING_VISION
+
                 val modelPath = copyAssetToFiles("smolvlm2_500m.gguf", "smolvlm2_500m.gguf")
                 val mmprojPath = copyAssetToFiles("smolvlm2_500m_mmproj.gguf", "smolvlm2_500m_mmproj.gguf")
-
                 Log.d(TAG, "ensureVisionModelLoaded: modelPath=$modelPath, mmprojPath=$mmprojPath")
 
-                if (modelPath == null || mmprojPath == null) {
+                    if (modelPath == null || mmprojPath == null) {
+                    _visionPhase.value = VisionPhase.IDLE
                     appendSystemMessage("❌ Не удалось скопировать модель из assets")
                     return@launch
                 }
@@ -1340,6 +1356,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                 ) { id ->
                     Log.d(TAG, "ensureVisionModelLoaded: load callback id=$id")
                     isVisionModelLoaded = true
+                    _visionPhase.value = VisionPhase.VISION_READY
                     appendSystemMessage("✅ Зрение загружено")
                     // Даём время модели полностью инициализироваться,
                     // прежде чем запускать первый predict.
@@ -1351,18 +1368,20 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         }
                     }
                 }
-            } catch (e: Exception) {
+                       } catch (e: Exception) {
+                _visionPhase.value = VisionPhase.IDLE
                 Log.e(TAG, "Ошибка загрузки vision: ${e.message}")
                 appendSystemMessage("❌ Ошибка загрузки зрения: ${e.message}")
             }
         }
     }
 
-    fun restorePreviousModelIfNeeded() {
+        fun restorePreviousModelIfNeeded() {
         if (!isVisionModelLoaded) return
 
         scope.launch(Dispatchers.IO) {
             try {
+                _visionPhase.value = VisionPhase.RESTORING_TEXT
                 llamaHelper.release()
                 isVisionModelLoaded = false
 
@@ -1378,9 +1397,18 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         savedMmprojPath
                     ) { _ ->
                         Log.d(TAG, "Текстовая модель восстановлена")
+                        _visionPhase.value = VisionPhase.TEXT_RESTORED
+                        appendSystemMessage("✅ Текстовая модель загружена обратно")
+                        scope.launch {
+                            delay(2000)
+                            _visionPhase.value = VisionPhase.IDLE
+                        }
                     }
+                } else {
+                    _visionPhase.value = VisionPhase.IDLE
                 }
             } catch (e: Exception) {
+                _visionPhase.value = VisionPhase.IDLE
                 Log.e(TAG, "Ошибка восстановления текстовой модели: ${e.message}")
             }
         }
