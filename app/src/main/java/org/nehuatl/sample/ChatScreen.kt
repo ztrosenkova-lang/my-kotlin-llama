@@ -982,13 +982,14 @@ fun ChatScreen(
     )
 }
 
-            StatusBar(
+                StatusBar(
                 state = state,
                 cloudState = cloudState,
                 currentMode = currentMode,
                 currentModel = if (isModelLoaded) currentModelPath else null,
                 modelDisplayName = loadedModelName,
                 isSmartMode = isSmartMode,
+                visionPhase = visionPhase,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 colors = colors
             )
@@ -6794,10 +6795,41 @@ private fun StatusBar(
     currentModel: String?,
     modelDisplayName: String = "",
     isSmartMode: Boolean = false,
+    visionPhase: VisionPhase = VisionPhase.IDLE,
     modifier: Modifier = Modifier,
     colors: AppColors
 ) {
-    val (containerColor, statusText, showProgress) = when (currentMode) {
+       // Если идёт vision-фаза — показываем её независимо от режима.
+    val visionStatus: Triple<Color, String, Boolean>? = when (visionPhase) {
+        VisionPhase.RELEASING_TEXT -> Triple(
+            colors.accent.copy(alpha = 0.15f),
+            "🤖 Выгружаю текстовую модель...",
+            true
+        )
+        VisionPhase.LOADING_VISION -> Triple(
+            colors.accent.copy(alpha = 0.15f),
+            "🤖 Загружаю зрение (SmolVLM2)...",
+            true
+        )
+        VisionPhase.VISION_READY -> Triple(
+            colors.accent.copy(alpha = 0.15f),
+            "🤖 Зрение готово — анализирую...",
+            true
+        )
+        VisionPhase.RESTORING_TEXT -> Triple(
+            colors.accent.copy(alpha = 0.15f),
+            "🤖 Возвращаю текстовую модель...",
+            true
+        )
+        VisionPhase.TEXT_RESTORED -> Triple(
+            colors.surfaceGray,
+            "✅ Текстовая модель загружена обратно",
+            false
+        )
+        VisionPhase.IDLE -> null
+    }
+
+    val (containerColor, statusText, showProgress) = visionStatus ?: when (currentMode) {
         AIMode.CLOUD -> {
             when (cloudState) {
                 is CloudAIState.Idle -> Triple(
