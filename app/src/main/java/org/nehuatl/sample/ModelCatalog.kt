@@ -91,13 +91,13 @@ object ModelCatalog {
             description = "LFM2.5-2.6B от Liquid AI. 2.6B параметров, ~2.5 ГБ. Контекст 128K. 16 языков, включая русский. Главная фишка — это локальный агент: сама планирует, вызывает инструменты и делает многошаговые задачи прямо на телефоне. Обгоняет Gemma 4 и Qwen3.5-4B по следованию инструкциям. Скорость до 30 токенов/с на телефоне. Идеальна для автономной работы без облака. Слабое место — глубокие знания и код."
         ),
 
-                // ===== 9. QWEN3.8-2B — 262K, ДУМАЮЩАЯ (Q5_K_M) =====
+                // ===== 9. QWEN3.8-2B — 262K, ДУМАЮЩАЯ (Q4_K_M) =====
         ModelInfo(
-            id = "qwen38_2b",
+            id = "qwen3.8_2b",
             name = "Qwen3.8-2B — 262K, думающая",
-            url = "https://huggingface.co/empero-ai/Qwen3.8-2B-Distill-GGUF/resolve/main/Qwen3.8-2B-Q5_K_M.gguf",
-            fileName = "qwen38_2b_q5.gguf",
-            description = "Qwen3.8-2B, Q5_K_M ~2 ГБ. 262K контекст! Дистиллирована с Qwen3.8 2.4T. Режим размышлений, function calling. Огромный контекст за минимальный размер. Русский — как у Qwen (средне-хороший). "
+            url = "https://huggingface.co/empero-ai/Qwen3.8-2B-Distill-GGUF/resolve/main/Qwen3.8-2B-Q4_K_M.gguf",
+            fileName = "qwen3.8_2b_q4.gguf",
+            description = "Qwen3.8-2B, Q4_K_M ~1.31 ГБ. 262K контекст! Дистиллирована с Qwen3.8 2.4T. Режим размышлений, function calling. Огромный контекст за минимальный размер. Русский — как у Qwen (средне-хороший). "
         ),
 
         // ===== 10. VIBETHINKER-3B HERETIC — БЕЗ ЦЕНЗУРЫ (Q5_K_M) =====
@@ -220,15 +220,15 @@ object ModelCatalog {
             mmprojFileName = "smolvlm2_500m_mmproj.gguf",
             description = "Vision-модель от HuggingFace. 500M, ~500 МБ (модель + проектор). Контекст 4K. Умеет: описание картинок, визуальный Q&A, OCR, анализ сцен. Английский. Скорость 15–20 токенов/с на телефоне. Качество выше, чем у 256M. "
         ),
-                // ===== 23. QWEN2-VL-2B — КАРТИНКИ, ЛЁГКАЯ (Q6_K) =====
+                // ===== 23. QWEN2-VL-2B — КАРТИНКИ, ЛЁГКАЯ (Q5_KM) =====
         ModelInfo(
             id = "qwen2_vl_2b",
             name = "Qwen2-VL-2B — картинки, лёгкая",
-            url = "https://huggingface.co/bartowski/Qwen2-VL-2B-Instruct-GGUF/resolve/main/Qwen2-VL-2B-Instruct-Q6_K.gguf",
-            fileName = "qwen2_vl_2b_q6.gguf",
+            url = "https://huggingface.co/bartowski/Qwen2-VL-2B-Instruct-GGUF/resolve/main/Qwen2-VL-2B-Instruct-Q5_K_M.gguf",
+            fileName = "qwen2_vl_2b_q5.gguf",
             mmprojUrl = "https://huggingface.co/bartowski/Qwen2-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen2-VL-2B-Instruct-f16.gguf",
             mmprojFileName = "qwen2_vl_2b_mmproj_q8.gguf",
-            description = "Qwen2-VL-2B от Alibaba. ~1.27 ГБ модель + ~676 МБ проектор = ~1.95 ГБ. Понимает картинки: описание, OCR (текст с фото), вопросы по изображению. Стандартная архитектура Qwen — работает в llama.cpp из коробки. Лёгкая и быстрая для телефона."
+            description = "Qwen2-VL-2B от Alibaba. ~1.13 ГБ модель + ~1.33 МБ проектор = ~2.46 ГБ. Понимает картинки: описание, OCR (текст с фото), вопросы по изображению. Стандартная архитектура Qwen — работает в llama.cpp из коробки. Лёгкая и быстрая для телефона."
         )
     )
 }
