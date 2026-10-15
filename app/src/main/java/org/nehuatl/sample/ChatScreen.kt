@@ -6130,7 +6130,7 @@ private fun SettingsPanel(
                     inactiveTrackColor = colors.borderGray
                 )
             )
-            Text(
+                       Text(
                 text = "Реальный контекст ограничен моделью: если у модели 8192, " +
                         "ставить 65536 бесполезно — лишнее просто не загрузится. " +
                         "Для 6 ГБ RAM безопасно до 8192. Больше — только на 8+ ГБ.",
@@ -6138,6 +6138,20 @@ private fun SettingsPanel(
                 fontSize = 10.sp,
                 modifier = Modifier.padding(top = 2.dp)
             )
+            Spacer(modifier = Modifier.height(6.dp))
+            Button(
+                onClick = { onContextSizeChange(8192) },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = colors.borderGray,
+                    contentColor = colors.text
+                ),
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.dp, colors.borderGray),
+                modifier = Modifier.fillMaxWidth(0.7f).height(34.dp),
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+            ) {
+                Text("🧮 Сбросить на безопасные 8192", color = colors.text, fontSize = 11.sp)
+            }
             Spacer(modifier = Modifier.height(12.dp))
             Button(
                 onClick = onModelChangeClick,
