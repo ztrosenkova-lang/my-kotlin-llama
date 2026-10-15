@@ -2518,8 +2518,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-        fun sendUserMessage(text: String, imagePath: String? = null) {
-        Log.d(TAG, "sendUserMessage: text='$text', imagePath=$imagePath, isVisionModelLoaded=$isVisionModelLoaded, isModelLoaded=${_isModelLoaded.value}, mode=${_currentMode.value}")
+        fun sendUserMessage(
+        text: String,
+        imagePath: String? = null,
+        videoFrames: List<String>? = null,
+        videoDurationSec: Int = 0
+    ) {
+        Log.d(TAG, "sendUserMessage: text='$text', imagePath=$imagePath, videoFrames=${videoFrames?.size ?: 0}, isVisionModelLoaded=$isVisionModelLoaded, isModelLoaded=${_isModelLoaded.value}, mode=${_currentMode.value}")
         if (_isCompressing.value) {
             appendSystemMessage("⏳ ИИ сжимает беседу, подождите...")
             return
@@ -2534,9 +2539,34 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             restorePreviousModelIfNeeded()
         }
 
+                       // Видео: кадры приходят списком. Пишем в чат метку, шлём в модель.
+        if (!videoFrames.isNullOrEmpty()) {
+            val label = "[Видео: ${videoDurationSec} сек, ${videoFrames.size} кадров]"
+            _chatHistory.value = _chatHistory.value + ChatMessage(
+                role = "user",
+                text = if (text.isBlank()) label else "$text $label",
+                hasImage = true
+            )
+            syncChatToFile()
+
+            when (_currentMode.value) {
+                AIMode.LOCAL -> {
+                    if (_isModelLoaded.value && currentMmprojPath != null) {
+                        generateLocalVideo(text, videoFrames)
+                    } else {
+                        ensureVisionModelLoaded {
+                            generateLocalVideo(text, videoFrames)
+                        }
+                    }
+                }
+                else -> appendSystemMessage("⚠️ Анализ видео доступен только в локальном режиме")
+            }
+            return
+        }
+
                // Если есть картинка без текста — не пишем пустое сообщение в чат,
         // а сразу отправляем в модель
-                                                               if (text.isBlank() && imagePath != null) {
+            if (text.isBlank() && imagePath != null) {
             Log.d(TAG, "Картинка без текста. imagePath=$imagePath, currentMmprojPath=$currentMmprojPath, isModelLoaded=${_isModelLoaded.value}")
             _chatHistory.value = _chatHistory.value + ChatMessage(
                 role = "user",
@@ -2878,7 +2908,42 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-        fun generateLocal(prompt: String, imagePath: String? = null) {
+            fun generateLocalVideo(prompt: String, frames: List<String>) {
+        if (llamaHelper.getContextId() == null) {
+            _state.value = GenerationState.Error("Модель не загружена.")
+            return
+        }
+
+        val effectivePrompt = if (prompt.isBlank()) {
+            "What is the main action or notable event happening in this segment? Describe it in one brief sentence."
+        } else {
+            prompt
+        }
+
+        val videoSystemPrompt = "Focus only on describing the key dramatic action or notable event occurring in this video segment. Look for notable actions of people or notable signals or novel elements in the video."
+
+        _generatedText.value = ""
+        _state.value = GenerationState.Generating(prompt = effectivePrompt, tokensGenerated = 0)
+
+        scope.launch {
+            try {
+                llamaHelper.predict(
+                    prompt = effectivePrompt,
+                    imagePath = null,
+                    systemPrompt = videoSystemPrompt,
+                    maxTokens = maxTokens.value,
+                    chatHistory = emptyList(),
+                    temperature = temperature.value,
+                    imagePaths = frames
+                )
+            } catch (e: Exception) {
+                _state.value = GenerationState.Error(e.message ?: "Unknown error")
+                _isModelLoaded.value = false
+            }
+        }
+    }
+
+    fun generateLocal(prompt: String, imagePath: String? = null) {
         Log.d(TAG, "generateLocal: prompt='$prompt', imagePath=$imagePath, contextId=${llamaHelper.getContextId()}, isVisionModelLoaded=$isVisionModelLoaded")
         val lowerPrompt = prompt.trim().lowercase()
 
@@ -2958,12 +3023,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         Log.d(TAG, "generateLocal: вызываю predict. effectivePrompt='$effectivePrompt', imagePath=$imagePath")
         scope.launch {
             try {
-                llamaHelper.predict(
+                    llamaHelper.predict(
                     prompt = effectivePrompt,
                     imagePath = imagePath,
                     systemPrompt = fullSystemPrompt,
                     maxTokens = maxTokens.value,
-                    chatHistory = historyForPredict
+                    chatHistory = historyForPredict,
+                    temperature = temperature.value
                 )
                 Log.d(TAG, "generateLocal: predict вернул управление")
             } catch (e: Exception) {
