@@ -2874,8 +2874,27 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             return
         }
 
-        _state.value = GenerationState.LoadingModel
+                _state.value = GenerationState.LoadingModel
         _isModelLoaded.value = false
+
+        // Грубая оценка: ~0.2 ГБ KV-кэша на 1000 токенов контекста.
+        // Не блокируем загрузку — только предупреждаем в чат.
+        try {
+            val am = getApplication<Application>().getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            val mi = android.app.ActivityManager.MemoryInfo()
+            am.getMemoryInfo(mi)
+            val availGb = mi.availMem.toDouble() / (1024.0 * 1024.0 * 1024.0)
+            val estimatedKvGb = contextSize.value / 1000.0 * 0.2
+            if (estimatedKvGb > availGb * 0.85) {
+                appendSystemMessage(
+                    "⚠️ Контекст ${contextSize.value} может не хватить RAM " +
+                    "(нужно ~${"%.1f".format(estimatedKvGb)} ГБ, доступно ~${"%.1f".format(availGb)} ГБ). " +
+                    "Если модель не загрузится — уменьшите контекст в настройках движка."
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "RAM pre-check failed: ${e.message}")
+        }
 
                 scope.launch {
             try {
@@ -2959,14 +2978,18 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         }
                     }
                 )
-            } catch (e: Exception) {
+                        } catch (e: Exception) {
                 _state.value = GenerationState.Error(e.message ?: "Unknown error")
                 _isModelLoaded.value = false
+                appendSystemMessage(
+                    "⚠️ Не удалось загрузить модель. Если контекст ${contextSize.value} — " +
+                    "большой, уменьшите его в настройках движка и попробуйте снова."
+                )
             }
         }
     }
 
-                        fun generateLocalVideo(prompt: String, frames: List<String>) {
+            fun generateLocalVideo(prompt: String, frames: List<String>) {
         if (llamaHelper.getContextId() == null) {
             _state.value = GenerationState.Error("Модель не загружена.")
             return
@@ -3418,10 +3441,19 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         temperature.value = temp.coerceIn(0.0f, 1.0f)
     }
 
-    fun updateContextSize(size: Int) {
+        fun updateContextSize(size: Int) {
         contextSize.value = size.coerceAtLeast(512)
     }
 
+    /**
+     * Безопасный сброс контекста на 8192.
+     * Используется кнопкой в настройках движка — если пользователь
+     * выставил слишком много и модель падает по RAM.
+     */
+    fun resetContextToSafe() {
+        contextSize.value = 8192
+        appendSystemMessage("🧮 Контекст сброшен на безопасное значение 8192")
+    }
         fun updateMaxTokens(tokens: Int) {
         maxTokens.value = tokens.coerceIn(1, 32768)
     }
