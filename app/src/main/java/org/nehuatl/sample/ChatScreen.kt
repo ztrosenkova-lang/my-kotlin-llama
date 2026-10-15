@@ -258,7 +258,6 @@ fun ChatScreen(
     onPickImage: () -> Unit,
     onPickVideo: () -> Unit = {},
     onTakePhoto: () -> Unit = {},
-    onVideoSelected: (android.net.Uri) -> Unit = {},
     onImageUsed: () -> Unit,
     imagePath: String? = null
 ) {
