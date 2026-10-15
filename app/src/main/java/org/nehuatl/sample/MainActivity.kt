@@ -687,7 +687,7 @@ fun clearSelectedModelAndMmproj() {
                     }
                 }
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                                        ChatScreen(
+                                                                                ChatScreen(
                         modifier = Modifier.padding(innerPadding),
                         viewModel = viewModel,
                         currentModelPath = modelPath,
@@ -697,6 +697,18 @@ fun clearSelectedModelAndMmproj() {
                         onPickModel = { modelPickerLauncher.launch(arrayOf("*/*")) },
                         onPickMmproj = { mmprojPickerLauncher.launch(arrayOf("*/*")) },
                         onPickImage = { imagePickerLauncher.launch(arrayOf("image/*")) },
+                        onPickVideo = { videoPickerLauncher.launch(arrayOf("video/*")) },
+                        onTakePhoto = {
+                            val file = File(cacheDir, "camera_${System.currentTimeMillis()}.jpg")
+                            pendingCameraFile = file
+                            val uri = androidx.core.content.FileProvider.getUriForFile(
+                                this@MainActivity,
+                                "$packageName.fileprovider",
+                                file
+                            )
+                            cameraLauncher.launch(uri)
+                        },
+                        onVideoSelected = { uri -> onVideoPicked?.invoke(uri) },
                         imagePath = imagePath,
                         onImageUsed = { imagePath = null }
                     )
