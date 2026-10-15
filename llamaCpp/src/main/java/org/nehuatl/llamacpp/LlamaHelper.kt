@@ -48,12 +48,15 @@ class LlamaHelper(
         ALPACA,      // Alpaca
         FALCON,      // Falcon Instruct
         MP,         // MPT Chat
+        SMOLVLM,     // SmolVLM2 (smol-vision шаблон)
         NEUTRAL      // Универсальный формат без специальных токенов
     }
 
        private fun detectModelFormat(modelPath: String): ModelFormat {
         val lowerPath = modelPath.lowercase()
         return when {
+            // SmolVLM2 (smol-vision шаблон) — проверяем ДО chatml-веток
+            lowerPath.contains("smolvlm") || lowerPath.contains("smol-vlm") -> ModelFormat.SMOLVLM
             // Llama 3 / Llama 3.1 / Llama 3.2
             lowerPath.contains("llama-3") || lowerPath.contains("llama3") -> ModelFormat.LLAMA3
             // Llama 2
@@ -187,12 +190,17 @@ class LlamaHelper(
         }
     }
 
-                        fun predict(
+        fun predict(
         prompt: String,
         imagePath: String? = null,
         systemPrompt: String? = null,
         maxTokens: Int = 512,
-        chatHistory: List<Pair<String, String>> = emptyList()
+        chatHistory: List<Pair<String, String>> = emptyList(),
+        temperature: Float = 0.7f,
+        topK: Int = 40,
+        topP: Float = 0.95f,
+        repetitionPenalty: Float = 1.0f,
+        imagePaths: List<String> = emptyList()
     ) {
         val context = currentContext ?: throw Exception("Model was not loaded yet")
 
@@ -218,27 +226,37 @@ class LlamaHelper(
         // Стоп-слова в зависимости от формата модели
         val stopWords = getStopWords()
         
-                       val params = mutableMapOf<String, Any>(
+        val params = mutableMapOf<String, Any>(
             "prompt" to fullPrompt,
             "emit_partial_completion" to true,
-            "temperature" to 0.7,
+            "temperature" to temperature,
             "n_predict" to maxTokens,
-            "top_k" to 40,
-            "top_p" to 0.95,
+            "top_k" to topK,
+            "top_p" to topP,
+            "penalty_repeat" to repetitionPenalty,
             "stop" to stopWords
         )
         
-        imagePath?.let {
-            try {
-                val imgUri = Uri.parse(it)
-                Log.d("LlamaHelper", ">>> Opening image FD for URI: $imgUri")
-                contentResolver.openFileDescriptor(imgUri, "r")?.use { pfd ->
-                    val imgFd = pfd.detachFd()
-                    params["image_fds"] = listOf(imgFd)
-                    Log.d("LlamaHelper", ">>> Image FD added to params: $imgFd")
+                // Список путей к медиа: либо одиночная картинка, либо кадры видео.
+        val allMediaPaths = if (imagePaths.isNotEmpty()) imagePaths
+                            else if (imagePath != null) listOf(imagePath)
+                            else emptyList()
+
+        if (allMediaPaths.isNotEmpty()) {
+            val fds = mutableListOf<Int>()
+            for (path in allMediaPaths) {
+                try {
+                    val imgUri = Uri.parse(path)
+                    contentResolver.openFileDescriptor(imgUri, "r")?.use { pfd ->
+                        fds.add(pfd.detachFd())
+                    }
+                } catch (e: Exception) {
+                    Log.e("LlamaHelper", "Failed to open media FD: $path", e)
                 }
-            } catch (e: Exception) {
-                Log.e("LlamaHelper", "Failed to open image FD", e)
+            }
+            if (fds.isNotEmpty()) {
+                params["image_fds"] = fds
+                Log.d("LlamaHelper", ">>> ${fds.size} media FD added to params")
             }
         }
 
@@ -566,6 +584,29 @@ class LlamaHelper(
                 append("<|assistant|>\n")
             }
 
+                        ModelFormat.SMOLVLM -> buildString {
+                if (!systemPrompt.isNullOrEmpty()) {
+                    append("<|im_start|>System: ")
+                    append(systemPrompt)
+                    append("<end_of_utterance>\n")
+                }
+                for ((role, text) in chatHistory) {
+                    if (role == "system") continue
+                    val tag = if (role == "user") "User" else "Assistant"
+                    append("<|im_start|>")
+                    append(tag)
+                    append(": ")
+                    append(text)
+                    append("<end_of_utterance>\n")
+                }
+                if (prompt.isNotBlank()) {
+                    append("<|im_start|>User: ")
+                    append(prompt)
+                    append("<end_of_utterance>\n")
+                }
+                append("<|im_start|>Assistant:")
+            }
+
             ModelFormat.NEUTRAL -> buildString {
                 if (!systemPrompt.isNullOrEmpty()) {
                     append("System: ")
@@ -696,6 +737,13 @@ class LlamaHelper(
                     "<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
                 }
             }
+            ModelFormat.SMOLVLM -> {
+                if (!systemPrompt.isNullOrEmpty()) {
+                    "<|im_start|>System: $systemPrompt<end_of_utterance>\n<|im_start|>User: $prompt<end_of_utterance>\n<|im_start|>Assistant:"
+                } else {
+                    "<|im_start|>User: $prompt<end_of_utterance>\n<|im_start|>Assistant:"
+                }
+            }
             ModelFormat.NEUTRAL -> {
                 if (!systemPrompt.isNullOrEmpty()) {
                     "System: $systemPrompt\n\nUser: $prompt\n\nAssistant:"
@@ -723,6 +771,7 @@ class LlamaHelper(
             ModelFormat.ALPACA -> listOf("### User:", "### Assistant:", "<|endoftext|>")
             ModelFormat.FALCON -> listOf("User:", "Falcon:", "<|endoftext|>")
             ModelFormat.MP -> listOf("<|im_end|>", "<|endoftext|>")
+            ModelFormat.SMOLVLM -> listOf("<end_of_utterance>", "<|im_end|>", "<|endoftext|>")
             ModelFormat.NEUTRAL -> listOf("</s>", "<|endoftext|>", "<|im_end|>", "<|eot_id|>")
         }
     }
