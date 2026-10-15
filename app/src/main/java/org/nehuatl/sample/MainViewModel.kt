@@ -1376,8 +1376,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-        fun restorePreviousModelIfNeeded() {
-        if (!isVisionModelLoaded) return
+            fun restorePreviousModelIfNeeded(onReady: (() -> Unit)? = null) {
+        if (!isVisionModelLoaded) {
+            onReady?.invoke()
+            return
+        }
 
         scope.launch(Dispatchers.IO) {
             try {
@@ -1403,13 +1406,22 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             delay(2000)
                             _visionPhase.value = VisionPhase.IDLE
                         }
+                        withContext(Dispatchers.Main) {
+                            onReady?.invoke()
+                        }
                     }
                 } else {
                     _visionPhase.value = VisionPhase.IDLE
+                    withContext(Dispatchers.Main) {
+                        onReady?.invoke()
+                    }
                 }
             } catch (e: Exception) {
                 _visionPhase.value = VisionPhase.IDLE
                 Log.e(TAG, "Ошибка восстановления текстовой модели: ${e.message}")
+                withContext(Dispatchers.Main) {
+                    onReady?.invoke()
+                }
             }
         }
     }
@@ -2560,13 +2572,26 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
                if (text.isBlank() && imagePath == null) return
 
-        // Если загружена vision и пользователь пишет ТЕКСТ (не картинку) —
+                // Если загружена vision и пользователь пишет ТЕКСТ (не картинку) —
         // выгружаем vision и возвращаем текстовую модель.
+        // Дальше идём ТОЛЬКО после того, как текстовая модель реально загружена.
         if (isVisionModelLoaded && imagePath == null) {
             Log.d(TAG, "Текстовое сообщение при загруженной vision — восстанавливаю текстовую")
-            restorePreviousModelIfNeeded()
+            restorePreviousModelIfNeeded {
+                proceedWithUserMessage(text, imagePath, videoFrames, videoDurationSec)
+            }
+            return
         }
 
+        proceedWithUserMessage(text, imagePath, videoFrames, videoDurationSec)
+    }
+
+    private fun proceedWithUserMessage(
+        text: String,
+        imagePath: String? = null,
+        videoFrames: List<String>? = null,
+        videoDurationSec: Int = 0
+    ) {
                        // Видео: кадры приходят списком. Пишем в чат метку, шлём в модель.
         if (!videoFrames.isNullOrEmpty()) {
             val label = "[Видео: ${videoDurationSec} сек, ${videoFrames.size} кадров]"
