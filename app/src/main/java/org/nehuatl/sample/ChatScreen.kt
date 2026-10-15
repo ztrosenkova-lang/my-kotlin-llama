@@ -256,6 +256,9 @@ fun ChatScreen(
     onPickModel: () -> Unit,
     onPickMmproj: () -> Unit,
     onPickImage: () -> Unit,
+    onPickVideo: () -> Unit = {},
+    onTakePhoto: () -> Unit = {},
+    onVideoSelected: (android.net.Uri) -> Unit = {},
     onImageUsed: () -> Unit,
     imagePath: String? = null
 ) {
@@ -370,6 +373,9 @@ fun ChatScreen(
     // Диалог разблокировки по команде «режим админа» (только в NEUTRAL)
     var showAdminUnlockDialog by remember { mutableStateOf(false) }
     var adminPhraseInput by remember { mutableStateOf("") }
+    var showMediaPicker by remember { mutableStateOf(false) }
+    var videoInfo by remember { mutableStateOf<VideoFrameExtractor.Result?>(null) }
+    var pendingVideoFrames by remember { mutableStateOf<List<String>?>(null) }
         // Сигнал для махания рукой — устанавливается, когда нужно помахать
     var waveSignal by remember { mutableStateOf(false) }
         // Сигнал для полёта в центр экрана и увеличения
@@ -756,7 +762,7 @@ fun ChatScreen(
         )
     }
 
-        if (showChatEditorState) {
+                if (showChatEditorState) {
         ChatEditorDialog(
             initialText = viewModel.readChatAsText(),
             onSave = { viewModel.overwriteChatFromText(it) },
@@ -766,6 +772,25 @@ fun ChatScreen(
         )
     }
 
+    if (showMediaPicker) {
+        MediaPickerDialog(
+            onPickGallery = {
+                showMediaPicker = false
+                onPickImage()
+            },
+            onTakePhoto = {
+                showMediaPicker = false
+                onTakePhoto()
+            },
+            onPickVideo = {
+                showMediaPicker = false
+                onPickVideo()
+            },
+            onDismiss = { showMediaPicker = false },
+            colors = colors,
+            isDarkTheme = isDarkTheme
+        )
+    }
         
         val density = LocalDensity.current      
    
@@ -1172,7 +1197,7 @@ fun ChatScreen(
                     viewModel.abortCloud()
                 },
                 onClearChat = { viewModel.clearChat() },
-                onPickImage = onPickImage,
+                onPickImage = { showMediaPicker = true },
                 enabled = true,
                 isGenerating = state.isActive() || cloudState.isActive(),
                 isSpeaking = isSpeaking,
@@ -7605,7 +7630,7 @@ private fun PromptInput(
                 else -> colors.green
             }
 
-            Text(
+                        Text(
                 text = memoryInfoText,
                 color = memoryColor,
                 fontSize = 8.sp,
@@ -7615,6 +7640,109 @@ private fun PromptInput(
                     .padding(start = 4.dp, end = 4.dp, bottom = 2.dp),
                 textAlign = TextAlign.Center
             )
+        }
+    }
+}
+
+@Composable
+private fun MediaPickerDialog(
+    onPickGallery: () -> Unit,
+    onTakePhoto: () -> Unit,
+    onPickVideo: () -> Unit,
+    onDismiss: () -> Unit,
+    colors: AppColors,
+    isDarkTheme: Boolean
+) {
+    MaterialTheme(
+        colorScheme = if (isDarkTheme) darkColorScheme() else lightColorScheme()
+    ) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = {
+                Text(
+                    "📎 Добавить медиа",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = colors.text
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    MediaOptionRow(
+                        emoji = "🖼️",
+                        label = "Галерея",
+                        description = "Выбрать изображение из галереи",
+                        onClick = onPickGallery,
+                        colors = colors
+                    )
+                    MediaOptionRow(
+                        emoji = "📷",
+                        label = "Камера",
+                        description = "Сфотографировать прямо сейчас",
+                        onClick = onTakePhoto,
+                        colors = colors
+                    )
+                    MediaOptionRow(
+                        emoji = "🎬",
+                        label = "Видео",
+                        description = "Выбрать видео (до 64 кадров)",
+                        onClick = onPickVideo,
+                        colors = colors
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.borderGray)
+                ) {
+                    Text("Отмена", color = colors.text)
+                }
+            },
+            containerColor = colors.surfaceGray
+        )
+    }
+}
+
+@Composable
+private fun MediaOptionRow(
+    emoji: String,
+    label: String,
+    description: String,
+    onClick: () -> Unit,
+    colors: AppColors
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, colors.borderGray),
+        colors = CardDefaults.cardColors(containerColor = colors.background)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(text = emoji, fontSize = 24.sp)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    color = colors.text,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = description,
+                    color = colors.text.copy(alpha = 0.7f),
+                    fontSize = 11.sp
+                )
+            }
         }
     }
 }
