@@ -6058,21 +6058,51 @@ private fun SettingsPanel(
                 colors = SliderDefaults.colors(thumbColor = colors.accent, activeTrackColor = colors.accent, inactiveTrackColor = colors.borderGray)
             )
             Spacer(modifier = Modifier.height(12.dp))
-            Text(text = "Максимум токенов: $maxTokens", color = colors.text)
+                        val maxTokensSteps = listOf(
+                256, 512, 1024, 2048, 4096, 8192, 16384, 32768
+            )
+            val maxTokensIndex = maxTokensSteps.indexOfFirst { it >= maxTokens }
+                .let { if (it == -1) maxTokensSteps.lastIndex else it }
+
+            Text(
+                text = "Максимум токенов ответа: $maxTokens" +
+                        if (maxTokens >= 8192) " (много — для думающих моделей)" else "",
+                color = colors.text
+            )
             Slider(
-                value = maxTokens.toFloat(),
-                onValueChange = { onMaxTokensChange(it.toInt()) },
-                valueRange = 1f..4096f,
-                steps = 50,
+                value = maxTokensIndex.toFloat(),
+                onValueChange = { idx ->
+                    val i = idx.toInt().coerceIn(0, maxTokensSteps.lastIndex)
+                    onMaxTokensChange(maxTokensSteps[i])
+                },
+                valueRange = 0f..(maxTokensSteps.size - 1).toFloat(),
+                steps = maxTokensSteps.size - 2,
                 modifier = Modifier.fillMaxWidth(),
-                colors = SliderDefaults.colors(thumbColor = colors.accent, activeTrackColor = colors.accent, inactiveTrackColor = colors.borderGray)
+                colors = SliderDefaults.colors(
+                    thumbColor = colors.accent,
+                    activeTrackColor = colors.accent,
+                    inactiveTrackColor = colors.borderGray
+                )
+            )
+            Text(
+                text = "Для ответов с размышлениями (reasoning) ставьте 8192+. " +
+                        "Большие значения замедляют генерацию.",
+                color = colors.text.copy(alpha = 0.6f),
+                fontSize = 10.sp,
+                modifier = Modifier.padding(top = 2.dp)
             )
             Spacer(modifier = Modifier.height(12.dp))
                         // Цвет зависит от размера контекста:
             // зелёный — безопасно (≤ 8192), оранжевый — на грани (≤ 16384), красный — рискованно (> 16384)
+                       val contextSteps = listOf(
+                512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144
+            )
+            val contextIndex = contextSteps.indexOfFirst { it >= contextSize }
+                .let { if (it == -1) contextSteps.lastIndex else it }
+
             val contextColor = when {
                 contextSize <= 8192 -> colors.green
-                contextSize <= 16384 -> Color(0xFFFFA500)
+                contextSize <= 32768 -> Color(0xFFFFA500)
                 else -> Color.Red
             }
 
@@ -6080,16 +6110,19 @@ private fun SettingsPanel(
                 text = "Размер контекстного окна: $contextSize" +
                         when {
                             contextSize <= 8192 -> " (безопасно)"
-                            contextSize <= 16384 -> " (на грани)"
-                            else -> " (может не хватить RAM)"
+                            contextSize <= 32768 -> " (на грани)"
+                            else -> " (высокий риск OOM)"
                         },
                 color = contextColor
             )
             Slider(
-                value = contextSize.toFloat(),
-                onValueChange = { onContextSizeChange(it.toInt()) },
-                valueRange = 512f..65536f,
-                steps = 31,
+                value = contextIndex.toFloat(),
+                onValueChange = { idx ->
+                    val i = idx.toInt().coerceIn(0, contextSteps.lastIndex)
+                    onContextSizeChange(contextSteps[i])
+                },
+                valueRange = 0f..(contextSteps.size - 1).toFloat(),
+                steps = contextSteps.size - 2,
                 modifier = Modifier.fillMaxWidth(),
                 colors = SliderDefaults.colors(
                     thumbColor = contextColor,
@@ -6098,7 +6131,9 @@ private fun SettingsPanel(
                 )
             )
             Text(
-                text = "Для 6 ГБ RAM безопасно до 8192. Больше — только на телефонах с 8+ ГБ.",
+                text = "Реальный контекст ограничен моделью: если у модели 8192, " +
+                        "ставить 65536 бесполезно — лишнее просто не загрузится. " +
+                        "Для 6 ГБ RAM безопасно до 8192. Больше — только на 8+ ГБ.",
                 color = colors.text.copy(alpha = 0.6f),
                 fontSize = 10.sp,
                 modifier = Modifier.padding(top = 2.dp)
