@@ -1110,11 +1110,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 // Резолвим редирект HF → CDN перед передачей в DownloadManager
                 val resolvedUrl = resolveRedirectUrl(url)
 
-                val mainRequest = DownloadManager.Request(Uri.parse(resolvedUrl))
+                    val mainRequest = DownloadManager.Request(Uri.parse(resolvedUrl))
                     .setTitle(fileName)
                     .setDescription("Загрузка модели ИИ-Друг")
                     .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                    .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+                    .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "models/$fileName")
                     .setAllowedOverMetered(true)
                     .setAllowedOverRoaming(false)
 
@@ -1138,7 +1138,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     .setTitle(mmprojFileName!!)
                     .setDescription("Загрузка проектора ИИ-Друг")
                     .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                    .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, mmprojFileName)
+                    .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "models/$mmprojFileName")
                     .setAllowedOverMetered(true)
                     .setAllowedOverRoaming(false)
 
@@ -1223,11 +1223,26 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    private fun updateProgress(modelId: String, isMain: Boolean, percent: Int, status: DownloadStatus) {
+       private fun updateProgress(modelId: String, isMain: Boolean, percent: Int, status: DownloadStatus) {
         if (isMain) {
             _downloadProgress.value = _downloadProgress.value + (modelId to DownloadProgress(percent, status))
         } else {
             _mmprojDownloadProgress.value = _mmprojDownloadProgress.value + (modelId to DownloadProgress(percent, status))
+        }
+    }
+
+    /**
+     * Проверяет, лежит ли файл модели/проектора в Downloads/models/.
+     * Используется в диалоге загрузки, чтобы показать «✅ Файл уже скачан».
+     */
+    fun isModelFileDownloaded(fileName: String): Boolean {
+        return try {
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val file = File(File(downloadsDir, "models"), fileName)
+            file.exists() && file.length() > 1_000_000
+        } catch (e: Exception) {
+            Log.w(TAG, "isModelFileDownloaded failed for $fileName: ${e.message}")
+            false
         }
     }
 
