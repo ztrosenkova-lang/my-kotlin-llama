@@ -29,7 +29,8 @@ fun RobotOverlayContent(
     val overlayHeadNod by viewModel.overlayHeadNod.collectAsStateWithLifecycle(initialValue = 0f)
     val overlayTapWaveDirection by viewModel.overlayTapWaveDirection.collectAsStateWithLifecycle(initialValue = 0f)
     val robotAutoAnimation by viewModel.robotAutoAnimation.collectAsStateWithLifecycle(initialValue = 0)
-        val isCompressing by viewModel.isCompressing.collectAsStateWithLifecycle(initialValue = false)
+    val isCompressing by viewModel.isCompressing.collectAsStateWithLifecycle(initialValue = false)
+    val visionPhase by viewModel.visionPhase.collectAsStateWithLifecycle(initialValue = VisionPhase.IDLE)
     val robotJumpSignal by viewModel.robotJumpSignal.collectAsStateWithLifecycle(initialValue = false)
     val overlayRobotScale by viewModel.overlayRobotScale.collectAsStateWithLifecycle(initialValue = 1.0f)
 
@@ -61,6 +62,7 @@ fun RobotOverlayContent(
             autoAnimation = robotAutoAnimation,
             isCompressing = isCompressing,
             isLoadingModel = state is GenerationState.LoadingModel,
+            visionPhase = visionPhase,
             isJumping = robotJumpSignal,
             bobAmplitude = 0f,
             modifier = Modifier
