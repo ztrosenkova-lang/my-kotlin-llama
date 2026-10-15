@@ -229,11 +229,11 @@ class LlamaHelper(
         val params = mutableMapOf<String, Any>(
             "prompt" to fullPrompt,
             "emit_partial_completion" to true,
-            "temperature" to temperature,
+            "temperature" to temperature.toDouble(),
             "n_predict" to maxTokens,
             "top_k" to topK,
-            "top_p" to topP,
-            "penalty_repeat" to repetitionPenalty,
+            "top_p" to topP.toDouble(),
+            "penalty_repeat" to repetitionPenalty.toDouble(),
             "stop" to stopWords
         )
         
