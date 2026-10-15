@@ -7188,15 +7188,15 @@ private fun ModelDownloadDialog(
                     )
                 }
 
-                Text(
-                    text = "После загрузки файл будет в папке Downloads. Выберите его через «Выбрать модель».",
+                                Text(
+                    text = "Файлы сохраняются в Downloads/models/. Выберите их через «Выбрать модель».",
                     color = colors.text.copy(alpha = 0.8f),
                     fontSize = 11.sp,
                     textAlign = TextAlign.Center,
                     fontFamily = FontFamily.Monospace
                 )
 
-                Column(
+                                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(420.dp)
@@ -7205,6 +7205,10 @@ private fun ModelDownloadDialog(
                 ) {
                     ModelCatalog.models.forEach { model ->
                         val progress = downloadProgress[model.id]
+                        val mainFileExists = viewModel.isModelFileDownloaded(model.fileName)
+                        val mmprojFileExists = model.mmprojFileName?.let {
+                            viewModel.isModelFileDownloaded(it)
+                        } ?: false
 
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -7218,13 +7222,36 @@ private fun ModelDownloadDialog(
                                     .padding(10.dp),
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Text(
-                                    text = model.name,
-                                    color = colors.text,
-                                    fontSize = 12.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = model.name,
+                                        color = colors.text,
+                                        fontSize = 12.sp,
+                                        fontFamily = FontFamily.Monospace,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    if (mainFileExists && (model.mmprojFileName == null || mmprojFileExists)) {
+                                        Text(
+                                            text = "✅ скачано",
+                                            color = Color(0xFF4CAF50),
+                                            fontSize = 10.sp,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                    }
+                                }
+                                if (mainFileExists && model.mmprojFileName != null && !mmprojFileExists) {
+                                    Text(
+                                        text = "⚠️ модель есть, проектор не скачан",
+                                        color = Color(0xFFFFA500),
+                                        fontSize = 10.sp,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
 
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -7246,9 +7273,15 @@ private fun ModelDownloadDialog(
 
                                     Button(
                                         onClick = {
+                                                                               val allDownloaded = mainFileExists &&
+                                            (model.mmprojFileName == null || mmprojFileExists)
+
+                                    Button(
+                                        onClick = {
                                             viewModel.startModelDownload(model.id, model.url, model.fileName)
                                         },
-                                        enabled = progress == null || progress.status == DownloadStatus.FAILED,
+                                        enabled = !allDownloaded &&
+                                                (progress == null || progress.status == DownloadStatus.FAILED),
                                         modifier = Modifier.weight(1f).height(34.dp),
                                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
                                         colors = ButtonDefaults.buttonColors(
@@ -7260,10 +7293,11 @@ private fun ModelDownloadDialog(
                                         shape = RoundedCornerShape(8.dp),
                                         border = BorderStroke(1.dp, colors.borderGray)
                                     ) {
-                                        val label = when (progress?.status) {
-                                            DownloadStatus.RUNNING -> "Качается..."
-                                            DownloadStatus.SUCCESS -> "✅ Готово"
-                                            DownloadStatus.FAILED -> "❌ Повторить"
+                                        val label = when {
+                                            allDownloaded -> "✅ Уже скачано"
+                                            progress?.status == DownloadStatus.RUNNING -> "Качается..."
+                                            progress?.status == DownloadStatus.SUCCESS -> "✅ Готово"
+                                            progress?.status == DownloadStatus.FAILED -> "❌ Повторить"
                                             else -> "Загрузить"
                                         }
                                         Text(label, color = colors.background, fontSize = 11.sp)
