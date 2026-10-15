@@ -290,6 +290,7 @@ fun ChatScreen(
     val showChatEditorState by viewModel.showChatEditor.collectAsStateWithLifecycle(initialValue = false)
     val isFloatingRobotRunning by viewModel.floatingRobotRunning.collectAsStateWithLifecycle(initialValue = false)
     val isCompressing by viewModel.isCompressing.collectAsStateWithLifecycle(initialValue = false)
+    val visionPhase by viewModel.visionPhase.collectAsStateWithLifecycle(initialValue = VisionPhase.IDLE)
     val isSmartMode by viewModel.isSmartMode.collectAsStateWithLifecycle(initialValue = false)
     val activeTranslationPrompt by viewModel.activeTranslationPrompt.collectAsStateWithLifecycle(initialValue = null)
 
@@ -1514,7 +1515,7 @@ fun ChatScreen(
                             }
                         }
                 ) {
-                                                                   ThinkingRobotAnimation(
+        ThinkingRobotAnimation(
                         height = 70.dp,
                         isActive = true,
                         isSpeaking = isSpeaking,
@@ -1529,6 +1530,7 @@ fun ChatScreen(
                         autoAnimation = robotAutoAnimation,
                         isCompressing = isCompressing,
                         isLoadingModel = state is GenerationState.LoadingModel,
+                        visionPhase = visionPhase,
                         isJumping = robotJumpSignal,
                         modifier = Modifier.fillMaxSize()
                     )
@@ -1782,6 +1784,7 @@ fun ThinkingRobotAnimation(
     isListening: Boolean = false,
     isCompressing: Boolean = false,
     isLoadingModel: Boolean = false,
+    visionPhase: VisionPhase = VisionPhase.IDLE,
     headTilt: Float = 0f,
     headBob: Float = 0f,
     headNod: Float = 0f,
@@ -3321,7 +3324,12 @@ fun ThinkingRobotAnimation(
         // Текст состояния на поясе. Показывается ВМЕСТО индикатора,
         // мигает по центру пояса. При isSpeaking — не показывается
         // (звук идёт через TTS, отдельная индикация не нужна).
-        val statusText: String? = when {
+            val statusText: String? = when {
+            visionPhase == VisionPhase.RELEASING_TEXT -> "Выгружаю текст..."
+            visionPhase == VisionPhase.LOADING_VISION -> "Загружаю зрение..."
+            visionPhase == VisionPhase.VISION_READY -> "Зрение готово"
+            visionPhase == VisionPhase.RESTORING_TEXT -> "Возвращаю текст..."
+            visionPhase == VisionPhase.TEXT_RESTORED -> "Текст готов"
             isThinking -> "ИИ думает..."
             isCompressing -> "Сжимаю беседу..."
             isLoadingModel -> "Загружаю модель..."
