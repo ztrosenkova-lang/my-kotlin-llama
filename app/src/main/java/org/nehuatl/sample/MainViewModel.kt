@@ -3422,8 +3422,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         contextSize.value = size.coerceAtLeast(512)
     }
 
-    fun updateMaxTokens(tokens: Int) {
-        maxTokens.value = tokens.coerceIn(1, 4096)
+        fun updateMaxTokens(tokens: Int) {
+        maxTokens.value = tokens.coerceIn(1, 32768)
     }
 
     fun releaseModel() {
