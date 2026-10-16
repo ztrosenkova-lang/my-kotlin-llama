@@ -1409,7 +1409,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     temperature.value = savedTemperature
                     contextSize.value = savedContextSize
 
-                    llamaHelper.load(
+                                       llamaHelper.load(
                         savedModelPath!!,
                         savedContextSize,
                         savedMmprojPath
@@ -1421,20 +1421,20 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             delay(2000)
                             _visionPhase.value = VisionPhase.IDLE
                         }
-                        withContext(Dispatchers.Main) {
+                        android.os.Handler(android.os.Looper.getMainLooper()).post {
                             onReady?.invoke()
                         }
                     }
                 } else {
                     _visionPhase.value = VisionPhase.IDLE
-                    withContext(Dispatchers.Main) {
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
                         onReady?.invoke()
                     }
                 }
             } catch (e: Exception) {
                 _visionPhase.value = VisionPhase.IDLE
                 Log.e(TAG, "Ошибка восстановления текстовой модели: ${e.message}")
-                withContext(Dispatchers.Main) {
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
                     onReady?.invoke()
                 }
             }
