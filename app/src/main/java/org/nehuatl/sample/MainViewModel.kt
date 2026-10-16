@@ -3235,10 +3235,34 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _chatHistory.value = _chatHistory.value + ChatMessage("system", text, buttons)
     }
 
-    fun abortLocal() {
+        fun abortLocal() {
         if (_state.value.isActive()) {
             Log.i(TAG, "Aborting generation")
             llamaHelper.abort()
+        }
+    }
+
+    /**
+     * Принимает выбранный пользователем видеофайл (URI),
+     * извлекает из него кадры через VideoFrameExtractor,
+     * и отправляет их в модель как видео-запрос.
+     */
+    fun attachVideo(uri: Uri) {
+        val context = getApplication<Application>()
+        scope.launch(Dispatchers.IO) {
+            appendSystemMessage("🎬 Извлекаю кадры из видео...")
+            val result = VideoFrameExtractor.extract(context, uri)
+            withContext(Dispatchers.Main) {
+                if (result == null) {
+                    appendSystemMessage("❌ Не удалось извлечь кадры из видео")
+                    return@withContext
+                }
+                sendUserMessage(
+                    text = "",
+                    videoFrames = result.framePaths,
+                    videoDurationSec = result.durationSeconds
+                )
+            }
         }
     }
 
