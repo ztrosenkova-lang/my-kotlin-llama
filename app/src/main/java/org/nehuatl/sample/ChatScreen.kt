@@ -7271,9 +7271,7 @@ private fun ModelDownloadDialog(
                                         Text("Описание", color = colors.text, fontSize = 11.sp)
                                     }
 
-                                    Button(
-                                        onClick = {
-                                                                               val allDownloaded = mainFileExists &&
+                                                                        val allDownloaded = mainFileExists &&
                                             (model.mmprojFileName == null || mmprojFileExists)
 
                                     Button(
