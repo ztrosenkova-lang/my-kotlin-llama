@@ -231,11 +231,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         File(getApplication<Application>().filesDir, "biblioteka").apply { mkdirs() }
     }
 
-    private val bibliotekaFile: File by lazy {
-        File(bibliotekaDir, "biblioteka.txt")
-    }
-
-        private val memorySearchEngine by lazy {
+    private val memorySearchEngine by lazy {
         MemorySearchEngine(memoryFile)
     }
 
@@ -1295,40 +1291,39 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-        fun openBiblioteka() {
+            fun ensureBibliotekaBooks() {
         try {
-            if (!bibliotekaFile.exists()) {
-                getApplication<Application>().assets.open("biblioteka.txt").use { input ->
-                    bibliotekaFile.outputStream().use { output ->
-                        input.copyTo(output)
+            val assetDir = "biblioteka"
+            val assetList = getApplication<Application>().assets.list(assetDir) ?: emptyArray()
+            for (fileName in assetList) {
+                if (!fileName.endsWith(".txt", ignoreCase = true)) continue
+                val destFile = File(bibliotekaDir, fileName)
+                if (!destFile.exists()) {
+                    getApplication<Application>().assets.open("$assetDir/$fileName").use { input ->
+                        destFile.outputStream().use { output -> input.copyTo(output) }
                     }
+                    Log.d(TAG, "Book copied: $fileName")
                 }
-                Log.d(TAG, "biblioteka.txt copied from assets to filesDir/biblioteka/")
             }
-
-            val uri = androidx.core.content.FileProvider.getUriForFile(
-                getApplication(),
-                "${getApplication<Application>().packageName}.fileprovider",
-                bibliotekaFile
-            )
-
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "text/plain")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-
-            val chooser = Intent.createChooser(intent, "Открыть библиотеку").apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-
-            getApplication<Application>().startActivity(chooser)
-            appendSystemMessage("📖 Открываю biblioteka.txt")
-            Log.d(TAG, "biblioteka.txt opened via ACTION_VIEW")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to open biblioteka.txt: ${e.message}", e)
-            appendSystemMessage("❌ Не удалось открыть библиотеку: ${e.message}")
+            Log.e(TAG, "ensureBibliotekaBooks failed: ${e.message}")
+        }
+    }
+
+    fun listBibliotekaBooks(): List<File> {
+        ensureBibliotekaBooks()
+        return bibliotekaDir.listFiles()
+            ?.filter { it.isFile && it.name.endsWith(".txt", ignoreCase = true) }
+            ?.sortedBy { it.name.lowercase() }
+            ?: emptyList()
+    }
+
+    fun readBookText(file: File): String {
+        return try {
+            if (file.exists()) file.readText() else ""
+        } catch (e: Exception) {
+            Log.e(TAG, "readBookText failed: ${e.message}")
+            ""
         }
     }
 
