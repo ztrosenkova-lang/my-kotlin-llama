@@ -1,15 +1,15 @@
 package org.nehuatl.sample
 
-import org.apache.lucene.analysis.standard.StandardAnalyzer
-import org.apache.lucene.document.Document
-import org.apache.lucene.document.Field
-import org.apache.lucene.document.TextField
-import org.apache.lucene.index.DirectoryReader
-import org.apache.lucene.index.IndexWriter
-import org.apache.lucene.index.IndexWriterConfig
-import org.apache.lucene.queryparser.classic.QueryParser
-import org.apache.lucene.search.IndexSearcher
-import org.apache.lucene.store.FSDirectory
+import org.gnit.lucenekmp.analysis.standard.StandardAnalyzer
+import org.gnit.lucenekmp.document.Document
+import org.gnit.lucenekmp.document.Field
+import org.gnit.lucenekmp.document.TextField
+import org.gnit.lucenekmp.index.DirectoryReader
+import org.gnit.lucenekmp.index.IndexWriter
+import org.gnit.lucenekmp.index.IndexWriterConfig
+import org.gnit.lucenekmp.queryparser.classic.QueryParser
+import org.gnit.lucenekmp.search.IndexSearcher
+import org.gnit.lucenekmp.store.FSDirectory
 import java.io.File
 
 class BookSearchEngine(private val indexDir: File) {
