@@ -1,5 +1,7 @@
 package org.nehuatl.sample
 
+import okio.FileSystem
+import okio.Path.Companion.toPath
 import org.gnit.lucenekmp.analysis.standard.StandardAnalyzer
 import org.gnit.lucenekmp.document.Document
 import org.gnit.lucenekmp.document.Field
@@ -23,7 +25,7 @@ class BookSearchEngine(private val indexDir: File) {
 
     fun indexBooks(books: List<Triple<String, String, String>>) {
         indexDir.mkdirs()
-        val dir = FSDirectory.open(indexDir.toPath())
+        val dir = FSDirectory.open(indexDir.absolutePath.toPath())
         val config = IndexWriterConfig(analyzer)
         config.openMode = IndexWriterConfig.OpenMode.CREATE
         val writer = IndexWriter(dir, config)
@@ -43,12 +45,12 @@ class BookSearchEngine(private val indexDir: File) {
 
     fun search(query: String, limit: Int = 50): List<Pair<String, String>> {
         if (!indexDir.exists()) return emptyList()
-        val dir = FSDirectory.open(indexDir.toPath())
+        val dir = FSDirectory.open(indexDir.absolutePath.toPath())
         val reader = DirectoryReader.open(dir)
         try {
             val searcher = IndexSearcher(reader)
             val parser = QueryParser("content", analyzer)
-            val q = parser.parse(QueryParser.escape(query))
+            val q = parser.parse(query) ?: return emptyList()
             val hits = searcher.search(q, limit)
             val results = mutableListOf<Pair<String, String>>()
             for (hit in hits.scoreDocs) {
