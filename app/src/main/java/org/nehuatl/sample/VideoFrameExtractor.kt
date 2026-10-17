@@ -19,15 +19,22 @@ object VideoFrameExtractor {
         val frameCount: Int
     )
 
-    fun extract(context: Context, videoUri: Uri): Result? {
+        fun extract(
+        context: Context,
+        videoUri: Uri,
+        onProgress: ((extracted: Int, total: Int) -> Unit)? = null
+    ): Result? {
         val retriever = MediaMetadataRetriever()
         return try {
             retriever.setDataSource(context, videoUri)
             val durationMs = retriever
                 .extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-                ?.toLongOrNull() ?: return null
+                ?.toLongOrNull() ?: 0L
 
-            if (durationMs <= 0) return null
+            if (durationMs <= 0) {
+                Log.e(TAG, "durationMs=$durationMs, cannot extract frames")
+                return null
+            }
 
             val durationSec = (durationMs / 1000).toInt()
             val intervalMs = durationMs / MAX_FRAMES
@@ -46,13 +53,14 @@ object VideoFrameExtractor {
                 else
                     MediaMetadataRetriever.OPTION_CLOSEST_SYNC
 
-                val bitmap = retriever.getFrameAtTime(timeUs, option) ?: continue
+        val bitmap = retriever.getFrameAtTime(timeUs, option) ?: continue
                 val file = File(cacheDir, "frame_$i.jpg")
                 FileOutputStream(file).use { out ->
                     bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)
                 }
                 bitmap.recycle()
                 frames.add(Uri.fromFile(file).toString())
+                onProgress?.invoke(frames.size, MAX_FRAMES)
             }
 
             // Fallback: если ключевых кадров мало — берём точные
@@ -64,7 +72,7 @@ object VideoFrameExtractor {
 
                 for (i in 0 until MAX_FRAMES) {
                     val timeUs = i * intervalMs * 1000
-                    val bitmap = retriever.getFrameAtTime(
+        val bitmap = retriever.getFrameAtTime(
                         timeUs,
                         MediaMetadataRetriever.OPTION_CLOSEST
                     ) ?: continue
@@ -74,6 +82,7 @@ object VideoFrameExtractor {
                     }
                     bitmap.recycle()
                     frames.add(Uri.fromFile(file).toString())
+                    onProgress?.invoke(frames.size, MAX_FRAMES)
                 }
             }
 
