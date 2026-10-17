@@ -841,13 +841,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 }
             }
                } else {
-                       _cloudGeneratedText.value = fullText
+            _cloudGeneratedText.value = fullText
             if (_isChatScreenVisible.value) {
                 // ChatScreen активен → печатная машинка
                 _pendingTextToPrint.value = fullText
-                if (isTtsEnabled) {
-                    _isPreparingSpeech.value = true
-                }
             } else {
                 // ChatScreen в фоне (overlay) → сразу пишем ответ в историю
         _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
@@ -946,13 +943,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 }
             }
                 } else {
-                       _generatedText.value = fullText
+            _generatedText.value = fullText
             if (_isChatScreenVisible.value) {
                 // ChatScreen активен → печатная машинка
+                // isPreparingSpeech ставится из ChatScreen, когда крышка
+                // на голове робота закроется (см. LaunchedEffect в ChatScreen).
                 _pendingTextToPrint.value = fullText
-                if (isTtsEnabled) {
-                    _isPreparingSpeech.value = true
-                }
             } else {
                 // ChatScreen в фоне (overlay) → сразу пишем ответ в историю
         _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
@@ -1409,12 +1405,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 }
 
                 temperature.value = 0.1f
-                contextSize.value = 4096
+                contextSize.value = 8192
 
-                Log.d(TAG, "ensureVisionModelLoaded: вызываю llamaHelper.load(4096)")
+                Log.d(TAG, "ensureVisionModelLoaded: вызываю llamaHelper.load(8192)")
                                 llamaHelper.load(
                     modelPath,
-                    4096,
+                    8192,
                     mmprojPath
                                 ) { id ->
                     Log.d(TAG, "ensureVisionModelLoaded: load callback id=$id")
@@ -2080,10 +2076,21 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    fun clearPendingText() {
+       fun clearPendingText() {
         _pendingTextToPrint.value = ""
     }
 
+    /**
+     * Управление флагом «Готовлю озвучку» из UI.
+     * Ставится из ChatScreen, когда крышка на голове робота закрылась
+     * (то есть анимация «думает» завершилась и робот перешёл в покой).
+     * Снимается автоматически в ACTION_SPEAK_START, когда TTS начал звучать.
+     */
+    fun setPreparingSpeech(preparing: Boolean) {
+        if (_isPreparingSpeech.value != preparing) {
+            _isPreparingSpeech.value = preparing
+        }
+    }
     fun setCloudReady(modelId: String) {
         _cloudState.value = CloudAIState.Ready(modelId)
         Log.d(TAG, "Cloud state set to Ready for model: $modelId")
