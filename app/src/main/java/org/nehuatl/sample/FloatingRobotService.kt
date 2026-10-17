@@ -255,7 +255,10 @@ class FloatingRobotService : LifecycleService() {
                 robotView?.visibility = android.view.View.GONE
                 Log.d(TAG, "Robot overlay hidden (app in foreground)")
             }
-            ACTION_SHOW -> {
+                       ACTION_SHOW -> {
+                if (robotView == null) {
+                    addRobotOverlay()
+                }
                 robotView?.visibility = android.view.View.VISIBLE
                 Log.d(TAG, "Robot overlay shown (app in background)")
             }
