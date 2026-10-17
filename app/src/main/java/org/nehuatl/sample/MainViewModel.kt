@@ -2243,14 +2243,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         systemPrompt = "Ты — полезный, умный и лаконичный ИИ-ассистент. Отвечай строго на русском языке.",
                         maxTokens = compressionMaxTokens
                     )
-                } else if (cloudAIProvider.isConfigured()) {
+                               } else if (cloudAIProvider.isConfigured()) {
                     cloudAIProvider.generate(
                         prompt = prompt,
                         systemPrompt = "Ты — полезный, умный и лаконичный ИИ-ассистент. Отвечай строго на русском языке.",
                         chatHistory = history,
                         maxTokens = compressionMaxTokens
                     )
-                }
                 } else {
                     compressionDotsJob?.cancel()
                     isCompressionRequest = false
