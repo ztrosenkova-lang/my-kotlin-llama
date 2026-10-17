@@ -249,6 +249,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _isSpeaking = MutableStateFlow(false)
     val isSpeaking: StateFlow<Boolean> = _isSpeaking.asStateFlow()
 
+    // true между «модель закончила» и «TTS начал говорить».
+    // Нужно, чтобы UI не показывал пустоту в этот момент.
+    private val _isPreparingSpeech = MutableStateFlow(false)
+    val isPreparingSpeech: StateFlow<Boolean> = _isPreparingSpeech.asStateFlow()
+
     private val _speakStartTrigger = MutableStateFlow(false)
     val speakStartTrigger: StateFlow<Boolean> = _speakStartTrigger.asStateFlow()
 
@@ -577,20 +582,23 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         appendSystemMessage(message)
                         Log.d(TAG, "TTS ready broadcast received: $message")
                     }
-                    TtsService.ACTION_TTS_ERROR -> {
+                TtsService.ACTION_TTS_ERROR -> {
                         val message = intent.getStringExtra(TtsService.EXTRA_MESSAGE) ?: "❌ Ошибка инициализации офлайн TTS"
                         _isTtsReady.value = false
                         isTtsEnabled = false
+                        _isPreparingSpeech.value = false
                         appendSystemMessage(message)
                         Log.e(TAG, "TTS error broadcast received: $message")
                     }
-                    TtsService.ACTION_SPEAK_START -> {
+                TtsService.ACTION_SPEAK_START -> {
                         _isSpeaking.value = true
+                        _isPreparingSpeech.value = false
                         _speakStartTrigger.value = true
                         Log.d(TAG, "SPEAK_START broadcast received")
                     }
                     TtsService.ACTION_SPEAK_END -> {
                         _isSpeaking.value = false
+                        _isPreparingSpeech.value = false
                         _speakStartTrigger.value = false
                         Log.d(TAG, "SPEAK_END broadcast received")
                     }
@@ -832,11 +840,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     sendUserMessage(pending)
                 }
             }
-        } else {
+               } else {
             _cloudGeneratedText.value = fullText
             if (_isChatScreenVisible.value) {
                 // ChatScreen активен → печатная машинка
                 _pendingTextToPrint.value = fullText
+                if (isTtsEnabled) {
+                    _isPreparingSpeech.value = true
+                }
             } else {
                 // ChatScreen в фоне (overlay) → сразу пишем ответ в историю
         _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
@@ -930,11 +941,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     sendUserMessage(pending)
                 }
             }
-        } else {
+                } else {
             _generatedText.value = fullText
             if (_isChatScreenVisible.value) {
                 // ChatScreen активен → печатная машинка
                 _pendingTextToPrint.value = fullText
+                if (isTtsEnabled) {
+                    _isPreparingSpeech.value = true
+                }
             } else {
                 // ChatScreen в фоне (overlay) → сразу пишем ответ в историю
         _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
@@ -1871,10 +1885,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-           fun disableTts() {
+              fun disableTts() {
         isTtsEnabled = false
         _isSpeaking.value = false
         _isTtsReady.value = false
+        _isPreparingSpeech.value = false
         // Ставим флаг «выключаемся», чтобы запоздавший ACTION_TTS_READY
         // от убитого сервиса не включил кнопку обратно.
         isTtsShuttingDown = true
@@ -1933,8 +1948,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         return cleanText.replace(Regex("\\s+"), " ").trim()
     }
 
-           fun speakText(text: String) {
+                     fun speakText(text: String) {
         if (!isTtsEnabled || text.isBlank()) {
+            _isPreparingSpeech.value = false
             return
         }
         val identifier = languageIdentifier
@@ -1951,10 +1967,22 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     speakWithAndroidTts(text, languageCode)
                 }
             }
-            .addOnFailureListener { e ->
+                       .addOnFailureListener { e ->
                 Log.e(TAG, "Language detection failed: ${e.message}")
                 speakWithSherpa(text)
             }
+
+        // Страховка: если за 5 секунд TTS не прислал SPEAK_START —
+        // снимаем «готовлю озвучку», чтобы статус не висел вечно.
+        if (_isPreparingSpeech.value) {
+            scope.launch {
+                delay(5000)
+                if (_isPreparingSpeech.value && !_isSpeaking.value) {
+                    Log.w(TAG, "TTS didn't start in 5s, resetting isPreparingSpeech")
+                    _isPreparingSpeech.value = false
+                }
+            }
+        }
     }
 
     // Озвучка фраз интерфейса — всегда через Sherpa (русский движок),
