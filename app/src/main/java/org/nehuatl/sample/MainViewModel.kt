@@ -1681,6 +1681,63 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
+        // ========== ПОИСК ПО КНИГАМ (FTS5) ==========
+
+    private val bookDatabase by lazy {
+        BookDatabase.get(getApplication())
+    }
+
+    /**
+     * Индексирует все книги из filesDir/biblioteka/ в Room FTS5.
+     * Вызывается один раз при первом открытии библиотеки.
+     */
+    fun indexBooksIfNeeded() {
+        scope.launch(Dispatchers.IO) {
+            try {
+                val dao = bookDatabase.bookDao()
+                if (dao.getBookCount() > 0) return@launch
+
+                val books = listBibliotekaBooks()
+                for (file in books) {
+                    val text = readBookText(file)
+                    if (text.isBlank()) continue
+                    val title = file.nameWithoutExtension
+                    val entity = BookEntity(title = title, content = text)
+                    val id = dao.insertBook(entity)
+                    // Room возвращает rowid при вставке
+                    dao.insertFts(BookFts(rowid = id, title = title, content = text))
+                }
+                Log.d(TAG, "Indexed ${books.size} books into FTS5")
+            } catch (e: Exception) {
+                Log.e(TAG, "indexBooksIfNeeded failed: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Поиск по книгам через FTS5.
+     * Возвращает список пар (название книги, фрагмент с совпадением).
+     */
+    suspend fun searchBooks(query: String): List<Pair<String, String>> {
+        return try {
+            val results = bookDatabase.bookDao().searchBooks(query)
+            results.map { book ->
+                // Вырезаем фрагмент вокруг первого совпадения
+                val idx = book.content.indexOf(query, ignoreCase = true)
+                val snippet = if (idx >= 0) {
+                    val start = (idx - 50).coerceAtLeast(0)
+                    val end = (idx + query.length + 100).coerceAtMost(book.content.length)
+                    "..." + book.content.substring(start, end).replace("\n", " ") + "..."
+                } else {
+                    book.content.take(150).replace("\n", " ") + "..."
+                }
+                book.title to snippet
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "searchBooks failed: ${e.message}")
+            emptyList()
+        }
+    }
     fun readBrain(): String {
         return try {
             if (brainFile.exists()) {
