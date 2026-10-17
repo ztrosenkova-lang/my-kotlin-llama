@@ -31,6 +31,7 @@ fun RobotOverlayContent(
     val robotAutoAnimation by viewModel.robotAutoAnimation.collectAsStateWithLifecycle(initialValue = 0)
     val isCompressing by viewModel.isCompressing.collectAsStateWithLifecycle(initialValue = false)
     val visionPhase by viewModel.visionPhase.collectAsStateWithLifecycle(initialValue = VisionPhase.IDLE)
+    val isPreparingSpeech by viewModel.isPreparingSpeech.collectAsStateWithLifecycle(initialValue = false)
     val robotJumpSignal by viewModel.robotJumpSignal.collectAsStateWithLifecycle(initialValue = false)
     val overlayRobotScale by viewModel.overlayRobotScale.collectAsStateWithLifecycle(initialValue = 1.0f)
 
@@ -60,9 +61,10 @@ fun RobotOverlayContent(
             yOffsetUnits = 10f,
             tapWaveDirection = overlayTapWaveDirection,
             autoAnimation = robotAutoAnimation,
-            isCompressing = isCompressing,
+                       isCompressing = isCompressing,
             isLoadingModel = state is GenerationState.LoadingModel,
             visionPhase = visionPhase,
+            isPreparingSpeech = isPreparingSpeech,
             isJumping = robotJumpSignal,
             bobAmplitude = 0f,
             modifier = Modifier
