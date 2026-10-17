@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 class LlamaHelper(
     val contentResolver: ContentResolver,
@@ -103,12 +104,16 @@ class LlamaHelper(
         }
     }
 
-    fun load(
+        fun load(
         path: String,
         contextLength: Int,
         mmprojPath: String? = null,
         loaded: (Long) -> Unit
     ) {
+        // Отменяем предыдущую загрузку, если она ещё идёт.
+        loadJob?.cancel()
+        loadJob = null
+
         currentContext?.let { id -> llama.releaseContext(id) }
         
         try {
@@ -159,7 +164,12 @@ class LlamaHelper(
                 }
             }
 
-            loadJob = scope.launch {
+                        loadJob = scope.launch {
+                // Даём время releaseContext завершиться — иначе новый startEngine
+                // может начаться раньше, чем освободится память старого контекста,
+                // и упадёт по OOM или SIGSEGV.
+                delay(300)
+
                 Log.d("LlamaHelper", ">>> will start llama context with config: $config")
                 val result = try {
                     llama.startEngine(config) {
@@ -819,20 +829,17 @@ class LlamaHelper(
             .trim()
     }
 
-        fun stopPrediction() {
+               fun stopPrediction() {
         val id = currentContext ?: return
 
-        // Отменяем Job ДО запуска stopCompletion, чтобы не гонять
-        // корутину, если генерация уже завершилась сама.
-        completionJob?.cancel()
-        completionJob = null
-
+        // НЕ отменяем completionJob — иначе finally { predictSemaphore.release() }
+        // в completionJob не выполнится, и следующий predict не стартует.
+        // Просто просим нативный цикл остановиться; корутина завершится сама
+        // по флагу is_interrupted.
         scope.launch {
             try {
                 llama.stopCompletion(id)
             } catch (e: Exception) {
-                // Контекст мог быть уже освобождён — это не ошибка,
-                // просто логируем и не падаем.
                 Log.w("LlamaHelper", "stopCompletion failed: ${e.message}")
             }
         }
