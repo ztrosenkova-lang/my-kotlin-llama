@@ -49,6 +49,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import java.io.File
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
@@ -376,6 +381,7 @@ fun ChatScreen(
     var showAdminUnlockDialog by remember { mutableStateOf(false) }
     var adminPhraseInput by remember { mutableStateOf("") }
     var showMediaPicker by remember { mutableStateOf(false) }
+    var showBiblioteka by remember { mutableStateOf(false) }
     var showOrganizerEditor by remember { mutableStateOf(false) }
     // Сигнал для махания рукой — устанавливается, когда нужно помахать
     var waveSignal by remember { mutableStateOf(false) }
@@ -449,7 +455,7 @@ fun ChatScreen(
                             robotOnOrbit = false
                             viewModel.appendSystemMessage("🤖 Робот прилетает с орбиты")
                         }
-                                  command == "махни рукой" -> {waveSignal = true
+                        command == "махни рукой" -> {waveSignal = true
                    }
                         command == "стань большим" -> {
                             growBigSignal = true
@@ -457,12 +463,12 @@ fun ChatScreen(
                         command == "стань маленьким" -> {
                             shrinkSmallSignal = true
                         }
-                                                command == "выйди из матрицы" -> {
+                        command == "выйди из матрицы" -> {
                             if (!FloatingRobotService.isRunning) {
                                 (context as? MainActivity)?.startFloatingWithPermissionCheck()
                             }
                         }
-                                command == "уйди" -> {
+                        command == "уйди" -> {
                             if (FloatingRobotService.isRunning) {
                                 val stopIntent = Intent(context, FloatingRobotService::class.java).apply {
                                     action = FloatingRobotService.ACTION_STOP
@@ -470,8 +476,8 @@ fun ChatScreen(
                                 context.startService(stopIntent)
                             }
                         }
-                                               command == "библиотека" -> {
-                            viewModel.openBiblioteka()
+                        command == "библиотека" -> {
+                            showBiblioteka = true
                         }
                         command == "умный режим" -> {
                             viewModel.enableSmartMode()
@@ -479,7 +485,7 @@ fun ChatScreen(
                         command == "режим калькулятора" -> {
                             viewModel.disableSmartMode()
                         }
-             command == "режим админа" -> {
+                       command == "режим админа" -> {
                             if (currentMode == AIMode.NEUTRAL) {
                                 adminPhraseInput = ""
                                 showAdminUnlockDialog = true
@@ -801,11 +807,20 @@ fun ChatScreen(
         )
     }
 
-    if (showOrganizerEditor) {
+        if (showOrganizerEditor) {
         OrganizerEditorDialog(
             initialText = viewModel.readOrganizerAsText(),
             onSave = { viewModel.overwriteOrganizerFromText(it) },
             onDismiss = { showOrganizerEditor = false },
+            colors = colors,
+            isDarkTheme = isDarkTheme
+        )
+    }
+
+    if (showBiblioteka) {
+        BibliotekaDialog(
+            viewModel = viewModel,
+            onDismiss = { showBiblioteka = false },
             colors = colors,
             isDarkTheme = isDarkTheme
         )
@@ -6949,6 +6964,194 @@ private fun OrganizerEditorDialog(
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.weight(1f).height(38.dp)
                     ) { Text("Закрыть", color = colors.background, fontSize = 12.sp) }
+                }
+            },
+            dismissButton = null
+        )
+    }
+}
+
+@Composable
+private fun BibliotekaDialog(
+    viewModel: MainViewModel,
+    onDismiss: () -> Unit,
+    colors: AppColors,
+    isDarkTheme: Boolean
+) {
+    val context = LocalContext.current
+    var books by remember { mutableStateOf<List<File>>(emptyList()) }
+    var selectedBook by remember { mutableStateOf<File?>(null) }
+    var bookSentences by remember { mutableStateOf<List<String>>(emptyList()) }
+    var currentSentenceIndex by remember { mutableStateOf(-1) }
+    var isReading by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
+    val isSpeaking by viewModel.isSpeaking.collectAsStateWithLifecycle(initialValue = false)
+
+    LaunchedEffect(Unit) {
+        books = viewModel.listBibliotekaBooks()
+    }
+
+    LaunchedEffect(selectedBook) {
+        selectedBook?.let { file ->
+            val text = viewModel.readBookText(file)
+            bookSentences = text.split(Regex("(?<=[.!?])\\s+|\\n{2,}"))
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+        }
+    }
+
+    LaunchedEffect(currentSentenceIndex, isReading) {
+        if (isReading && currentSentenceIndex in bookSentences.indices) {
+            listState.animateScrollToItem(currentSentenceIndex)
+        }
+    }
+
+    LaunchedEffect(isReading, currentSentenceIndex, isSpeaking) {
+        if (isReading && currentSentenceIndex >= 0 && currentSentenceIndex < bookSentences.size) {
+            if (!isSpeaking) {
+                delay(300)
+                if (isReading && !isSpeaking) {
+                    val next = currentSentenceIndex + 1
+                    if (next < bookSentences.size) {
+                        currentSentenceIndex = next
+                        viewModel.speakText(bookSentences[next])
+                    } else {
+                        isReading = false
+                        currentSentenceIndex = -1
+                    }
+                }
+            }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            if (isReading) viewModel.abortLocal()
+        }
+    }
+
+    MaterialTheme(
+        colorScheme = if (isDarkTheme) darkColorScheme() else lightColorScheme()
+    ) {
+        AlertDialog(
+            onDismissRequest = {
+                isReading = false
+                onDismiss()
+            },
+            title = {
+                Text(
+                    if (selectedBook == null) "📖 Библиотека" else "📖 ${selectedBook!!.nameWithoutExtension}",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = colors.text
+                )
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    if (selectedBook == null) {
+                        LazyColumn(modifier = Modifier.fillMaxWidth().height(400.dp)) {
+                            items(books) { file ->
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp)
+                                        .clickable { selectedBook = file },
+                                    colors = CardDefaults.cardColors(containerColor = colors.surfaceGray),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Text(
+                                        text = file.nameWithoutExtension,
+                                        color = colors.text,
+                                        fontSize = 13.sp,
+                                        modifier = Modifier.padding(12.dp)
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    if (isReading) {
+                                        isReading = false
+                                        currentSentenceIndex = -1
+                                    } else {
+                                        isReading = true
+                                        currentSentenceIndex = 0
+                                        bookSentences.getOrNull(0)?.let { sentence ->
+                                            viewModel.speakText(sentence)
+                                        }
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = colors.accent),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Text(if (isReading) "⏸ Стоп" else "▶ Слушать", color = colors.background, fontSize = 10.sp)
+                            }
+                            Button(
+                                onClick = {
+                                    (context as? MainActivity)?.forceStartFloatingAndMinimize()
+                                },
+                                enabled = isReading,
+                                colors = ButtonDefaults.buttonColors(containerColor = colors.borderGray),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Text("⬇ Свернуть", color = colors.text, fontSize = 10.sp)
+                            }
+                            Button(
+                                onClick = {
+                                    isReading = false
+                                    currentSentenceIndex = -1
+                                    selectedBook = null
+                                    bookSentences = emptyList()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = colors.borderGray),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Text("← Назад", color = colors.text, fontSize = 10.sp)
+                            }
+                        }
+
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxWidth().height(400.dp)
+                        ) {
+                            itemsIndexed(bookSentences) { index, sentence ->
+                                val isCurrent = index == currentSentenceIndex
+                                Text(
+                                    text = sentence,
+                                    color = if (isCurrent) colors.background else colors.text,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(
+                                            if (isCurrent) colors.accent.copy(alpha = 0.6f) else Color.Transparent,
+                                            RoundedCornerShape(4.dp)
+                                        )
+                                        .padding(6.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        isReading = false
+                        onDismiss()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.accent)
+                ) {
+                    Text("Закрыть", color = colors.background)
                 }
             },
             dismissButton = null
