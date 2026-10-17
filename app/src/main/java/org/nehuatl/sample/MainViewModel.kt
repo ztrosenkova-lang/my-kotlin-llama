@@ -841,7 +841,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 }
             }
                } else {
-            _cloudGeneratedText.value = fullText
+                       _cloudGeneratedText.value = fullText
             if (_isChatScreenVisible.value) {
                 // ChatScreen активен → печатная машинка
                 _pendingTextToPrint.value = fullText
@@ -855,6 +855,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 syncChatToFile()
             }
             speakText(fullText)
+
+            if (_visionPhase.value == VisionPhase.VISION_READY) {
+                _visionPhase.value = VisionPhase.IDLE
+            }
         }
     } else {
         // Пустой ответ — не сжатие завершилось успешно
@@ -942,7 +946,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 }
             }
                 } else {
-            _generatedText.value = fullText
+                       _generatedText.value = fullText
             if (_isChatScreenVisible.value) {
                 // ChatScreen активен → печатная машинка
                 _pendingTextToPrint.value = fullText
@@ -956,6 +960,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 syncChatToFile()
             }
             speakText(fullText)
+
+            // Vision-запрос завершён — снимаем фазу VISION_READY,
+            // иначе статус-бар и пояс робота будут вечно показывать
+            // «Зрение готово — анализирую...» / «Зрение готово».
+            if (_visionPhase.value == VisionPhase.VISION_READY) {
+                _visionPhase.value = VisionPhase.IDLE
+            }
         }
         } else {
         if (isCompressionRequest) {
@@ -2654,7 +2665,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             appendSystemMessage("⏳ Зрение загружается, подождите...")
             return
         }
-               if (text.isBlank() && imagePath == null) return
+    if (text.isBlank() && imagePath == null && videoFrames.isNullOrEmpty()) return
 
         // Если загружена vision и пользователь пишет ТЕКСТ (не картинку и не видео) —
         // выгружаем vision и возвращаем текстовую модель.
