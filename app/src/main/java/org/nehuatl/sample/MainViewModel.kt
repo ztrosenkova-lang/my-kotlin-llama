@@ -2415,7 +2415,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         syncChatToFile()
     }
 
-        fun updateAssistantMessage(newText: String) {
+               fun updateAssistantMessage(newText: String) {
+        // Печать финального ответа пошла — «Готовлю озвучку» сбрасываем.
+        if (_isPreparingSpeech.value) {
+            _isPreparingSpeech.value = false
+        }
         val currentList = _chatHistory.value.toMutableList()
         if (currentList.isNotEmpty() && currentList.last().role == "assistant") {
             currentList[currentList.lastIndex] = ChatMessage("assistant", newText)
