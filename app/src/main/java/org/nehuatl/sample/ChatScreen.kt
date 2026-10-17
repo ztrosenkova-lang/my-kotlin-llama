@@ -6980,6 +6980,9 @@ private fun BibliotekaDialog(
 ) {
     val context = LocalContext.current
     var books by remember { mutableStateOf<List<File>>(emptyList()) }
+    var searchQuery by remember { mutableStateOf("") }
+    var searchResults by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+    var isSearching by remember { mutableStateOf(false) }
     var selectedBook by remember { mutableStateOf<File?>(null) }
     var bookSentences by remember { mutableStateOf<List<String>>(emptyList()) }
     var currentSentenceIndex by remember { mutableStateOf(-1) }
@@ -6989,6 +6992,20 @@ private fun BibliotekaDialog(
 
     LaunchedEffect(Unit) {
         books = viewModel.listBibliotekaBooks()
+    }
+        LaunchedEffect(Unit) {
+        viewModel.indexBooksIfNeeded()
+    }
+
+    LaunchedEffect(searchQuery) {
+        if (searchQuery.isBlank()) {
+            searchResults = emptyList()
+            isSearching = false
+        } else {
+            isSearching = true
+            searchResults = viewModel.searchBooks(searchQuery)
+            isSearching = false
+        }
     }
 
     LaunchedEffect(selectedBook) {
@@ -7045,25 +7062,64 @@ private fun BibliotekaDialog(
                     color = colors.text
                 )
             },
-            text = {
+                        text = {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    if (selectedBook == null) {
-                        LazyColumn(modifier = Modifier.fillMaxWidth().height(400.dp)) {
-                            items(books) { file ->
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp)
-                                        .clickable { selectedBook = file },
-                                    colors = CardDefaults.cardColors(containerColor = colors.surfaceGray),
-                                    shape = RoundedCornerShape(10.dp)
-                                ) {
-                                    Text(
-                                        text = file.nameWithoutExtension,
-                                        color = colors.text,
-                                        fontSize = 13.sp,
-                                        modifier = Modifier.padding(12.dp)
-                                    )
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Поиск по книгам...", color = colors.text.copy(alpha = 0.5f), fontSize = 11.sp) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = colors.text,
+                            unfocusedTextColor = colors.text,
+                            focusedContainerColor = colors.surfaceGray,
+                            unfocusedContainerColor = colors.surfaceGray,
+                            focusedBorderColor = colors.accent,
+                            unfocusedBorderColor = colors.borderGray,
+                            cursorColor = colors.accent
+                        )
+                    )
+                                       if (selectedBook == null) {
+                        if (searchQuery.isNotBlank()) {
+                            if (isSearching) {
+                                CircularProgressIndicator(color = colors.accent, modifier = Modifier.size(24.dp))
+                            } else if (searchResults.isEmpty()) {
+                                Text("Ничего не найдено", color = colors.text.copy(alpha = 0.6f), fontSize = 12.sp)
+                            } else {
+                                LazyColumn(modifier = Modifier.fillMaxWidth().height(400.dp)) {
+                                    items(searchResults) { (title, snippet) ->
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                            colors = CardDefaults.cardColors(containerColor = colors.surfaceGray),
+                                            shape = RoundedCornerShape(10.dp)
+                                        ) {
+                                            Column(modifier = Modifier.padding(10.dp)) {
+                                                Text(title, color = colors.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                                Text(snippet, color = colors.text, fontSize = 10.sp, maxLines = 3)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            LazyColumn(modifier = Modifier.fillMaxWidth().height(400.dp)) {
+                                items(books) { file ->
+                                    Card(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp)
+                                            .clickable { selectedBook = file },
+                                        colors = CardDefaults.cardColors(containerColor = colors.surfaceGray),
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) {
+                                        Text(
+                                            text = file.nameWithoutExtension,
+                                            color = colors.text,
+                                            fontSize = 13.sp,
+                                            modifier = Modifier.padding(12.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
