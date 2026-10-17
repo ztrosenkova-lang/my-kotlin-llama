@@ -256,7 +256,6 @@ fun ChatScreen(
     onPickModel: () -> Unit,
     onPickMmproj: () -> Unit,
     onPickImage: () -> Unit,
-    onPickVideo: () -> Unit = {},
     onTakePhoto: () -> Unit = {},
     onImageUsed: () -> Unit,
     imagePath: String? = null
@@ -375,16 +374,13 @@ fun ChatScreen(
     var showAdminUnlockDialog by remember { mutableStateOf(false) }
     var adminPhraseInput by remember { mutableStateOf("") }
     var showMediaPicker by remember { mutableStateOf(false) }
-    var videoInfo by remember { mutableStateOf<VideoFrameExtractor.Result?>(null) }
-    var pendingVideoFrames by remember { mutableStateOf<List<String>?>(null) }
-        // Сигнал для махания рукой — устанавливается, когда нужно помахать
+    // Сигнал для махания рукой — устанавливается, когда нужно помахать
     var waveSignal by remember { mutableStateOf(false) }
-        // Сигнал для полёта в центр экрана и увеличения
+    // Сигнал для полёта в центр экрана и увеличения
     var growBigSignal by remember { mutableStateOf(false) }
     // Сигнал для полёта в левый верхний угол и уменьшения
     var shrinkSmallSignal by remember { mutableStateOf(false) }
-
-        // Состояния для робота после приземления
+    // Состояния для робота после приземления
     var robotIsLanded by remember { mutableStateOf(false) }
     var robotScale by remember { mutableStateOf(1f) }
     var robotIsFlyingHome by remember { mutableStateOf(false) }
@@ -393,17 +389,15 @@ fun ChatScreen(
     var robotOrbitAngle by remember { mutableStateOf(0f) }
     var robotOffsetX by remember { mutableStateOf(0f) }
     var robotOffsetY by remember { mutableStateOf(0f) }
-
-        // Флаг «палец сейчас двигает робота» — защита от откатов при перетаскивании
+    // Флаг «палец сейчас двигает робота» — защита от откатов при перетаскивании
     var isRobotDragging by remember { mutableStateOf(false) }
-
-       // Реакции робота на пользователя
+    // Реакции робота на пользователя
     var headTiltTarget by remember { mutableStateOf(0f) }
     var headNodTarget by remember { mutableStateOf(0f) }
     // Направление махания рукой при тапе: -1f влево, +1f вправо, 0f нет
     var tapWaveDirection by remember { mutableStateOf(0f) }
 
-        val focusRequester = remember { FocusRequester() }
+    val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     val scrollState = rememberScrollState()
     val context = LocalContext.current
@@ -801,7 +795,7 @@ fun ChatScreen(
         )
     }
 
-    if (showMediaPicker) {
+        if (showMediaPicker) {
         MediaPickerDialog(
             onPickGallery = {
                 showMediaPicker = false
@@ -810,10 +804,6 @@ fun ChatScreen(
             onTakePhoto = {
                 showMediaPicker = false
                 onTakePhoto()
-            },
-            onPickVideo = {
-                showMediaPicker = false
-                onPickVideo()
             },
             onDismiss = { showMediaPicker = false },
             colors = colors,
@@ -7813,7 +7803,6 @@ private fun PromptInput(
 private fun MediaPickerDialog(
     onPickGallery: () -> Unit,
     onTakePhoto: () -> Unit,
-    onPickVideo: () -> Unit,
     onDismiss: () -> Unit,
     colors: AppColors,
     isDarkTheme: Boolean
@@ -7847,13 +7836,6 @@ private fun MediaPickerDialog(
                         label = "Камера",
                         description = "Сфотографировать прямо сейчас",
                         onClick = onTakePhoto,
-                        colors = colors
-                    )
-                    MediaOptionRow(
-                        emoji = "🎬",
-                        label = "Видео",
-                        description = "Выбрать видео (до 64 кадров)",
-                        onClick = onPickVideo,
                         colors = colors
                     )
                 }
