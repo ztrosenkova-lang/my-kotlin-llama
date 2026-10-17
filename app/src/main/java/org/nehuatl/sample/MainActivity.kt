@@ -727,8 +727,12 @@ fun clearSelectedModelAndMmproj() {
         checkPasswordAndProceed()
     }
 
-                  override fun onResume() {
+                     override fun onResume() {
         super.onResume()
+
+        // Перечитываем органайзер — если будильник сработал в фоне,
+        // запись уже удалена из файла, и часы на руке должны перестать пульсировать.
+        appViewModel?.reloadOrganizer()
 
         // Если приложение вышло на передний план — прячем робота 2 из overlay,
         // чтобы на экране был только робот 1 внутри приложения.
