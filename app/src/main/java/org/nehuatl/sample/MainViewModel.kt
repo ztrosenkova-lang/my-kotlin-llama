@@ -935,7 +935,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
             speakText(fullText)
         }
-    } else {
+        } else {
         if (isCompressionRequest) {
             compressionDotsJob?.cancel()
             updateLastSystemMessage("⚠️ Сжатие не удалось: пустой ответ")
@@ -950,11 +950,17 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     sendUserMessage(pending)
                 }
             }
+        } else {
+            // Пустой ответ от модели — сбрасываем состояния,
+            // чтобы статус не крутился вечно.
+            _state.value = GenerationState.Error("Модель вернула пустой ответ")
+            _visionPhase.value = VisionPhase.IDLE
         }
     }
 }
-                                                                               is LlamaHelper.LLMEvent.Error -> {
+         is LlamaHelper.LLMEvent.Error -> {
                         _state.value = GenerationState.Error(event.message)
+                        _visionPhase.value = VisionPhase.IDLE
                         if (isCompressionRequest) {
                             compressionDotsJob?.cancel()
                             updateLastSystemMessage("⚠️ Сжатие не удалось: ${event.message}")
@@ -3247,11 +3253,17 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
      * извлекает из него кадры через VideoFrameExtractor,
      * и отправляет их в модель как видео-запрос.
      */
-    fun attachVideo(uri: Uri) {
+       fun attachVideo(uri: Uri) {
         val context = getApplication<Application>()
         scope.launch(Dispatchers.IO) {
             appendSystemMessage("🎬 Извлекаю кадры из видео...")
-            val result = VideoFrameExtractor.extract(context, uri)
+            val result = VideoFrameExtractor.extract(context, uri) { extracted, total ->
+                if (extracted % 8 == 0 || extracted == total) {
+                    scope.launch(Dispatchers.Main) {
+                        updateLastSystemMessage("🎬 Извлекаю кадры: $extracted / $total")
+                    }
+                }
+            }
             withContext(Dispatchers.Main) {
                 if (result == null) {
                     appendSystemMessage("❌ Не удалось извлечь кадры из видео")
