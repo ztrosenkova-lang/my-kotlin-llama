@@ -32,6 +32,8 @@ fun RobotOverlayContent(
     val isCompressing by viewModel.isCompressing.collectAsStateWithLifecycle(initialValue = false)
     val visionPhase by viewModel.visionPhase.collectAsStateWithLifecycle(initialValue = VisionPhase.IDLE)
     val isPreparingSpeech by viewModel.isPreparingSpeech.collectAsStateWithLifecycle(initialValue = false)
+    val organizerEntries by viewModel.organizerEntries.collectAsStateWithLifecycle(initialValue = emptyList())
+    val hasActiveAlarm = organizerEntries.isNotEmpty()
     val robotJumpSignal by viewModel.robotJumpSignal.collectAsStateWithLifecycle(initialValue = false)
     val overlayRobotScale by viewModel.overlayRobotScale.collectAsStateWithLifecycle(initialValue = 1.0f)
 
@@ -65,6 +67,7 @@ fun RobotOverlayContent(
             isLoadingModel = state is GenerationState.LoadingModel,
             visionPhase = visionPhase,
             isPreparingSpeech = isPreparingSpeech,
+            hasActiveAlarm = hasActiveAlarm,
             isJumping = robotJumpSignal,
             bobAmplitude = 0f,
             modifier = Modifier
