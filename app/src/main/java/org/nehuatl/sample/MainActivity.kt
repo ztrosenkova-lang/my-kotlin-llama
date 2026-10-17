@@ -91,19 +91,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-       private val videoPickerLauncher = registerForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        uri?.let {
-            contentResolver.takePersistableUriPermission(
-                it,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION
-            )
-            appViewModel?.attachVideo(it)
-        }
-    }
+       
 
-    private val cameraLauncher = registerForActivityResult(
+        private val cameraLauncher = registerForActivityResult(
         ActivityResultContracts.TakePicture()
     ) { success ->
         if (success && pendingCameraFile != null) {
@@ -698,7 +688,6 @@ fun clearSelectedModelAndMmproj() {
                         onPickModel = { modelPickerLauncher.launch(arrayOf("*/*")) },
                         onPickMmproj = { mmprojPickerLauncher.launch(arrayOf("*/*")) },
                         onPickImage = { imagePickerLauncher.launch(arrayOf("image/*")) },
-                        onPickVideo = { videoPickerLauncher.launch(arrayOf("video/*")) },
                         onTakePhoto = {
                             val file = File(cacheDir, "camera_${System.currentTimeMillis()}.jpg")
                             pendingCameraFile = file
