@@ -6,5 +6,6 @@ plugins {
     alias(libs.plugins.maven.publish)
     alias(libs.plugins.gradleup.nmcp)
     alias(libs.plugins.kotlin.compose) apply false
+    alias(libs.plugins.ksp) apply false
     id("signing")
 }
