@@ -242,7 +242,7 @@ class LlamaHelper(
                             else if (imagePath != null) listOf(imagePath)
                             else emptyList()
 
-        if (allMediaPaths.isNotEmpty()) {
+               if (allMediaPaths.isNotEmpty()) {
             val fds = mutableListOf<Int>()
             for (path in allMediaPaths) {
                 try {
@@ -254,16 +254,19 @@ class LlamaHelper(
                     Log.e("LlamaHelper", "Failed to open media FD: $path", e)
                 }
             }
-            if (fds.isNotEmpty()) {
-                params["image_fds"] = fds
-                Log.d("LlamaHelper", ">>> ${fds.size} media FD added to params")
+            if (fds.isEmpty()) {
+                predictSemaphore.release()
+                sharedFlow.tryEmit(LLMEvent.Error("Не удалось открыть медиафайлы (${allMediaPaths.size} шт). Возможно, формат не поддерживается."))
+                return
             }
+            params["image_fds"] = fds
+            Log.d("LlamaHelper", ">>> ${fds.size} media FD added to params")
         }
 
                completionJob = scope.launch {
             try {
                 sharedFlow.tryEmit(LLMEvent.Started(prompt))
-                llama.launchCompletion(
+                                llama.launchCompletion(
                     id = context,
                     params = params
                 )
@@ -272,7 +275,11 @@ class LlamaHelper(
                 // Очищаем ответ от маркеров форматирования
                 val cleanedText = cleanResponse(allText)
 
-                sharedFlow.tryEmit(LLMEvent.Done(cleanedText, tokenCount, duration))
+                if (cleanedText.isBlank()) {
+                    sharedFlow.tryEmit(LLMEvent.Error("Модель вернула пустой ответ. Возможно, формат медиа не поддерживается."))
+                } else {
+                    sharedFlow.tryEmit(LLMEvent.Done(cleanedText, tokenCount, duration))
+                }
             } finally {
                 // Семафор освобождаем в finally, чтобы при любом исходе
                 // (ошибка, отмена, успех) следующий predict мог стартовать.
