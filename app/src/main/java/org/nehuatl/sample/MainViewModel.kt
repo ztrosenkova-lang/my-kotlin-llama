@@ -2178,20 +2178,26 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     }
                 }
 
+                                // Для сжатия берём настройку пользователя, но ограничиваем сверху.
+                // Нижняя граница — 2048 (меньше не хватит на длинный диалог),
+                // верхняя — 8192 (больше для сжатия 10 сообщений избыточно и замедляет).
+                val compressionMaxTokens = maxTokens.value.coerceIn(2048, 8192)
+
                 if (_isModelLoaded.value && llamaHelper.getContextId() != null) {
                     llamaHelper.predict(
                         prompt = prompt,
                         imagePath = null,
                         systemPrompt = "Ты — полезный, умный и лаконичный ИИ-ассистент. Отвечай строго на русском языке.",
-                        maxTokens = 512
+                        maxTokens = compressionMaxTokens
                     )
                 } else if (cloudAIProvider.isConfigured()) {
                     cloudAIProvider.generate(
                         prompt = prompt,
                         systemPrompt = "Ты — полезный, умный и лаконичный ИИ-ассистент. Отвечай строго на русском языке.",
                         chatHistory = history,
-                        maxTokens = maxTokens.value
+                        maxTokens = compressionMaxTokens
                     )
+                }
                 } else {
                     compressionDotsJob?.cancel()
                     isCompressionRequest = false
