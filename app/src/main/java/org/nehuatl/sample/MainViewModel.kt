@@ -1683,31 +1683,30 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         // ========== ПОИСК ПО КНИГАМ (FTS5) ==========
 
-    private val bookDatabase by lazy {
+        private val bookDatabase by lazy {
         BookDatabase.get(getApplication())
     }
 
+    private val bookSearchEngine by lazy {
+        BookSearchEngine(File(getApplication<Application>().filesDir, "book_index"))
+    }
     /**
      * Индексирует все книги из filesDir/biblioteka/ в Room FTS5.
      * Вызывается один раз при первом открытии библиотеки.
      */
-    fun indexBooksIfNeeded() {
+       fun indexBooksIfNeeded() {
         scope.launch(Dispatchers.IO) {
             try {
-                val dao = bookDatabase.bookDao()
-                if (dao.getBookCount() > 0) return@launch
-
                 val books = listBibliotekaBooks()
-                for (file in books) {
+                if (books.isEmpty()) return@launch
+
+                val triples = books.map { file ->
                     val text = readBookText(file)
-                    if (text.isBlank()) continue
-                    val title = file.nameWithoutExtension
-                    val entity = BookEntity(title = title, content = text)
-                    val id = dao.insertBook(entity)
-                    // Room возвращает rowid при вставке
-                    dao.insertFts(BookFts(rowid = id, title = title, content = text))
+                    Triple(file.nameWithoutExtension, text, file.absolutePath)
                 }
-                Log.d(TAG, "Indexed ${books.size} books into FTS5")
+                bookSearchEngine.clearIndex()
+                bookSearchEngine.indexBooks(triples)
+                Log.d(TAG, "Indexed ${books.size} books into Lucene")
             } catch (e: Exception) {
                 Log.e(TAG, "indexBooksIfNeeded failed: ${e.message}")
             }
@@ -1718,20 +1717,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
      * Поиск по книгам через FTS5.
      * Возвращает список пар (название книги, фрагмент с совпадением).
      */
-    suspend fun searchBooks(query: String): List<Pair<String, String>> {
+       suspend fun searchBooks(query: String): List<Pair<String, String>> {
         return try {
-            val results = bookDatabase.bookDao().searchBooks(query)
-            results.map { book ->
-                // Вырезаем фрагмент вокруг первого совпадения
-                val idx = book.content.indexOf(query, ignoreCase = true)
-                val snippet = if (idx >= 0) {
-                    val start = (idx - 50).coerceAtLeast(0)
-                    val end = (idx + query.length + 100).coerceAtMost(book.content.length)
-                    "..." + book.content.substring(start, end).replace("\n", " ") + "..."
-                } else {
-                    book.content.take(150).replace("\n", " ") + "..."
-                }
-                book.title to snippet
+            withContext(Dispatchers.IO) {
+                bookSearchEngine.search(query)
             }
         } catch (e: Exception) {
             Log.e(TAG, "searchBooks failed: ${e.message}")
