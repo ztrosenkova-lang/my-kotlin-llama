@@ -280,6 +280,7 @@ fun ChatScreen(
     val isPermanentlyUnlocked by viewModel.isPermanentlyUnlocked.collectAsStateWithLifecycle(initialValue = false)
     val isPermanentlyBlocked by viewModel.isPermanentlyBlocked.collectAsStateWithLifecycle(initialValue = false)
     val isSpeaking by viewModel.isSpeaking.collectAsStateWithLifecycle(initialValue = false)
+    val isPreparingSpeech by viewModel.isPreparingSpeech.collectAsStateWithLifecycle(initialValue = false)
     val speakStartTrigger by viewModel.speakStartTrigger.collectAsStateWithLifecycle(initialValue = false)
     val robotGreetingSignal by viewModel.robotGreetingSignal.collectAsStateWithLifecycle(initialValue = false)
     val robotAutoAnimation by viewModel.robotAutoAnimation.collectAsStateWithLifecycle(initialValue = 0)
@@ -982,7 +983,7 @@ fun ChatScreen(
     )
 }
 
-                StatusBar(
+                          StatusBar(
                 state = state,
                 cloudState = cloudState,
                 currentMode = currentMode,
@@ -990,6 +991,7 @@ fun ChatScreen(
                 modelDisplayName = loadedModelName,
                 isSmartMode = isSmartMode,
                 visionPhase = visionPhase,
+                isPreparingSpeech = isPreparingSpeech,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 colors = colors
             )
@@ -1529,9 +1531,10 @@ fun ChatScreen(
                         headNod = headNodTarget,
                         tapWaveDirection = tapWaveDirection,
                         autoAnimation = robotAutoAnimation,
-                        isCompressing = isCompressing,
+                                               isCompressing = isCompressing,
                         isLoadingModel = state is GenerationState.LoadingModel,
                         visionPhase = visionPhase,
+                        isPreparingSpeech = isPreparingSpeech,
                         isJumping = robotJumpSignal,
                         modifier = Modifier.fillMaxSize()
                     )
@@ -1786,6 +1789,7 @@ fun ThinkingRobotAnimation(
     isCompressing: Boolean = false,
     isLoadingModel: Boolean = false,
     visionPhase: VisionPhase = VisionPhase.IDLE,
+    isPreparingSpeech: Boolean = false,
     headTilt: Float = 0f,
     headBob: Float = 0f,
     headNod: Float = 0f,
@@ -3325,12 +3329,13 @@ fun ThinkingRobotAnimation(
         // Текст состояния на поясе. Показывается ВМЕСТО индикатора,
         // мигает по центру пояса. При isSpeaking — не показывается
         // (звук идёт через TTS, отдельная индикация не нужна).
-            val statusText: String? = when {
+                       val statusText: String? = when {
             visionPhase == VisionPhase.RELEASING_TEXT -> "Выгружаю текст..."
             visionPhase == VisionPhase.LOADING_VISION -> "Загружаю зрение..."
             visionPhase == VisionPhase.VISION_READY -> "Зрение готово"
             visionPhase == VisionPhase.RESTORING_TEXT -> "Возвращаю текст..."
             visionPhase == VisionPhase.TEXT_RESTORED -> "Текст готов"
+            isPreparingSpeech -> "Готовлю озвучку..."
             isThinking -> "ИИ думает..."
             isCompressing -> "Сжимаю беседу..."
             isLoadingModel -> "Загружаю модель..."
@@ -6845,9 +6850,21 @@ private fun StatusBar(
     modelDisplayName: String = "",
     isSmartMode: Boolean = false,
     visionPhase: VisionPhase = VisionPhase.IDLE,
+    isPreparingSpeech: Boolean = false,
     modifier: Modifier = Modifier,
     colors: AppColors
 ) {
+          // Если TTS готовит озвучку — показываем это независимо от vision.
+    // Иначе будет провал: модель закончила, а звук ещё не пошёл.
+    val preparingStatus: Triple<Color, String, Boolean>? =
+        if (isPreparingSpeech) {
+            Triple(
+                colors.accent.copy(alpha = 0.15f),
+                "🔊 Готовлю озвучку...",
+                true
+            )
+        } else null
+
        // Если идёт vision-фаза — показываем её независимо от режима.
     val visionStatus: Triple<Color, String, Boolean>? = when (visionPhase) {
         VisionPhase.RELEASING_TEXT -> Triple(
@@ -6878,7 +6895,7 @@ private fun StatusBar(
         VisionPhase.IDLE -> null
     }
 
-    val (containerColor, statusText, showProgress) = visionStatus ?: when (currentMode) {
+        val (containerColor, statusText, showProgress) = preparingStatus ?: visionStatus ?: when (currentMode) {
         AIMode.CLOUD -> {
             when (cloudState) {
                 is CloudAIState.Idle -> Triple(
