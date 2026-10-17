@@ -46,6 +46,7 @@ import java.security.KeyStore
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.*
+import java.io.FileOutputStream
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import java.security.KeyPairGenerator
@@ -2645,7 +2646,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
                // Если есть картинка без текста — не пишем пустое сообщение в чат,
         // а сразу отправляем в модель
-            if (text.isBlank() && imagePath != null) {
+                        if (text.isBlank() && imagePath != null) {
             Log.d(TAG, "Картинка без текста. imagePath=$imagePath, currentMmprojPath=$currentMmprojPath, isModelLoaded=${_isModelLoaded.value}")
             _chatHistory.value = _chatHistory.value + ChatMessage(
                 role = "user",
@@ -2654,20 +2655,23 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             )
             syncChatToFile()
 
+            // Конвертируем картинку в JPEG во временный файл.
+            // mtmd/stb_image не читает HEIC/HEIF и некоторые WebP/PNG,
+            // а камера отдаёт JPEG — поэтому камера работает, а галерея нет.
+            val jpegPath = convertImageToJpeg(getApplication(), imagePath)
+            if (jpegPath == null) {
+                appendSystemMessage("❌ Не удалось конвертировать изображение. Формат не поддерживается.")
+                _visionPhase.value = VisionPhase.IDLE
+                return
+            }
+
                        when (_currentMode.value) {
                 AIMode.LOCAL -> {
-                    // Если модель уже загружена с проектором (vision) —
-                    // работаем с ней напрямую, без выгрузки и assets.
-                    // Если загружена текстовая без проектора или модель не загружена —
-                    // подгружаем встроенный SmolVLM2.
-                    // restorePreviousModelIfNeeded НЕ вызываем здесь —
-                    // иначе vision выгрузится раньше, чем успеет ответить.
-                    // Текстовая модель вернётся при следующем текстовом сообщении.
                     if (_isModelLoaded.value && currentMmprojPath != null) {
-                        generateLocal("", imagePath)
+                        generateLocal("", jpegPath)
                     } else {
                         ensureVisionModelLoaded {
-                            generateLocal("", imagePath)
+                            generateLocal("", jpegPath)
                         }
                     }
                 }
@@ -2677,7 +2681,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
             return
         }
-
         _chatHistory.value = _chatHistory.value + ChatMessage(
             role = "user",
             text = text,
@@ -3241,7 +3244,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _chatHistory.value = _chatHistory.value + ChatMessage("system", text, buttons)
     }
 
-        fun abortLocal() {
+            fun abortLocal() {
         if (_state.value.isActive()) {
             Log.i(TAG, "Aborting generation")
             llamaHelper.abort()
@@ -3253,7 +3256,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
      * извлекает из него кадры через VideoFrameExtractor,
      * и отправляет их в модель как видео-запрос.
      */
-       fun attachVideo(uri: Uri) {
+    fun attachVideo(uri: Uri) {
         val context = getApplication<Application>()
         scope.launch(Dispatchers.IO) {
             appendSystemMessage("🎬 Извлекаю кадры из видео...")
@@ -3275,6 +3278,35 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     videoDurationSec = result.durationSeconds
                 )
             }
+        }
+    }
+
+    /**
+     * Декодирует любую картинку через BitmapFactory и пересохраняет её в JPEG.
+     * Нужно потому, что mtmd (stb_image) не читает HEIC/HEIF и часть WebP/PNG,
+     * а JPEG — гарантированно поддерживаемый формат.
+     * Возвращает file:// URI временного JPEG или null при ошибке.
+     */
+    private fun convertImageToJpeg(context: Application, imageUriString: String): String? {
+        return try {
+            val uri = Uri.parse(imageUriString)
+            val bitmap = context.contentResolver.openInputStream(uri)?.use { input ->
+                android.graphics.BitmapFactory.decodeStream(input)
+            } ?: return null
+
+            val cacheDir = File(context.cacheDir, "vision_input").apply {
+                if (exists()) listFiles()?.forEach { it.delete() } else mkdirs()
+            }
+            val file = File(cacheDir, "converted_${System.currentTimeMillis()}.jpg")
+            FileOutputStream(file).use { out ->
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out)
+            }
+            bitmap.recycle()
+            Log.d(TAG, "convertImageToJpeg: ${imageUriString.take(60)} -> ${file.absolutePath}")
+            "file://${file.absolutePath}"
+        } catch (e: Exception) {
+            Log.e(TAG, "convertImageToJpeg failed: ${e.message}", e)
+            null
         }
     }
 
