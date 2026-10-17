@@ -376,6 +376,7 @@ fun ChatScreen(
     var showAdminUnlockDialog by remember { mutableStateOf(false) }
     var adminPhraseInput by remember { mutableStateOf("") }
     var showMediaPicker by remember { mutableStateOf(false) }
+    var showOrganizerEditor by remember { mutableStateOf(false) }
     // Сигнал для махания рукой — устанавливается, когда нужно помахать
     var waveSignal by remember { mutableStateOf(false) }
     // Сигнал для полёта в центр экрана и увеличения
@@ -488,6 +489,9 @@ fun ChatScreen(
                         }
                         command == "редактировать чат" -> {
                             viewModel.showChatEditor()
+                        }
+                        command == "редактировать органайзер" -> {
+                            showOrganizerEditor = true
                         }
                         else -> {
                             viewModel.sendUserMessage(recognizedText)
@@ -787,11 +791,21 @@ fun ChatScreen(
         )
     }
 
-                if (showChatEditorState) {
+    if (showChatEditorState) {
         ChatEditorDialog(
             initialText = viewModel.readChatAsText(),
             onSave = { viewModel.overwriteChatFromText(it) },
             onDismiss = { viewModel.hideChatEditor() },
+            colors = colors,
+            isDarkTheme = isDarkTheme
+        )
+    }
+
+    if (showOrganizerEditor) {
+        OrganizerEditorDialog(
+            initialText = viewModel.readOrganizerAsText(),
+            onSave = { viewModel.overwriteOrganizerFromText(it) },
+            onDismiss = { showOrganizerEditor = false },
             colors = colors,
             isDarkTheme = isDarkTheme
         )
@@ -1195,6 +1209,10 @@ fun ChatScreen(
                         }
                                                 command == "режим калькулятора" -> {
                             viewModel.disableSmartMode()
+                            promptInput = ""
+                        }
+                        command == "редактировать органайзер" -> {
+                            showOrganizerEditor = true
                             promptInput = ""
                         }
                         command == "режим админа" -> {
@@ -6870,6 +6888,74 @@ private fun ChatEditorDialog(
         )
     }
 }
+@Composable
+private fun OrganizerEditorDialog(
+    initialText: String,
+    onSave: (String) -> Unit,
+    onDismiss: () -> Unit,
+    colors: AppColors,
+    isDarkTheme: Boolean
+) {
+    var text by remember { mutableStateOf(initialText) }
+
+    MaterialTheme(
+        colorScheme = if (isDarkTheme) darkColorScheme() else lightColorScheme()
+    ) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("📅 Органайзер", style = MaterialTheme.typography.titleLarge, color = colors.text) },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "Формат: ГГГГ-ММ-ДД ЧЧ:ММ | текст",
+                        color = colors.text.copy(alpha = 0.6f),
+                        fontSize = 10.sp,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    OutlinedTextField(
+                        value = text,
+                        onValueChange = { text = it },
+                        placeholder = { Text("2026-10-22 18:30 | Позвонить в гараж", color = colors.text.copy(alpha = 0.5f), fontSize = 10.sp) },
+                        modifier = Modifier.fillMaxWidth().height(400.dp),
+                        maxLines = 1000,
+                        singleLine = false,
+                        textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, color = colors.text),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = colors.text,
+                            unfocusedTextColor = colors.text,
+                            focusedContainerColor = colors.surfaceGray,
+                            unfocusedContainerColor = colors.surfaceGray,
+                            focusedBorderColor = colors.accent,
+                            unfocusedBorderColor = colors.borderGray,
+                            cursorColor = colors.accent
+                        )
+                    )
+                }
+            },
+            confirmButton = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = { onSave(text); onDismiss() },
+                        colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.background),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f).height(38.dp)
+                    ) { Text("Сохранить", color = colors.background, fontSize = 12.sp) }
+                    Button(
+                        onClick = onDismiss,
+                        colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.background),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f).height(38.dp)
+                    ) { Text("Закрыть", color = colors.background, fontSize = 12.sp) }
+                }
+            },
+            dismissButton = null
+        )
+    }
+}
+
 @Composable
 private fun ImagePreview(imagePath: String, colors: AppColors) {
     Card(
