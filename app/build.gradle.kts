@@ -104,6 +104,9 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
 
+    implementation("org.gnit.lucene-kmp:lucene-kmp-core:10.2.0-alpha14")
+    implementation("org.gnit.lucene-kmp:lucene-kmp-queryparser:10.2.0-alpha14")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
