@@ -76,6 +76,11 @@ data class DownloadProgress(
     val status: DownloadStatus
 )
 
+data class AlarmEntry(
+    val timeMillis: Long,
+    val text: String
+)
+
 enum class VisionPhase {
     IDLE,                   // ничего не происходит
     RELEASING_TEXT,         // выгружаю текстовую модель
@@ -230,9 +235,16 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         File(bibliotekaDir, "biblioteka.txt")
     }
 
-    private val memorySearchEngine by lazy {
+        private val memorySearchEngine by lazy {
         MemorySearchEngine(memoryFile)
     }
+
+    private val organizerFile: File by lazy {
+        File(getApplication<Application>().filesDir, "organizer.txt")
+    }
+
+    private val _organizerEntries = MutableStateFlow<List<AlarmEntry>>(emptyList())
+    val organizerEntries: StateFlow<List<AlarmEntry>> = _organizerEntries.asStateFlow()
 
     private var isCompressionRequest = false
     private var userMessageCount = 0
@@ -552,9 +564,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 _chatHistory.value = parseChatFromText(saved)
                 Log.d(TAG, "chat.txt loaded (${_chatHistory.value.size} messages)")
             }
-        } catch (e: Exception) {
+                } catch (e: Exception) {
             Log.e(TAG, "Ошибка чтения chat.txt: ${e.message}")
         }
+
+        reloadOrganizer()
 
                // Восстанавливаем сохранённый масштаб робота в overlay.
         _overlayRobotScale.value = prefs.getFloat("overlay_robot_scale", 1.0f).coerceIn(0.5f, 3.0f)
@@ -1606,6 +1620,72 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
+       // ========== ОРГАНАЙЗЕР ==========
+
+    private fun parseOrganizerText(text: String): List<AlarmEntry> {
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+        return text.split("\n").mapNotNull { line ->
+            val trimmed = line.trim()
+            if (trimmed.isEmpty()) return@mapNotNull null
+            val sep = trimmed.indexOf('|')
+            if (sep < 0) return@mapNotNull null
+            val timeStr = trimmed.substring(0, sep).trim()
+            val msg = trimmed.substring(sep + 1).trim()
+            val millis = try { dateFormat.parse(timeStr)?.time } catch (e: Exception) { null }
+            if (millis == null) return@mapNotNull null
+            AlarmEntry(millis, msg)
+        }.sortedBy { it.timeMillis }
+    }
+
+    fun reloadOrganizer() {
+        try {
+            if (!organizerFile.exists()) {
+                organizerFile.createNewFile()
+                _organizerEntries.value = emptyList()
+                return
+            }
+            val text = organizerFile.readText()
+            _organizerEntries.value = parseOrganizerText(text)
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка чтения organizer.txt: ${e.message}")
+        }
+    }
+
+    fun readOrganizerAsText(): String {
+        return try {
+            if (organizerFile.exists()) organizerFile.readText().trim() else ""
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка чтения organizer.txt: ${e.message}")
+            ""
+        }
+    }
+
+    fun overwriteOrganizerFromText(newText: String) {
+        try {
+            if (!organizerFile.exists()) organizerFile.createNewFile()
+            organizerFile.writeText(newText.trim() + "\n")
+            _organizerEntries.value = parseOrganizerText(newText)
+            appendSystemMessage("📅 Органайзер обновлён")
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка перезаписи organizer.txt: ${e.message}")
+            appendSystemMessage("❌ Ошибка обновления органайзера")
+        }
+    }
+
+    private fun saveOrganizerEntry(timeMillis: Long, text: String) {
+        try {
+            if (!organizerFile.exists()) organizerFile.createNewFile()
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+            val line = dateFormat.format(Date(timeMillis)) + " | " + text
+            val existing = organizerFile.readText().trim()
+            val newContent = if (existing.isEmpty()) line else existing + "\n" + line
+            organizerFile.writeText(newContent + "\n")
+            _organizerEntries.value = parseOrganizerText(newContent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка записи organizer.txt: ${e.message}")
+        }
+    }
+
     fun readBrain(): String {
         return try {
             if (brainFile.exists()) {
@@ -2598,9 +2678,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             .distinct()
     }
 
-       private fun buildSystemPrompt(commandType: String, prompt: String): String {
+        private fun buildSystemPrompt(commandType: String, prompt: String): String {
         val basePrompt = _systemPrompt.value
         val lowerPrompt = prompt.lowercase()
+
+        // Текущая дата — чтобы модель знала «сегодня» и могла считать «через 5 дней».
+        val dateFormat = SimpleDateFormat("d MMMM yyyy, EEEE, HH:mm", Locale("ru"))
+        val currentDate = dateFormat.format(Date())
 
         // Для модели-переводчика системный промпт не трогаем — это чистый промпт перевода
         val isTranslator = currentModelName.contains("Hy-MT2", ignoreCase = true) ||
@@ -2609,7 +2693,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             return basePrompt
         }
 
-        return buildString {
+               return buildString {
+            append("Сегодня: ")
+            append(currentDate)
+            append("\n\n")
             append(basePrompt)
             append("\n\n")
 
@@ -3162,83 +3249,141 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    private fun handleAlarmCommand(prompt: String) {
-        val timePattern = Regex("(?:в|в\\s+|напомни\\s+в\\s+)(\\d{1,2}[:.]\\d{2})")
-        val match = timePattern.find(prompt)
+        private fun handleAlarmCommand(prompt: String) {
+        val cal = Calendar.getInstance()
+        val lower = prompt.lowercase()
 
-        if (match != null) {
-            val timeStr = match.groupValues[1].replace(".", ":")
-            val message = prompt.replace(Regex("(?:в\\s+|напомни\\s+в\\s+)\\d{1,2}[:.]\\d{2}\\s*"), "").trim()
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val context = getApplication<Application>().applicationContext
-                val alarmManagerSystem = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
-                if (alarmManagerSystem?.canScheduleExactAlarms() == false) {
-                    appendSystemMessage("⚠️ Для установки точных напоминаний ИИ-Другу требуется специальное разрешение. Пожалуйста, включите тумблер в открывшихся настройках.")
-                    try {
-                        val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                        }
-                        context.startActivity(intent)
-                    } catch (e: Exception) {
-                        appendSystemMessage("❌ Не удалось автоматически открыть системные настройки разрешений: ${e.message}")
-                    }
-                    return
-                }
+        // 1. «через N дней/часов/минут»
+        val relativePattern = Regex("через\\s+(\\d+)\\s*(день|дня|дней|час|часа|часов|минут|минуты|минуту)")
+        val relMatch = relativePattern.find(lower)
+        if (relMatch != null) {
+            val n = relMatch.groupValues[1].toIntOrNull() ?: 0
+            val unit = relMatch.groupValues[2]
+            when {
+                unit.startsWith("д") -> cal.add(Calendar.DAY_OF_YEAR, n)
+                unit.startsWith("ч") -> cal.add(Calendar.HOUR_OF_DAY, n)
+                unit.startsWith("м") -> cal.add(Calendar.MINUTE, n)
             }
-
-            setAlarm(timeStr, message)
-            appendSystemMessage("⏰ Будильник установлен на $timeStr: '$message'")
-        } else {
-            appendSystemMessage("⚠️ Не удалось распознать время. Используйте формат: 'в 18.00 идем в гараж'")
+            val message = prompt.replace(relMatch.value, "").replace("напомни", "", ignoreCase = true).trim()
+            if (scheduleAlarm(cal.timeInMillis, message)) {
+                val timeStr = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(cal.time)
+                appendSystemMessage("⏰ Напоминание на $timeStr: '$message'")
+            }
+            return
         }
+
+        // 2. «завтра в HH:MM»
+        val tomorrowPattern = Regex("завтра\\s+в\\s+(\\d{1,2})[:.](\\d{2})")
+        val tmMatch = tomorrowPattern.find(lower)
+        if (tmMatch != null) {
+            val h = tmMatch.groupValues[1].toIntOrNull() ?: 0
+            val m = tmMatch.groupValues[2].toIntOrNull() ?: 0
+            cal.add(Calendar.DAY_OF_YEAR, 1)
+            cal.set(Calendar.HOUR_OF_DAY, h)
+            cal.set(Calendar.MINUTE, m)
+            cal.set(Calendar.SECOND, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            val message = prompt.replace(tmMatch.value, "").replace("напомни", "", ignoreCase = true).trim()
+            if (scheduleAlarm(cal.timeInMillis, message)) {
+                val timeStr = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(cal.time)
+                appendSystemMessage("⏰ Напоминание на $timeStr: '$message'")
+            }
+            return
+        }
+
+        // 3. «DD месяца в HH:MM»
+        val monthsRu = mapOf(
+            "января" to 0, "февраля" to 1, "марта" to 2, "апреля" to 3,
+            "мая" to 4, "июня" to 5, "июля" to 6, "августа" to 7,
+            "сентября" to 8, "октября" to 9, "ноября" to 10, "декабря" to 11
+        )
+        val datePattern = Regex("(\\d{1,2})\\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\\s+в\\s+(\\d{1,2})[:.](\\d{2})")
+        val dateMatch = datePattern.find(lower)
+        if (dateMatch != null) {
+            val d = dateMatch.groupValues[1].toIntOrNull() ?: 1
+            val mon = monthsRu[dateMatch.groupValues[2]] ?: 0
+            val h = dateMatch.groupValues[3].toIntOrNull() ?: 0
+            val m = dateMatch.groupValues[4].toIntOrNull() ?: 0
+            cal.set(Calendar.DAY_OF_MONTH, d)
+            cal.set(Calendar.MONTH, mon)
+            cal.set(Calendar.HOUR_OF_DAY, h)
+            cal.set(Calendar.MINUTE, m)
+            cal.set(Calendar.SECOND, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            if (cal.timeInMillis < System.currentTimeMillis()) cal.add(Calendar.YEAR, 1)
+            val message = prompt.replace(dateMatch.value, "").replace("напомни", "", ignoreCase = true).trim()
+            if (scheduleAlarm(cal.timeInMillis, message)) {
+                val timeStr = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(cal.time)
+                appendSystemMessage("⏰ Напоминание на $timeStr: '$message'")
+            }
+            return
+        }
+
+        // 4. «в HH:MM»
+        val timePattern = Regex("(?:в|в\\s+|напомни\\s+в\\s+)(\\d{1,2})[:.](\\d{2})")
+        val match = timePattern.find(lower)
+        if (match != null) {
+            val h = match.groupValues[1].toIntOrNull() ?: 0
+            val m = match.groupValues[2].toIntOrNull() ?: 0
+            cal.set(Calendar.HOUR_OF_DAY, h)
+            cal.set(Calendar.MINUTE, m)
+            cal.set(Calendar.SECOND, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            if (cal.timeInMillis < System.currentTimeMillis()) cal.add(Calendar.DAY_OF_YEAR, 1)
+            val message = prompt.replace(match.value, "").replace("напомни", "", ignoreCase = true).trim()
+            if (scheduleAlarm(cal.timeInMillis, message)) {
+                val timeStr = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(cal.time)
+                appendSystemMessage("⏰ Напоминание на $timeStr: '$message'")
+            }
+            return
+        }
+
+        appendSystemMessage("⚠️ Не удалось распознать время. Примеры: 'напомни через 5 дней купить хлеб', 'напомни завтра в 10:00 позвонить', 'напомни 22 октября в 18:30 встреча', 'напомни в 18.00 идем в гараж'")
     }
 
-    private fun setAlarm(timeStr: String, message: String) {
-        try {
-            val dateFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
-            val alarmTime = dateFormat.parse(timeStr)
-            if (alarmTime == null) {
-                Log.e(TAG, "Не удалось распарсить время: $timeStr")
-                appendSystemMessage("⚠️ Не удалось распознать время: $timeStr")
-                return
-            }
-
-            val calendar = Calendar.getInstance().apply {
-                val timeCal = Calendar.getInstance().apply { time = alarmTime }
-                set(Calendar.HOUR_OF_DAY, timeCal.get(Calendar.HOUR_OF_DAY))
-                set(Calendar.MINUTE, timeCal.get(Calendar.MINUTE))
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-                if (timeInMillis < System.currentTimeMillis()) {
-                    add(Calendar.DAY_OF_YEAR, 1)
+    private fun scheduleAlarm(timeMillis: Long, message: String): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val context = getApplication<Application>().applicationContext
+            val alarmManagerSystem = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+            if (alarmManagerSystem?.canScheduleExactAlarms() == false) {
+                appendSystemMessage("⚠️ Для установки точных напоминаний ИИ-Другу требуется специальное разрешение.")
+                try {
+                    val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(intent)
+                } catch (e: Exception) {
+                    appendSystemMessage("❌ Не удалось открыть настройки: ${e.message}")
                 }
+                return false
             }
-
+        }
+        return try {
             val intent = Intent(getApplication(), AlarmReceiver::class.java).apply {
                 putExtra("message", message)
+                putExtra("timeMillis", timeMillis)
             }
             val pendingIntent = PendingIntent.getBroadcast(
                 getApplication(),
-                System.currentTimeMillis().toInt(),
+                timeMillis.toInt(),
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
             )
-
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, calendar.timeInMillis, pendingIntent)
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timeMillis, pendingIntent)
             } else {
-                alarmManager.setExact(AlarmManager.RTC_WAKEUP, calendar.timeInMillis, pendingIntent)
+                alarmManager.setExact(AlarmManager.RTC_WAKEUP, timeMillis, pendingIntent)
             }
-
-            Log.d(TAG, "Будильник установлен на ${calendar.time} ($timeStr): $message")
+            saveOrganizerEntry(timeMillis, message)
+            true
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка установки будильника: ${e.message}")
-            appendSystemMessage("⚠️ Ошибка установки будильника: ${e.message}")
+            appendSystemMessage("⚠️ Ошибка установки: ${e.message}")
+            false
         }
     }
 
-    internal fun appendSystemMessage(text: String) {
+     internal fun appendSystemMessage(text: String) {
         _chatHistory.value = _chatHistory.value + ChatMessage("system", text)
         syncChatToFile()
     }
