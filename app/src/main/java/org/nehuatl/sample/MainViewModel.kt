@@ -313,7 +313,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private var savedContextSize: Int = 8192
     private var savedModelPath: String? = null
     private var savedMmprojPath: String? = null
+
+    @Volatile
     private var isVisionModelLoaded = false
+
+    // true, пока vision грузится. Защита от параллельного запуска
+    // двух ensureVisionModelLoaded (пользователь быстро нажал «+» дважды).
+    @Volatile
+    private var isVisionLoading = false
 
     fun enableSmartMode() {
         if (_isSmartMode.value) {
@@ -1327,10 +1334,16 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             false
         }
     }
-        fun ensureVisionModelLoaded(onReady: () -> Unit) {
+                fun ensureVisionModelLoaded(onReady: () -> Unit) {
         if (isVisionModelLoaded) {
             _visionPhase.value = VisionPhase.VISION_READY
             onReady()
+            return
+        }
+
+        if (isVisionLoading) {
+            // Уже грузимся — не запускаем второй load.
+            appendSystemMessage("⏳ Зрение уже загружается, подождите...")
             return
         }
 
@@ -1338,6 +1351,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             appendSystemMessage("❌ Недостаточно памяти для загрузки визиона")
             return
         }
+
+        isVisionLoading = true
 
         Log.d(TAG, "ensureVisionModelLoaded: START. savedModelPath=$currentModelPath, savedMmprojPath=$currentMmprojPath")
         appendSystemMessage("🤖 Загружаю зрение...")
@@ -1361,7 +1376,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 val mmprojPath = copyAssetToFiles("smolvlm2_500m_mmproj.gguf", "smolvlm2_500m_mmproj.gguf")
                 Log.d(TAG, "ensureVisionModelLoaded: modelPath=$modelPath, mmprojPath=$mmprojPath")
 
-                    if (modelPath == null || mmprojPath == null) {
+                if (modelPath == null || mmprojPath == null) {
+                    isVisionLoading = false
                     _visionPhase.value = VisionPhase.IDLE
                     appendSystemMessage("❌ Не удалось скопировать модель из assets")
                     return@launch
@@ -1371,13 +1387,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 contextSize.value = 4096
 
                 Log.d(TAG, "ensureVisionModelLoaded: вызываю llamaHelper.load(4096)")
-                llamaHelper.load(
+                                llamaHelper.load(
                     modelPath,
                     4096,
                     mmprojPath
                                 ) { id ->
                     Log.d(TAG, "ensureVisionModelLoaded: load callback id=$id")
                     isVisionModelLoaded = true
+                    isVisionLoading = false
                     _visionPhase.value = VisionPhase.VISION_READY
                     appendSystemMessage("✅ Зрение загружено")
                     // Даём время модели полностью инициализироваться,
@@ -1391,6 +1408,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     }
                 }
                        } catch (e: Exception) {
+                isVisionLoading = false
                 _visionPhase.value = VisionPhase.IDLE
                 Log.e(TAG, "Ошибка загрузки vision: ${e.message}")
                 appendSystemMessage("❌ Ошибка загрузки зрения: ${e.message}")
@@ -1474,13 +1492,16 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         val messages = _chatHistory.value
         if (messages.isEmpty()) return ""
         val sb = StringBuilder()
-        for (message in messages) {
+                for (message in messages) {
             val prefix = when (message.role) {
                 "user" -> "Вы: "
                 "assistant" -> "ИИ-Друг: "
                 "system" -> "📢 "
                 else -> ""
             }
+            // hasImage уже подразумевает, что в тексте может быть 📷 или [Изображение].
+            // Дублировать иконку в файл не нужно — иначе при перезапуске
+            // она накапливается с каждым сохранением.
             sb.append(prefix).append(message.text).append("\n")
         }
         return sb.toString().trim()
@@ -1503,7 +1524,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             currentText = StringBuilder()
         }
 
-        for (line in lines) {
+                for (line in lines) {
             val role = when {
                 line.startsWith("Вы: ") -> "user"
                 line.startsWith("ИИ-Друг: ") -> "assistant"
@@ -1519,7 +1540,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     "system" -> 2     // "📢 "
                     else -> 0
                 }
-                currentText.append(line.substring(prefixLength))
+                // Срезаем возможные ведущие 📷 / [Изображение] / [Видео: ...],
+                // чтобы они не накапливались при каждом сохранении/загрузке.
+                var body = line.substring(prefixLength)
+                body = body.removePrefix("📷 ").trimStart()
+                currentText.append(body)
             } else {
                 if (currentRole != null) {
                     currentText.append("\n").append(line)
@@ -2592,12 +2617,16 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         videoFrames: List<String>? = null,
         videoDurationSec: Int = 0
     ) {
-        Log.d(TAG, "sendUserMessage: text='$text', imagePath=$imagePath, videoFrames=${videoFrames?.size ?: 0}, isVisionModelLoaded=$isVisionModelLoaded, isModelLoaded=${_isModelLoaded.value}, mode=${_currentMode.value}")
+     Log.d(TAG, "sendUserMessage: text='$text', imagePath=$imagePath, videoFrames=${videoFrames?.size ?: 0}, isVisionModelLoaded=$isVisionModelLoaded, isModelLoaded=${_isModelLoaded.value}, mode=${_currentMode.value}")
         if (_isCompressing.value) {
             appendSystemMessage("⏳ ИИ сжимает беседу, подождите...")
             return
         }
 
+        if (isVisionLoading) {
+            appendSystemMessage("⏳ Зрение загружается, подождите...")
+            return
+        }
                if (text.isBlank() && imagePath == null) return
 
         // Если загружена vision и пользователь пишет ТЕКСТ (не картинку и не видео) —
@@ -3053,13 +3082,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         scope.launch {
             try {
-                llamaHelper.predict(
+                    llamaHelper.predict(
                     prompt = effectivePrompt,
                     imagePath = null,
                     systemPrompt = videoSystemPrompt,
                     maxTokens = maxTokens.value,
                     chatHistory = emptyList(),
                     temperature = temperature.value,
+                    repetitionPenalty = 1.15f,
                     imagePaths = frames
                 )
             } catch (e: Exception) {
@@ -3148,13 +3178,14 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         Log.d(TAG, "generateLocal: вызываю predict. effectivePrompt='$effectivePrompt', imagePath=$imagePath")
         scope.launch {
             try {
-                    llamaHelper.predict(
+            llamaHelper.predict(
                     prompt = effectivePrompt,
                     imagePath = imagePath,
                     systemPrompt = fullSystemPrompt,
                     maxTokens = maxTokens.value,
                     chatHistory = historyForPredict,
-                    temperature = temperature.value
+                    temperature = temperature.value,
+                    repetitionPenalty = 1.15f
                 )
                 Log.d(TAG, "generateLocal: predict вернул управление")
             } catch (e: Exception) {
