@@ -1681,6 +1681,42 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
+        fun ensureBibliotekaBooks() {
+        try {
+            val assetDir = "biblioteka"
+            val assetList = getApplication<Application>().assets.list(assetDir) ?: emptyArray()
+            for (fileName in assetList) {
+                if (!fileName.endsWith(".txt", ignoreCase = true)) continue
+                val destFile = File(bibliotekaDir, fileName)
+                if (!destFile.exists()) {
+                    getApplication<Application>().assets.open("$assetDir/$fileName").use { input ->
+                        destFile.outputStream().use { output -> input.copyTo(output) }
+                    }
+                    Log.d(TAG, "Book copied: $fileName")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "ensureBibliotekaBooks failed: ${e.message}")
+        }
+    }
+
+    fun listBibliotekaBooks(): List<File> {
+        ensureBibliotekaBooks()
+        return bibliotekaDir.listFiles()
+            ?.filter { it.isFile && it.name.endsWith(".txt", ignoreCase = true) }
+            ?.sortedBy { it.name.lowercase() }
+            ?: emptyList()
+    }
+
+    fun readBookText(file: File): String {
+        return try {
+            if (file.exists()) file.readText() else ""
+        } catch (e: Exception) {
+            Log.e(TAG, "readBookText failed: ${e.message}")
+            ""
+        }
+    }
+
     fun readBrain(): String {
         return try {
             if (brainFile.exists()) {
