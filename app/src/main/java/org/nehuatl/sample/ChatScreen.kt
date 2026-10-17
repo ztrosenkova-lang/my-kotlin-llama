@@ -582,9 +582,37 @@ fun ChatScreen(
         }
     }
 
-    LaunchedEffect(isSpeaking) {
+       LaunchedEffect(isSpeaking) {
         if (!isSpeaking) {
             pendingTextPrinted = false
+        }
+    }
+
+    // Отслеживаем переход isThinking: true → false.
+    // Когда модель закончила думать, крышка на голове робота ещё
+    // закрывается (2000 мс, см. headPanelOpenAmount). «Готовлю озвучку»
+    // показываем только после того, как крышка закрылась.
+    var prevIsThinking by remember { mutableStateOf(false) }
+    val currentThinking = state is GenerationState.Generating || cloudState is CloudAIState.Generating
+
+    LaunchedEffect(currentThinking) {
+        if (prevIsThinking && !currentThinking) {
+            // Модель только что закончила. Ждём, пока крышка закроется.
+            delay(2000)
+            // Показываем «Готовлю озвучку» только если ответ ещё не начал
+            // звучать и TTS включён.
+            if (isTtsReady && !isSpeaking) {
+                viewModel.setPreparingSpeech(true)
+            }
+        }
+        prevIsThinking = currentThinking
+    }
+        LaunchedEffect(isPreparingSpeech) {
+        if (isPreparingSpeech) {
+            delay(5000)
+            if (isPreparingSpeech && !isSpeaking) {
+                viewModel.setPreparingSpeech(false)
+            }
         }
     }
 
