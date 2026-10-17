@@ -575,9 +575,12 @@ fun ChatScreen(
         }
     }
 
-    LaunchedEffect(speakStartTrigger, pendingTextToPrint) {
+       LaunchedEffect(speakStartTrigger, pendingTextToPrint) {
         if (speakStartTrigger && pendingTextToPrint.isNotEmpty() && !pendingTextPrinted) {
             pendingTextPrinted = true
+            // Печать финального текста началась — «Готовлю озвучку» больше не актуально.
+            // Сбрасываем сразу, не дожидаясь SPEAK_START/5-секундной страховки.
+            viewModel.setPreparingSpeech(false)
             var runningText = ""
             for (i in pendingTextToPrint.indices) {
                 runningText += pendingTextToPrint[i]
