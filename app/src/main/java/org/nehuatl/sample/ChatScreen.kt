@@ -280,6 +280,8 @@ fun ChatScreen(
     val isPermanentlyBlocked by viewModel.isPermanentlyBlocked.collectAsStateWithLifecycle(initialValue = false)
     val isSpeaking by viewModel.isSpeaking.collectAsStateWithLifecycle(initialValue = false)
     val isPreparingSpeech by viewModel.isPreparingSpeech.collectAsStateWithLifecycle(initialValue = false)
+    val organizerEntries by viewModel.organizerEntries.collectAsStateWithLifecycle(initialValue = emptyList())
+    val hasActiveAlarm = organizerEntries.isNotEmpty()
     val speakStartTrigger by viewModel.speakStartTrigger.collectAsStateWithLifecycle(initialValue = false)
     val robotGreetingSignal by viewModel.robotGreetingSignal.collectAsStateWithLifecycle(initialValue = false)
     val robotAutoAnimation by viewModel.robotAutoAnimation.collectAsStateWithLifecycle(initialValue = 0)
@@ -1553,6 +1555,7 @@ fun ChatScreen(
                         isLoadingModel = state is GenerationState.LoadingModel,
                         visionPhase = visionPhase,
                         isPreparingSpeech = isPreparingSpeech,
+                        hasActiveAlarm = hasActiveAlarm,
                         isJumping = robotJumpSignal,
                         modifier = Modifier.fillMaxSize()
                     )
@@ -1808,6 +1811,7 @@ fun ThinkingRobotAnimation(
     isLoadingModel: Boolean = false,
     visionPhase: VisionPhase = VisionPhase.IDLE,
     isPreparingSpeech: Boolean = false,
+    hasActiveAlarm: Boolean = false,
     headTilt: Float = 0f,
     headBob: Float = 0f,
     headNod: Float = 0f,
@@ -2678,9 +2682,19 @@ fun ThinkingRobotAnimation(
             val barTopLeft = pt(barsCenterX - barWidthU / 2f, barYU - barHeightU / 2f)
             val barSize = Size(barWidthU * u, barHeightU * u)
 
-            val isBarActive = isThinking && (leftBarsPhase.toInt() == i)
+        val isBarActive = isThinking && (leftBarsPhase.toInt() == i)
+
+            // Средняя полоска (i == 1): пульсирует зелёным, когда модель загружена
+            // и находится в покое (не думает, не говорит, не сжимает, не грузит).
+            val isMiddlePulse = i == 1 && isAiReady &&
+                    !isThinking && !isSpeaking && !isCompressing && !isLoadingModel
+
+            val middlePulseAlpha = if (isMiddlePulse) {
+                0.5f + 0.5f * ((kotlin.math.sin(pulse * 2f) + 1f) / 2f)
+            } else 1f
 
             val barColor = when {
+                isMiddlePulse -> Color(0xFF00E676).copy(alpha = middlePulseAlpha)
                 isBarActive -> Color(0xFF00E676)
                 isThinking -> Color(0xFF1E88E5)
                 isAiReady -> Color(0xFF1E88E5)
@@ -2910,12 +2924,21 @@ fun ThinkingRobotAnimation(
                 val indicatorCenterX = 46f
                 val indicatorCenterY = 140f
                 val indicatorRadius = 4f * u
-                val indicatorAlpha = if (isAiReady) (0.6f + 0.4f * indicatorPulse) else 1f
-                val indicatorColor = if (isAiReady) {
-                    Color(0xFF4CAF50).copy(alpha = indicatorAlpha)
+
+                // Часы показывают напоминания:
+                // - есть напоминание → медленно пульсируют зелёным;
+                // - нет напоминаний → синие как сейчас.
+                val alarmPulseAlpha = if (hasActiveAlarm) {
+                    0.5f + 0.5f * ((kotlin.math.sin(pulse * 1.2f) + 1f) / 2f)
+                } else 1f
+
+                val indicatorColor = if (hasActiveAlarm) {
+                    Color(0xFF4CAF50).copy(alpha = alarmPulseAlpha)
                 } else {
                     Color(0xFF2196F3)
                 }
+
+                val indicatorAlpha = if (hasActiveAlarm) alarmPulseAlpha else 1f
 
                 val clockW = indicatorRadius * 1.9f
                 val clockH = indicatorRadius * 1.5f
@@ -2976,10 +2999,10 @@ fun ThinkingRobotAnimation(
                 )
 
                 drawRoundRect(
-                    color = if (isAiReady) {
-                        Color(0xFFB9F6CA).copy(alpha = 0.9f)
-                    } else {
-                        darkGray
+                    color = when {
+                        hasActiveAlarm -> Color(0xFFB9F6CA).copy(alpha = alarmPulseAlpha)
+                        isAiReady -> Color(0xFFB9F6CA).copy(alpha = 0.9f)
+                        else -> darkGray
                     },
                     topLeft = clockTopLeft,
                     size = clockSize,
