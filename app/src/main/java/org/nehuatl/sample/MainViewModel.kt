@@ -2656,13 +2656,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-        fun sendUserMessage(
+       fun sendUserMessage(
         text: String,
-        imagePath: String? = null,
-        videoFrames: List<String>? = null,
-        videoDurationSec: Int = 0
+        imagePath: String? = null
     ) {
-     Log.d(TAG, "sendUserMessage: text='$text', imagePath=$imagePath, videoFrames=${videoFrames?.size ?: 0}, isVisionModelLoaded=$isVisionModelLoaded, isModelLoaded=${_isModelLoaded.value}, mode=${_currentMode.value}")
+          Log.d(TAG, "sendUserMessage: text='$text', imagePath=$imagePath, isVisionModelLoaded=$isVisionModelLoaded, isModelLoaded=${_isModelLoaded.value}, mode=${_currentMode.value}")
         if (_isCompressing.value) {
             appendSystemMessage("⏳ ИИ сжимает беседу, подождите...")
             return
@@ -2672,60 +2670,32 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             appendSystemMessage("⏳ Зрение загружается, подождите...")
             return
         }
-    if (text.isBlank() && imagePath == null && videoFrames.isNullOrEmpty()) return
+                   if (text.isBlank() && imagePath == null) return
 
         // Если загружена vision и пользователь пишет ТЕКСТ (не картинку и не видео) —
         // выгружаем vision и возвращаем текстовую модель.
-        // Дальше идём ТОЛЬКО после того, как текстовая модель реально загружена.
-        //
+        // Дальше идём ТОЛЬКО после того, как текстовая модель реально загружена.//
         // Для видео и картинок НЕ восстанавливаем текстовую — они идут в текущую
         // загруженную vision напрямую. Иначе получится двойная работа:
         // выгрузка vision → загрузка текстовой → снова выгрузка → загрузка vision.
-        val isMediaRequest = imagePath != null || !videoFrames.isNullOrEmpty()
+        val isMediaRequest = imagePath != null
         if (isVisionModelLoaded && !isMediaRequest) {
             Log.d(TAG, "Текстовое сообщение при загруженной vision — восстанавливаю текстовую")
             restorePreviousModelIfNeeded {
-                proceedWithUserMessage(text, imagePath, videoFrames, videoDurationSec)
+                proceedWithUserMessage(text, imagePath)
             }
             return
         }
 
-        proceedWithUserMessage(text, imagePath, videoFrames, videoDurationSec)
+        proceedWithUserMessage(text, imagePath)
     }
 
-    private fun proceedWithUserMessage(
+        private fun proceedWithUserMessage(
         text: String,
-        imagePath: String? = null,
-        videoFrames: List<String>? = null,
-        videoDurationSec: Int = 0
+        imagePath: String? = null
     ) {
-                       // Видео: кадры приходят списком. Пишем в чат метку, шлём в модель.
-        if (!videoFrames.isNullOrEmpty()) {
-            val label = "[Видео: ${videoDurationSec} сек, ${videoFrames.size} кадров]"
-            _chatHistory.value = _chatHistory.value + ChatMessage(
-                role = "user",
-                text = if (text.isBlank()) label else "$text $label",
-                hasImage = true
-            )
-            syncChatToFile()
-
-            when (_currentMode.value) {
-                AIMode.LOCAL -> {
-                    if (_isModelLoaded.value && currentMmprojPath != null) {
-                        generateLocalVideo(text, videoFrames)
-                    } else {
-                        ensureVisionModelLoaded {
-                            generateLocalVideo(text, videoFrames)
-                        }
-                    }
-                }
-                else -> appendSystemMessage("⚠️ Анализ видео доступен только в локальном режиме")
-            }
-            return
-        }
-
                // Если есть картинка без текста — не пишем пустое сообщение в чат,
-        // а сразу отправляем в модель
+               // а сразу отправляем в модель
                         if (text.isBlank() && imagePath != null) {
             Log.d(TAG, "Картинка без текста. imagePath=$imagePath, currentMmprojPath=$currentMmprojPath, isModelLoaded=${_isModelLoaded.value}")
             _chatHistory.value = _chatHistory.value + ChatMessage(
@@ -3093,56 +3063,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-            fun generateLocalVideo(prompt: String, frames: List<String>) {
-        if (llamaHelper.getContextId() == null) {
-            _state.value = GenerationState.Error("Модель не загружена.")
-            return
-        }
-
-        // Разные VLM — разный формат видео-входа.
-        // SmolVLM2 понимает видеопромпт и последовательность кадров.
-        // Остальные модели (Qwen-VL, Gemma-Vision и пр.) —
-        // обрабатывают кадры как набор изображений с обычным промптом.
-        val isSmolVLM = currentModelName.contains("smolvlm", ignoreCase = true) ||
-                        currentModelName.contains("smol-vlm", ignoreCase = true)
-
-        val effectivePrompt = if (prompt.isBlank()) {
-            if (isSmolVLM) {
-                "What is the main action or notable event happening in this segment? Describe it in one brief sentence."
-            } else {
-                "Опиши, что происходит на этих кадрах видео. Кратко, по сути."
-            }
-        } else {
-            prompt
-        }
-
-        val videoSystemPrompt = if (isSmolVLM) {
-            "Focus only on describing the key dramatic action or notable event occurring in this video segment. Look for notable actions of people or notable signals or novel elements in the video."
-        } else {
-            _systemPrompt.value
-        }
-
-        _generatedText.value = ""
-        _state.value = GenerationState.Generating(prompt = effectivePrompt, tokensGenerated = 0)
-
-        scope.launch {
-            try {
-                    llamaHelper.predict(
-                    prompt = effectivePrompt,
-                    imagePath = null,
-                    systemPrompt = videoSystemPrompt,
-                    maxTokens = maxTokens.value,
-                    chatHistory = emptyList(),
-                    temperature = temperature.value,
-                    repetitionPenalty = 1.15f,
-                    imagePaths = frames
-                )
-            } catch (e: Exception) {
-                _state.value = GenerationState.Error(e.message ?: "Unknown error")
-                _isModelLoaded.value = false
-            }
-        }
-    }
+          
     fun generateLocal(prompt: String, imagePath: String? = null) {
         Log.d(TAG, "generateLocal: prompt='$prompt', imagePath=$imagePath, contextId=${llamaHelper.getContextId()}, isVisionModelLoaded=$isVisionModelLoaded")
         val lowerPrompt = prompt.trim().lowercase()
@@ -3333,35 +3254,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    /**
-     * Принимает выбранный пользователем видеофайл (URI),
-     * извлекает из него кадры через VideoFrameExtractor,
-     * и отправляет их в модель как видео-запрос.
-     */
-    fun attachVideo(uri: Uri) {
-        val context = getApplication<Application>()
-        scope.launch(Dispatchers.IO) {
-            appendSystemMessage("🎬 Извлекаю кадры из видео...")
-            val result = VideoFrameExtractor.extract(context, uri) { extracted, total ->
-                if (extracted % 8 == 0 || extracted == total) {
-                    scope.launch(Dispatchers.Main) {
-                        updateLastSystemMessage("🎬 Извлекаю кадры: $extracted / $total")
-                    }
-                }
-            }
-            withContext(Dispatchers.Main) {
-                if (result == null) {
-                    appendSystemMessage("❌ Не удалось извлечь кадры из видео")
-                    return@withContext
-                }
-                sendUserMessage(
-                    text = "",
-                    videoFrames = result.framePaths,
-                    videoDurationSec = result.durationSeconds
-                )
-            }
-        }
-    }
+   
 
     /**
      * Декодирует любую картинку через BitmapFactory и пересохраняет её в JPEG.
