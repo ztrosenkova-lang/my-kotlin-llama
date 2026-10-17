@@ -10,7 +10,7 @@ import java.io.FileOutputStream
 
 object VideoFrameExtractor {
     private const val TAG = "VideoFrameExtractor"
-    private const val MAX_FRAMES = 64
+    private const val MAX_FRAMES = 24
     private const val MIN_ACCEPTABLE_FRAMES = 16
 
     data class Result(
