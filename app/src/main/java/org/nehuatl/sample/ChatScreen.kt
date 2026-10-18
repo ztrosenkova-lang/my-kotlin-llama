@@ -434,6 +434,20 @@ fun ChatScreen(
             viewModel.setChatScreenVisible(false)
         }
     }
+    val pdfPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.renderPdfToJpegAndSetImage(uri) { jpegPath ->
+                if (jpegPath != null) {
+                    // Отправляем как картинку с пустым текстом — модель опишет/прочитает
+                    viewModel.sendUserMessage("", jpegPath)
+                } else {
+                    viewModel.appendSystemMessage("❌ Не удалось прочитать PDF. Возможно, он защищён паролем или повреждён.")
+                }
+            }
+        }
+    }
 
     val speechRecognizerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -833,7 +847,7 @@ fun ChatScreen(
         )
     }
 
-        if (showMediaPicker) {
+                if (showMediaPicker) {
         MediaPickerDialog(
             onPickGallery = {
                 showMediaPicker = false
@@ -842,6 +856,10 @@ fun ChatScreen(
             onTakePhoto = {
                 showMediaPicker = false
                 onTakePhoto()
+            },
+            onPickPdf = {
+                showMediaPicker = false
+                pdfPickerLauncher.launch(arrayOf("application/pdf"))
             },
             onDismiss = { showMediaPicker = false },
             colors = colors,
@@ -8266,6 +8284,7 @@ private fun PromptInput(
 private fun MediaPickerDialog(
     onPickGallery: () -> Unit,
     onTakePhoto: () -> Unit,
+    onPickPdf: () -> Unit,
     onDismiss: () -> Unit,
     colors: AppColors,
     isDarkTheme: Boolean
@@ -8282,7 +8301,7 @@ private fun MediaPickerDialog(
                     color = colors.text
                 )
             },
-            text = {
+                        text = {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -8299,6 +8318,13 @@ private fun MediaPickerDialog(
                         label = "Камера",
                         description = "Сфотографировать прямо сейчас",
                         onClick = onTakePhoto,
+                        colors = colors
+                    )
+                    MediaOptionRow(
+                        emoji = "📄",
+                        label = "PDF",
+                        description = "Выбрать PDF и отправить первую страницу в модель",
+                        onClick = onPickPdf,
                         colors = colors
                     )
                 }
