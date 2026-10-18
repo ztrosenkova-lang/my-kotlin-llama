@@ -2906,10 +2906,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                            currentModelName.contains("hy_mt2", ignoreCase = true)
 
                 if (!isTranslator) {
-            when {
-                lowerText.contains("библиотека") -> {
-                    return
-                }
+                       when {
                 lowerText.contains(BRAIN_EDIT_COMMAND) -> {
                     showBrainEditor()
                     appendSystemMessage("🧠 Открыт редактор Brain.txt")
