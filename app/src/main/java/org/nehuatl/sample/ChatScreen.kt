@@ -7017,6 +7017,9 @@ private fun BibliotekaDialog(
     var bookSentences by remember { mutableStateOf<List<String>>(emptyList()) }
     var currentSentenceIndex by remember { mutableStateOf(-1) }
     var isReading by remember { mutableStateOf(false) }
+    var isPaused by remember { mutableStateOf(false) }
+    var fontSizeSp by remember { mutableStateOf(12) }
+    var inBookQuery by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val isSpeaking by viewModel.isSpeaking.collectAsStateWithLifecycle(initialValue = false)
 
@@ -7053,17 +7056,18 @@ private fun BibliotekaDialog(
         }
     }
 
-    LaunchedEffect(isReading, currentSentenceIndex, isSpeaking) {
-        if (isReading && currentSentenceIndex >= 0 && currentSentenceIndex < bookSentences.size) {
+       LaunchedEffect(isReading, isPaused, currentSentenceIndex, isSpeaking) {
+        if (isReading && !isPaused && currentSentenceIndex >= 0 && currentSentenceIndex < bookSentences.size) {
             if (!isSpeaking) {
                 delay(300)
-                if (isReading && !isSpeaking) {
+                if (isReading && !isPaused && !isSpeaking) {
                     val next = currentSentenceIndex + 1
                     if (next < bookSentences.size) {
                         currentSentenceIndex = next
                         viewModel.speakText(bookSentences[next])
                     } else {
                         isReading = false
+                        isPaused = false
                         currentSentenceIndex = -1
                     }
                 }
@@ -7179,13 +7183,22 @@ private fun BibliotekaDialog(
                             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Button(
+                                                        Button(
                                 onClick = {
-                                    if (isReading) {
-                                        isReading = false
-                                        currentSentenceIndex = -1
+                                    if (isReading && !isPaused) {
+                                        // Пауза — TTS стоп, но место сохраняем
+                                        isPaused = true
+                                        viewModel.abortLocal()
+                                    } else if (isReading && isPaused) {
+                                        // Продолжить с текущего места
+                                        isPaused = false
+                                        bookSentences.getOrNull(currentSentenceIndex)?.let { sentence ->
+                                            viewModel.speakText(sentence)
+                                        }
                                     } else {
+                                        // Начать с начала
                                         isReading = true
+                                        isPaused = false
                                         currentSentenceIndex = 0
                                         bookSentences.getOrNull(0)?.let { sentence ->
                                             viewModel.speakText(sentence)
@@ -7201,7 +7214,15 @@ private fun BibliotekaDialog(
                                 modifier = Modifier.weight(1f).height(38.dp),
                                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
                             ) {
-                                Text(if (isReading) "⏸ Стоп" else "▶ Слушать", color = colors.background, fontSize = 11.sp)
+                                Text(
+                                    when {
+                                        isReading && !isPaused -> "⏸ Пауза"
+                                        isReading && isPaused -> "▶ Продолжить"
+                                        else -> "▶ Слушать"
+                                    },
+                                    color = colors.background,
+                                    fontSize = 11.sp
+                                )
                             }
                             Button(
                                 onClick = {
@@ -7222,6 +7243,7 @@ private fun BibliotekaDialog(
                             Button(
                                 onClick = {
                                     isReading = false
+                                    isPaused = false
                                     currentSentenceIndex = -1
                                     selectedBook = null
                                     bookSentences = emptyList()
@@ -7236,6 +7258,32 @@ private fun BibliotekaDialog(
                                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
                             ) {
                                 Text("← Назад", color = colors.background, fontSize = 11.sp)
+                            }
+                                                       Button(
+                                onClick = { if (fontSizeSp > 10) fontSizeSp -= 1 },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = colors.accent,
+                                    contentColor = colors.background
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, colors.borderGray),
+                                modifier = Modifier.weight(0.6f).height(38.dp),
+                                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp)
+                            ) {
+                                Text("A−", color = colors.background, fontSize = 11.sp)
+                            }
+                            Button(
+                                onClick = { if (fontSizeSp < 20) fontSizeSp += 1 },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = colors.accent,
+                                    contentColor = colors.background
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, colors.borderGray),
+                                modifier = Modifier.weight(0.6f).height(38.dp),
+                                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp)
+                            ) {
+                                Text("A+", color = colors.background, fontSize = 11.sp)
                             }
                             Button(
                                 onClick = {
@@ -7254,22 +7302,54 @@ private fun BibliotekaDialog(
                                 Text("✕ Закрыть", color = colors.background, fontSize = 11.sp)
                             }
                         }
+                                                OutlinedTextField(
+                            value = inBookQuery,
+                            onValueChange = { query ->
+                                inBookQuery = query
+                                if (query.isNotBlank()) {
+                                    val idx = bookSentences.indexOfFirst { it.contains(query, ignoreCase = true) }
+                                    if (idx >= 0) {
+                                        currentSentenceIndex = idx
+                                        coroutineScope.launch { listState.animateScrollToItem(idx) }
+                                    }
+                                }
+                            },
+                            placeholder = { Text("Найти в книге...", color = colors.text.copy(alpha = 0.5f), fontSize = 11.sp) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = colors.text,
+                                unfocusedTextColor = colors.text,
+                                focusedContainerColor = colors.surfaceGray,
+                                unfocusedContainerColor = colors.surfaceGray,
+                                focusedBorderColor = colors.accent,
+                                unfocusedBorderColor = colors.borderGray,
+                                cursorColor = colors.accent
+                            )
+                        )
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.fillMaxWidth().height(400.dp)
                         ) {
-                            itemsIndexed(bookSentences) { index, sentence ->
+                                                       itemsIndexed(bookSentences) { index, sentence ->
                                 val isCurrent = index == currentSentenceIndex
                                 Text(
                                     text = sentence,
                                     color = if (isCurrent) colors.background else colors.text,
-                                    fontSize = 12.sp,
+                                    fontSize = fontSizeSp.sp,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .background(
                                             if (isCurrent) colors.accent.copy(alpha = 0.6f) else Color.Transparent,
                                             RoundedCornerShape(4.dp)
                                         )
+                                        .clickable {
+                                            currentSentenceIndex = index
+                                            if (isReading) {
+                                                isPaused = false
+                                                viewModel.speakText(sentence)
+                                            }
+                                        }
                                         .padding(6.dp)
                                 )
                             }
