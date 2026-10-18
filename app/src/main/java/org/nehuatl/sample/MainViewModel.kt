@@ -2723,13 +2723,16 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             .distinct()
     }
 
-        private fun buildSystemPrompt(commandType: String, prompt: String): String {
+        private fun currentDateContext(): String {
+        val dateFormat = SimpleDateFormat("d MMMM yyyy, EEEE, HH:mm", Locale("ru"))
+        return "Текущая дата и время: ${dateFormat.format(Date())}\n\n"
+    }
+
+    private fun buildSystemPrompt(commandType: String, prompt: String): String {
         val basePrompt = _systemPrompt.value
         val lowerPrompt = prompt.lowercase()
 
-        // Текущая дата — чтобы модель знала «сегодня» и могла считать «через 5 дней».
-        val dateFormat = SimpleDateFormat("d MMMM yyyy, EEEE, HH:mm", Locale("ru"))
-        val currentDate = dateFormat.format(Date())
+        val currentDate = currentDateContext()
 
         // Для модели-переводчика системный промпт не трогаем — это чистый промпт перевода
         val isTranslator = currentModelName.contains("Hy-MT2", ignoreCase = true) ||
@@ -3049,7 +3052,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         val fullSystemPrompt = if (isSearchCommand) {
             buildSystemPrompt("search", prompt)
         } else {
-            _systemPrompt.value
+            currentDateContext() + _systemPrompt.value
         }
 
         val cloudHistory = _chatHistory.value
@@ -3249,10 +3252,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     effectivePrompt.contains(CHAT_LOOKUP_COMMAND, ignoreCase = true)
         }
 
-                                  val fullSystemPrompt = if (isSearchCommand) {
+        val fullSystemPrompt = if (isSearchCommand) {
             buildSystemPrompt("search", effectivePrompt)
         } else {
-            _systemPrompt.value
+            currentDateContext() + _systemPrompt.value
         }
 
         // Умный режим: история без последнего сообщения (оно идёт как prompt)
