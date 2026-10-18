@@ -7075,7 +7075,7 @@ private fun BibliotekaDialog(
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
-                        placeholder = { Text("Поиск по книгам...", color = colors.text.copy(alpha = 0.5f), fontSize = 11.sp) },
+        placeholder = { Text("Поиск по названию или содержанию...", color = colors.text.copy(alpha = 0.5f), fontSize = 11.sp) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -7095,10 +7095,19 @@ private fun BibliotekaDialog(
                             } else if (searchResults.isEmpty()) {
                                 Text("Ничего не найдено", color = colors.text.copy(alpha = 0.6f), fontSize = 12.sp)
                             } else {
-                                LazyColumn(modifier = Modifier.fillMaxWidth().height(400.dp)) {
+                LazyColumn(modifier = Modifier.fillMaxWidth().height(400.dp)) {
                                     items(searchResults) { (title, snippet) ->
                                         Card(
-                                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 4.dp)
+                                                .clickable {
+                                                    val file = books.find { it.nameWithoutExtension == title }
+                                                    if (file != null) {
+                                                        selectedBook = file
+                                                        selectedPdfFile = if (file.name.endsWith(".pdf", true)) file else null
+                                                    }
+                                                },
                                             colors = CardDefaults.cardColors(containerColor = colors.surfaceGray),
                                             shape = RoundedCornerShape(10.dp)
                                         ) {
