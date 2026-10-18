@@ -210,25 +210,15 @@ object ModelCatalog {
             description = "Vision-модель от HuggingFace. 256M, ~300 МБ (модель + проектор). Контекст 8K. Умеет: описание картинок, OCR (распознавание текста), определение координат кнопок. Английский. Идеальна для слабых телефонов. Очень быстрая. "
         ),
 
-        // ===== 22. SMOLVLM2-500M — КАРТИНКИ, КАЧЕСТВЕННЕЕ =====
+                               // ===== 24. SMOLVLM2-2.2B — УМНЕЕ, ДЛЯ ТЕСТА КАРТИНОК =====
         ModelInfo(
-            id = "smolvlm2_500m",
-            name = "SmolVLM2-500M — картинки, качественнее",
-            url = "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
-            fileName = "smolvlm2_500m_q4.gguf",
-            mmprojUrl = "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-500M-Video-Instruct-f16.gguf",
-            mmprojFileName = "smolvlm2_500m_mmproj.gguf",
-            description = "Vision-модель от HuggingFace. 500M, ~500 МБ (модель + проектор). Контекст 4K. Умеет: описание картинок, визуальный Q&A, OCR, анализ сцен. Английский. Скорость 15–20 токенов/с на телефоне. Качество выше, чем у 256M. "
-        ),
-                // ===== 23. QWEN2-VL-2B — КАРТИНКИ, ЛЁГКАЯ (Q5_KM) =====
-        ModelInfo(
-            id = "qwen2_vl_2b",
-            name = "Qwen2-VL-2B — картинки, лёгкая",
-            url = "https://huggingface.co/bartowski/Qwen2-VL-2B-Instruct-GGUF/resolve/main/Qwen2-VL-2B-Instruct-Q5_K_M.gguf",
-            fileName = "qwen2_vl_2b_q5.gguf",
-            mmprojUrl = "https://huggingface.co/bartowski/Qwen2-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen2-VL-2B-Instruct-f16.gguf",
-            mmprojFileName = "qwen2_vl_2b_mmproj_q8.gguf",
-            description = "Qwen2-VL-2B от Alibaba. ~1.13 ГБ модель + ~1.33 МБ проектор = ~2.46 ГБ. Понимает картинки: описание, OCR (текст с фото), вопросы по изображению. Стандартная архитектура Qwen — работает в llama.cpp из коробки. Лёгкая и быстрая для телефона."
+            id = "smolvlm2_2_2b",
+            name = "SmolVLM2-2.2B — умнее, для теста картинок",
+            url = "https://huggingface.co/pierretokns/SmolVLM2-2.2B-Instruct-GGUF/resolve/main/SmolVLM2-2.2B-Instruct-Q4_K_M.gguf",
+            fileName = "smolvlm2_2_2b_q4.gguf",
+            mmprojUrl = "https://huggingface.co/pierretokns/SmolVLM2-2.2B-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-2.2B-Instruct-f16.gguf",
+            mmprojFileName = "smolvlm2_2_2b_mmproj_f16.gguf",
+            description = "SmolVLM2-2.2B — прямой апгрейд твоей текущей 500M. Архитектура та же (smolvlm), поэтому работает с текущим кодом LlamaHelper без правок промпта. Размер: 1.0 ГБ модель (Q4_K_M) + 832 МБ проектор (F16) = ~1.83 ГБ, влезает в лимит 2.5 ГБ. Параметров в 4.4 раза больше, чем у 500M, поэтому она значительно лучше понимает сцены и точнее читает текст на картинках. По бенчмаркам: OCRBench 72.9 (у 500M — 61.0), DocVQA 80.0 (у 500M — 70.5), TextVQA 73.2 (у 500M — 60.2), ScienceQA 90.0. Лицензия Apache 2.0, английский язык. Для теста вместо встроенной SmolVLM2-500M — то, что нужно: тот же формат, но заметно умнее."
         )
     )
 }
