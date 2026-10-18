@@ -855,11 +855,17 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             if (_isChatScreenVisible.value) {
                 // ChatScreen активен → печатная машинка
                 _pendingTextToPrint.value = fullText
-            } else {
+                        } else {
                 // ChatScreen в фоне (overlay) → сразу пишем ответ в историю
-        _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
+                _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
                 _pendingTextToPrint.value = ""
                 syncChatToFile()
+                // В overlay ChatScreen не активен, поэтому «готовлю озвучку»
+                // ставим здесь, а не в ChatScreen. Только если TTS включён —
+                // иначе флаг зависнет, потому что SPEAK_START не придёт.
+                if (isTtsEnabled) {
+                    _isPreparingSpeech.value = true
+                }
             }
             speakText(fullText)
 
@@ -959,14 +965,16 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 // isPreparingSpeech ставится из ChatScreen, когда крышка
                 // на голове робота закроется (см. LaunchedEffect в ChatScreen).
                 _pendingTextToPrint.value = fullText
-            } else {
+                        } else {
                 // ChatScreen в фоне (overlay) → сразу пишем ответ в историю
-        _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
+                _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
                 _pendingTextToPrint.value = ""
                 syncChatToFile()
+                if (isTtsEnabled) {
+                    _isPreparingSpeech.value = true
+                }
             }
             speakText(fullText)
-
             // Vision-запрос завершён — снимаем фазу VISION_READY,
             // иначе статус-бар и пояс робота будут вечно показывать
             // «Зрение готово — анализирую...» / «Зрение готово».
