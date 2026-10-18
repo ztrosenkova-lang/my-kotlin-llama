@@ -160,9 +160,10 @@ import kotlin.math.sqrt
 import androidx.compose.animation.core.keyframes
 import java.util.Random
 import androidx.compose.runtime.rememberUpdatedState
-import com.grizzi.bouquet.VerticalPDFReader
-import com.grizzi.bouquet.rememberVerticalPdfReaderState
-import com.grizzi.bouquet.ResourceType
+import com.rizzi.bouquet.VerticalPDFReader
+import com.rizzi.bouquet.rememberVerticalPdfReaderState
+import com.rizzi.bouquet.ResourceType
+import androidx.core.net.toUri
 // Длительность плавной смены темы. 600–900 мс — комфортно.
 // Хочешь затянуть — ставь 1200–1500. Больше 1500 — уже раздражает.
 private const val THEME_ANIMATION_MS = 4500
