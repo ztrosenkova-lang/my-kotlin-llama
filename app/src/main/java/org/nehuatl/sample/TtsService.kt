@@ -233,10 +233,15 @@ class TtsService : Service() {
         }
     }
 
-    private fun stopSpeaking() {
+        private fun stopSpeaking() {
         try {
-            audioTrack?.stop()
-            audioTrack?.release()
+            audioTrack?.let { track ->
+                if (track.playState == AudioTrack.PLAYSTATE_PLAYING || track.playState == AudioTrack.PLAYSTATE_PAUSED) {
+                    track.pause()
+                    track.flush()
+                }
+                track.release()
+            }
             audioTrack = null
         } catch (e: Exception) {
             Log.e(TAG, "Stop error: ${e.message}", e)
