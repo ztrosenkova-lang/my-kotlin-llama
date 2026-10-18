@@ -19,6 +19,10 @@ import android.os.VibratorManager
 import android.provider.Settings
 import android.speech.tts.TextToSpeech
 import android.util.Log
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.graphics.pdf.PdfRenderer
+import android.os.ParcelFileDescriptor
 import com.google.mlkit.nl.languageid.LanguageIdentification
 import com.google.mlkit.nl.languageid.LanguageIdentifier
 import androidx.lifecycle.AndroidViewModel
@@ -3474,11 +3478,64 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out)
             }
             bitmap.recycle()
-            Log.d(TAG, "convertImageToJpeg: ${imageUriString.take(60)} -> ${file.absolutePath}")
+        Log.d(TAG, "convertImageToJpeg: ${imageUriString.take(60)} -> ${file.absolutePath}")
             "file://${file.absolutePath}"
         } catch (e: Exception) {
             Log.e(TAG, "convertImageToJpeg failed: ${e.message}", e)
             null
+        }
+    }
+
+    fun renderPdfToJpegAndSetImage(pdfUri: Uri, onResult: (String?) -> Unit) {
+        scope.launch(Dispatchers.IO) {
+            var pfd: android.os.ParcelFileDescriptor? = null
+            var renderer: android.graphics.pdf.PdfRenderer? = null
+            var page: android.graphics.pdf.PdfRenderer.Page? = null
+            try {
+                pfd = contentResolver.openFileDescriptor(pdfUri, "r")
+                if (pfd == null) {
+                    withContext(Dispatchers.Main) { onResult(null) }
+                    return@launch
+                }
+                renderer = android.graphics.pdf.PdfRenderer(pfd)
+                if (renderer.pageCount == 0) {
+                    withContext(Dispatchers.Main) { onResult(null) }
+                    return@launch
+                }
+                page = renderer.openPage(0)
+
+                val scale = 2
+                val bitmap = android.graphics.Bitmap.createBitmap(
+                    page.width * scale,
+                    page.height * scale,
+                    android.graphics.Bitmap.Config.ARGB_8888
+                )
+                bitmap.eraseColor(android.graphics.Color.WHITE)
+                page.render(bitmap, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+
+                val cacheDir = File(getApplication<Application>().cacheDir, "vision_input").apply {
+                    if (exists()) listFiles()?.forEach { it.delete() } else mkdirs()
+                }
+                val file = File(cacheDir, "pdf_page_${System.currentTimeMillis()}.jpg")
+                FileOutputStream(file).use { out ->
+                    bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out)
+                }
+                bitmap.recycle()
+
+                withContext(Dispatchers.Main) {
+                    onResult("file://${file.absolutePath}")
+                }
+            } catch (e: SecurityException) {
+                Log.e(TAG, "PDF защищён паролем: ${e.message}")
+                withContext(Dispatchers.Main) { onResult(null) }
+            } catch (e: Exception) {
+                Log.e(TAG, "renderPdfToJpeg failed: ${e.message}", e)
+                withContext(Dispatchers.Main) { onResult(null) }
+            } finally {
+                try { page?.close() } catch (_: Exception) {}
+                try { renderer?.close() } catch (_: Exception) {}
+                try { pfd?.close() } catch (_: Exception) {}
+            }
         }
     }
 
