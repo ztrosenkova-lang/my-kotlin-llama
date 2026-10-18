@@ -3421,8 +3421,8 @@ fun ThinkingRobotAnimation(
             visionPhase == VisionPhase.RESTORING_TEXT -> "Возвращаю текст..."
             visionPhase == VisionPhase.TEXT_RESTORED -> "Текст готов"
             isPreparingSpeech -> "Готовлю озвучку..."
-            isThinking -> "ИИ думает..."
             isCompressing -> "Сжимаю беседу..."
+            isThinking -> "ИИ думает..."
             isLoadingModel -> "Загружаю модель..."
             isListening -> "Слушаю..."
             else -> null
