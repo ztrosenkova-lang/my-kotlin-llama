@@ -7008,6 +7008,7 @@ private fun BibliotekaDialog(
     isDarkTheme: Boolean
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     var books by remember { mutableStateOf<List<File>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
     var searchResults by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
