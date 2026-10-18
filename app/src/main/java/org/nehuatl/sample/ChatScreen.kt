@@ -7144,7 +7144,7 @@ private fun BibliotekaDialog(
                             )
                         }
                     } else {
-                        Row(
+                                               Row(
                             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
@@ -7161,24 +7161,32 @@ private fun BibliotekaDialog(
                                         }
                                     }
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = colors.accent),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                                modifier = Modifier.height(32.dp)
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = colors.accent,
+                                    contentColor = colors.background
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, colors.borderGray),
+                                modifier = Modifier.weight(1f).height(38.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
                             ) {
-                                Text(if (isReading) "⏸ Стоп" else "▶ Слушать", color = colors.background, fontSize = 10.sp)
+                                Text(if (isReading) "⏸ Стоп" else "▶ Слушать", color = colors.background, fontSize = 11.sp)
                             }
                             Button(
                                 onClick = {
-                                    (context as? MainActivity)?.forceStartFloatingAndMinimize()
+                                    val activity = context.findActivity()
+                                    activity?.forceStartFloatingAndMinimize()
                                 },
-                                enabled = isReading,
-                                colors = ButtonDefaults.buttonColors(containerColor = colors.borderGray),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                                modifier = Modifier.height(32.dp)
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = colors.accent,
+                                    contentColor = colors.background
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, colors.borderGray),
+                                modifier = Modifier.weight(1f).height(38.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
                             ) {
-                                Text("⬇ Свернуть", color = colors.text, fontSize = 10.sp)
+                                Text("⬇ Свернуть", color = colors.background, fontSize = 11.sp)
                             }
                             Button(
                                 onClick = {
@@ -7187,15 +7195,34 @@ private fun BibliotekaDialog(
                                     selectedBook = null
                                     bookSentences = emptyList()
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = colors.borderGray),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                                modifier = Modifier.height(32.dp)
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = colors.accent,
+                                    contentColor = colors.background
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, colors.borderGray),
+                                modifier = Modifier.weight(1f).height(38.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
                             ) {
-                                Text("← Назад", color = colors.text, fontSize = 10.sp)
+                                Text("← Назад", color = colors.background, fontSize = 11.sp)
+                            }
+                            Button(
+                                onClick = {
+                                    isReading = false
+                                    onDismiss()
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = colors.accent,
+                                    contentColor = colors.background
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, colors.borderGray),
+                                modifier = Modifier.weight(1f).height(38.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                            ) {
+                                Text("✕ Закрыть", color = colors.background, fontSize = 11.sp)
                             }
                         }
-
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.fillMaxWidth().height(400.dp)
@@ -7219,8 +7246,10 @@ private fun BibliotekaDialog(
                     }
                 }
             },
-                        confirmButton = {
-                Row(
+            confirmButton = {
+                if (selectedBook != null && selectedBook?.name?.endsWith(".txt", ignoreCase = true) == true) {
+                    // Для txt-книги кнопки уже внутри Row — нижнюю не показываем
+                } else Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -8273,7 +8302,14 @@ private fun MediaPickerDialog(
         )
     }
 }
-
+private fun android.content.Context.findActivity(): MainActivity? {
+    var ctx = this
+    while (ctx is android.content.ContextWrapper) {
+        if (ctx is MainActivity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
+}
 @Composable
 private fun MediaOptionRow(
     emoji: String,
