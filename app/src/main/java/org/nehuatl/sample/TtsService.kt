@@ -212,7 +212,13 @@ class TtsService : Service() {
                     sendBroadcast(startIntent)
                     Log.d(TAG, "SPEAK_START broadcast sent")
 
-                    audioTrack?.write(audio.samples, 0, audio.samples.size, AudioTrack.WRITE_BLOCKING)
+                    val chunkSize = 4096
+                    var offset = 0
+                    while (offset < audio.samples.size && audioTrack != null) {
+                        val count = minOf(chunkSize, audio.samples.size - offset)
+                        audioTrack?.write(audio.samples, offset, count, AudioTrack.WRITE_BLOCKING)
+                        offset += count
+                    }
                     audioTrack?.stop()
                     audioTrack?.release()
                     audioTrack = null
