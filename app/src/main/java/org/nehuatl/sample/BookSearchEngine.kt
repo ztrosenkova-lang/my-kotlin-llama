@@ -50,7 +50,13 @@ class BookSearchEngine(private val indexDir: File) {
         try {
             val searcher = IndexSearcher(reader)
             val parser = QueryParser("content", analyzer)
-            val q = parser.parse(query) ?: return emptyList()
+            val titleParser = QueryParser("title", analyzer)
+            val contentQuery = parser.parse(query)
+            val titleQuery = titleParser.parse(query)
+            val q = org.gnit.lucenekmp.search.BooleanQuery.Builder()
+                .add(contentQuery, org.gnit.lucenekmp.search.BooleanClause.Occur.SHOULD)
+                .add(titleQuery, org.gnit.lucenekmp.search.BooleanClause.Occur.SHOULD)
+                .build()
             val hits = searcher.search(q, limit)
             val results = mutableListOf<Pair<String, String>>()
             for (hit in hits.scoreDocs) {
