@@ -1649,8 +1649,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         try {
             val assetDir = "biblioteka"
             val assetList = getApplication<Application>().assets.list(assetDir) ?: emptyArray()
-            for (fileName in assetList) {
-                if (!fileName.endsWith(".txt", ignoreCase = true)) continue
+                        for (fileName in assetList) {
+                if (!fileName.endsWith(".txt", ignoreCase = true) && !fileName.endsWith(".pdf", ignoreCase = true)) continue
                 val destFile = File(bibliotekaDir, fileName)
                 if (!destFile.exists()) {
                     getApplication<Application>().assets.open("$assetDir/$fileName").use { input ->
@@ -1667,7 +1667,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     fun listBibliotekaBooks(): List<File> {
         ensureBibliotekaBooks()
         return bibliotekaDir.listFiles()
-            ?.filter { it.isFile && it.name.endsWith(".txt", ignoreCase = true) }
+            ?.filter { it.isFile && (it.name.endsWith(".txt", ignoreCase = true) || it.name.endsWith(".pdf", ignoreCase = true)) }
             ?.sortedBy { it.name.lowercase() }
             ?: emptyList()
     }
