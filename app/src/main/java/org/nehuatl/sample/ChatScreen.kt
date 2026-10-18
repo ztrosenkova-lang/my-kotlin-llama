@@ -160,6 +160,9 @@ import kotlin.math.sqrt
 import androidx.compose.animation.core.keyframes
 import java.util.Random
 import androidx.compose.runtime.rememberUpdatedState
+import com.grizzi.bouquet.VerticalPDFReader
+import com.grizzi.bouquet.rememberVerticalPdfReaderState
+import com.grizzi.bouquet.ResourceType
 // Длительность плавной смены темы. 600–900 мс — комфортно.
 // Хочешь затянуть — ставь 1200–1500. Больше 1500 — уже раздражает.
 private const val THEME_ANIMATION_MS = 4500
@@ -6987,6 +6990,7 @@ private fun BibliotekaDialog(
     var searchResults by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
     var isSearching by remember { mutableStateOf(false) }
     var selectedBook by remember { mutableStateOf<File?>(null) }
+    var selectedPdfFile by remember { mutableStateOf<File?>(null) }
     var bookSentences by remember { mutableStateOf<List<String>>(emptyList()) }
     var currentSentenceIndex by remember { mutableStateOf(-1) }
     var isReading by remember { mutableStateOf(false) }
@@ -7108,11 +7112,11 @@ private fun BibliotekaDialog(
                         } else {
                             LazyColumn(modifier = Modifier.fillMaxWidth().height(400.dp)) {
                                 items(books) { file ->
-                                    Card(
+                                        Card(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .padding(vertical = 4.dp)
-                                            .clickable { selectedBook = file },
+                                            .clickable { selectedBook = file; selectedPdfFile = if (file.name.endsWith(".pdf", true)) file else null },
                                         colors = CardDefaults.cardColors(containerColor = colors.surfaceGray),
                                         shape = RoundedCornerShape(10.dp)
                                     ) {
@@ -7125,6 +7129,35 @@ private fun BibliotekaDialog(
                                     }
                                 }
                             }
+                        }
+                                        } else if (selectedBook?.name?.endsWith(".pdf", ignoreCase = true) == true) {
+                        // PDF-просмотр
+                        val pdfState = rememberVerticalPdfReaderState(
+                            resource = ResourceType.Local(selectedBook!!.toUri()),
+                            isZoomEnable = true
+                        )
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        selectedBook = null
+                                        selectedPdfFile = null
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = colors.borderGray),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                    modifier = Modifier.height(32.dp)
+                                ) {
+                                    Text("← Назад", color = colors.text, fontSize = 10.sp)
+                                }
+                            }
+                            VerticalPDFReader(
+                                state = pdfState,
+                                modifier = Modifier.fillMaxWidth().height(500.dp)
+                            )
                         }
                     } else {
                         Row(
