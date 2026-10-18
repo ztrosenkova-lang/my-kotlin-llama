@@ -7059,7 +7059,7 @@ private fun BibliotekaDialog(
        LaunchedEffect(isReading, isPaused, currentSentenceIndex, isSpeaking) {
         if (isReading && !isPaused && currentSentenceIndex >= 0 && currentSentenceIndex < bookSentences.size) {
             if (!isSpeaking) {
-                delay(300)
+                delay(100)
                 if (isReading && !isPaused && !isSpeaking) {
                     val next = currentSentenceIndex + 1
                     if (next < bookSentences.size) {
