@@ -7137,27 +7137,10 @@ private fun BibliotekaDialog(
                             resource = ResourceType.Local(selectedBook!!.toUri()),
                             isZoomEnable = true
                         )
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Button(
-                                    onClick = {
-                                        selectedBook = null
-                                        selectedPdfFile = null
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = colors.borderGray),
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                                    modifier = Modifier.height(32.dp)
-                                ) {
-                                    Text("← Назад", color = colors.text, fontSize = 10.sp)
-                                }
-                            }
+                    Column(modifier = Modifier.fillMaxWidth()) {
                             VerticalPDFReader(
-                                state = pdfState,
-                                modifier = Modifier.fillMaxWidth().height(500.dp)
+                            state = pdfState,
+                            modifier = Modifier.fillMaxWidth().height(500.dp)
                             )
                         }
                     } else {
@@ -7236,15 +7219,48 @@ private fun BibliotekaDialog(
                     }
                 }
             },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        isReading = false
-                        onDismiss()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = colors.accent)
+                        confirmButton = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Закрыть", color = colors.background)
+                    if (selectedBook != null) {
+                        Button(
+                            onClick = {
+                                isReading = false
+                                currentSentenceIndex = -1
+                                selectedBook = null
+                                selectedPdfFile = null
+                                bookSentences = emptyList()
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = colors.accent,
+                                contentColor = colors.background
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, colors.borderGray),
+                            modifier = Modifier.weight(1f).height(38.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                        ) {
+                            Text("← Назад", color = colors.background, fontSize = 12.sp)
+                        }
+                    }
+                    Button(
+                        onClick = {
+                            isReading = false
+                            onDismiss()
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = colors.accent,
+                            contentColor = colors.background
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, colors.borderGray),
+                        modifier = Modifier.weight(1f).height(38.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                    ) {
+                        Text("Закрыть", color = colors.background, fontSize = 12.sp)
+                    }
                 }
             },
             dismissButton = null
