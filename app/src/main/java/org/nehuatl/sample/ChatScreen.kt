@@ -480,8 +480,8 @@ fun ChatScreen(
                                 context.startService(stopIntent)
                             }
                         }
-                        command == "библиотека" -> {
-                            showBiblioteka = true
+                       command == "библиотека" -> {
+                            viewModel.sendUserMessage(recognizedText)
                         }
                         command == "умный режим" -> {
                             viewModel.enableSmartMode()
@@ -1229,8 +1229,12 @@ fun ChatScreen(
                             viewModel.enableSmartMode()
                             promptInput = ""
                         }
-                                                command == "режим калькулятора" -> {
+                                    command == "режим калькулятора" -> {
                             viewModel.disableSmartMode()
+                            promptInput = ""
+                        }
+                                promptInput.trim() == "--пароль Связность--" -> {
+                            showBiblioteka = true
                             promptInput = ""
                         }
                         command == "редактировать органайзер" -> {
