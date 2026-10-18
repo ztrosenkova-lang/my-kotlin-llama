@@ -107,6 +107,8 @@ dependencies {
     implementation("org.gnit.lucene-kmp:lucene-kmp-core:10.2.0-alpha14")
     implementation("org.gnit.lucene-kmp:lucene-kmp-queryparser:10.2.0-alpha14")
 
+    implementation("io.github.grizzi91:bouquet:1.1.2")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
