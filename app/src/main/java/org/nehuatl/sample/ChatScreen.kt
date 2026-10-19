@@ -7021,6 +7021,8 @@ private fun BibliotekaDialog(
     var selectedPdfFile by remember { mutableStateOf<File?>(null) }
     var bookSentences by remember { mutableStateOf<List<String>>(emptyList()) }
     var currentSentenceIndex by remember { mutableStateOf(-1) }
+    var bookChunks by remember { mutableStateOf<List<String>>(emptyList()) }
+    var currentChunkIndex by remember { mutableStateOf(-1) }
     var isReading by remember { mutableStateOf(false) }
     var isPaused by remember { mutableStateOf(false) }
     var fontSizeSp by remember { mutableStateOf(12) }
@@ -7052,27 +7054,34 @@ private fun BibliotekaDialog(
             bookSentences = text.split(Regex("(?<=[.!?])\\s+|\\n{2,}"))
                 .map { it.trim() }
                 .filter { it.isNotEmpty() }
+            bookChunks = buildBookChunks(bookSentences, BOOK_CHUNK_TARGET_CHARS)
+            currentChunkIndex = -1
         }
     }
 
-    LaunchedEffect(currentSentenceIndex, isReading) {
-        if (isReading && currentSentenceIndex in bookSentences.indices) {
-            listState.animateScrollToItem(currentSentenceIndex)
+    LaunchedEffect(currentChunkIndex, isReading) {
+        if (isReading && currentChunkIndex >= 0) {
+            val firstSentence = firstSentenceOfChunk(currentChunkIndex, bookChunks, bookSentences)
+            if (firstSentence in bookSentences.indices) {
+                listState.animateScrollToItem(firstSentence)
+            }
         }
     }
 
-       LaunchedEffect(isReading, isPaused, currentSentenceIndex, isSpeaking) {
-        if (isReading && !isPaused && currentSentenceIndex >= 0 && currentSentenceIndex < bookSentences.size) {
+    LaunchedEffect(isReading, isPaused, currentChunkIndex, isSpeaking) {
+        if (isReading && !isPaused && currentChunkIndex >= 0 && currentChunkIndex < bookChunks.size) {
             if (!isSpeaking) {
-                delay(100)
+                delay(50)
                 if (isReading && !isPaused && !isSpeaking) {
-                    val next = currentSentenceIndex + 1
-                    if (next < bookSentences.size) {
-                        currentSentenceIndex = next
-                        viewModel.speakText(bookSentences[next])
+                    val next = currentChunkIndex + 1
+                    if (next < bookChunks.size) {
+                        currentChunkIndex = next
+                        currentSentenceIndex = firstSentenceOfChunk(next, bookChunks, bookSentences)
+                        viewModel.speakText(bookChunks[next])
                     } else {
                         isReading = false
                         isPaused = false
+                        currentChunkIndex = -1
                         currentSentenceIndex = -1
                     }
                 }
@@ -7106,23 +7115,7 @@ private fun BibliotekaDialog(
             },
                         text = {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-        placeholder = { Text("Поиск по названию или содержанию...", color = colors.text.copy(alpha = 0.5f), fontSize = 11.sp) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = colors.text,
-                            unfocusedTextColor = colors.text,
-                            focusedContainerColor = colors.surfaceGray,
-                            unfocusedContainerColor = colors.surfaceGray,
-                            focusedBorderColor = colors.accent,
-                            unfocusedBorderColor = colors.borderGray,
-                            cursorColor = colors.accent
-                        )
-                    )
-                                       if (selectedBook == null) {
+                        if (selectedBook == null) {
                         if (searchQuery.isNotBlank()) {
                             if (isSearching) {
                                 CircularProgressIndicator(color = colors.accent, modifier = Modifier.size(24.dp))
@@ -7238,29 +7231,32 @@ private fun BibliotekaDialog(
                             modifier = Modifier.fillMaxWidth().height(500.dp)
                         )
                     } else {
-                                               Row(
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                                                                      Row(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                                                        Button(
+                            Button(
                                 onClick = {
                                     if (isReading && !isPaused) {
-                                        // Пауза — TTS стоп, но место сохраняем
                                         isPaused = true
                                         viewModel.abortLocal()
                                     } else if (isReading && isPaused) {
-                                        // Продолжить с текущего места
                                         isPaused = false
-                                        bookSentences.getOrNull(currentSentenceIndex)?.let { sentence ->
-                                            viewModel.speakText(sentence)
+                                        bookChunks.getOrNull(currentChunkIndex)?.let { chunk ->
+                                            viewModel.speakText(chunk)
                                         }
                                     } else {
-                                        // Начать с начала
                                         isReading = true
                                         isPaused = false
-                                        currentSentenceIndex = 0
-                                        bookSentences.getOrNull(0)?.let { sentence ->
-                                            viewModel.speakText(sentence)
+                                        val startChunk = findChunkForSentence(
+                                            currentSentenceIndex, bookChunks, bookSentences
+                                        ).takeIf { it >= 0 } ?: 0
+                                        currentChunkIndex = startChunk
+                                        currentSentenceIndex = firstSentenceOfChunk(
+                                            startChunk, bookChunks, bookSentences
+                                        )
+                                        bookChunks.getOrNull(startChunk)?.let { chunk ->
+                                            viewModel.speakText(chunk)
                                         }
                                     }
                                 },
@@ -7270,7 +7266,7 @@ private fun BibliotekaDialog(
                                 ),
                                 shape = RoundedCornerShape(10.dp),
                                 border = BorderStroke(1.dp, colors.borderGray),
-                                modifier = Modifier.weight(1f).height(38.dp),
+                                modifier = Modifier.weight(2f).height(38.dp),
                                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
                             ) {
                                 Text(
@@ -7284,41 +7280,6 @@ private fun BibliotekaDialog(
                                 )
                             }
                             Button(
-                                onClick = {
-                                    val activity = context.findActivity()
-                                    activity?.forceStartFloatingAndMinimize()
-                                },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = colors.accent,
-                                    contentColor = colors.background
-                                ),
-                                shape = RoundedCornerShape(10.dp),
-                                border = BorderStroke(1.dp, colors.borderGray),
-                                modifier = Modifier.weight(1f).height(38.dp),
-                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
-                            ) {
-                                Text("⬇ Свернуть", color = colors.background, fontSize = 11.sp)
-                            }
-                            Button(
-                                onClick = {
-                                    isReading = false
-                                    isPaused = false
-                                    currentSentenceIndex = -1
-                                    selectedBook = null
-                                    bookSentences = emptyList()
-                                },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = colors.accent,
-                                    contentColor = colors.background
-                                ),
-                                shape = RoundedCornerShape(10.dp),
-                                border = BorderStroke(1.dp, colors.borderGray),
-                                modifier = Modifier.weight(1f).height(38.dp),
-                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
-                            ) {
-                                Text("← Назад", color = colors.background, fontSize = 11.sp)
-                            }
-                                                       Button(
                                 onClick = { if (fontSizeSp > 10) fontSizeSp -= 1 },
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = colors.accent,
@@ -7326,10 +7287,10 @@ private fun BibliotekaDialog(
                                 ),
                                 shape = RoundedCornerShape(10.dp),
                                 border = BorderStroke(1.dp, colors.borderGray),
-                                modifier = Modifier.weight(0.6f).height(38.dp),
+                                modifier = Modifier.weight(1f).height(38.dp),
                                 contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp)
                             ) {
-                                Text("A−", color = colors.background, fontSize = 11.sp)
+                                Text("A−", color = colors.background, fontSize = 14.sp)
                             }
                             Button(
                                 onClick = { if (fontSizeSp < 20) fontSizeSp += 1 },
@@ -7339,28 +7300,13 @@ private fun BibliotekaDialog(
                                 ),
                                 shape = RoundedCornerShape(10.dp),
                                 border = BorderStroke(1.dp, colors.borderGray),
-                                modifier = Modifier.weight(0.6f).height(38.dp),
+                                modifier = Modifier.weight(1f).height(38.dp),
                                 contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp)
                             ) {
-                                Text("A+", color = colors.background, fontSize = 11.sp)
-                            }
-                            Button(
-                                onClick = {
-                                    isReading = false
-                                    onDismiss()
-                                },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = colors.accent,
-                                    contentColor = colors.background
-                                ),
-                                shape = RoundedCornerShape(10.dp),
-                                border = BorderStroke(1.dp, colors.borderGray),
-                                modifier = Modifier.weight(1f).height(38.dp),
-                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
-                            ) {
-                                Text("✕ Закрыть", color = colors.background, fontSize = 11.sp)
+                                Text("A+", color = colors.background, fontSize = 14.sp)
                             }
                         }
+
                                                 OutlinedTextField(
                             value = inBookQuery,
                             onValueChange = { query ->
@@ -7386,12 +7332,15 @@ private fun BibliotekaDialog(
                                 cursorColor = colors.accent
                             )
                         )
-                        LazyColumn(
+                         LazyColumn(
                             state = listState,
                             modifier = Modifier.fillMaxWidth().height(400.dp)
                         ) {
-                                                       itemsIndexed(bookSentences) { index, sentence ->
-                                val isCurrent = index == currentSentenceIndex
+                itemsIndexed(bookSentences) { index, sentence ->
+                                val isCurrent = index == currentSentenceIndex ||
+                                    (currentChunkIndex >= 0 &&
+                                     currentChunkIndex < bookChunks.size &&
+                                     isSentenceInChunk(index, currentChunkIndex, bookChunks, bookSentences))
                                 Text(
                                     text = sentence,
                                     color = if (isCurrent) colors.background else colors.text,
@@ -7404,13 +7353,77 @@ private fun BibliotekaDialog(
                                         )
                                         .clickable {
                                             currentSentenceIndex = index
+                                            val chunkIdx = findChunkForSentence(index, bookChunks, bookSentences)
+                                            currentChunkIndex = chunkIdx
                                             if (isReading) {
                                                 isPaused = false
-                                                viewModel.speakText(sentence)
+                                                bookChunks.getOrNull(chunkIdx)?.let { chunk ->
+                                                    viewModel.speakText(chunk)
+                                                }
                                             }
                                         }
                                         .padding(6.dp)
                                 )
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    val activity = context.findActivity()
+                                    activity?.forceStartFloatingAndMinimize()
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = colors.accent,
+                                    contentColor = colors.background
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, colors.borderGray),
+                                modifier = Modifier.weight(1f).height(38.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                            ) {
+                                Text("⬇ Свернуть", color = colors.background, fontSize = 11.sp)
+                            }
+                            Button(
+                                onClick = {
+                                    isReading = false
+                                    isPaused = false
+                                    currentSentenceIndex = -1
+                                    currentChunkIndex = -1
+                                    selectedBook = null
+                                    bookSentences = emptyList()
+                                    bookChunks = emptyList()
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = colors.accent,
+                                    contentColor = colors.background
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, colors.borderGray),
+                                modifier = Modifier.weight(1f).height(38.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                            ) {
+                                Text("← Назад", color = colors.background, fontSize = 11.sp)
+                            }
+                            Button(
+                                onClick = {
+                                    isReading = false
+                                    currentChunkIndex = -1
+                                    onDismiss()
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = colors.accent,
+                                    contentColor = colors.background
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, colors.borderGray),
+                                modifier = Modifier.weight(1f).height(38.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                            ) {
+                                Text("✕ Закрыть", color = colors.background, fontSize = 11.sp)
                             }
                         }
                     }
@@ -7648,6 +7661,92 @@ private fun PdfPageItem(
             }
         }
     }
+}
+
+// ========== БЛОКИ ДЛЯ ОЗВУЧКИ КНИГИ ==========
+// Один блок = несколько предложений, склеенных по ~targetChars символов.
+// Синтез идёт на блок, а не на каждое предложение — паузы между
+// предложениями внутри блока исчезают. Паузы остаются только на границах
+// блоков (раз в ~450 символов). Склейка — по границам предложений.
+
+private const val BOOK_CHUNK_TARGET_CHARS = 450
+
+private fun buildBookChunks(
+    sentences: List<String>,
+    targetChars: Int = BOOK_CHUNK_TARGET_CHARS
+): List<String> {
+    if (sentences.isEmpty()) return emptyList()
+    val chunks = mutableListOf<String>()
+    val sb = StringBuilder()
+    for (s in sentences) {
+        if (sb.isNotEmpty() && sb.length + s.length + 1 > targetChars) {
+            chunks.add(sb.toString().trim())
+            sb.setLength(0)
+        }
+        if (sb.isNotEmpty()) sb.append(' ')
+        sb.append(s)
+    }
+    if (sb.isNotEmpty()) chunks.add(sb.toString().trim())
+    return chunks
+}
+
+private fun findChunkForSentence(
+    sentenceIndex: Int,
+    chunks: List<String>,
+    sentences: List<String>
+): Int {
+    if (sentenceIndex < 0 || sentences.isEmpty() || chunks.isEmpty()) return -1
+    var cursor = 0
+    for ((chunkIdx, chunk) in chunks.withIndex()) {
+        var remaining = chunk.length
+        while (cursor < sentences.size && remaining > 0) {
+            val s = sentences[cursor]
+            if (cursor == sentenceIndex) return chunkIdx
+            remaining -= s.length
+            if (remaining > 0) remaining -= 1
+            cursor++
+        }
+        if (cursor > sentenceIndex) return chunkIdx
+    }
+    return chunks.lastIndex.coerceAtLeast(0)
+}
+
+private fun firstSentenceOfChunk(
+    chunkIndex: Int,
+    chunks: List<String>,
+    sentences: List<String>
+): Int {
+    if (chunkIndex < 0 || chunks.isEmpty() || sentences.isEmpty()) return -1
+    var cursor = 0
+    for (ci in 0 until chunkIndex) {
+        var remaining = chunks[ci].length
+        while (cursor < sentences.size && remaining > 0) {
+            remaining -= sentences[cursor].length
+            if (remaining > 0) remaining -= 1
+            cursor++
+        }
+    }
+    return if (cursor in sentences.indices) cursor else -1
+}
+
+private fun isSentenceInChunk(
+    sentenceIndex: Int,
+    chunkIndex: Int,
+    chunks: List<String>,
+    sentences: List<String>
+): Boolean {
+    if (chunkIndex < 0 || chunkIndex >= chunks.size) return false
+    val first = firstSentenceOfChunk(chunkIndex, chunks, sentences)
+    if (first < 0) return false
+    var cursor = first
+    var remaining = chunks[chunkIndex].length
+    while (cursor < sentences.size && remaining > 0) {
+        if (cursor == sentenceIndex) return true
+        remaining -= sentences[cursor].length
+        if (remaining > 0) remaining -= 1
+        cursor++
+    }
+    return false
 }
 
 @Composable
