@@ -3508,55 +3508,81 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     }
 
     fun renderPdfToJpegAndSetImage(pdfUri: Uri, onResult: (String?) -> Unit) {
+        renderPdfPagesToCache(pdfUri, listOf(0)) { paths ->
+            onResult(paths.firstOrNull())
+        }
+    }
+
+    /**
+     * Рендерит указанные страницы PDF в отдельные JPEG-файлы в cacheDir/vision_input.
+     * Возвращает список file:// URI в том порядке, в котором запрошены страницы.
+     * PdfRenderer не потокобезопасен — страницы рендерятся строго последовательно,
+     * одна за другой (openPage → render → close).
+     * Очередь отправки в vision — на стороне UI (ChatScreen).
+     */
+    fun renderPdfPagesToCache(
+        pdfUri: Uri,
+        pageIndices: List<Int>,
+        onResult: (List<String>) -> Unit
+    ) {
         scope.launch(Dispatchers.IO) {
+            val result = mutableListOf<String>()
             var pfd: android.os.ParcelFileDescriptor? = null
             var renderer: android.graphics.pdf.PdfRenderer? = null
-            var page: android.graphics.pdf.PdfRenderer.Page? = null
             try {
                 pfd = contentResolver.openFileDescriptor(pdfUri, "r")
                 if (pfd == null) {
-                    withContext(Dispatchers.Main) { onResult(null) }
+                    withContext(Dispatchers.Main) { onResult(emptyList()) }
                     return@launch
                 }
                 renderer = android.graphics.pdf.PdfRenderer(pfd)
                 if (renderer.pageCount == 0) {
-                    withContext(Dispatchers.Main) { onResult(null) }
+                    withContext(Dispatchers.Main) { onResult(emptyList()) }
                     return@launch
                 }
-                page = renderer.openPage(0)
-
-                val scale = 2
-                val bitmap = android.graphics.Bitmap.createBitmap(
-                    page.width * scale,
-                    page.height * scale,
-                    android.graphics.Bitmap.Config.ARGB_8888
-                )
-                bitmap.eraseColor(android.graphics.Color.WHITE)
-                page.render(bitmap, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
 
                 val cacheDir = File(getApplication<Application>().cacheDir, "vision_input").apply {
                     if (exists()) listFiles()?.forEach { it.delete() } else mkdirs()
                 }
-                val file = File(cacheDir, "pdf_page_${System.currentTimeMillis()}.jpg")
-                FileOutputStream(file).use { out ->
-                    bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out)
-                }
-                bitmap.recycle()
 
-                withContext(Dispatchers.Main) {
-                    onResult("file://${file.absolutePath}")
+                for (index in pageIndices) {
+                    if (index < 0 || index >= renderer.pageCount) {
+                        Log.w(TAG, "renderPdfPagesToCache: страница $index вне диапазона (всего ${renderer.pageCount})")
+                        continue
+                    }
+                    var page: android.graphics.pdf.PdfRenderer.Page? = null
+                    try {
+                        page = renderer.openPage(index)
+                        val scale = 2
+                        val bitmap = android.graphics.Bitmap.createBitmap(
+                            page.width * scale,
+                            page.height * scale,
+                            android.graphics.Bitmap.Config.ARGB_8888
+                        )
+                        bitmap.eraseColor(android.graphics.Color.WHITE)
+                        page.render(bitmap, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+
+                        val file = File(cacheDir, "pdf_page_${index}_${System.currentTimeMillis()}.jpg")
+                        FileOutputStream(file).use { out ->
+                            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out)
+                        }
+                        bitmap.recycle()
+                        result.add("file://${file.absolutePath}")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "renderPdfPagesToCache: ошибка страницы $index: ${e.message}", e)
+                    } finally {
+                        try { page?.close() } catch (_: Exception) {}
+                    }
                 }
             } catch (e: SecurityException) {
                 Log.e(TAG, "PDF защищён паролем: ${e.message}")
-                withContext(Dispatchers.Main) { onResult(null) }
             } catch (e: Exception) {
-                Log.e(TAG, "renderPdfToJpeg failed: ${e.message}", e)
-                withContext(Dispatchers.Main) { onResult(null) }
+                Log.e(TAG, "renderPdfPagesToCache failed: ${e.message}", e)
             } finally {
-                try { page?.close() } catch (_: Exception) {}
                 try { renderer?.close() } catch (_: Exception) {}
                 try { pfd?.close() } catch (_: Exception) {}
             }
+            withContext(Dispatchers.Main) { onResult(result) }
         }
     }
 
