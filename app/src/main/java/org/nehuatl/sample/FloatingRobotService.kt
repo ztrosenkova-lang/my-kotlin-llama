@@ -280,6 +280,16 @@ class FloatingRobotService : LifecycleService() {
         Log.d(TAG, "Service destroyed")
     }
 
+    // Пользователь смахнул задачу приложения. MainActivity и MainViewModel
+    // умирают, но foreground-сервис живёт. Без этой обработки overlay остаётся
+    // висеть с мёртвой ссылкой на ViewModel и не реагирует на тапы.
+    // Останавливаем сервис — робот 2 исчезает вместе с приложением.
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        Log.d(TAG, "onTaskRemoved: app task swiped away, stopping service")
+        stopSelf()
+    }
+
     // ========== OVERLAY РОБОТА ==========
 
    private fun addRobotOverlay() {
@@ -470,7 +480,18 @@ class FloatingRobotService : LifecycleService() {
                                        // ТАП: не двигались и быстро отпустили
                     if (dx < 15 && dy < 15 && dt < 300) {
                         val now = System.currentTimeMillis()
-                        val vm = MainViewModel.instance ?: return true
+                        val vm = MainViewModel.instance
+                        if (vm == null) {
+                            // MainViewModel уже мёртв (приложение закрыто), а сервис
+                            // ещё жив. Тап обработать нечем — останавливаем сервис,
+                            // чтобы overlay не висел мёртвым.
+                            Log.w(TAG, "Tap on overlay but MainViewModel is null — stopping service")
+                            val stopIntent = Intent(this@FloatingRobotService, FloatingRobotService::class.java).apply {
+                                action = ACTION_STOP
+                            }
+                            startService(stopIntent)
+                            return true
+                        }
 
                         val isListening = vm.overlayListening.value
                         val isDoubleTap = (now - lastTapTime < 400) && singleTapHandled
