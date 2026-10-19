@@ -7094,11 +7094,14 @@ private fun BibliotekaDialog(
                 isReading = false
                 onDismiss()
             },
-            title = {
+                        title = {
                 Text(
                     if (selectedBook == null) "📖 Библиотека" else "📖 ${selectedBook!!.nameWithoutExtension}",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = colors.text
+                    style = MaterialTheme.typography.titleSmall,
+                    color = colors.text,
+                    fontSize = 14.sp,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
             },
                         text = {
@@ -7484,6 +7487,9 @@ private fun PdfReaderView(
 ) {
     val density = LocalDensity.current
 
+    // Состояние открытия PDF: загрузка / ошибка / готовый рендерер.
+    // Нужно, чтобы битый или запароленный PDF не висел вечным спиннером.
+    var openError by remember(file) { mutableStateOf(false) }
     val renderer by produceState<PdfRenderer?>(initialValue = null, file) {
         value = withContext(Dispatchers.IO) {
             try {
@@ -7491,17 +7497,14 @@ private fun PdfReaderView(
                 PdfRenderer(pfd)
             } catch (e: Exception) {
                 android.util.Log.e("PdfReaderView", "open failed: ${e.message}", e)
+                openError = true
                 null
             }
         }
     }
 
-    val cache = remember(file) {
-        object : android.util.LruCache<Int, Bitmap>(PDF_CACHE_SIZE) {
-            override fun entryRemoved(evicted: Boolean, key: Int, oldValue: Bitmap, newValue: Bitmap?) {
-                if (evicted && oldValue !== newValue) oldValue.recycle()
-            }
-        }
+        val cache = remember(file) {
+        android.util.LruCache<Int, Bitmap>(PDF_CACHE_SIZE)
     }
 
     val renderMutex = remember(file) { Mutex() }
@@ -7525,31 +7528,49 @@ private fun PdfReaderView(
                 .border(1.dp, colors.borderGray, RoundedCornerShape(12.dp)),
             contentAlignment = Alignment.Center
         ) {
-            CircularProgressIndicator(color = colors.accent)
+            if (openError) {
+                Text(
+                    text = "❌ Не удалось открыть PDF.\nВозможно, он защищён паролем или повреждён.",
+                    color = colors.text,
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(16.dp)
+                )
+            } else {
+                CircularProgressIndicator(color = colors.accent)
+            }
         }
         return
     }
 
     val pageCount = currentRenderer.pageCount
-    val screenWidthPx = with(density) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
 
-    LazyColumn(
-        modifier = modifier
-            .background(colors.background.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-            .border(1.dp, colors.borderGray, RoundedCornerShape(12.dp))
-            .padding(6.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        items(pageCount) { index ->
-            PdfPageItem(
-                renderer = currentRenderer,
-                pageIndex = index,
-                pageWidthFraction = pageWidthFraction,
-                screenWidthPx = screenWidthPx,
-                cache = cache,
-                renderMutex = renderMutex,
-                colors = colors
-            )
+    BoxWithConstraints(modifier = modifier) {
+        // Реальная ширина колонки (без полей AlertDialog), а не ширина экрана.
+        // Именно её умножаем на pageWidthFraction — тогда 100% = точная
+        // ширина колонки, без лишнего рендера и мыла при сжатии.
+        val columnWidthPx = constraints.maxWidth.toFloat()
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(colors.background.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                .border(1.dp, colors.borderGray, RoundedCornerShape(12.dp))
+                .padding(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            items(pageCount) { index ->
+                PdfPageItem(
+                    renderer = currentRenderer,
+                    pageIndex = index,
+                    pageWidthFraction = pageWidthFraction,
+                    columnWidthPx = columnWidthPx,
+                    cache = cache,
+                    renderMutex = renderMutex,
+                    colors = colors
+                )
+            }
         }
     }
 }
@@ -7559,7 +7580,7 @@ private fun PdfPageItem(
     renderer: PdfRenderer,
     pageIndex: Int,
     pageWidthFraction: Float,
-    screenWidthPx: Float,
+    columnWidthPx: Float,
     cache: android.util.LruCache<Int, Bitmap>,
     renderMutex: Mutex,
     colors: AppColors
@@ -7577,7 +7598,7 @@ private fun PdfPageItem(
                 try {
                     val page = renderer.openPage(pageIndex)
                     try {
-                        val renderWidth = (screenWidthPx * pageWidthFraction)
+                        val renderWidth = (columnWidthPx * pageWidthFraction)
                             .toInt()
                             .coerceIn(1, PDF_MAX_RENDER_WIDTH_PX)
                         val renderHeight = (page.height.toFloat() * renderWidth / page.width.toFloat())
