@@ -690,7 +690,7 @@ fun ChatScreen(
     // Отправляет страницы по одной. Следующая уходит только когда предыдущая
     // полностью обработана: vision не занята, модель не думает, TTS не говорит.
     // Защита от «⏳ Зрение загружается» на 2-й и 3-й страницах.
-    LaunchedEffect(pdfQueueActive, pdfQueueCurrentIndex, visionPhase, state, cloudState, isSpeaking, isPreparingSpeech) {
+    LaunchedEffect(pdfQueueActive, pdfQueueCurrentIndex, visionPhase, state::class, state, cloudState, isSpeaking, isPreparingSpeech) {
         if (!pdfQueueActive) return@LaunchedEffect
         if (pdfQueueCurrentIndex >= pdfPageQueue.size) {
             pdfQueueActive = false
