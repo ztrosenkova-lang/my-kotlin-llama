@@ -1,0 +1,4343 @@
+package org.nehuatl.sample
+
+import android.app.Application
+import android.app.AlarmManager
+import android.app.DownloadManager
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.ContentResolver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
+import android.provider.Settings
+import android.speech.tts.TextToSpeech
+import android.util.Log
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.graphics.pdf.PdfRenderer
+import android.os.ParcelFileDescriptor
+import com.google.mlkit.nl.languageid.LanguageIdentification
+import com.google.mlkit.nl.languageid.LanguageIdentifier
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.nehuatl.llamacpp.LlamaHelper
+import java.util.concurrent.TimeUnit
+import java.io.File
+import java.security.KeyStore
+import java.security.MessageDigest
+import java.text.SimpleDateFormat
+import java.util.*
+import java.io.FileOutputStream
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import java.security.KeyPairGenerator
+import kotlin.math.log10
+
+data class PromptButton(
+    val label: String,
+    val promptText: String
+)
+
+data class ChatMessage(
+    val role: String,
+    val text: String,
+    val promptButtons: List<PromptButton>? = null,
+    val hasImage: Boolean = false
+)
+
+enum class DownloadStatus {
+    IDLE,
+    RUNNING,
+    SUCCESS,
+    FAILED
+}
+
+data class DownloadProgress(
+    val percent: Int,
+    val status: DownloadStatus
+)
+
+data class AlarmEntry(
+    val timeMillis: Long,
+    val text: String
+)
+
+enum class VisionPhase {
+    IDLE,                   // ничего не происходит
+    RELEASING_TEXT,         // выгружаю текстовую модель
+    LOADING_VISION,         // загружаю зрение
+    VISION_READY,           // зрение готово, идёт запрос к нему
+    RESTORING_TEXT,         // возвращаю текстовую модель
+    TEXT_RESTORED           // текстовая модель вернулась
+}
+
+class MainViewModel(application: Application, val contentResolver: ContentResolver) : AndroidViewModel(application) {
+    companion object {
+        @Volatile var instance: MainViewModel? = null
+        private const val TAG = "MainViewModel"
+
+        private const val REMEMBER_COMMAND = "запомни"
+        private const val FIND_COMMAND = "найди"
+        private const val SEARCH_COMMAND = "поищи"
+        private const val RECALL_COMMAND = "вспомни"
+        private const val ALARM_COMMAND = "будильник"
+        private const val REMIND_COMMAND = "напомни"
+        private const val CHAT_LOOKUP_COMMAND = "посмотри в чате"
+        private const val BRAIN_EDIT_COMMAND = "редактировать мозг"
+
+        private const val AUTO_BRAIN_COMPRESSION_THRESHOLD = 10
+
+        private const val SECRET_PHRASE_HASH = "af5f2b759f2adf6f46fdd7b1441ed77086f833dcb5f74d9a5ea6930aa8634505"
+        private const val ONE_DAY_MS = 86400000L
+
+        private const val KEY_DARK_THEME = "dark_theme"
+        private const val KEY_SMART_MODE = "smart_mode"
+        private const val KEY_SESSION_UNLOCKED = "session_unlocked"
+        private const val SMART_MODE_MAX_CHARS = Int.MAX_VALUE
+
+        // Авто-тема по времени
+        private const val KEY_MANUAL_THEME_UNTIL = "manual_theme_until"
+        private const val DAY_START_HOUR = 7      // 07:00 — начало светлой темы
+        private const val NIGHT_START_HOUR = 19   // 19:00 — начало тёмной темы
+        private const val MANUAL_OVERRIDE_MS = 1 * 60 * 60 * 1000L  // 6 часов
+
+    private val CATEGORIES = listOf("[ПАРОЛЬ]", "[КОНТАКТ]", "[ПРАЙС]", "[ИНСТРУКЦИЯ]", "[АДРЕС]", "[ДАТА]", "[ОБЩЕЕ]", "[ТРАВЫ]", "[ГРИБЫ]", "[ОРИЕНТИРОВАНИЕ]")
+    }
+
+    private val viewModelJob = SupervisorJob()
+    private val scope = CoroutineScope(Dispatchers.IO + viewModelJob)
+
+    private val _llmFlow = MutableSharedFlow<LlamaHelper.LLMEvent>(
+        replay = 0,
+        extraBufferCapacity = 64,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val llmFlow: SharedFlow<LlamaHelper.LLMEvent> = _llmFlow.asSharedFlow()
+
+    private val _state = MutableStateFlow<GenerationState>(GenerationState.Idle)
+    val state = _state.asStateFlow()
+
+    private val _generatedText = MutableStateFlow("")
+    val generatedText = _generatedText.asStateFlow()
+
+    private val _isModelLoaded = MutableStateFlow(false)
+    val isModelLoaded: MutableStateFlow<Boolean> = _isModelLoaded
+
+    private val _cloudState = MutableStateFlow<CloudAIState>(CloudAIState.Idle)
+    val cloudState = _cloudState.asStateFlow()
+
+    private val _cloudGeneratedText = MutableStateFlow("")
+    val cloudGeneratedText = _cloudGeneratedText.asStateFlow()
+
+    private val _cloudFlow = MutableSharedFlow<CloudAIEvent>(
+        replay = 0,
+        extraBufferCapacity = 64,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val cloudFlow: SharedFlow<CloudAIEvent> = _cloudFlow.asSharedFlow()
+
+    private val cloudPreferences: android.content.SharedPreferences by lazy {
+        getApplication<Application>().getSharedPreferences("cloud_ai", Context.MODE_PRIVATE)
+    }
+
+    private val cloudAIProvider by lazy {
+        CloudAIProvider(
+            context = getApplication(),
+            scope = scope,
+            sharedFlow = _cloudFlow,
+            preferences = cloudPreferences
+        )
+    }
+
+    private var currentModelName: String = ""
+    private var currentModelPath: String? = null
+    private var currentMmprojPath: String? = null
+
+    private val _loadedModelName = MutableStateFlow("")
+    val loadedModelName: StateFlow<String> = _loadedModelName.asStateFlow()
+
+    private val _systemPrompt = MutableStateFlow("Ты — полезный, умный и лаконичный ИИ-ассистент. Отвечай строго на русском языке.")
+    val systemPrompt = _systemPrompt.asStateFlow()
+
+    private val _chatHistory = MutableStateFlow<List<ChatMessage>>(emptyList())
+    val chatHistory = _chatHistory.asStateFlow()
+
+    val temperature = MutableStateFlow(0.3f)
+    val contextSize = MutableStateFlow(8192)
+    val maxTokens = MutableStateFlow(2048)
+
+    private val _isDarkTheme = MutableStateFlow(false)
+    val isDarkTheme: StateFlow<Boolean> = _isDarkTheme.asStateFlow()
+
+    private val _isFirstLaunch = MutableStateFlow(false)
+    val isFirstLaunch: StateFlow<Boolean> = _isFirstLaunch.asStateFlow()
+
+    private val _isCompressing = MutableStateFlow(false)
+    val isCompressing: StateFlow<Boolean> = _isCompressing.asStateFlow()
+
+    private val _visionPhase = MutableStateFlow(VisionPhase.IDLE)
+    val visionPhase: StateFlow<VisionPhase> = _visionPhase.asStateFlow()
+
+    // Отложенное сообщение пользователя — отправляется после завершения сжатия
+    private val _pendingUserMessage = MutableStateFlow<String?>(null)
+
+    // Job для анимации бегущих точек в сообщении о сжатии
+    private var compressionDotsJob: Job? = null
+
+       private val _showBrainEditor = MutableStateFlow(false)
+    val showBrainEditor: StateFlow<Boolean> = _showBrainEditor.asStateFlow()
+
+    private val _showChatEditor = MutableStateFlow(false)
+    val showChatEditor: StateFlow<Boolean> = _showChatEditor.asStateFlow()
+
+            private val memoryFile: File by lazy {
+        File(getApplication<Application>().filesDir, "memory.txt")
+    }
+
+        
+    // ML Kit + Android TTS для озвучки не-русского текста
+    private var languageIdentifier: LanguageIdentifier? = null
+    private var androidTts: TextToSpeech? = null
+    private var androidTtsReady = false
+
+            private val brainFile: File by lazy {
+        File(getApplication<Application>().filesDir, "brain.txt")
+    }
+
+    private val chatFile: File by lazy {
+        File(getApplication<Application>().filesDir, "chat.txt")
+    }
+
+    private val bibliotekaDir: File by lazy {
+        File(getApplication<Application>().filesDir, "biblioteka").apply { mkdirs() }
+    }
+
+    private val memorySearchEngine by lazy {
+        MemorySearchEngine(memoryFile)
+    }
+
+    private val organizerFile: File by lazy {
+        File(getApplication<Application>().filesDir, "organizer.txt")
+    }
+
+    private val _organizerEntries = MutableStateFlow<List<AlarmEntry>>(emptyList())
+    val organizerEntries: StateFlow<List<AlarmEntry>> = _organizerEntries.asStateFlow()
+
+    private var isCompressionRequest = false
+    private var userMessageCount = 0
+
+        private var isTtsEnabled = false
+    // Флаг «TTS выключается прямо сейчас». Пока он true — ACTION_TTS_READY
+    // игнорируется, чтобы запоздавший broadcast от убитого сервиса
+    // не включал кнопку обратно.
+    @Volatile
+    private var isTtsShuttingDown = false
+    private val _isTtsReady = MutableStateFlow(false)
+    val isTtsReady: StateFlow<Boolean> = _isTtsReady.asStateFlow()
+
+    private val _isSpeaking = MutableStateFlow(false)
+    val isSpeaking: StateFlow<Boolean> = _isSpeaking.asStateFlow()
+
+    // true между «модель закончила» и «TTS начал говорить».
+    // Нужно, чтобы UI не показывал пустоту в этот момент.
+    private val _isPreparingSpeech = MutableStateFlow(false)
+    val isPreparingSpeech: StateFlow<Boolean> = _isPreparingSpeech.asStateFlow()
+
+    private val _speakStartTrigger = MutableStateFlow(false)
+    val speakStartTrigger: StateFlow<Boolean> = _speakStartTrigger.asStateFlow()
+
+    private val _pendingTextToPrint = MutableStateFlow("")
+    val pendingTextToPrint: StateFlow<String> = _pendingTextToPrint.asStateFlow()
+
+    private lateinit var ttsReceiver: BroadcastReceiver
+
+    private val alarmManager by lazy {
+        getApplication<Application>().getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    }
+
+        private val _currentMode = MutableStateFlow(AIMode.NEUTRAL)
+    val currentMode = _currentMode.asStateFlow()
+
+    // ========== АКТИВНОСТЬ CHATSCREEN ==========
+    // true, когда ChatScreen виден на экране (activity на переднем плане).
+    // Нужно для разделения логики: обычный диалог (печатная машинка работает)
+    // vs overlay (ответ пишется сразу в _chatHistory, без анимации).
+    private val _isChatScreenVisible = MutableStateFlow(false)
+    val isChatScreenVisible: StateFlow<Boolean> = _isChatScreenVisible.asStateFlow()
+
+    fun setChatScreenVisible(visible: Boolean) {
+        _isChatScreenVisible.value = visible
+        Log.d(TAG, "ChatScreen visible = $visible")
+    }
+    fun setCurrentMode(mode: AIMode) {
+        _currentMode.value = mode
+    }
+
+                    private val _floatingRobotRunning = MutableStateFlow(false)
+    val floatingRobotRunning: StateFlow<Boolean> = _floatingRobotRunning.asStateFlow()
+
+    fun setFloatingRunning(running: Boolean) {
+        _floatingRobotRunning.value = running
+    }
+
+        // ========== МАСШТАБ РОБОТА В OVERLAY ==========
+    // Управляется жестом pinch в FloatingRobotService.
+    // Читается в RobotOverlayContent для расчёта высоты канваса.
+    // Сохраняется в SharedPreferences, чтобы пережить перезапуск сервиса.
+    // Начальное значение 1.0f — реальное подтягивается в init-блоке,
+    // когда prefs уже инициализирован.
+    private val _overlayRobotScale = MutableStateFlow(1.0f)
+    val overlayRobotScale: StateFlow<Float> = _overlayRobotScale.asStateFlow()
+
+        fun setOverlayRobotScale(scale: Float) {
+        val coerced = scale.coerceIn(0.5f, 3.0f)
+        if (_overlayRobotScale.value != coerced) {
+            _overlayRobotScale.value = coerced
+            prefs.edit().putFloat("overlay_robot_scale", coerced).apply()
+        }
+    }
+    // ========== УМНЫЙ РЕЖИМ ==========
+    // При включении в каждый запрос к локальной модели добавляется
+    // последнее сообщение пользователя + хвост истории чата (до 8000 символов).
+    private val _isSmartMode = MutableStateFlow(false)
+    val isSmartMode: StateFlow<Boolean> = _isSmartMode.asStateFlow()
+
+    // ========== СОСТОЯНИЕ ДЛЯ VISION-МОДЕЛИ ==========
+    private var savedTemperature: Float = 0.3f
+    private var savedContextSize: Int = 8192
+    private var savedModelPath: String? = null
+    private var savedMmprojPath: String? = null
+
+    @Volatile
+    private var isVisionModelLoaded = false
+
+    // true, пока vision грузится. Защита от параллельного запуска
+    // двух ensureVisionModelLoaded (пользователь быстро нажал «+» дважды).
+    @Volatile
+    private var isVisionLoading = false
+
+    fun enableSmartMode() {
+        if (_isSmartMode.value) {
+            appendSystemMessage("🧠 Умный режим уже включён")
+            return
+        }
+        _isSmartMode.value = true
+        prefs.edit().putBoolean(KEY_SMART_MODE, true).apply()
+        appendSystemMessage("🧠 Умный режим включён: в каждый запрос добавляется история чата")
+    }
+
+    fun disableSmartMode() {
+        if (!_isSmartMode.value) {
+            appendSystemMessage("🧮 Режим калькулятора уже активен")
+            return
+        }
+        _isSmartMode.value = false
+        prefs.edit().putBoolean(KEY_SMART_MODE, false).apply()
+        appendSystemMessage("🧮 Режим калькулятора включён: запросы идут как обычно")
+    }
+
+    /**
+     * Собирает systemPrompt для локальной модели в умном режиме:
+     * системный промпт → последнее сообщение → хвост истории (без последнего).
+     *
+     * Хвост обрезается по SMART_MODE_MAX_CHARS символам снизу.
+     * Последнее сообщение пользователя исключено из хвоста, чтобы не дублировалось.
+     */
+    private fun buildSmartSystemPrompt(): String {
+        val basePrompt = _systemPrompt.value
+        val history = _chatHistory.value
+
+        // Последнее сообщение пользователя — если оно есть
+        val lastUserMessage = history.lastOrNull { it.role == "user" }
+
+        // Хвост чата без последнего сообщения пользователя
+        val historyWithoutLast = if (lastUserMessage != null) {
+            history.dropLastWhile { it === lastUserMessage }
+        } else {
+            history
+        }
+
+               // Весь чат без ограничения по объёму
+        val tailBuilder = StringBuilder()
+        for (message in historyWithoutLast.asReversed()) {
+            val prefix = when (message.role) {
+                "user" -> "Пользователь: "
+                "assistant" -> "Ассистент: "
+                else -> "Система: "
+            }
+            val line = prefix + message.text + "\n"
+            tailBuilder.insert(0, line)
+        }
+        val tail = tailBuilder.toString().trim()
+
+        return buildString {
+            append(basePrompt)
+
+            if (lastUserMessage != null) {
+                append("\n\nПОСЛЕДНЕЕ СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ: ")
+                append(lastUserMessage.text)
+            }
+
+                if (tail.isNotEmpty()) {
+                append("\n\nИСТОРИЯ ЧАТА:\n")
+                append(tail)
+            }
+
+            append("\n\nОТВЕЧАЙ С УЧЁТОМ ЭТОЙ ИСТОРИИ И ПОСЛЕДНЕГО СООБЩЕНИЯ.")
+        }
+    }
+
+               // Сигнал махания для робота в overlay (робот 2)
+    private val _overlayWaveSignal = MutableStateFlow(false)
+    val overlayWaveSignal: StateFlow<Boolean> = _overlayWaveSignal.asStateFlow()
+
+    // Сигнал наклона головы робота 2 при одиночном тапе
+    private val _overlayHeadTilt = MutableStateFlow(0f)
+    val overlayHeadTilt: StateFlow<Float> = _overlayHeadTilt.asStateFlow()
+
+    private val _overlayHeadNod = MutableStateFlow(0f)
+    val overlayHeadNod: StateFlow<Float> = _overlayHeadNod.asStateFlow()
+
+    // Направление махания рукой робота 2 при тапе
+    private val _overlayTapWaveDirection = MutableStateFlow(0f)
+    val overlayTapWaveDirection: StateFlow<Float> = _overlayTapWaveDirection.asStateFlow()
+
+    private var overlayHeadResetJob: Job? = null
+
+        fun triggerOverlayHeadTilt(direction: Float) {
+        overlayHeadResetJob?.cancel()
+        _overlayHeadTilt.value = direction * 15f
+        _overlayHeadNod.value = 0.5f
+        _overlayTapWaveDirection.value = direction
+        overlayHeadResetJob = scope.launch {
+            delay(800)
+            _overlayHeadTilt.value = 0f
+            _overlayHeadNod.value = 0f
+            _overlayTapWaveDirection.value = 0f
+        }
+    }
+    // Сигнал «микрофон overlay слушает» — для робота 2 (глаза расширяются)
+    private val _overlayListening = MutableStateFlow(false)
+    val overlayListening: StateFlow<Boolean> = _overlayListening.asStateFlow()
+
+    fun setOverlayListening(listening: Boolean) {
+        _overlayListening.value = listening
+    }
+
+           // Сигнал «привет» — для робота 1 (машет рукой сам)
+    private val _robotGreetingSignal = MutableStateFlow(false)
+    val robotGreetingSignal: StateFlow<Boolean> = _robotGreetingSignal.asStateFlow()
+
+    // Сигнал «прыжок» — включается при свайпе вверх по роботу.
+    // Читается роботом 1 и роботом 2. Авто-сброс через 1200 мс.
+    private val _robotJumpSignal = MutableStateFlow(false)
+    val robotJumpSignal: StateFlow<Boolean> = _robotJumpSignal.asStateFlow()
+
+    // ========== АВТО-АНИМАЦИИ РОБОТОВ (раз в минуту, по циклу) ==========
+    // 0 — нет анимации
+    // 1 — махание правой рукой
+    // 2 — наклон головы влево
+    // 3 — махание левой рукой
+    // 4 — наклон головы вправо
+    // 5 — приветственное махание правой рукой
+    private val _robotAutoAnimation = MutableStateFlow(0)
+    val robotAutoAnimation: StateFlow<Int> = _robotAutoAnimation.asStateFlow()
+
+        fun triggerRobotGreeting() {
+        _robotGreetingSignal.value = true
+        scope.launch {
+            delay(2500)
+            _robotGreetingSignal.value = false
+        }
+    }
+
+        fun triggerRobotJump() {
+        if (_robotJumpSignal.value) return
+        _robotJumpSignal.value = true
+        scope.launch {
+            delay(1200)
+            _robotJumpSignal.value = false
+        }
+    }
+
+    private var overlayWaveResetJob: Job? = null
+
+    fun triggerOverlayWave() {
+        overlayWaveResetJob?.cancel()
+        _overlayWaveSignal.value = true
+        overlayWaveResetJob = scope.launch {
+            delay(2500)
+            _overlayWaveSignal.value = false
+        }
+    }
+
+    
+
+        private val _memoryInfoText = MutableStateFlow("Всего доступно: 0.0 ГБ / Занято: 0.0 ГБ")
+    val memoryInfoText: StateFlow<String> = _memoryInfoText.asStateFlow()
+
+        // ========== ЗАГРУЗКА МОДЕЛЕЙ ==========
+    // Карта modelId -> downloadId (основная модель). Живёт в синглтоне.
+    val downloadIds: MutableMap<String, Long> = mutableMapOf()
+
+    // Карта modelId -> downloadId проектора (если есть). Живёт в синглтоне.
+    val mmprojDownloadIds: MutableMap<String, Long> = mutableMapOf()
+
+    // Прогресс загрузок: modelId -> DownloadProgress (основная модель)
+    private val _downloadProgress = MutableStateFlow<Map<String, DownloadProgress>>(emptyMap())
+    val downloadProgress: StateFlow<Map<String, DownloadProgress>> = _downloadProgress.asStateFlow()
+
+    // Прогресс загрузок проектора: modelId -> DownloadProgress
+    private val _mmprojDownloadProgress = MutableStateFlow<Map<String, DownloadProgress>>(emptyMap())
+    val mmprojDownloadProgress: StateFlow<Map<String, DownloadProgress>> = _mmprojDownloadProgress.asStateFlow()
+
+    private val _isAppLocked = MutableStateFlow(true)
+    val isAppLocked: StateFlow<Boolean> = _isAppLocked.asStateFlow()
+    private var isUnlockedPermanently = false
+    private val hardwareKeyAlias = "app_hardware_key"
+    private val prefs: android.content.SharedPreferences by lazy {
+        getApplication<Application>().getSharedPreferences("app_security", Context.MODE_PRIVATE)
+    }
+
+    private val _isDeviceBound = MutableStateFlow(false)
+    val isDeviceBound: StateFlow<Boolean> = _isDeviceBound.asStateFlow()
+
+    private val _remainingTimeText = MutableStateFlow("")
+    val remainingTimeText: StateFlow<String> = _remainingTimeText.asStateFlow()
+
+    private val _isPermanentlyUnlocked = MutableStateFlow(false)
+    val isPermanentlyUnlocked: StateFlow<Boolean> = _isPermanentlyUnlocked.asStateFlow()
+
+    private val _isPermanentlyBlocked = MutableStateFlow(false)
+    val isPermanentlyBlocked: StateFlow<Boolean> = _isPermanentlyBlocked.asStateFlow()
+
+    private val llamaHelper by lazy {
+        LlamaHelper(
+            contentResolver = contentResolver,
+            scope = scope,
+            sharedFlow = _llmFlow,
+        )
+    }
+
+        init {
+    instance = this
+
+        // Сброс возможного зависшего флага сжатия при перезапуске приложения
+        _isCompressing.value = false
+        isCompressionRequest = false
+        _pendingUserMessage.value = null
+
+        _floatingRobotRunning.value = FloatingRobotService.isRunning
+
+        _isDarkTheme.value = prefs.getBoolean(KEY_DARK_THEME, false)
+        _isSmartMode.value = prefs.getBoolean(KEY_SMART_MODE, false)
+        _isFirstLaunch.value = prefs.getBoolean("first_launch", true)
+
+        // Читаем chat.txt и восстанавливаем чат
+        try {
+            if (!chatFile.exists()) chatFile.createNewFile()
+            val saved = chatFile.readText().trim()
+            if (saved.isNotEmpty()) {
+                _chatHistory.value = parseChatFromText(saved)
+                Log.d(TAG, "chat.txt loaded (${_chatHistory.value.size} messages)")
+            }
+                } catch (e: Exception) {
+            Log.e(TAG, "Ошибка чтения chat.txt: ${e.message}")
+        }
+
+        reloadOrganizer()
+
+               // Восстанавливаем сохранённый масштаб робота в overlay.
+        _overlayRobotScale.value = prefs.getFloat("overlay_robot_scale", 1.0f).coerceIn(0.5f, 3.0f)
+                // При запуске всегда применяем авто-тему по времени суток.
+        // Ручной приоритет сбрасывается — иначе после ручного переключения
+        // тема не менялась бы при старте в течение часа.
+        prefs.edit().putLong(KEY_MANUAL_THEME_UNTIL, 0L).apply()
+        applyAutoTheme()
+        if (_isFirstLaunch.value) {
+            prefs.edit().putBoolean("first_launch", false).apply()
+        }
+
+        ttsReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                when (intent?.action) {
+                                        TtsService.ACTION_TTS_READY -> {
+                        // Игнорируем запоздавший broadcast, если TTS выключается прямо сейчас
+                        if (isTtsShuttingDown) {
+                            Log.d(TAG, "TTS ready broadcast ignored (shutting down)")
+                            return
+                        }
+                        val message = intent.getStringExtra(TtsService.EXTRA_MESSAGE) ?: "✅ Офлайн голосовой движок успешно загружен"
+                        _isTtsReady.value = true
+                        isTtsEnabled = true
+                        appendSystemMessage(message)
+                        Log.d(TAG, "TTS ready broadcast received: $message")
+                    }
+                TtsService.ACTION_TTS_ERROR -> {
+                        val message = intent.getStringExtra(TtsService.EXTRA_MESSAGE) ?: "❌ Ошибка инициализации офлайн TTS"
+                        _isTtsReady.value = false
+                        isTtsEnabled = false
+                        _isPreparingSpeech.value = false
+                        appendSystemMessage(message)
+                        Log.e(TAG, "TTS error broadcast received: $message")
+                    }
+                TtsService.ACTION_SPEAK_START -> {
+                        _isSpeaking.value = true
+                        _isPreparingSpeech.value = false
+                        _speakStartTrigger.value = true
+                        Log.d(TAG, "SPEAK_START broadcast received")
+                    }
+                    TtsService.ACTION_SPEAK_END -> {
+                        _isSpeaking.value = false
+                        _isPreparingSpeech.value = false
+                        _speakStartTrigger.value = false
+                        Log.d(TAG, "SPEAK_END broadcast received")
+                    }
+                }
+            }
+        }
+
+        val ttsFilter = IntentFilter().apply {
+            addAction(TtsService.ACTION_TTS_READY)
+            addAction(TtsService.ACTION_TTS_ERROR)
+            addAction(TtsService.ACTION_SPEAK_START)
+            addAction(TtsService.ACTION_SPEAK_END)
+        }
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getApplication<Application>().registerReceiver(
+                ttsReceiver,
+                ttsFilter,
+                Context.RECEIVER_NOT_EXPORTED
+            )
+        } else {
+            getApplication<Application>().registerReceiver(ttsReceiver, ttsFilter)
+        }
+
+        languageIdentifier = LanguageIdentification.getClient()
+
+               androidTts = TextToSpeech(getApplication<Application>()) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                androidTtsReady = true
+                Log.d(TAG, "Android TTS initialized")
+            } else {
+                androidTtsReady = false
+                Log.e(TAG, "Android TTS init failed: $status")
+            }
+        }
+
+        androidTts?.setOnUtteranceProgressListener(
+            object : android.speech.tts.UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) {
+                    _isSpeaking.value = true
+                    _speakStartTrigger.value = true
+                    Log.d(TAG, "Android TTS onStart")
+                }
+
+                override fun onDone(utteranceId: String?) {
+                    _isSpeaking.value = false
+                    _speakStartTrigger.value = false
+                    Log.d(TAG, "Android TTS onDone")
+                }
+
+                @Deprecated("Deprecated in Java")
+                override fun onError(utteranceId: String?) {
+                    _isSpeaking.value = false
+                    _speakStartTrigger.value = false
+                    Log.e(TAG, "Android TTS onError: $utteranceId")
+                }
+            }
+        )
+
+                // Проверяем флаг «сессия разблокирована» — если пользователь уже вводил
+        // пароль в этой сессии и процесс не убивался, не показываем LockScreen снова.
+        val sessionUnlocked = prefs.getBoolean(KEY_SESSION_UNLOCKED, false)
+
+        if (prefs.getBoolean("is_permanently_blocked", false)) {
+            Log.e(TAG, "App is permanently blocked.")
+            _isAppLocked.value = true
+            _isDeviceBound.value = false
+            _isPermanentlyBlocked.value = true
+            _remainingTimeText.value = "🔴 Приложение заблокировано"
+        } else if (sessionUnlocked) {
+            // Сессия уже разблокирована — не спрашиваем пароль
+            Log.i(TAG, "Session already unlocked — skipping password")
+            _isAppLocked.value = false
+            _isDeviceBound.value = true
+            _isPermanentlyUnlocked.value = true
+            _remainingTimeText.value = "✅ Приложение разблокировано"
+        } else {
+            isUnlockedPermanently = prefs.getBoolean("unlocked_permanently", false)
+            if (isUnlockedPermanently) {
+                _isPermanentlyUnlocked.value = true
+                _isAppLocked.value = false
+                _isDeviceBound.value = true
+                _remainingTimeText.value = "✅ Приложение разблокировано"
+                Log.i(TAG, "App is permanently unlocked.")
+            } else {
+                if (!verifyDeviceBinding()) {
+                    Log.e(TAG, "Device binding verification FAILED!")
+                    _isAppLocked.value = true
+                    _isDeviceBound.value = false
+                    _isPermanentlyBlocked.value = true
+                    _remainingTimeText.value = "🔴 Приложение заблокировано"
+                } else {
+                    if (!verifyHardwareBinding()) {
+                        Log.e(TAG, "Hardware binding verification FAILED!")
+                        _isAppLocked.value = true
+                        _isDeviceBound.value = false
+                        _isPermanentlyBlocked.value = true
+                        _remainingTimeText.value = "🔴 Приложение заблокировано"
+                    } else {
+                        if (!verifyTimeLimit()) {
+                            Log.e(TAG, "Time limit verification FAILED!")
+                        } else {
+                            _isAppLocked.value = false
+                            _isDeviceBound.value = true
+                            _remainingTimeText.value = ""
+                            Log.i(TAG, "All security checks passed. App is unlocked and device is bound.")
+                        }
+                    }
+                }
+            }
+        }
+
+        scope.launch(Dispatchers.Default) {
+            while (true) {
+                updateRemainingTime()
+                delay(60000)
+            }
+        }
+
+               // Авто-тема: проверять раз в минуту, менять если время суток сменилось
+        // и ручной приоритет истёк
+        scope.launch(Dispatchers.Default) {
+            while (true) {
+                applyAutoTheme()
+                delay(60000)
+            }
+        }
+
+                            // ========== АВТО-АНИМАЦИИ РОБОТОВ ==========
+        // Каждые 60 секунд запускаем одну анимацию из перемешанного набора:
+        // 1 → махание правой рукой, 2 → наклон головы влево,
+        // 3 → махание левой рукой, 4 → наклон головы вправо,
+        // 5 → приветственное махание правой рукой,
+        // 6 → покачивание корпуса влево, 7 → покачивание корпуса вправо,
+        // 8 → покачивание корпуса влево-вправо, 9 → осмотр вверх-вниз,
+        // 10 → смещение головы вправо + наклон вправо,
+        // 11 → смещение головы влево + наклон влево.
+        // Длительность каждой — 2.5 секунды.
+        // Порядок перемешивается заново после каждого полного круга.
+                        scope.launch(Dispatchers.Default) {
+            val basePool = listOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
+            var shuffled = basePool.shuffled()
+            var index = 0
+
+            // Общий интервал от начала одной анимации до начала следующей —
+            // случайный в диапазоне 15–50 секунд. Так авто-анимации идут
+            // вразнобой, а не «ровно раз в минуту».
+            val minIntervalMs = 15000L
+            val maxIntervalMs = 50000L
+            val random = java.util.Random()
+
+            // Первая анимация — тоже через случайный интервал.
+            delay(minIntervalMs + random.nextLong(maxIntervalMs - minIntervalMs + 1))
+
+            while (true) {
+                val anim = shuffled[index]
+                _robotAutoAnimation.value = anim
+
+                // Анимация длится 2500 мс, затем сигнал сбрасывается.
+                delay(2500)
+                _robotAutoAnimation.value = 0
+
+                index++
+                if (index >= shuffled.size) {
+                    // Прошли весь круг — тасуем заново
+                    shuffled = basePool.shuffled()
+                    index = 0
+                }
+
+                // Ждём до следующей анимации: случайный общий интервал минус
+                // уже прошедшие 2.5 секунды самой анимации.
+                val nextInterval = minIntervalMs + random.nextLong(maxIntervalMs - minIntervalMs + 1)
+                delay((nextInterval - 2500).coerceAtLeast(0L))
+            }
+        }
+
+                viewModelScope.launch(Dispatchers.IO) {
+            try {
+                if (!brainFile.exists()) brainFile.createNewFile()
+
+                // База знаний: создаём ПУСТОЙ файл при первом запуске.
+                // Наполнение — только вручную, по кнопке «Восстановить базовые»
+                // в редакторе базы знаний. Автозаполнение из assets убрано,
+                // чтобы пользователь сам решал, что в базе лежит.
+                if (!memoryFile.exists()) {
+                    memoryFile.createNewFile()
+                    memorySearchEngine.clearCache()
+                    Log.d(TAG, "memory.txt created empty")
+                }
+                Log.d(TAG, "Local storage files initialized successfully.")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to initialize local text memory files: ${e.message}")
+            }
+        }
+
+        isTtsEnabled = true
+        _isTtsReady.value = false
+        appendSystemMessage("🔄 Инициализация офлайн голосового движка...")
+        Log.d(TAG, "TTS auto-enabled, waiting for initialization")
+
+        val ttsStartIntent = Intent(getApplication<Application>(), TtsService::class.java)
+        getApplication<Application>().startService(ttsStartIntent)
+
+        scope.launch {
+            _cloudFlow.collect { event ->
+                when (event) {
+                    is CloudAIEvent.Started -> {
+                        _cloudGeneratedText.value = ""
+                        _cloudState.value = CloudAIState.Generating(
+                            prompt = event.prompt,
+                            startTime = System.currentTimeMillis(),
+                            tokensGenerated = 0
+                        )
+                    }
+                    is CloudAIEvent.Ongoing -> {
+                        _cloudGeneratedText.value = event.text
+                        val currentState = _cloudState.value
+                        if (currentState is CloudAIState.Generating) {
+                            _cloudState.value = currentState.copy(tokensGenerated = event.tokenCount)
+                        }
+                    }
+                                                                               is CloudAIEvent.Done -> {
+    _cloudState.value = CloudAIState.Completed(event.tokenCount, event.duration)
+    val fullText = event.fullText
+    if (fullText.isNotEmpty()) {
+        if (isCompressionRequest) {
+            saveBrain(fullText)
+            compressionDotsJob?.cancel()
+            updateLastSystemMessage("✅ Беседа сжата и записана в память")
+            isCompressionRequest = false
+            _isCompressing.value = false
+
+            // Пауза 3 сек, затем отправляем отложенное сообщение пользователя
+            scope.launch {
+                delay(3000)
+                val pending = _pendingUserMessage.value
+                if (pending != null) {
+                    _pendingUserMessage.value = null
+                    sendUserMessage(pending)
+                }
+            }
+               } else {
+            _cloudGeneratedText.value = fullText
+            if (_isChatScreenVisible.value) {
+                // ChatScreen активен → печатная машинка
+                _pendingTextToPrint.value = fullText
+                        } else {
+                // ChatScreen в фоне (overlay) → сразу пишем ответ в историю
+                _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
+                _pendingTextToPrint.value = ""
+                syncChatToFile()
+                // В overlay ChatScreen не активен, поэтому «готовлю озвучку»
+                // ставим здесь, а не в ChatScreen. Только если TTS включён —
+                // иначе флаг зависнет, потому что SPEAK_START не придёт.
+                if (isTtsEnabled) {
+                    _isPreparingSpeech.value = true
+                }
+            }
+            speakText(fullText)
+
+            if (_visionPhase.value == VisionPhase.VISION_READY) {
+                _visionPhase.value = VisionPhase.IDLE
+            }
+        }
+    } else {
+        // Пустой ответ — не сжатие завершилось успешно
+        if (isCompressionRequest) {
+            compressionDotsJob?.cancel()
+            updateLastSystemMessage("⚠️ Сжатие не удалось: пустой ответ")
+            isCompressionRequest = false
+            _isCompressing.value = false
+
+            scope.launch {
+                delay(3000)
+                val pending = _pendingUserMessage.value
+                if (pending != null) {
+                    _pendingUserMessage.value = null
+                    sendUserMessage(pending)
+                }
+            }
+        }
+    }
+}
+            is CloudAIEvent.Error -> {
+                        _cloudState.value = CloudAIState.Error(event.message)
+                        if (isCompressionRequest) {
+                            compressionDotsJob?.cancel()
+                            updateLastSystemMessage("⚠️ Сжатие не удалось: ${event.message}")
+                            isCompressionRequest = false
+                            _isCompressing.value = false
+
+                            // Всё равно отправляем отложенное сообщение
+                            scope.launch {
+                                delay(3000)
+                                val pending = _pendingUserMessage.value
+                                if (pending != null) {
+                                    _pendingUserMessage.value = null
+                                    sendUserMessage(pending)
+                                }
+                            }
+                        } else {
+                            isCompressionRequest = false
+                            _isCompressing.value = false
+                        }
+                        Log.e(TAG, "Ошибка облачного ИИ: ${event.message}")
+                    }
+                    is CloudAIEvent.TokenReceived -> {
+                        val config = cloudAIProvider.getConfig()
+                        if (config != null) {
+                            _cloudState.value = CloudAIState.Ready(config.modelId)
+                        }
+                    }
+                }
+            }
+        }
+
+                scope.launch {
+            _llmFlow.collect { event ->
+                Log.d(TAG, "LLM event: ${event::class.simpleName}")
+                when (event) {
+                    is LlamaHelper.LLMEvent.Started -> {
+                        _state.value = GenerationState.Generating(prompt = event.prompt, tokensGenerated = 0)
+                    }
+                    is LlamaHelper.LLMEvent.Ongoing -> {
+                        _generatedText.value += event.word
+                        val currentState = _state.value
+                        if (currentState is GenerationState.Generating) {
+                            _state.value = currentState.copy(tokensGenerated = event.tokenCount)
+                        }
+                    }
+                                                                                                                                                          is LlamaHelper.LLMEvent.Done -> {
+    _state.value = GenerationState.Completed(event.tokenCount, event.duration)
+    val fullText = event.fullText
+    if (fullText.isNotEmpty()) {
+        if (isCompressionRequest) {
+            saveBrain(fullText)
+            compressionDotsJob?.cancel()
+            updateLastSystemMessage("✅ Беседа сжата и записана в память")
+            isCompressionRequest = false
+            _isCompressing.value = false
+
+            scope.launch {
+                delay(3000)
+                val pending = _pendingUserMessage.value
+                if (pending != null) {
+                    _pendingUserMessage.value = null
+                    sendUserMessage(pending)
+                }
+            }
+                } else {
+            _generatedText.value = fullText
+            if (_isChatScreenVisible.value) {
+                // ChatScreen активен → печатная машинка
+                // isPreparingSpeech ставится из ChatScreen, когда крышка
+                // на голове робота закроется (см. LaunchedEffect в ChatScreen).
+                _pendingTextToPrint.value = fullText
+                        } else {
+                // ChatScreen в фоне (overlay) → сразу пишем ответ в историю
+                _chatHistory.value = _chatHistory.value + ChatMessage("assistant", fullText)
+                _pendingTextToPrint.value = ""
+                syncChatToFile()
+                if (isTtsEnabled) {
+                    _isPreparingSpeech.value = true
+                }
+            }
+            speakText(fullText)
+            // Vision-запрос завершён — снимаем фазу VISION_READY,
+            // иначе статус-бар и пояс робота будут вечно показывать
+            // «Зрение готово — анализирую...» / «Зрение готово».
+            if (_visionPhase.value == VisionPhase.VISION_READY) {
+                _visionPhase.value = VisionPhase.IDLE
+            }
+        }
+        } else {
+        if (isCompressionRequest) {
+            compressionDotsJob?.cancel()
+            updateLastSystemMessage("⚠️ Сжатие не удалось: пустой ответ")
+            isCompressionRequest = false
+            _isCompressing.value = false
+
+            scope.launch {
+                delay(3000)
+                val pending = _pendingUserMessage.value
+                if (pending != null) {
+                    _pendingUserMessage.value = null
+                    sendUserMessage(pending)
+                }
+            }
+        } else {
+            // Пустой ответ от модели — сбрасываем состояния,
+            // чтобы статус не крутился вечно.
+            _state.value = GenerationState.Error("Модель вернула пустой ответ")
+            _visionPhase.value = VisionPhase.IDLE
+        }
+    }
+}
+         is LlamaHelper.LLMEvent.Error -> {
+                        _state.value = GenerationState.Error(event.message)
+                        _visionPhase.value = VisionPhase.IDLE
+                        if (isCompressionRequest) {
+                            compressionDotsJob?.cancel()
+                            updateLastSystemMessage("⚠️ Сжатие не удалось: ${event.message}")
+                            isCompressionRequest = false
+                            _isCompressing.value = false
+
+                            scope.launch {
+                                delay(3000)
+                                val pending = _pendingUserMessage.value
+                                if (pending != null) {
+                                    _pendingUserMessage.value = null
+                                    sendUserMessage(pending)
+                                }
+                            }
+                        } else {
+                            isCompressionRequest = false
+                            _isCompressing.value = false
+                        }
+                        Log.e(TAG, "Ошибка локального ИИ: ${event.message}")
+                        _isModelLoaded.value = false
+                    }
+                    is LlamaHelper.LLMEvent.Loaded -> {
+                        _state.value = GenerationState.ModelLoaded(event.path)
+                        _isModelLoaded.value = true
+                    }
+                }
+            }
+        }
+
+        scope.launch(Dispatchers.Default) {
+            val context = getApplication<Application>().applicationContext
+            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+            val memoryInfo = android.app.ActivityManager.MemoryInfo()
+            while (true) {
+                if (activityManager != null) {
+                    activityManager.getMemoryInfo(memoryInfo)
+                    val totalGb = memoryInfo.totalMem.toDouble() / (1024.0 * 1024.0 * 1024.0)
+                    val availGb = memoryInfo.availMem.toDouble() / (1024.0 * 1024.0 * 1024.0)
+                    val usedGb = totalGb - availGb
+                    val formattedString = String.format(
+                        java.util.Locale.US,
+                        "Всего доступно %.1f ГБ / Занято %.1f ГБ",
+                        totalGb,
+                        usedGb
+                    )
+                    _memoryInfoText.value = formattedString
+                }
+                delay(1000)
+            }
+        }
+    }
+
+           /**
+     * Возвращает true, если сейчас ночь (19:00 – 07:00).
+     */
+    private fun isNightNow(): Boolean {
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        return hour >= NIGHT_START_HOUR || hour < DAY_START_HOUR
+    }
+
+    /**
+     * Применяет авто-тему по времени, если ручной приоритет истёк.
+     * Если ручной приоритет ещё активен — ничего не делает.
+     */
+    private fun applyAutoTheme() {
+        val manualUntil = prefs.getLong(KEY_MANUAL_THEME_UNTIL, 0L)
+        if (System.currentTimeMillis() < manualUntil) {
+            // Ручной приоритет ещё действует — не трогаем тему
+            return
+        }
+
+        val shouldBeDark = isNightNow()
+        if (_isDarkTheme.value != shouldBeDark) {
+            _isDarkTheme.value = shouldBeDark
+            prefs.edit().putBoolean(KEY_DARK_THEME, shouldBeDark).apply()
+            Log.d(TAG, "Auto theme applied: dark=$shouldBeDark")
+        }
+    }
+
+    /**
+     * Ручное переключение темы.
+     * Устанавливает приоритет ручного выбора на 6 часов вперёд.
+     */
+    fun toggleTheme() {
+        _isDarkTheme.value = !_isDarkTheme.value
+        prefs.edit().putBoolean(KEY_DARK_THEME, _isDarkTheme.value).apply()
+
+        // Откладываем авто-тему на 6 часов
+        val until = System.currentTimeMillis() + MANUAL_OVERRIDE_MS
+        prefs.edit().putLong(KEY_MANUAL_THEME_UNTIL, until).apply()
+        Log.d(TAG, "Manual theme set. Auto theme delayed until ${Date(until)}")
+    }
+
+        // ========== ЗАГРУЗКА МОДЕЛЕЙ ЧЕРЕЗ DOWNLOADMANAGER ==========
+
+    /**
+     * Резолвит финальный URL после всех редиректов (Hugging Face → CDN).
+     * DownloadManager не умеет проходить цепочки редиректов HF, поэтому
+     * мы сначала получаем прямую ссылку на CDN через OkHttp (HEAD-запрос).
+     * Если резолв не удался — возвращаем исходный URL.
+     */
+    private fun resolveRedirectUrl(originalUrl: String): String {
+        return try {
+            val client = OkHttpClient.Builder()
+                .followRedirects(true)
+                .followSslRedirects(true)
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .build()
+
+            val request = Request.Builder()
+                .url(originalUrl)
+                .head()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                // OkHttp уже прошёл все редиректы, берём финальный URL
+                val finalUrl = response.request.url.toString()
+                Log.d(TAG, "Resolved URL: $originalUrl -> $finalUrl")
+                finalUrl
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to resolve redirect for $originalUrl: ${e.message}")
+            originalUrl
+        }
+    }
+
+        fun startModelDownload(modelId: String, url: String, fileName: String) {
+        // Основная модель
+        val mainProgress = _downloadProgress.value[modelId]
+        val mainAlreadyDone = mainProgress?.status == DownloadStatus.SUCCESS
+        val mainRunning = mainProgress?.status == DownloadStatus.RUNNING
+
+        // Проектор
+        val model = ModelCatalog.models.find { it.id == modelId }
+        val mmprojUrl = model?.mmprojUrl
+        val mmprojFileName = model?.mmprojFileName
+        val hasMmproj = !mmprojUrl.isNullOrEmpty() && !mmprojFileName.isNullOrEmpty()
+
+        val mmprojProgress = _mmprojDownloadProgress.value[modelId]
+        val mmprojAlreadyDone = mmprojProgress?.status == DownloadStatus.SUCCESS
+        val mmprojRunning = mmprojProgress?.status == DownloadStatus.RUNNING
+
+        // Ничего не делаем, если всё уже качается или скачано
+        if (mainRunning) return
+        if (hasMmproj && mmprojRunning) return
+
+        try {
+            val dm = getApplication<Application>().getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+
+                       // Запуск основной модели — только если ещё не скачана
+            if (!mainAlreadyDone) {
+                // Резолвим редирект HF → CDN перед передачей в DownloadManager
+                val resolvedUrl = resolveRedirectUrl(url)
+
+                    val mainRequest = DownloadManager.Request(Uri.parse(resolvedUrl))
+                    .setTitle(fileName)
+                    .setDescription("Загрузка модели ИИ-Друг")
+                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                    .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "models/$fileName")
+                    .setAllowedOverMetered(true)
+                    .setAllowedOverRoaming(false)
+
+                val mainId = dm.enqueue(mainRequest)
+                downloadIds[modelId] = mainId
+                _downloadProgress.value = _downloadProgress.value + (modelId to DownloadProgress(0, DownloadStatus.RUNNING))
+
+                scope.launch {
+                    pollDownloadProgress(mainId, modelId, isMain = true)
+                }
+
+                Log.d(TAG, "Main download started: modelId=$modelId, mainId=$mainId")
+            }
+
+            // Запуск проектора — только если есть и ещё не скачан
+            if (hasMmproj && !mmprojAlreadyDone) {
+                // Резолвим редирект HF → CDN перед передачей в DownloadManager
+                val resolvedMmprojUrl = resolveRedirectUrl(mmprojUrl!!)
+
+                val mmprojRequest = DownloadManager.Request(Uri.parse(resolvedMmprojUrl))
+                    .setTitle(mmprojFileName!!)
+                    .setDescription("Загрузка проектора ИИ-Друг")
+                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                    .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "models/$mmprojFileName")
+                    .setAllowedOverMetered(true)
+                    .setAllowedOverRoaming(false)
+
+                val mmprojId = dm.enqueue(mmprojRequest)
+                mmprojDownloadIds[modelId] = mmprojId
+                _mmprojDownloadProgress.value = _mmprojDownloadProgress.value + (modelId to DownloadProgress(0, DownloadStatus.RUNNING))
+
+                scope.launch {
+                    pollDownloadProgress(mmprojId, modelId, isMain = false)
+                }
+
+                Log.d(TAG, "Mmproj download started: modelId=$modelId, mmprojId=$mmprojId")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start download: ${e.message}", e)
+            if (!mainAlreadyDone) {
+                _downloadProgress.value = _downloadProgress.value + (modelId to DownloadProgress(0, DownloadStatus.FAILED))
+            }
+            if (hasMmproj && !mmprojAlreadyDone) {
+                _mmprojDownloadProgress.value = _mmprojDownloadProgress.value + (modelId to DownloadProgress(0, DownloadStatus.FAILED))
+            }
+        }
+    }
+
+       private suspend fun pollDownloadProgress(downloadId: Long, modelId: String, isMain: Boolean) {
+        val dm = getApplication<Application>().getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+
+        while (true) {
+            delay(500)
+
+            val query = DownloadManager.Query().setFilterById(downloadId)
+            val cursor = try {
+                dm.query(query)
+            } catch (e: Exception) {
+                Log.e(TAG, "Download query failed: ${e.message}", e)
+                updateProgress(modelId, isMain, 0, DownloadStatus.FAILED)
+                return
+            }
+
+            if (cursor == null) {
+                updateProgress(modelId, isMain, 0, DownloadStatus.FAILED)
+                return
+            }
+
+            cursor.use {
+                if (!it.moveToFirst()) {
+                    updateProgress(modelId, isMain, 0, DownloadStatus.FAILED)
+                    return
+                }
+
+                val statusIndex = it.getColumnIndex(DownloadManager.COLUMN_STATUS)
+                val downloadedIndex = it.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
+                val totalIndex = it.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
+
+                val status = if (statusIndex >= 0) it.getInt(statusIndex) else DownloadManager.STATUS_FAILED
+                val downloaded = if (downloadedIndex >= 0) it.getLong(downloadedIndex) else 0L
+                val total = if (totalIndex >= 0) it.getLong(totalIndex) else -1L
+
+                when (status) {
+                    DownloadManager.STATUS_SUCCESSFUL -> {
+                        updateProgress(modelId, isMain, 100, DownloadStatus.SUCCESS)
+                        Log.d(TAG, "Download SUCCESS: modelId=$modelId, isMain=$isMain")
+                        return
+                    }
+                    DownloadManager.STATUS_FAILED -> {
+                        updateProgress(modelId, isMain, 0, DownloadStatus.FAILED)
+                        Log.e(TAG, "Download FAILED: modelId=$modelId, isMain=$isMain")
+                        return
+                    }
+                    DownloadManager.STATUS_PAUSED,
+                    DownloadManager.STATUS_PENDING,
+                    DownloadManager.STATUS_RUNNING -> {
+                        val percent = if (total > 0L) {
+                            ((downloaded * 100L) / total).toInt().coerceIn(0, 100)
+                        } else {
+                            0
+                        }
+                        updateProgress(modelId, isMain, percent, DownloadStatus.RUNNING)
+                    }
+                }
+            }
+        }
+    }
+
+       private fun updateProgress(modelId: String, isMain: Boolean, percent: Int, status: DownloadStatus) {
+        if (isMain) {
+            _downloadProgress.value = _downloadProgress.value + (modelId to DownloadProgress(percent, status))
+        } else {
+            _mmprojDownloadProgress.value = _mmprojDownloadProgress.value + (modelId to DownloadProgress(percent, status))
+        }
+    }
+
+    /**
+     * Проверяет, лежит ли файл модели/проектора в Downloads/models/.
+     * Используется в диалоге загрузки, чтобы показать «✅ Файл уже скачан».
+     */
+    fun isModelFileDownloaded(fileName: String): Boolean {
+        return try {
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val file = File(File(downloadsDir, "models"), fileName)
+            file.exists() && file.length() > 1_000_000
+        } catch (e: Exception) {
+            Log.w(TAG, "isModelFileDownloaded failed for $fileName: ${e.message}")
+            false
+        }
+    }
+
+            // ========== VISION-МОДЕЛЬ (SmolVLM2-500M) ==========
+
+    private fun copyAssetToFiles(assetName: String, destFileName: String): String? {
+        return try {
+            val destFile = File(getApplication<Application>().filesDir, destFileName)
+            if (!destFile.exists()) {
+                getApplication<Application>().assets.open("vision/$assetName").use { input ->
+                    destFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                Log.d(TAG, "Asset $assetName скопирован в ${destFile.absolutePath}")
+            }
+        "file://${destFile.absolutePath}"
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка копирования $assetName: ${e.message}")
+            null
+        }
+    }
+
+       private fun hasEnoughRamForVision(): Boolean {
+        return try {
+            val am = getApplication<Application>().getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            val mi = android.app.ActivityManager.MemoryInfo()
+            am.getMemoryInfo(mi)
+            val availGb = mi.availMem.toDouble() / (1024.0 * 1024.0 * 1024.0)
+            val totalGb = mi.totalMem.toDouble() / (1024.0 * 1024.0 * 1024.0)
+            Log.d(TAG, "RAM: свободно $availGb ГБ, всего $totalGb ГБ")
+
+            // Свободно >= 0.8 ГБ — точно хватит (после выгрузки текстовой модели).
+            // Или всего >= 3 ГБ — телефон достаточно мощный, чтобы загрузить vision.
+            availGb >= 0.8 || totalGb >= 3.0
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка проверки RAM: ${e.message}")
+            false
+        }
+    }
+                fun ensureVisionModelLoaded(onReady: () -> Unit) {
+        if (isVisionModelLoaded) {
+            _visionPhase.value = VisionPhase.VISION_READY
+            onReady()
+            return
+        }
+
+        if (isVisionLoading) {
+            // Уже грузимся — не запускаем второй load.
+            appendSystemMessage("⏳ Зрение уже загружается, подождите...")
+            return
+        }
+
+        if (!hasEnoughRamForVision()) {
+            appendSystemMessage("❌ Недостаточно памяти для загрузки визиона")
+            return
+        }
+
+        isVisionLoading = true
+
+        Log.d(TAG, "ensureVisionModelLoaded: START. savedModelPath=$currentModelPath, savedMmprojPath=$currentMmprojPath")
+        appendSystemMessage("🤖 Загружаю зрение...")
+
+        savedTemperature = temperature.value
+        savedContextSize = contextSize.value
+        savedModelPath = if (_isModelLoaded.value) currentModelPath else null
+        savedMmprojPath = if (_isModelLoaded.value) currentMmprojPath else null
+
+        scope.launch(Dispatchers.IO) {
+                        try {
+                _visionPhase.value = VisionPhase.RELEASING_TEXT
+                llamaHelper.release()
+                // Даём время контексту освободиться — иначе load()
+                // может начаться раньше, чем release() завершится.
+                delay(500)
+
+                _visionPhase.value = VisionPhase.LOADING_VISION
+
+                val modelPath = copyAssetToFiles("smolvlm2_500m.gguf", "smolvlm2_500m.gguf")
+                val mmprojPath = copyAssetToFiles("smolvlm2_500m_mmproj.gguf", "smolvlm2_500m_mmproj.gguf")
+                Log.d(TAG, "ensureVisionModelLoaded: modelPath=$modelPath, mmprojPath=$mmprojPath")
+
+                if (modelPath == null || mmprojPath == null) {
+                    isVisionLoading = false
+                    _visionPhase.value = VisionPhase.IDLE
+                    appendSystemMessage("❌ Не удалось скопировать модель из assets")
+                    return@launch
+                }
+
+                temperature.value = 0.1f
+                contextSize.value = 8192
+
+                Log.d(TAG, "ensureVisionModelLoaded: вызываю llamaHelper.load(8192)")
+                                llamaHelper.load(
+                    modelPath,
+                    8192,
+                    mmprojPath
+                                ) { id ->
+                    Log.d(TAG, "ensureVisionModelLoaded: load callback id=$id")
+                    isVisionModelLoaded = true
+                    isVisionLoading = false
+                    _visionPhase.value = VisionPhase.VISION_READY
+                    appendSystemMessage("✅ Зрение загружено")
+                    // Даём время модели полностью инициализироваться,
+                    // прежде чем запускать первый predict.
+                    scope.launch(Dispatchers.IO) {
+                        delay(1500)
+                        withContext(Dispatchers.Main) {
+                            Log.d(TAG, "ensureVisionModelLoaded: onReady, вызываю generateLocal")
+                            onReady()
+                        }
+                    }
+                }
+                       } catch (e: Exception) {
+                isVisionLoading = false
+                _visionPhase.value = VisionPhase.IDLE
+                Log.e(TAG, "Ошибка загрузки vision: ${e.message}")
+                appendSystemMessage("❌ Ошибка загрузки зрения: ${e.message}")
+            }
+        }
+    }
+
+            fun restorePreviousModelIfNeeded(onReady: (() -> Unit)? = null) {
+        if (!isVisionModelLoaded) {
+            onReady?.invoke()
+            return
+        }
+
+        scope.launch(Dispatchers.IO) {
+            try {
+                _visionPhase.value = VisionPhase.RESTORING_TEXT
+                llamaHelper.release()
+                isVisionModelLoaded = false
+
+                if (savedModelPath != null) {
+                    appendSystemMessage("🤖 Возвращаю текстовую модель...")
+
+                    temperature.value = savedTemperature
+                    contextSize.value = savedContextSize
+
+                                       llamaHelper.load(
+                        savedModelPath!!,
+                        savedContextSize,
+                        savedMmprojPath
+                    ) { _ ->
+                        Log.d(TAG, "Текстовая модель восстановлена")
+                        _visionPhase.value = VisionPhase.TEXT_RESTORED
+                        appendSystemMessage("✅ Текстовая модель загружена обратно")
+                        scope.launch {
+                            delay(2000)
+                            _visionPhase.value = VisionPhase.IDLE
+                        }
+                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            onReady?.invoke()
+                        }
+                    }
+                } else {
+                    _visionPhase.value = VisionPhase.IDLE
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        onReady?.invoke()
+                    }
+                }
+            } catch (e: Exception) {
+                _visionPhase.value = VisionPhase.IDLE
+                Log.e(TAG, "Ошибка восстановления текстовой модели: ${e.message}")
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    onReady?.invoke()
+                }
+            }
+        }
+    }
+
+    fun showBrainEditor() {
+        _showBrainEditor.value = true
+    }
+
+    fun hideBrainEditor() {
+        _showBrainEditor.value = false
+    }
+
+    // ========== РЕДАКТОР ЧАТА ==========
+
+    fun showChatEditor() {
+        _showChatEditor.value = true
+    }
+
+    fun hideChatEditor() {
+        _showChatEditor.value = false
+    }
+
+    /**
+     * Форматирует _chatHistory в текст для редактора.
+     * Формат: "Вы: ", "ИИ-Друг: ", "📢 " + текст сообщения.
+     */
+    fun readChatAsText(): String {
+        val messages = _chatHistory.value
+        if (messages.isEmpty()) return ""
+        val sb = StringBuilder()
+                for (message in messages) {
+            val prefix = when (message.role) {
+                "user" -> "Вы: "
+                "assistant" -> "ИИ-Друг: "
+                "system" -> "📢 "
+                else -> ""
+            }
+            // hasImage уже подразумевает, что в тексте может быть 📷 или [Изображение].
+            // Дублировать иконку в файл не нужно — иначе при перезапуске
+            // она накапливается с каждым сохранением.
+            sb.append(prefix).append(message.text).append("\n")
+        }
+        return sb.toString().trim()
+    }
+
+    /**
+     * Парсит текст из редактора обратно в список ChatMessage.
+     * Строка с префиксом начинает новое сообщение, без префикса — продолжение.
+     */
+    private fun parseChatFromText(text: String): List<ChatMessage> {
+        val result = mutableListOf<ChatMessage>()
+        val lines = text.split("\n")
+        var currentRole: String? = null
+        var currentText = StringBuilder()
+
+        fun flush() {
+            if (currentRole != null) {
+                result.add(ChatMessage(currentRole!!, currentText.toString().trimEnd()))
+            }
+            currentText = StringBuilder()
+        }
+
+                for (line in lines) {
+            val role = when {
+                line.startsWith("Вы: ") -> "user"
+                line.startsWith("ИИ-Друг: ") -> "assistant"
+                line.startsWith("📢 ") -> "system"
+                else -> null
+            }
+            if (role != null) {
+                flush()
+                currentRole = role
+                val prefixLength = when (role) {
+                    "user" -> 4       // "Вы: "
+                    "assistant" -> 9  // "ИИ-Друг: "
+                    "system" -> 2     // "📢 "
+                    else -> 0
+                }
+                // Срезаем возможные ведущие 📷 / [Изображение] / [Видео: ...],
+                // чтобы они не накапливались при каждом сохранении/загрузке.
+                var body = line.substring(prefixLength)
+                body = body.removePrefix("📷 ").trimStart()
+                currentText.append(body)
+            } else {
+                if (currentRole != null) {
+                    currentText.append("\n").append(line)
+                }
+            }
+        }
+        flush()
+        return result
+    }
+
+    /**
+     * Перезаписывает chat.txt текстом из редактора,
+     * парсит его и заменяет _chatHistory.
+     */
+    fun overwriteChatFromText(newText: String) {
+        try {
+            if (!chatFile.exists()) chatFile.createNewFile()
+            chatFile.writeText(newText.trim() + "\n")
+            val parsed = parseChatFromText(newText)
+            _chatHistory.value = parsed
+            Log.d(TAG, "chat.txt overwritten and _chatHistory replaced (${parsed.size} messages)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка перезаписи chat.txt: ${e.message}")
+            appendSystemMessage("❌ Ошибка синхронизации чата")
+        }
+    }
+
+    /**
+     * Записывает текущий _chatHistory в chat.txt.
+     * Вызывается при каждом изменении чата.
+     */
+    private fun syncChatToFile() {
+        try {
+            if (!chatFile.exists()) chatFile.createNewFile()
+            chatFile.writeText(readChatAsText() + "\n")
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка записи chat.txt: ${e.message}")
+        }
+    }
+
+       // ========== ОРГАНАЙЗЕР ==========
+
+    private fun parseOrganizerText(text: String): List<AlarmEntry> {
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+        return text.split("\n").mapNotNull { line ->
+            val trimmed = line.trim()
+            if (trimmed.isEmpty()) return@mapNotNull null
+            val sep = trimmed.indexOf('|')
+            if (sep < 0) return@mapNotNull null
+            val timeStr = trimmed.substring(0, sep).trim()
+            val msg = trimmed.substring(sep + 1).trim()
+            val millis = try { dateFormat.parse(timeStr)?.time } catch (e: Exception) { null }
+            if (millis == null) return@mapNotNull null
+            AlarmEntry(millis, msg)
+        }.sortedBy { it.timeMillis }
+    }
+
+    fun reloadOrganizer() {
+        try {
+            if (!organizerFile.exists()) {
+                organizerFile.createNewFile()
+                _organizerEntries.value = emptyList()
+                return
+            }
+            val text = organizerFile.readText()
+            _organizerEntries.value = parseOrganizerText(text)
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка чтения organizer.txt: ${e.message}")
+        }
+    }
+
+    fun readOrganizerAsText(): String {
+        return try {
+            if (organizerFile.exists()) organizerFile.readText().trim() else ""
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка чтения organizer.txt: ${e.message}")
+            ""
+        }
+    }
+
+    fun overwriteOrganizerFromText(newText: String) {
+        try {
+            if (!organizerFile.exists()) organizerFile.createNewFile()
+            organizerFile.writeText(newText.trim() + "\n")
+            _organizerEntries.value = parseOrganizerText(newText)
+            appendSystemMessage("📅 Органайзер обновлён")
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка перезаписи organizer.txt: ${e.message}")
+            appendSystemMessage("❌ Ошибка обновления органайзера")
+        }
+    }
+
+    private fun saveOrganizerEntry(timeMillis: Long, text: String) {
+        try {
+            if (!organizerFile.exists()) organizerFile.createNewFile()
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+            val line = dateFormat.format(Date(timeMillis)) + " | " + text
+            val existing = organizerFile.readText().trim()
+            val newContent = if (existing.isEmpty()) line else existing + "\n" + line
+            organizerFile.writeText(newContent + "\n")
+            _organizerEntries.value = parseOrganizerText(newContent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка записи organizer.txt: ${e.message}")
+        }
+    }
+
+        fun ensureBibliotekaBooks() {
+        try {
+            val assetDir = "biblioteka"
+            val assetList = getApplication<Application>().assets.list(assetDir) ?: emptyArray()
+                        for (fileName in assetList) {
+                if (!fileName.endsWith(".txt", ignoreCase = true) && !fileName.endsWith(".pdf", ignoreCase = true)) continue
+                val destFile = File(bibliotekaDir, fileName)
+                if (!destFile.exists()) {
+                    getApplication<Application>().assets.open("$assetDir/$fileName").use { input ->
+                        destFile.outputStream().use { output -> input.copyTo(output) }
+                    }
+                    Log.d(TAG, "Book copied: $fileName")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "ensureBibliotekaBooks failed: ${e.message}")
+        }
+    }
+
+    fun listBibliotekaBooks(): List<File> {
+        ensureBibliotekaBooks()
+        return bibliotekaDir.listFiles()
+            ?.filter { it.isFile && (it.name.endsWith(".txt", ignoreCase = true) || it.name.endsWith(".pdf", ignoreCase = true)) }
+            ?.sortedBy { it.name.lowercase() }
+            ?: emptyList()
+    }
+
+    fun readBookText(file: File): String {
+        return try {
+            if (file.exists()) file.readText() else ""
+        } catch (e: Exception) {
+            Log.e(TAG, "readBookText failed: ${e.message}")
+            ""
+        }
+    }
+
+        // ========== ПОИСК ПО КНИГАМ (FTS5) ==========
+
+        private val bookDatabase by lazy {
+        BookDatabase.get(getApplication())
+    }
+
+    private val bookSearchEngine by lazy {
+        BookSearchEngine(File(getApplication<Application>().filesDir, "book_index"))
+    }
+    /**
+     * Индексирует все книги из filesDir/biblioteka/ в Room FTS5.
+     * Вызывается один раз при первом открытии библиотеки.
+     */
+       fun indexBooksIfNeeded() {
+        scope.launch(Dispatchers.IO) {
+            try {
+                val books = listBibliotekaBooks()
+                if (books.isEmpty()) return@launch
+
+                val triples = books.map { file ->
+                    val text = readBookText(file)
+                    Triple(file.nameWithoutExtension, text, file.absolutePath)
+                }
+                bookSearchEngine.clearIndex()
+                bookSearchEngine.indexBooks(triples)
+                Log.d(TAG, "Indexed ${books.size} books into Lucene")
+            } catch (e: Exception) {
+                Log.e(TAG, "indexBooksIfNeeded failed: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Поиск по книгам через FTS5.
+     * Возвращает список пар (название книги, фрагмент с совпадением).
+     */
+       suspend fun searchBooks(query: String): List<Pair<String, String>> {
+        return try {
+            withContext(Dispatchers.IO) {
+                bookSearchEngine.search(query)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "searchBooks failed: ${e.message}")
+            emptyList()
+        }
+    }
+    fun readBrain(): String {
+        return try {
+            if (brainFile.exists()) {
+                brainFile.readText().trim()
+            } else {
+                ""
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка чтения мозга: ${e.message}")
+            ""
+        }
+    }
+
+    fun overwriteBrain(newFullText: String) {
+        try {
+            if (!brainFile.exists()) {
+                brainFile.createNewFile()
+            }
+            brainFile.writeText(newFullText.trim() + "\n")
+            appendSystemMessage("🧠 Brain.txt обновлен")
+            Log.d(TAG, "Brain.txt updated")
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка перезаписи мозга: ${e.message}")
+            appendSystemMessage("❌ Ошибка обновления Brain.txt")
+        }
+    }
+
+    private fun updateRemainingTime() {
+        if (_isPermanentlyBlocked.value) {
+            _remainingTimeText.value = "🔴 Приложение заблокировано"
+            return
+        }
+
+        if (isUnlockedPermanently) {
+            _remainingTimeText.value = "✅ Приложение разблокировано"
+            _isPermanentlyUnlocked.value = true
+            return
+        }
+
+        _isPermanentlyUnlocked.value = false
+
+        val storedTime = prefs.getLong("app_start_time", 0L)
+        if (storedTime == 0L) {
+            _remainingTimeText.value = "⚠️ Время не установлено"
+            return
+        }
+
+        val currentTime = System.currentTimeMillis()
+        val elapsed = currentTime - storedTime
+        val remaining = ONE_DAY_MS - elapsed
+
+        if (remaining <= 0) {
+            _remainingTimeText.value = "🔴 Приложение заблокировано. Введите секретную фразу."
+            _isAppLocked.value = true
+            return
+        }
+
+        val hours = remaining / 3600000
+        val minutes = (remaining % 3600000) / 60000
+        _remainingTimeText.value = "⏳ До блокировки: ${hours}ч ${minutes}мин"
+    }
+
+    private fun verifyDeviceBinding(): Boolean {
+        return try {
+            val context = getApplication<Application>()
+            val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+
+            if (androidId.isNullOrEmpty()) {
+                Log.e(TAG, "Failed to get Android ID. Device binding impossible.")
+                _isDeviceBound.value = false
+                _isAppLocked.value = true
+                _isPermanentlyBlocked.value = true
+                prefs.edit().putBoolean("is_permanently_blocked", true).apply()
+                _remainingTimeText.value = "🔴 Приложение заблокировано"
+                return false
+            }
+
+            val md = MessageDigest.getInstance("SHA-256")
+            val deviceHash = md.digest(androidId.toByteArray(Charsets.UTF_8))
+            val deviceHashString = deviceHash.joinToString("") { "%02x".format(it) }
+
+            val storedHash = prefs.getString("device_hash", null)
+
+            if (storedHash == null) {
+                prefs.edit().putString("device_hash", deviceHashString).apply()
+                _isDeviceBound.value = true
+                Log.i(TAG, "Device binding initialized for this device.")
+                true
+            } else {
+                val isMatch = storedHash == deviceHashString
+                if (!isMatch) {
+                    Log.e(TAG, "Device mismatch! Stored: $storedHash, Current: $deviceHashString")
+                    _isDeviceBound.value = false
+                    _isAppLocked.value = true
+                    _isPermanentlyBlocked.value = true
+                    prefs.edit().putBoolean("is_permanently_blocked", true).apply()
+                    _remainingTimeText.value = "🔴 Приложение заблокировано"
+                } else {
+                    _isDeviceBound.value = true
+                }
+                isMatch
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error verifying device binding: ${e.message}", e)
+            _isDeviceBound.value = false
+            _isAppLocked.value = true
+            _isPermanentlyBlocked.value = true
+            prefs.edit().putBoolean("is_permanently_blocked", true).apply()
+            _remainingTimeText.value = "🔴 Приложение заблокировано"
+            false
+        }
+    }
+
+    private fun verifyHardwareBinding(): Boolean {
+        return try {
+            val keyStore = KeyStore.getInstance("AndroidKeyStore")
+            keyStore.load(null)
+            val isKeyExists = keyStore.containsAlias(hardwareKeyAlias)
+            val storedTime = prefs.getLong("app_start_time", 0L)
+
+            if (!isKeyExists && storedTime == 0L) {
+                generateHardwareKey()
+                prefs.edit().putLong("app_start_time", System.currentTimeMillis()).apply()
+                Log.i(TAG, "Hardware key generated for first launch.")
+                true
+            } else if (isKeyExists && storedTime > 0L) {
+                true
+            } else if (isKeyExists && storedTime == 0L) {
+                Log.e(TAG, "Hardware key exists but start time is missing! Possible cloning.")
+                _isAppLocked.value = true
+                _isDeviceBound.value = false
+                _isPermanentlyBlocked.value = true
+                prefs.edit().putBoolean("is_permanently_blocked", true).apply()
+                _remainingTimeText.value = "🔴 Приложение заблокировано"
+                false
+            } else {
+                Log.e(TAG, "Start time exists but hardware key is missing! Possible cloning.")
+                _isAppLocked.value = true
+                _isDeviceBound.value = false
+                _isPermanentlyBlocked.value = true
+                prefs.edit().putBoolean("is_permanently_blocked", true).apply()
+                _remainingTimeText.value = "🔴 Приложение заблокировано"
+                false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Hardware binding verification error: ${e.message}", e)
+            _isAppLocked.value = true
+            _isDeviceBound.value = false
+            _isPermanentlyBlocked.value = true
+            prefs.edit().putBoolean("is_permanently_blocked", true).apply()
+            _remainingTimeText.value = "🔴 Приложение заблокировано"
+            false
+        }
+    }
+
+    private fun generateHardwareKey() {
+        try {
+            val keyPairGenerator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_RSA, "AndroidKeyStore")
+            val spec = KeyGenParameterSpec.Builder(
+                hardwareKeyAlias,
+                KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY
+            )
+                .setDigests(KeyProperties.DIGEST_SHA256)
+                .setSignaturePaddings(KeyProperties.SIGNATURE_PADDING_RSA_PKCS1)
+                .setUserAuthenticationRequired(false)
+                .setKeySize(2048)
+                .build()
+            keyPairGenerator.initialize(spec)
+            keyPairGenerator.generateKeyPair()
+            Log.i(TAG, "Hardware key generated successfully.")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to generate hardware key: ${e.message}", e)
+        }
+    }
+
+    private fun verifyTimeLimit(): Boolean {
+        if (isUnlockedPermanently) {
+            _isPermanentlyUnlocked.value = true
+            return true
+        }
+
+        val storedTime = prefs.getLong("app_start_time", 0L)
+        if (storedTime == 0L) {
+            Log.e(TAG, "Start time not found. Verification failed.")
+            _isAppLocked.value = true
+            _remainingTimeText.value = "🔴 Приложение заблокировано"
+            return false
+        }
+
+        val currentTime = System.currentTimeMillis()
+        if (currentTime < storedTime) {
+            Log.e(TAG, "System time was set back! Possible tampering.")
+            _isAppLocked.value = true
+            _isPermanentlyBlocked.value = true
+            prefs.edit().putBoolean("is_permanently_blocked", true).apply()
+            _remainingTimeText.value = "🔴 Приложение заблокировано"
+            return false
+        }
+
+        val elapsed = currentTime - storedTime
+        if (elapsed > ONE_DAY_MS) {
+            Log.e(TAG, "One-day limit exceeded. App locked. Secret phrase required.")
+            _isAppLocked.value = true
+            _remainingTimeText.value = "🔴 Приложение заблокировано. Введите секретную фразу."
+            return false
+        }
+
+        Log.i(TAG, "Time limit verification passed. Hours remaining: ${(ONE_DAY_MS - elapsed) / 3600000}")
+        return true
+    }
+
+    fun verifySecretPhrase(input: String): Boolean {
+        val inputHash = hashStringSha256(input)
+        val isMatch = MessageDigest.isEqual(inputHash.toByteArray(), SECRET_PHRASE_HASH.toByteArray())
+                if (isMatch) {
+            isUnlockedPermanently = true
+            _isPermanentlyUnlocked.value = true
+            _isPermanentlyBlocked.value = false
+            _isAppLocked.value = false
+            _isDeviceBound.value = true
+            _remainingTimeText.value = "✅ Приложение разблокировано"
+            prefs.edit().putLong("app_start_time", System.currentTimeMillis()).apply()
+            prefs.edit().putBoolean("unlocked_permanently", true).apply()
+            prefs.edit().putBoolean("is_permanently_blocked", false).apply()
+            // Запоминаем, что сессия разблокирована — чтобы не спрашивать пароль снова
+            prefs.edit().putBoolean(KEY_SESSION_UNLOCKED, true).apply()
+            Log.i(TAG, "Device permanently unlocked with secret phrase.")
+        } else {
+            Log.w(TAG, "Incorrect secret phrase entered. Permanent block.")
+            _isPermanentlyBlocked.value = true
+            _isAppLocked.value = true
+            _isDeviceBound.value = false
+            _remainingTimeText.value = "🔴 Приложение заблокировано"
+            prefs.edit().putBoolean("is_permanently_blocked", true).apply()
+        }
+        return isMatch
+    }
+
+    private fun hashStringSha256(input: String): String {
+        val md = MessageDigest.getInstance("SHA-256")
+        val digest = md.digest(input.toByteArray(Charsets.UTF_8))
+        return digest.joinToString("") { "%02x".format(it) }
+    }
+
+           fun enableTts() {
+        // Если TTS выключается прямо сейчас — не даём включить, чтобы
+        // не было гонки между ACTION_STOP и ACTION_TTS_READY.
+        if (isTtsShuttingDown) {
+            appendSystemMessage("⏳ Подождите, TTS выключается...")
+            return
+        }
+
+        // Уже включено и готово
+        if (_isTtsReady.value && isTtsEnabled) {
+            appendSystemMessage("🔊 Озвучка уже включена")
+            return
+        }
+
+        // Включено, но сервис ещё не готов — просто ставим флаг
+        if (_isTtsReady.value && !isTtsEnabled) {
+            isTtsEnabled = true
+            appendSystemMessage("🔊 Озвучка включена")
+            return
+        }
+
+        // Нужно запустить сервис заново
+        isTtsEnabled = true
+        _isTtsReady.value = false
+        appendSystemMessage("🔄 Инициализация офлайн голосового движка...")
+        Log.d(TAG, "TTS service starting")
+
+        val ttsStartIntent = Intent(getApplication<Application>(), TtsService::class.java)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                getApplication<Application>().startForegroundService(ttsStartIntent)
+            } else {
+                getApplication<Application>().startService(ttsStartIntent)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start TtsService: ${e.message}")
+            isTtsEnabled = false
+            _isTtsReady.value = false
+            appendSystemMessage("❌ Не удалось запустить TTS: ${e.message}")
+        }
+    }
+
+              fun disableTts() {
+        isTtsEnabled = false
+        _isSpeaking.value = false
+        _isTtsReady.value = false
+        _isPreparingSpeech.value = false
+        // Ставим флаг «выключаемся», чтобы запоздавший ACTION_TTS_READY
+        // от убитого сервиса не включил кнопку обратно.
+        isTtsShuttingDown = true
+        appendSystemMessage("🔇 Озвучка отключена, TTS выгружен из памяти")
+        Log.d(TAG, "TTS disabled")
+
+        // Шлём ACTION_STOP, чтобы сервис снял foreground и остановился сам.
+        val ttsStopIntent = Intent(getApplication<Application>(), TtsService::class.java).apply {
+            action = TtsService.ACTION_STOP
+        }
+        try {
+            getApplication<Application>().startService(ttsStopIntent)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to send ACTION_STOP to TtsService: ${e.message}")
+        }
+
+        // Снимаем флаг через 3 секунды — этого хватит, чтобы сервис успел
+        // умереть и не прислал ACTION_TTS_READY повторно.
+        scope.launch {
+            delay(3000)
+            isTtsShuttingDown = false
+        }
+    }
+       private fun filterTextForSpeech(text: String): String {
+        var cleanText = text
+
+        // Проверяем, является ли текст математическим выражением/уравнением
+        val isMathExpression = Regex("[0-9\\s+\\-*/=xх×]").matches(text) &&
+                Regex("\\d").containsMatchIn(text) &&
+                (text.contains("=") || text.contains("+") || text.contains("-") || text.contains("*") || text.contains("/") || text.contains("x") || text.contains("х") || text.contains("×"))
+
+        if (isMathExpression) {
+            // Озвучиваем математические символы
+            cleanText = cleanText
+                .replace("+", " плюс ")
+                .replace("=", " равно ")
+                .replace("*", " умножить на ")
+                .replace("×", " умножить на ")
+                .replace("x", " умножить на ")
+                .replace("х", " умножить на ")
+                .replace("/", " разделить на ")
+                .replace("-", " минус ")
+        } else {
+            // Обычный текст — не озвучиваем * и -
+            cleanText = cleanText
+                .replace("+", " плюс ")
+                .replace("=", " равно ")
+                .replace("/", " разделить на ")
+        }
+
+        cleanText = Regex("(\\d),(\\d)").replace(cleanText) { match ->
+            "${match.groupValues[1]} запятая ${match.groupValues[2]}"
+        }
+
+        cleanText = cleanText.replace(Regex("[^\\p{L}\\p{N}\\s.!?]"), "")
+        return cleanText.replace(Regex("\\s+"), " ").trim()
+    }
+
+                     fun speakText(text: String) {
+        if (!isTtsEnabled || text.isBlank()) {
+            _isPreparingSpeech.value = false
+            return
+        }
+        val identifier = languageIdentifier
+        if (identifier == null) {
+            speakWithSherpa(text)
+            return
+        }
+        identifier.identifyLanguage(text)
+            .addOnSuccessListener { languageCode ->
+                Log.d(TAG, "Detected language: $languageCode")
+                if (languageCode == "und" || languageCode == "ru") {
+                    speakWithSherpa(text)
+                } else {
+                    speakWithAndroidTts(text, languageCode)
+                }
+            }
+                       .addOnFailureListener { e ->
+                Log.e(TAG, "Language detection failed: ${e.message}")
+                speakWithSherpa(text)
+            }
+
+        // Страховка: если за 5 секунд TTS не прислал SPEAK_START —
+        // снимаем «готовлю озвучку», чтобы статус не висел вечно.
+        if (_isPreparingSpeech.value) {
+            scope.launch {
+                delay(5000)
+                if (_isPreparingSpeech.value && !_isSpeaking.value) {
+                    Log.w(TAG, "TTS didn't start in 5s, resetting isPreparingSpeech")
+                    _isPreparingSpeech.value = false
+                }
+            }
+        }
+    }
+
+    // Озвучка фраз интерфейса — всегда через Sherpa (русский движок),
+    // без определения языка через ML Kit.
+    fun speakUiPhrase(text: String) {
+        if (!isTtsEnabled || text.isBlank()) {
+            return
+        }
+        speakWithSherpa(text)
+    }
+
+       private fun speakWithSherpa(text: String) {
+        // Проверяем, что TTS включён. Если выключен — не шлём ничего,
+        // иначе сервис перезапустится и уведомление вернётся.
+        if (!isTtsEnabled) {
+            Log.d(TAG, "speakWithSherpa: TTS disabled, skipping")
+            return
+        }
+        val filteredText = filterTextForSpeech(text)
+        if (filteredText.isBlank()) {
+            return
+        }
+        val context = getApplication<Application>()
+        val intent = Intent(context, TtsService::class.java).apply {
+            action = TtsService.ACTION_SPEAK
+            putExtra(TtsService.EXTRA_TEXT, filteredText)
+        }
+        context.startService(intent)
+    }
+
+       private fun speakWithAndroidTts(text: String, languageCode: String) {
+        val tts = androidTts
+        if (tts == null || !androidTtsReady) {
+            Log.w(TAG, "Android TTS not ready")
+            return
+        }
+        val locale = when (languageCode.lowercase()) {
+            "en" -> java.util.Locale.ENGLISH
+            "es" -> java.util.Locale("es", "ES")
+            "de" -> java.util.Locale.GERMAN
+            "fr" -> java.util.Locale.FRENCH
+            "it" -> java.util.Locale.ITALIAN
+            "pt" -> java.util.Locale("pt", "PT")
+            "zh" -> java.util.Locale.CHINESE
+            "ja" -> java.util.Locale.JAPANESE
+            "ko" -> java.util.Locale.KOREAN
+            "ar" -> java.util.Locale("ar", "SA")
+            else -> java.util.Locale.ENGLISH
+        }
+
+                val availability = tts.isLanguageAvailable(locale)
+
+        when (availability) {
+            TextToSpeech.LANG_AVAILABLE,
+            TextToSpeech.LANG_COUNTRY_AVAILABLE,
+            TextToSpeech.LANG_COUNTRY_VAR_AVAILABLE -> {
+                tts.language = locale
+                tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "android_tts_${System.currentTimeMillis()}")
+            }
+            else -> {
+                Log.w(TAG, "TTS not available for $locale (availability=$availability)")
+            }
+        }
+    }
+
+    private fun openTtsSettings() {
+        val context = getApplication<Application>()
+        try {
+            val intent = Intent("com.android.settings.TTS_SETTINGS")
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+            Log.d(TAG, "Opened TTS settings")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to open TTS settings: ${e.message}, trying fallback")
+            try {
+                val fallback = Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA)
+                fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(fallback)
+                Log.d(TAG, "Opened TTS install data fallback")
+            } catch (e2: Exception) {
+                Log.e(TAG, "Fallback also failed: ${e2.message}")
+                appendSystemMessage("⚠️ Не удалось открыть настройки TTS. Открой вручную: Настройки → Язык и ввод → Синтез речи.")
+            }
+        }
+    }
+
+       fun clearPendingText() {
+        _pendingTextToPrint.value = ""
+    }
+
+    /**
+     * Управление флагом «Готовлю озвучку» из UI.
+     * Ставится из ChatScreen, когда крышка на голове робота закрылась
+     * (то есть анимация «думает» завершилась и робот перешёл в покой).
+     * Снимается автоматически в ACTION_SPEAK_START, когда TTS начал звучать.
+     */
+    fun setPreparingSpeech(preparing: Boolean) {
+        if (_isPreparingSpeech.value != preparing) {
+            _isPreparingSpeech.value = preparing
+        }
+    }
+    fun setCloudReady(modelId: String) {
+        _cloudState.value = CloudAIState.Ready(modelId)
+        Log.d(TAG, "Cloud state set to Ready for model: $modelId")
+    }
+
+        /**
+     * Стеммер Портера (Snowball) для русского языка.
+     * Приводит слово к псевдо-корню, чтобы "штукатурка", "штукатурные",
+     * "штукатурить" давали один и тот же стем.
+     * Реализация портирована с http://snowball.tartarus.org/algorithms/russian/stemmer.html
+     * Работает с кириллицей, для латиницы/цифр возвращает слово без изменений.
+     */
+    private fun extractRussianRoot(word: String): String {
+        val lowerWord = word.lowercase()
+        // Работаем только с русскими словами. Латиница, цифры, смешанное — возвращаем как есть.
+        if (!lowerWord.any { it in 'а'..'я' || it == 'ё' }) return lowerWord
+
+        var word = lowerWord.replace('ё', 'е')
+
+        // Защита коротких слов
+        if (word.length < 3) return word
+
+        val vowels = "аеиоуыэюя"
+        fun isVowel(c: Char): Boolean = c in vowels
+
+        // Шаг 1: RV, R1, R2
+        // RV — область после первой гласной
+        // R1 — область после первой согласной, идущей после гласной
+        // R2 — область после второй такой согласной (относительно начала R1)
+        fun findRVRegion(w: String): Int {
+            for (i in w.indices) {
+                if (isVowel(w[i])) return i + 1
+            }
+            return w.length
+        }
+
+        fun findRRegion(w: String, start: Int): Int {
+            var i = start
+            while (i < w.length - 1) {
+                if (!isVowel(w[i]) && isVowel(w[i + 1])) {
+                    return i + 2
+                }
+                i++
+            }
+            return w.length
+        }
+
+        val rvStart = findRVRegion(word)
+        val r1Start = findRRegion(word, 0)
+        val r2Start = findRRegion(word, r1Start)
+
+        // Шаг 2: удаление окончаний (в области RV)
+        val endings = listOf(
+            "иями", "ями", "ами", "ией", "иям", "ием", "иях", "ию",
+            "ью", "ия", "ья", "ев", "ов", "ие", "ье", "еи", "ии",
+            "ей", "ой", "ий", "йм", "ием", "ым", "ом", "его", "ого",
+            "ему", "ому", "их", "ых", "ую", "юю", "ая", "яя", "ою", "ею",
+            "ах", "ях", "ам", "ям", "ий", "ый", "ой", "ей", "ою", "ею",
+            "и", "ы", "а", "я", "о", "е", "у", "ю", "й", "ь"
+        )
+
+        for (ending in endings) {
+            if (word.length - rvStart >= ending.length &&
+                word.endsWith(ending) &&
+                word.length - ending.length >= rvStart) {
+                word = word.substring(0, word.length - ending.length)
+                break
+            }
+        }
+
+        // Шаг 3: удаление суффиксов из R2 (приоритет) и R1
+        val suffixesR2 = listOf(
+            "иями", "ями", "ами", "ейше", "ейш", "нн",
+            "ость", "ост", "ей", "ий"
+        )
+        for (suffix in suffixesR2) {
+            if (word.length - r2Start >= suffix.length && word.endsWith(suffix)) {
+                word = word.substring(0, word.length - suffix.length)
+                break
+            }
+        }
+
+        val suffixesR1 = listOf(
+            "иями", "ями", "ами", "еи", "ии", "ей",
+            "ием", "иям", "иях", "ию", "ью", "ия", "ья",
+            "ев", "ов", "ие", "ье",
+            "ейше", "ейш", "нн",
+            "ость", "ост",
+            "ивш", "ывш", "ующ", "ся", "сь",
+            "его", "ого", "ему", "ому",
+            "их", "ых", "ую", "юю",
+            "ая", "яя", "ою", "ею",
+            "ах", "ях", "ам", "ям",
+            "ом", "ем", "ой", "ый", "ий",
+            "у", "ю", "а", "я", "о", "е", "и", "ы", "ь", "й",
+            "ав", "ыв", "ив", "ов", "ев", "уй",
+            "нн", "вш", "н", "в"
+        )
+        for (suffix in suffixesR1) {
+            if (word.length - r1Start >= suffix.length && word.endsWith(suffix)) {
+                word = word.substring(0, word.length - suffix.length)
+                break
+            }
+        }
+
+        // Шаг 4: удаление "ь" в конце
+        if (word.endsWith("ь")) {
+            word = word.substring(0, word.length - 1)
+        }
+
+        // Шаг 5: двойные "н" → одиночная "н"
+        word = word.replace(Regex("нн$"), "н")
+
+        return if (word.length < 2) lowerWord else word
+    }
+
+            private fun triggerBackgroundDialogueCompression(history: List<ChatMessage>) {
+        if (history.size < AUTO_BRAIN_COMPRESSION_THRESHOLD) return
+        if (_isCompressing.value) return
+
+        // Если основной predict ещё не завершён — откладываем сжатие.
+        // Иначе два launchCompletion на одном контексте валят процесс.
+        if (_state.value.isActive() || _cloudState.value.isActive()) {
+            Log.d(TAG, "Compression deferred: AI busy")
+            return
+        }
+
+        _isCompressing.value = true
+
+        scope.launch(Dispatchers.IO) {
+            try {
+                val dialogueText = history.joinToString("\n") { message ->
+                    val prefix = when (message.role) {
+                        "user" -> "Пользователь"
+                        "assistant" -> "Ассистент"
+                        else -> "Система"
+                    }
+                    "$prefix: ${message.text}"
+                }
+
+                val prompt = "Сожми кратко этот диалог. Выдели самое важное из того, о чём говорили. Сохрани факты, договорённости, планы, имена, пароли, контакты, цены, адреса — всё что может понадобиться в будущем. Пиши тезисно, строго по одной строке на факт. Без лишних слов.\n\n$dialogueText"
+
+                isCompressionRequest = true
+
+                // Системное сообщение с бегущими точками
+                appendSystemMessage("🧠 ИИ сжимает беседу")
+
+                // Запускаем анимацию бегущих точек каждые 500 мс
+                compressionDotsJob = scope.launch {
+                    var dotsCount = 0
+                    while (true) {
+                        delay(500)
+                        dotsCount = (dotsCount + 1) % 4
+                        val dots = ".".repeat(dotsCount)
+                        updateLastSystemMessage("🧠 ИИ сжимает беседу$dots")
+                    }
+                }
+
+                                // Для сжатия берём настройку пользователя, но ограничиваем сверху.
+                // Нижняя граница — 2048 (меньше не хватит на длинный диалог),
+                // верхняя — 8192 (больше для сжатия 10 сообщений избыточно и замедляет).
+                val compressionMaxTokens = maxTokens.value.coerceIn(2048, 8192)
+
+                if (_isModelLoaded.value && llamaHelper.getContextId() != null) {
+                    llamaHelper.predict(
+                        prompt = prompt,
+                        imagePath = null,
+                        systemPrompt = "Ты — полезный, умный и лаконичный ИИ-ассистент. Отвечай строго на русском языке.",
+                        maxTokens = compressionMaxTokens
+                    )
+                               } else if (cloudAIProvider.isConfigured()) {
+                    cloudAIProvider.generate(
+                        prompt = prompt,
+                        systemPrompt = "Ты — полезный, умный и лаконичный ИИ-ассистент. Отвечай строго на русском языке.",
+                        chatHistory = history,
+                        maxTokens = compressionMaxTokens
+                    )
+                } else {
+                    compressionDotsJob?.cancel()
+                    isCompressionRequest = false
+                    _isCompressing.value = false
+                    appendSystemMessage("⚠️ Нет активного ИИ для сжатия беседы")
+                }
+            } catch (e: Exception) {
+                compressionDotsJob?.cancel()
+                isCompressionRequest = false
+                _isCompressing.value = false
+                Log.e(TAG, "Background compression failed: ${e.message}")
+            }
+        }
+    }
+
+        fun updateLastSystemMessage(newText: String) {
+        val currentList = _chatHistory.value.toMutableList()
+        if (currentList.isNotEmpty() && currentList.last().role == "system") {
+            currentList[currentList.lastIndex] = ChatMessage("system", newText)
+            _chatHistory.value = currentList
+        } else {
+            _chatHistory.value = currentList + ChatMessage("system", newText)
+        }
+        syncChatToFile()
+    }
+
+               fun updateAssistantMessage(newText: String) {
+        // Печать финального ответа пошла — «Готовлю озвучку» сбрасываем.
+        if (_isPreparingSpeech.value) {
+            _isPreparingSpeech.value = false
+        }
+        val currentList = _chatHistory.value.toMutableList()
+        if (currentList.isNotEmpty() && currentList.last().role == "assistant") {
+            currentList[currentList.lastIndex] = ChatMessage("assistant", newText)
+            _chatHistory.value = currentList
+        } else {
+            _chatHistory.value = currentList + ChatMessage("assistant", newText)
+        }
+        syncChatToFile()
+    }
+
+        private fun determineCategory(text: String): String {
+        val lowerText = text.lowercase()
+
+        val hasPrice = Regex("\\d+[.,]?\\d*\\s*(р|руб|₽)").containsMatchIn(lowerText) ||
+                lowerText.contains("р/м") ||
+                lowerText.contains("р/кг") ||
+                lowerText.contains("р/шт") ||
+                lowerText.contains("р/лист") ||
+                lowerText.contains("р/пм") ||
+                lowerText.contains("р/т")
+
+        if (hasPrice) return "[ПРАЙС]"
+
+        // Прайс-слова: если в запросе есть и материал/изделие, и цифры-размеры — это прайс
+        val priceKeywords = listOf(
+            "труба", "труб", "лист", "листов", "уголок", "швеллер", "арматура",
+            "профиль", "профнастил", "металл", "сталь", "нержавейка",
+            "круг", "квадрат", "полоса", "балка", "рельс", "сетка",
+            "профтруба", "вгп", "электросвар", "бесшовн",
+            "плитка", "кафель", "керамогранит", "мозаик", "керамик",
+            "краска", "грунтовка", "штукатурка", "шпаклевка", "эмаль", "лак",
+            "бетон", "цемент", "песок", "щебень", "кирпич", "газоблок", "пеноблок",
+            "гипсокартон", "утеплитель", "минвата", "пенопласт", "профлист",
+            "кабель", "провод", "гофра", "трубка", "фитинг", "муфта", "фланец",
+            "кран", "задвижка", "вентиль", "счетчик", "насос", "котел"
+        )
+
+        val hasPriceKeyword = priceKeywords.any { lowerText.contains(it) }
+        val hasDigits = Regex("\\d").containsMatchIn(lowerText)
+
+        if (hasPriceKeyword && hasDigits) return "[ПРАЙС]"
+
+        val categories = mapOf(
+            "[ПАРОЛЬ]" to listOf("пароль", "логин", "доступ", "код", "пин", "секрет", "ключ"),
+            "[КОНТАКТ]" to listOf("телефон", "номер", "контакт", "позвонить", "мобильный", "вотсап", "телеграм"),
+            "[ИНСТРУКЦИЯ]" to listOf("как", "инструкция", "алгоритм", "пошагово", "руководство", "порядок", "действия"),
+            "[АДРЕС]" to listOf("адрес", "улица", "город", "метро", "район", "дом"),
+            "[ДАТА]" to listOf("дата", "время", "встреча", "напоминание", "дедлайн")
+        )
+
+        val scores = categories.mapValues { (_, keywords) ->
+            keywords.count { keyword -> lowerText.contains(keyword) }
+        }
+
+        val bestCategory = scores.maxByOrNull { it.value }
+        return if (bestCategory != null && bestCategory.value > 0) {
+            bestCategory.key
+        } else {
+            "[ОБЩЕЕ]"
+        }
+    }
+
+    private fun appendToCategory(text: String) {
+        try {
+            if (!memoryFile.exists()) {
+                memoryFile.createNewFile()
+            }
+
+            val category = determineCategory(text)
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+            val timestamp = dateFormat.format(Date())
+
+            val existing = memoryFile.readText()
+            val lines = existing.split("\n").toMutableList()
+
+            val categoryIndex = lines.indexOfFirst { it.trim() == category }
+
+            if (categoryIndex == -1) {
+                lines.add("")
+                lines.add(category)
+                lines.add("[$timestamp] $text")
+            } else {
+                var insertIndex = categoryIndex + 1
+                while (insertIndex < lines.size && lines[insertIndex].isNotBlank() && !CATEGORIES.any { lines[insertIndex].trim().startsWith(it) }) {
+                    insertIndex++
+                }
+                lines.add(insertIndex, "[$timestamp] $text")
+            }
+
+            memoryFile.writeText(lines.joinToString("\n"))
+            memorySearchEngine.clearCache()
+            Log.d(TAG, "Записано в категорию $category: $text")
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка записи в категорию: ${e.message}")
+        }
+    }
+
+    fun saveToLongTermMemory(text: String) {
+        appendToCategory(text)
+        appendSystemMessage("🧠 Запомнено: $text")
+    }
+
+    private fun getCategorySection(category: String): String {
+        val fullMemory = readFromLongTermMemory()
+        if (fullMemory.isEmpty()) return ""
+
+        val lines = fullMemory.split("\n")
+        val categoryIndex = lines.indexOfFirst { it.trim() == category }
+        if (categoryIndex == -1) return ""
+
+        val sectionLines = mutableListOf<String>()
+        var i = categoryIndex + 1
+        while (i < lines.size && !CATEGORIES.any { lines[i].trim().startsWith(it) }) {
+            if (lines[i].isNotBlank()) {
+                sectionLines.add(lines[i])
+            }
+            i++
+        }
+
+        return sectionLines.joinToString("\n")
+    }
+
+    private fun searchMemory(query: String, category: String? = null): String {
+        return try {
+            val result = memorySearchEngine.search(query, category)
+            Log.d(TAG, "Search result for '$query': ${if (result.isEmpty()) "empty" else "found ${result.split("\n").size} lines"}")
+            result
+        } catch (e: Exception) {
+            Log.e(TAG, "Memory search error: ${e.message}", e)
+            ""
+        }
+    }
+
+        private fun searchBrain(query: String): String {
+        val brainData = readBrain()
+        if (brainData.isEmpty()) return ""
+
+        val lines = brainData.split("\n")
+
+        // Регулярка метки даты: [2026-09-15 19:42]
+        val dateRegex = Regex("^\\[\\d{4}-\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}\\]$")
+
+        // Разбиваем brain на блоки. Каждый блок начинается с метки даты.
+        // В блоке храним: индекс строки с датой и список строк между этой датой
+        // и следующей датой (не включая сами метки дат).
+        data class BrainBlock(
+            val dateStr: String,       // "2026-09-15"
+            val content: List<String>  // строки блока БЕЗ метки даты
+        )
+
+        val blocks = mutableListOf<BrainBlock>()
+        var currentDateStr: String? = null
+        var currentContent = mutableListOf<String>()
+
+        for (line in lines) {
+            val trimmed = line.trim()
+            if (dateRegex.matches(trimmed)) {
+                // Закрываем предыдущий блок
+                if (currentDateStr != null) {
+                    blocks.add(BrainBlock(currentDateStr, currentContent.toList()))
+                }
+                // Начинаем новый — дату извлекаем
+                currentDateStr = Regex("\\d{4}-\\d{2}-\\d{2}").find(trimmed)?.value ?: ""
+                currentContent = mutableListOf()
+            } else {
+                if (currentDateStr != null) {
+                    currentContent.add(line)
+                }
+            }
+        }
+        // Закрываем последний блок
+        if (currentDateStr != null) {
+            blocks.add(BrainBlock(currentDateStr, currentContent.toList()))
+        }
+
+        if (blocks.isEmpty()) return ""
+
+        // ========== 1. ПОИСК ПО ДАТЕ ==========
+        val dateMatches = Regex("\\d{4}-\\d{2}-\\d{2}").findAll(query).map { it.value }.toList()
+        if (dateMatches.isNotEmpty()) {
+            val matched = blocks.filter { block ->
+                dateMatches.any { d -> block.dateStr == d }
+            }
+            if (matched.isNotEmpty()) {
+                return matched.joinToString("\n\n") { block ->
+                    block.content.joinToString("\n").trim()
+                }
+            }
+        }
+
+        // ========== 2. ПОИСК ПО [ ... ] (кроме дат) ==========
+        // Собираем все фрагменты в квадратных скобках, которые НЕ являются датами.
+        // Формат подписи: [Разговор про скорость света во вселенной:]
+        val bracketRegex = Regex("\\[([^\\]]+)\\]")
+        val queryLower = query.lowercase()
+
+        val matchedBlocks = mutableListOf<BrainBlock>()
+        for (block in blocks) {
+            // Ищем в блоке все [...] кроме дат
+            var blockMatched = false
+            for (line in block.content) {
+                val matches = bracketRegex.findAll(line)
+                for (m in matches) {
+                    val inner = m.groupValues[1].trim()
+                    // Пропускаем даты
+                    if (dateRegex.matches("[$inner]")) continue
+                    if (inner.isEmpty()) continue
+
+                    // Проверяем: содержится ли inner в запросе или запрос в inner
+                    val innerLower = inner.lowercase()
+                    if (queryLower.contains(innerLower) || innerLower.contains(queryLower)) {
+                        blockMatched = true
+                        break
+                    }
+
+                    // Или совпадение по ключевым словам внутри [...]
+                    val innerWords = innerLower
+                        .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
+                        .split(Regex("\\s+"))
+                        .filter { it.length > 2 }
+
+                    val queryWords = queryLower
+                        .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
+                        .split(Regex("\\s+"))
+                        .filter { it.length > 2 }
+
+                    if (innerWords.isNotEmpty() && queryWords.isNotEmpty()) {
+                        val common = innerWords.intersect(queryWords.toSet())
+                        // Порог: минимум 2 общих слова или 1 слово длиной >= 5
+                        if (common.size >= 2 ||
+                            common.any { it.length >= 5 }) {
+                            blockMatched = true
+                            break
+                        }
+                    }
+                }
+                if (blockMatched) break
+            }
+            if (blockMatched) {
+                matchedBlocks.add(block)
+            }
+        }
+
+        if (matchedBlocks.isNotEmpty()) {
+            return matchedBlocks.joinToString("\n\n") { block ->
+                block.content.joinToString("\n").trim()
+            }
+        }
+
+        // ========== 3. ПОИСК ПО КЛЮЧЕВЫМ СЛОВАМ ==========
+        val keywords = extractKeywords(query)
+        if (keywords.isEmpty()) return ""
+
+        return blocks.joinToString("\n\n") { block ->
+            val blockText = block.content.joinToString("\n")
+            val lowerBlock = blockText.lowercase()
+            // Оставляем блок, если в нём есть хотя бы одно ключевое слово
+            if (keywords.any { keyword -> lowerBlock.contains(keyword) }) {
+                blockText.trim()
+            } else {
+                ""
+            }
+        }.trim().replace(Regex("\n{3,}"), "\n\n")
+    }
+
+    private fun searchChat(query: String): String {
+        val history = _chatHistory.value
+        if (history.isEmpty()) return ""
+
+        val keywords = extractKeywords(query)
+
+        return if (keywords.isNotEmpty()) {
+            history.filter { message ->
+                val lowerText = message.text.lowercase()
+                keywords.any { keyword -> lowerText.contains(keyword) }
+            }.joinToString("\n") { message ->
+                val prefix = when (message.role) {
+                    "user" -> "Пользователь"
+                    "assistant" -> "Ассистент"
+                    else -> "Система"
+                }
+                "$prefix: ${message.text}"
+            }
+        } else {
+            ""
+        }
+    }
+
+    private fun extractKeywords(query: String): List<String> {
+        return query.lowercase()
+            .replace(RECALL_COMMAND, "")
+            .replace(FIND_COMMAND, "")
+            .replace(SEARCH_COMMAND, "")
+            .replace(CHAT_LOOKUP_COMMAND, "")
+            .replace(BRAIN_EDIT_COMMAND, "")
+            .trim()
+            .split(Regex("[\\s,.;:!?]+"))
+            .map { it.trim() }
+            .filter { it.length > 2 }
+            .map { extractRussianRoot(it) }
+            .distinct()
+    }
+
+        private fun currentDateContext(): String {
+        val dateFormat = SimpleDateFormat("d MMMM yyyy, EEEE, HH:mm", Locale("ru"))
+        return "Текущая дата и время: ${dateFormat.format(Date())}\n\n"
+    }
+
+    private fun buildSystemPrompt(commandType: String, prompt: String): String {
+        val basePrompt = _systemPrompt.value
+        val lowerPrompt = prompt.lowercase()
+
+        val currentDate = currentDateContext()
+
+        // Для модели-переводчика системный промпт не трогаем — это чистый промпт перевода
+        val isTranslator = currentModelName.contains("Hy-MT2", ignoreCase = true) ||
+                           currentModelName.contains("hy_mt2", ignoreCase = true)
+        if (isTranslator) {
+            return basePrompt
+        }
+
+               return buildString {
+            append("Сегодня: ")
+            append(currentDate)
+            append("\n\n")
+            append(basePrompt)
+            append("\n\n")
+
+            when {
+                lowerPrompt.contains(CHAT_LOOKUP_COMMAND) -> {
+                    val fullChatHistory = _chatHistory.value.joinToString("\n") { message ->
+                        val prefix = when (message.role) {
+                            "user" -> "Пользователь"
+                            "assistant" -> "Ассистент"
+                            else -> "Система"
+                        }
+                        "$prefix: ${message.text}"
+                    }
+                    if (fullChatHistory.isNotEmpty()) {
+                        append("ПОЛНАЯ ИСТОРИЯ ЧАТА:\n$fullChatHistory\n\n")
+                        append("Пользователь просит найти информацию в истории чата. Изучи ВСЮ историю чата выше и найди то, что относится к запросу пользователя. Используй найденные сообщения для ответа.")
+                    } else {
+                        append("ПОЛНАЯ ИСТОРИЯ ЧАТА: пока пусто.\n\n")
+                        append("Пользователь просит найти информацию в истории чата, но история пуста. Честно скажи об этом.")
+                    }
+                }
+                lowerPrompt.contains(RECALL_COMMAND) -> {
+                    val brainData = readBrain()
+                    if (brainData.isNotEmpty()) {
+                        append("СЖАТАЯ ИСТОРИЯ ПРОШЛЫХ РАЗГОВОРОВ (МОЗГ):\n$brainData\n\n")
+                        append("Пользователь просит вспомнить информацию из прошлых разговоров. Изучи ВЕСЬ сжатый архив выше и найди то, что относится к запросу пользователя. Используй найденные факты для ответа.")
+                    } else {
+                        append("СЖАТАЯ ИСТОРИЯ ПРОШЛЫХ РАЗГОВОРОВ (МОЗГ): пока пусто.\n\n")
+                        append("Пользователь просит вспомнить информацию, но сжатой истории пока нет. Честно скажи об этом.")
+                    }
+                }
+                                else -> {
+                    // Ищем сразу по всем категориям — как в Word, без фильтрации
+                    val allMemory = searchMemory(prompt, null)
+                    if (allMemory.isNotEmpty()) {
+                        append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ:\n$allMemory\n\n")
+                        append("Пользователь просит найти информацию в базе знаний. Изучи найденные факты выше и используй их для ответа.")
+                    } else {
+                        append("ЛОКАЛЬНАЯ БАЗА ЗНАНИЙ: подходящих фактов не найдено.\n\n")
+                        append("Честно скажи, что в базе знаний нет информации по запросу, и попроси пользователя перефразировать запрос.")
+                    }
+                }
+            }
+        }
+    }
+
+       fun sendUserMessage(
+        text: String,
+        imagePath: String? = null
+    ) {
+          Log.d(TAG, "sendUserMessage: text='$text', imagePath=$imagePath, isVisionModelLoaded=$isVisionModelLoaded, isModelLoaded=${_isModelLoaded.value}, mode=${_currentMode.value}")
+        if (_isCompressing.value) {
+            appendSystemMessage("⏳ ИИ сжимает беседу, подождите...")
+            return
+        }
+
+        if (isVisionLoading) {
+            appendSystemMessage("⏳ Зрение загружается, подождите...")
+            return
+        }
+                   if (text.isBlank() && imagePath == null) return
+
+        // Если загружена vision и пользователь пишет ТЕКСТ (не картинку и не видео) —
+        // выгружаем vision и возвращаем текстовую модель.
+        // Дальше идём ТОЛЬКО после того, как текстовая модель реально загружена.//
+        // Для видео и картинок НЕ восстанавливаем текстовую — они идут в текущую
+        // загруженную vision напрямую. Иначе получится двойная работа:
+        // выгрузка vision → загрузка текстовой → снова выгрузка → загрузка vision.
+        val isMediaRequest = imagePath != null
+        if (isVisionModelLoaded && !isMediaRequest) {
+            Log.d(TAG, "Текстовое сообщение при загруженной vision — восстанавливаю текстовую")
+            restorePreviousModelIfNeeded {
+                proceedWithUserMessage(text, imagePath)
+            }
+            return
+        }
+
+        proceedWithUserMessage(text, imagePath)
+    }
+
+        private fun proceedWithUserMessage(
+        text: String,
+        imagePath: String? = null
+    ) {
+               // Если есть картинка без текста — не пишем пустое сообщение в чат,
+               // а сразу отправляем в модель
+                        if (text.isBlank() && imagePath != null) {
+            Log.d(TAG, "Картинка без текста. imagePath=$imagePath, currentMmprojPath=$currentMmprojPath, isModelLoaded=${_isModelLoaded.value}")
+            _chatHistory.value = _chatHistory.value + ChatMessage(
+                role = "user",
+                text = "[Изображение]",
+                hasImage = true
+            )
+            syncChatToFile()
+
+            // Конвертируем картинку в JPEG во временный файл.
+            // mtmd/stb_image не читает HEIC/HEIF и некоторые WebP/PNG,
+            // а камера отдаёт JPEG — поэтому камера работает, а галерея нет.
+            val jpegPath = convertImageToJpeg(getApplication(), imagePath)
+            if (jpegPath == null) {
+                appendSystemMessage("❌ Не удалось конвертировать изображение. Формат не поддерживается.")
+                _visionPhase.value = VisionPhase.IDLE
+                return
+            }
+
+                       when (_currentMode.value) {
+                AIMode.LOCAL -> {
+                    if (_isModelLoaded.value && currentMmprojPath != null) {
+                        generateLocal("", jpegPath)
+                    } else {
+                        ensureVisionModelLoaded {
+                            generateLocal("", jpegPath)
+                        }
+                    }
+                }
+                else -> {
+                    appendSystemMessage("⚠️ Анализ изображений доступен только в локальном режиме")
+                }
+            }
+            return
+        }
+        _chatHistory.value = _chatHistory.value + ChatMessage(
+            role = "user",
+            text = text,
+            hasImage = imagePath != null
+        )
+        syncChatToFile()
+        userMessageCount++
+
+        // Модель-переводчик не умеет сжимать диалоги — пропускаем сжатие
+        val isTranslatorModel = currentModelName.contains("Hy-MT2", ignoreCase = true) ||
+                                currentModelName.contains("hy_mt2", ignoreCase = true)
+
+        if (isTranslatorModel) {
+            userMessageCount = 0
+        } else if (userMessageCount >= AUTO_BRAIN_COMPRESSION_THRESHOLD) {
+            userMessageCount = 0
+
+            // Сохраняем сообщение — отправим его после завершения сжатия
+            _pendingUserMessage.value = text
+
+            // Запускаем сжатие
+            triggerBackgroundDialogueCompression(_chatHistory.value)
+
+            // Возвращаемся — вопрос не отправляем, пока сжатие не завершится
+            return
+        }
+
+                        val lowerText = text.lowercase()
+
+        // Реакция на «привет» — робот машет рукой
+        if (lowerText.contains("привет") || lowerText.contains("здравствуй") || lowerText.contains("хай")) {
+            triggerRobotGreeting()
+        }
+
+        // Если загружена модель-переводчик, команды памяти игнорируются —
+        // весь текст уходит в переводчик как есть
+        val isTranslator = currentModelName.contains("Hy-MT2", ignoreCase = true) ||
+                           currentModelName.contains("hy_mt2", ignoreCase = true)
+
+                if (!isTranslator) {
+                       when {
+                lowerText.contains(BRAIN_EDIT_COMMAND) -> {
+                    showBrainEditor()
+                    appendSystemMessage("🧠 Открыт редактор Brain.txt")
+                    return
+                }
+                lowerText.contains("редактировать чат") -> {
+                    showChatEditor()
+                    return
+                }
+                lowerText.contains(REMEMBER_COMMAND) -> {
+                    // Ищем «запомни» в нижнем регистре, но отрезаем от оригинала
+                    // по позиции — чтобы работало с «Запомни», «ЗАПОМНИ» и т.д.
+                    val lowerIndex = lowerText.indexOf(REMEMBER_COMMAND)
+                    val cleanText = if (lowerIndex >= 0) {
+                        text.substring(lowerIndex + REMEMBER_COMMAND.length).trim()
+                    } else {
+                        text.trim()
+                    }
+                    if (cleanText.isNotEmpty()) {
+                        saveToLongTermMemory(cleanText)
+                    } else {
+                        appendSystemMessage("⚠️ Что именно мне нужно запомнить?")
+                    }
+                    return
+                }
+                lowerText.contains(ALARM_COMMAND) || lowerText.contains(REMIND_COMMAND) -> {
+                    handleAlarmCommand(text)
+                    return
+                }
+                lowerText.contains(RECALL_COMMAND) || lowerText.contains(FIND_COMMAND) || lowerText.contains(SEARCH_COMMAND) || lowerText.contains(CHAT_LOOKUP_COMMAND) -> {
+                    if (_currentMode.value == AIMode.NEUTRAL) {
+                        when {
+                            lowerText.contains(CHAT_LOOKUP_COMMAND) -> {
+                                val chatData = searchChat(text)
+                                if (chatData.isNotEmpty()) {
+                                    appendSystemMessage("💬 Найдено в истории чата:\n$chatData")
+                                } else {
+                                    appendSystemMessage("💬 В истории чата ничего не найдено")
+                                }
+                            }
+                            lowerText.contains(RECALL_COMMAND) -> {
+                                val brainData = searchBrain(text)
+                                if (brainData.isNotEmpty()) {
+                                    appendSystemMessage("🧠 Найдено в Brain.txt:\n$brainData")
+                                } else {
+                                    appendSystemMessage("🧠 В Brain.txt ничего не найдено")
+                                }
+                            }
+                            else -> {
+                                val memoryData = searchMemory(text, null)
+                                if (memoryData.isNotEmpty()) {
+                                    appendSystemMessage("🔍 Найдено в базе знаний:\n$memoryData")
+                                } else {
+                                    appendSystemMessage("🔍 Ничего не найдено. Перефразируйте запрос.")
+                                }
+                            }
+                        }
+                        return
+                    }
+                }
+            }
+        }
+                when (_currentMode.value) {
+            AIMode.LOCAL -> {
+                if (_isModelLoaded.value) {
+                    generateLocal(text, imagePath)
+                } else {
+                    appendSystemMessage("⚠️ Локальная модель не загружена. Загрузите модель через 'движок'.")
+                }
+            }
+                       AIMode.CLOUD -> {
+                if (imagePath != null) {
+                    appendSystemMessage("⚠️ Облачный ИИ не поддерживает анализ изображений")
+                } else if (isCloudConfigured()) {
+                    generateCloud(text)
+                } else {
+                    appendSystemMessage("⚠️ Облачный ИИ не настроен. Настройте через 'облачный ии'.")
+                }
+            }
+            AIMode.NEUTRAL -> {
+                appendSystemMessage("⚠️ Выберите режим работы: локальный или облачный ИИ")
+            }
+        }
+    }
+
+    fun isCloudConfigured(): Boolean = cloudAIProvider.isConfigured()
+    fun getCloudConfig(): CloudAIConfig? = cloudAIProvider.getConfig()
+
+    fun saveCloudConfig(config: CloudAIConfig) {
+        cloudAIProvider.saveConfig(config)
+        if (config.isValid()) {
+            _cloudState.value = CloudAIState.Ready(config.modelId)
+        } else {
+            _cloudState.value = CloudAIState.Idle
+        }
+    }
+
+    fun clearCloudConfig() {
+        cloudAIProvider.clearConfig()
+        _cloudState.value = CloudAIState.Idle
+        _cloudGeneratedText.value = ""
+        appendSystemMessage("🔄 Настройки облачного ИИ успешно сброшены")
+    }
+
+    fun generateCloudToken(callback: (Boolean) -> Unit) {
+        scope.launch {
+            val success = cloudAIProvider.generateToken()
+            callback(success)
+        }
+    }
+
+    fun generateCloud(prompt: String) {
+        val lowerPrompt = prompt.trim().lowercase()
+
+                if (lowerPrompt.startsWith(REMEMBER_COMMAND)) {
+            val cleanText = prompt.substring(REMEMBER_COMMAND.length).trim()
+            if (cleanText.isNotEmpty()) {
+                saveToLongTermMemory(cleanText)
+            } else {
+                appendSystemMessage("⚠️ Что именно мне нужно запомнить?")
+            }
+            return
+        }
+
+        if (prompt.lowercase().contains(ALARM_COMMAND) || prompt.lowercase().contains(REMIND_COMMAND)) {
+            handleAlarmCommand(prompt)
+            return
+        }
+
+        if (!cloudAIProvider.isConfigured()) {
+            _cloudState.value = CloudAIState.Error("Облачный ИИ не настроен")
+            return
+        }
+
+        val isSearchCommand = prompt.contains(FIND_COMMAND, ignoreCase = true) ||
+                prompt.contains(SEARCH_COMMAND, ignoreCase = true) ||
+                prompt.contains(RECALL_COMMAND, ignoreCase = true) ||
+                prompt.contains(CHAT_LOOKUP_COMMAND, ignoreCase = true)
+
+        val fullSystemPrompt = if (isSearchCommand) {
+            buildSystemPrompt("search", prompt)
+        } else {
+            currentDateContext() + _systemPrompt.value
+        }
+
+        val cloudHistory = _chatHistory.value
+
+        cloudAIProvider.generate(
+            prompt = prompt,
+            systemPrompt = fullSystemPrompt,
+            chatHistory = cloudHistory,
+            maxTokens = maxTokens.value
+        )
+    }
+
+    fun abortCloud() {
+        cloudAIProvider.abort()
+        _cloudState.value = CloudAIState.Idle
+    }
+
+        fun loadModel(path: String, mmprojPath: String? = null) {
+        if (path.isEmpty()) return
+
+        currentModelPath = path
+        currentMmprojPath = mmprojPath
+
+        if (prefs.getBoolean("engine_permanently_dead", false)) {
+            Log.e(TAG, "Engine is permanently dead. Load blocked.")
+            _state.value = GenerationState.Error("Engine is permanently dead.")
+            return
+        }
+
+                _state.value = GenerationState.LoadingModel
+        _isModelLoaded.value = false
+
+        // Грубая оценка: ~0.2 ГБ KV-кэша на 1000 токенов контекста.
+        // Не блокируем загрузку — только предупреждаем в чат.
+        try {
+            val am = getApplication<Application>().getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            val mi = android.app.ActivityManager.MemoryInfo()
+            am.getMemoryInfo(mi)
+            val availGb = mi.availMem.toDouble() / (1024.0 * 1024.0 * 1024.0)
+            val estimatedKvGb = contextSize.value / 1000.0 * 0.2
+            if (estimatedKvGb > availGb * 0.85) {
+                appendSystemMessage(
+                    "⚠️ Контекст ${contextSize.value} может не хватить RAM " +
+                    "(нужно ~${"%.1f".format(estimatedKvGb)} ГБ, доступно ~${"%.1f".format(availGb)} ГБ). " +
+                    "Если модель не загрузится — уменьшите контекст в настройках движка."
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "RAM pre-check failed: ${e.message}")
+        }
+
+                scope.launch {
+            try {
+                llamaHelper.load(
+                    path,
+                    contextSize.value,
+                    if (mmprojPath.isNullOrEmpty()) null else mmprojPath,
+                                                               { id ->
+                        _state.value = GenerationState.ModelLoaded(path)
+                        _isModelLoaded.value = true
+                        val uri = Uri.parse(path)
+                        currentModelName = getFileNameFromUri(contentResolver, uri)
+                        _loadedModelName.value = currentModelName
+
+                        // Если активен промпт переводчика, а загружена не Hy-MT2 — сбрасываем
+                        val isTranslator = currentModelName.contains("Hy-MT2", ignoreCase = true) ||
+                                           currentModelName.contains("hy_mt2", ignoreCase = true)
+                        if (!isTranslator && _activeTranslationPrompt.value != null) {
+                            _activeTranslationPrompt.value = null
+                            _systemPrompt.value = "Ты — полезный, умный и лаконичный ИИ-ассистент. Отвечай строго на русском языке."
+                            appendSystemMessage("🔄 Промпт переводчика сброшен — загружена не модель-переводчик")
+                        }
+
+                        // Ищем загруженную модель в каталоге по имени файла
+                        val modelInfo = ModelCatalog.models.find { it.fileName == currentModelName }
+
+                        if (isTranslator) {
+                            // Подсказка для модели-переводчика Hy-MT2
+                            val translationButtons = listOf(
+                                PromptButton(
+                                    label = "🇷🇺 На русский",
+                                    promptText = "Переведи следующий текст на русский, без дополнительных объяснений:"
+                                ),
+                                PromptButton(
+                                    label = "🇬🇧 На английский",
+                                    promptText = "Translate the following text into English, without additional explanation:"
+                                ),
+                                PromptButton(
+                                    label = "🇪🇸 На испанский",
+                                    promptText = "Traduce el siguiente texto al español, sin explicaciones adicionales:"
+                                ),
+                                PromptButton(
+                                    label = "🇩🇪 На немецкий",
+                                    promptText = "Übersetze den folgenden Text ins Deutsche, ohne zusätzliche Erklärungen:"
+                                ),
+                                PromptButton(
+                                    label = "🇫🇷 На французский",
+                                    promptText = "Traduis le texte suivant en français, sans explication supplémentaire:"
+                                ),
+                                PromptButton(
+                                    label = "🇨🇳 На китайский",
+                                    promptText = "将以下文本翻译成中文，不要额外解释："
+                                )
+                            )
+                            appendSystemMessageWithButtons(
+                                "🌍 ЭТО МОДЕЛЬ-ПЕРЕВОДЧИК, А НЕ СОБЕСЕДНИК.\n\n" +
+                                "Она НЕ умеет вести диалог. Она только ПЕРЕВОДИТ.\n\n" +
+                                "ЧТОБЫ ПОЛЬЗОВАТЬСЯ:\n" +
+                                "1. Нажми «характер» (иконка 🧠 в панели внизу).\n" +
+                                "2. В поле «Инструкция для ИИ» вставь один из промптов — тапни на кнопку нужного языка ниже, промпт скопируется в буфер. Потом вставь его в «характер».\n" +
+                                "3. Сохрани промпт и пиши текст на ЛЮБОМ языке.\n\n" +
+                                "ПРИМЕРЫ:\n" +
+                                "• Пишешь по-испански, промпт «на русский» → получаешь русский перевод.\n" +
+                                "• Пишешь по-русски, промпт «на испанский» → получаешь испанский перевод.\n\n" +
+                                "Язык перевода задаётся ПРОМПТОМ, а не тем, на каком языке ты пишешь.",
+                                translationButtons
+                            )
+                        } else if (modelInfo != null) {
+                            // Для всех остальных моделей — карточка с описанием
+                            appendSystemMessage(
+                                "✅ Загружена модель:\n\n" +
+                                "📦 ${modelInfo.name}\n\n" +
+                                "${modelInfo.description}"
+                            )
+                        } else {
+                            // Файл не из каталога (пользователь выбрал свою модель)
+                            appendSystemMessage(
+                                "✅ Модель загружена: $currentModelName\n\n" +
+                                "(Описание недоступно — модель выбрана не из каталога приложения)"
+                            )
+                        }
+                    }
+                )
+                        } catch (e: Exception) {
+                _state.value = GenerationState.Error(e.message ?: "Unknown error")
+                _isModelLoaded.value = false
+                appendSystemMessage(
+                    "⚠️ Не удалось загрузить модель. Если контекст ${contextSize.value} — " +
+                    "большой, уменьшите его в настройках движка и попробуйте снова."
+                )
+            }
+        }
+    }
+
+          
+    fun generateLocal(prompt: String, imagePath: String? = null) {
+        Log.d(TAG, "generateLocal: prompt='$prompt', imagePath=$imagePath, contextId=${llamaHelper.getContextId()}, isVisionModelLoaded=$isVisionModelLoaded")
+        val lowerPrompt = prompt.trim().lowercase()
+
+        if (prefs.getBoolean("engine_permanently_dead", false)) {
+            Log.e(TAG, "Engine is permanently dead. Generate blocked.")
+            _state.value = GenerationState.Error("Engine is permanently dead.")
+            return
+        }
+
+                if (lowerPrompt.startsWith(REMEMBER_COMMAND)) {
+            val cleanText = prompt.substring(REMEMBER_COMMAND.length).trim()
+            if (cleanText.isNotEmpty()) {
+                saveToLongTermMemory(cleanText)
+            } else {
+                appendSystemMessage("⚠️ Что именно мне нужно запомнить?")
+            }
+            return
+        }
+
+        if (prompt.lowercase().contains(ALARM_COMMAND) || prompt.lowercase().contains(REMIND_COMMAND)) {
+            handleAlarmCommand(prompt)
+            return
+        }
+
+        if (llamaHelper.getContextId() == null) {
+            _state.value = GenerationState.Error("Модель не загружена. Загрузите модель через 'движок'.")
+            return
+        }
+
+                            val effectivePrompt = if (imagePath != null && prompt.isBlank()) {
+    // Разные VLM-модели лучше понимают разные промпты.
+    val isQwenModel = currentModelName.contains("Qwen", ignoreCase = true) ||
+                      currentModelName.contains("qwen", ignoreCase = true)
+    val isGemmaModel = currentModelName.contains("gemma", ignoreCase = true) ||
+                       currentModelName.contains("Gemma", ignoreCase = true)
+    when {
+        isQwenModel -> "Опиши это изображение."
+        isGemmaModel -> "Describe this image."
+        else -> "Describe this image in detail."
+    }
+} else {
+    prompt
+}
+
+        val isSearchCommand = if (imagePath != null) {
+            false
+        } else {
+            effectivePrompt.contains(FIND_COMMAND, ignoreCase = true) ||
+                    effectivePrompt.contains(SEARCH_COMMAND, ignoreCase = true) ||
+                    effectivePrompt.contains(RECALL_COMMAND, ignoreCase = true) ||
+                    effectivePrompt.contains(CHAT_LOOKUP_COMMAND, ignoreCase = true)
+        }
+
+        val fullSystemPrompt = if (isSearchCommand) {
+            buildSystemPrompt("search", effectivePrompt)
+        } else {
+            currentDateContext() + _systemPrompt.value
+        }
+
+        // Умный режим: история без последнего сообщения (оно идёт как prompt)
+        // Режим калькулятора: пустая история, только текущий prompt
+        val historyForPredict: List<Pair<String, String>> = if (_isSmartMode.value) {
+    val h = _chatHistory.value
+    val withoutLast = if (h.isNotEmpty() && h.last().role == "user" && h.last().text == effectivePrompt) {
+        h.dropLast(1)
+    } else {
+        h
+    }
+    withoutLast.map { it.role to it.text }
+} else {
+    emptyList()
+}
+
+                _generatedText.value = ""
+        _state.value = GenerationState.Generating(prompt = effectivePrompt, tokensGenerated = 0)
+
+        Log.d(TAG, "generateLocal: вызываю predict. effectivePrompt='$effectivePrompt', imagePath=$imagePath")
+        scope.launch {
+            try {
+            llamaHelper.predict(
+                    prompt = effectivePrompt,
+                    imagePath = imagePath,
+                    systemPrompt = fullSystemPrompt,
+                    maxTokens = maxTokens.value,
+                    chatHistory = historyForPredict,
+                    temperature = temperature.value,
+                    repetitionPenalty = 1.15f
+                )
+                Log.d(TAG, "generateLocal: predict вернул управление")
+            } catch (e: Exception) {
+                Log.e(TAG, "generateLocal: исключение в predict: ${e.message}", e)
+                _state.value = GenerationState.Error(e.message ?: "Unknown error")
+                _isModelLoaded.value = false
+            }
+        }
+    }
+
+        private fun handleAlarmCommand(prompt: String) {
+        val cal = Calendar.getInstance()
+        val lower = prompt.lowercase()
+
+        // 1. «через N дней/часов/минут»
+        val relativePattern = Regex("через\\s+(\\d+)\\s*(день|дня|дней|час|часа|часов|минут|минуты|минуту)")
+        val relMatch = relativePattern.find(lower)
+        if (relMatch != null) {
+            val n = relMatch.groupValues[1].toIntOrNull() ?: 0
+            val unit = relMatch.groupValues[2]
+            when {
+                unit.startsWith("д") -> cal.add(Calendar.DAY_OF_YEAR, n)
+                unit.startsWith("ч") -> cal.add(Calendar.HOUR_OF_DAY, n)
+                unit.startsWith("м") -> cal.add(Calendar.MINUTE, n)
+            }
+            val message = prompt.replace(relMatch.value, "").replace("напомни", "", ignoreCase = true).trim()
+            if (scheduleAlarm(cal.timeInMillis, message)) {
+                val timeStr = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(cal.time)
+                appendSystemMessage("⏰ Напоминание на $timeStr: '$message'")
+            }
+            return
+        }
+
+        // 2. «завтра в HH:MM»
+        val tomorrowPattern = Regex("завтра\\s+в\\s+(\\d{1,2})[:.](\\d{2})")
+        val tmMatch = tomorrowPattern.find(lower)
+        if (tmMatch != null) {
+            val h = tmMatch.groupValues[1].toIntOrNull() ?: 0
+            val m = tmMatch.groupValues[2].toIntOrNull() ?: 0
+            cal.add(Calendar.DAY_OF_YEAR, 1)
+            cal.set(Calendar.HOUR_OF_DAY, h)
+            cal.set(Calendar.MINUTE, m)
+            cal.set(Calendar.SECOND, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            val message = prompt.replace(tmMatch.value, "").replace("напомни", "", ignoreCase = true).trim()
+            if (scheduleAlarm(cal.timeInMillis, message)) {
+                val timeStr = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(cal.time)
+                appendSystemMessage("⏰ Напоминание на $timeStr: '$message'")
+            }
+            return
+        }
+
+        // 3. «DD месяца в HH:MM»
+        val monthsRu = mapOf(
+            "января" to 0, "февраля" to 1, "марта" to 2, "апреля" to 3,
+            "мая" to 4, "июня" to 5, "июля" to 6, "августа" to 7,
+            "сентября" to 8, "октября" to 9, "ноября" to 10, "декабря" to 11
+        )
+        val datePattern = Regex("(\\d{1,2})\\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\\s+в\\s+(\\d{1,2})[:.](\\d{2})")
+        val dateMatch = datePattern.find(lower)
+        if (dateMatch != null) {
+            val d = dateMatch.groupValues[1].toIntOrNull() ?: 1
+            val mon = monthsRu[dateMatch.groupValues[2]] ?: 0
+            val h = dateMatch.groupValues[3].toIntOrNull() ?: 0
+            val m = dateMatch.groupValues[4].toIntOrNull() ?: 0
+            cal.set(Calendar.DAY_OF_MONTH, d)
+            cal.set(Calendar.MONTH, mon)
+            cal.set(Calendar.HOUR_OF_DAY, h)
+            cal.set(Calendar.MINUTE, m)
+            cal.set(Calendar.SECOND, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            if (cal.timeInMillis < System.currentTimeMillis()) cal.add(Calendar.YEAR, 1)
+            val message = prompt.replace(dateMatch.value, "").replace("напомни", "", ignoreCase = true).trim()
+            if (scheduleAlarm(cal.timeInMillis, message)) {
+                val timeStr = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(cal.time)
+                appendSystemMessage("⏰ Напоминание на $timeStr: '$message'")
+            }
+            return
+        }
+
+        // 4. «в HH:MM»
+        val timePattern = Regex("(?:в|в\\s+|напомни\\s+в\\s+)(\\d{1,2})[:.](\\d{2})")
+        val match = timePattern.find(lower)
+        if (match != null) {
+            val h = match.groupValues[1].toIntOrNull() ?: 0
+            val m = match.groupValues[2].toIntOrNull() ?: 0
+            cal.set(Calendar.HOUR_OF_DAY, h)
+            cal.set(Calendar.MINUTE, m)
+            cal.set(Calendar.SECOND, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            if (cal.timeInMillis < System.currentTimeMillis()) cal.add(Calendar.DAY_OF_YEAR, 1)
+            val message = prompt.replace(match.value, "").replace("напомни", "", ignoreCase = true).trim()
+            if (scheduleAlarm(cal.timeInMillis, message)) {
+                val timeStr = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(cal.time)
+                appendSystemMessage("⏰ Напоминание на $timeStr: '$message'")
+            }
+            return
+        }
+
+        appendSystemMessage("⚠️ Не удалось распознать время. Примеры: 'напомни через 5 дней купить хлеб', 'напомни завтра в 10:00 позвонить', 'напомни 22 октября в 18:30 встреча', 'напомни в 18.00 идем в гараж'")
+    }
+
+    private fun scheduleAlarm(timeMillis: Long, message: String): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val context = getApplication<Application>().applicationContext
+            val alarmManagerSystem = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+            if (alarmManagerSystem?.canScheduleExactAlarms() == false) {
+                appendSystemMessage("⚠️ Для установки точных напоминаний ИИ-Другу требуется специальное разрешение.")
+                try {
+                    val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(intent)
+                } catch (e: Exception) {
+                    appendSystemMessage("❌ Не удалось открыть настройки: ${e.message}")
+                }
+                return false
+            }
+        }
+        return try {
+            val intent = Intent(getApplication(), AlarmReceiver::class.java).apply {
+                putExtra("message", message)
+                putExtra("timeMillis", timeMillis)
+            }
+            val pendingIntent = PendingIntent.getBroadcast(
+                getApplication(),
+                timeMillis.toInt(),
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timeMillis, pendingIntent)
+            } else {
+                alarmManager.setExact(AlarmManager.RTC_WAKEUP, timeMillis, pendingIntent)
+            }
+            saveOrganizerEntry(timeMillis, message)
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка установки будильника: ${e.message}")
+            appendSystemMessage("⚠️ Ошибка установки: ${e.message}")
+            false
+        }
+    }
+
+     internal fun appendSystemMessage(text: String) {
+        _chatHistory.value = _chatHistory.value + ChatMessage("system", text)
+        syncChatToFile()
+    }
+
+    internal fun appendSystemMessageWithButtons(text: String, buttons: List<PromptButton>) {
+        _chatHistory.value = _chatHistory.value + ChatMessage("system", text, buttons)
+    }
+
+            fun abortLocal() {
+        if (_state.value.isActive()) {
+            Log.i(TAG, "Aborting generation")
+            llamaHelper.abort()
+        }
+    }
+
+   
+
+    /**
+     * Декодирует любую картинку через BitmapFactory и пересохраняет её в JPEG.
+     * Нужно потому, что mtmd (stb_image) не читает HEIC/HEIF и часть WebP/PNG,
+     * а JPEG — гарантированно поддерживаемый формат.
+     * Возвращает file:// URI временного JPEG или null при ошибке.
+     */
+    private fun convertImageToJpeg(context: Application, imageUriString: String): String? {
+        return try {
+            val uri = Uri.parse(imageUriString)
+            val bitmap = context.contentResolver.openInputStream(uri)?.use { input ->
+                android.graphics.BitmapFactory.decodeStream(input)
+            } ?: return null
+
+            val cacheDir = File(context.cacheDir, "vision_input").apply {
+                if (exists()) listFiles()?.forEach { it.delete() } else mkdirs()
+            }
+            val file = File(cacheDir, "converted_${System.currentTimeMillis()}.jpg")
+            FileOutputStream(file).use { out ->
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out)
+            }
+            bitmap.recycle()
+        Log.d(TAG, "convertImageToJpeg: ${imageUriString.take(60)} -> ${file.absolutePath}")
+            "file://${file.absolutePath}"
+        } catch (e: Exception) {
+            Log.e(TAG, "convertImageToJpeg failed: ${e.message}", e)
+            null
+        }
+    }
+
+    fun renderPdfToJpegAndSetImage(pdfUri: Uri, onResult: (String?) -> Unit) {
+        scope.launch(Dispatchers.IO) {
+            var pfd: android.os.ParcelFileDescriptor? = null
+            var renderer: android.graphics.pdf.PdfRenderer? = null
+            var page: android.graphics.pdf.PdfRenderer.Page? = null
+            try {
+                pfd = contentResolver.openFileDescriptor(pdfUri, "r")
+                if (pfd == null) {
+                    withContext(Dispatchers.Main) { onResult(null) }
+                    return@launch
+                }
+                renderer = android.graphics.pdf.PdfRenderer(pfd)
+                if (renderer.pageCount == 0) {
+                    withContext(Dispatchers.Main) { onResult(null) }
+                    return@launch
+                }
+                page = renderer.openPage(0)
+
+                val scale = 2
+                val bitmap = android.graphics.Bitmap.createBitmap(
+                    page.width * scale,
+                    page.height * scale,
+                    android.graphics.Bitmap.Config.ARGB_8888
+                )
+                bitmap.eraseColor(android.graphics.Color.WHITE)
+                page.render(bitmap, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+
+                val cacheDir = File(getApplication<Application>().cacheDir, "vision_input").apply {
+                    if (exists()) listFiles()?.forEach { it.delete() } else mkdirs()
+                }
+                val file = File(cacheDir, "pdf_page_${System.currentTimeMillis()}.jpg")
+                FileOutputStream(file).use { out ->
+                    bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out)
+                }
+                bitmap.recycle()
+
+                withContext(Dispatchers.Main) {
+                    onResult("file://${file.absolutePath}")
+                }
+            } catch (e: SecurityException) {
+                Log.e(TAG, "PDF защищён паролем: ${e.message}")
+                withContext(Dispatchers.Main) { onResult(null) }
+            } catch (e: Exception) {
+                Log.e(TAG, "renderPdfToJpeg failed: ${e.message}", e)
+                withContext(Dispatchers.Main) { onResult(null) }
+            } finally {
+                try { page?.close() } catch (_: Exception) {}
+                try { renderer?.close() } catch (_: Exception) {}
+                try { pfd?.close() } catch (_: Exception) {}
+            }
+        }
+    }
+
+           // Читает базовые знания из app/src/main/assets/memory_base.txt
+    private fun readBaseMemoryFromAssets(): String {
+        return try {
+            getApplication<Application>().assets
+                .open("memory_base.txt")
+                .bufferedReader()
+                .use { it.readText() }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read base memory from assets: ${e.message}")
+            ""
+        }
+    }
+
+    // Читает базовые записи мозга из app/src/main/assets/brain_base.txt
+    private fun readBaseBrainFromAssets(): String {
+        return try {
+            getApplication<Application>().assets
+                .open("brain_base.txt")
+                .bufferedReader()
+                .use { it.readText() }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read base brain from assets: ${e.message}")
+            ""
+        }
+    }
+
+    fun readFromLongTermMemory(): String {
+        return try {
+            if (memoryFile.exists()) {
+                memoryFile.readText().trim()
+            } else {
+                ""
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка чтения памяти: ${e.message}")
+            ""
+        }
+    }
+
+                fun restoreBaseMemory() {
+        try {
+            val baseMemory = readBaseMemoryFromAssets()
+            if (baseMemory.isEmpty()) {
+                appendSystemMessage("❌ Не удалось прочитать базовые знания")
+                return
+            }
+
+            if (!memoryFile.exists()) {
+                memoryFile.createNewFile()
+            }
+
+            val existing = memoryFile.readText()
+
+            if (existing.isBlank()) {
+                memoryFile.writeText(baseMemory)
+                memorySearchEngine.clearCache()
+                appendSystemMessage("📚 Базовые знания добавлены")
+                Log.d(TAG, "Base memory added (file was empty)")
+                return
+            }
+
+            val existingLines = existing.split("\n").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+            val baseLines = baseMemory.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+            val newLines = baseLines.filter { it !in existingLines }
+
+            if (newLines.isEmpty()) {
+                appendSystemMessage("✅ Базовые знания уже есть в памяти")
+                Log.d(TAG, "Base memory already present")
+                return
+            }
+
+            val toAppend = "\n\n" + newLines.joinToString("\n")
+            memoryFile.appendText(toAppend)
+            memorySearchEngine.clearCache()
+            appendSystemMessage("📚 Базовые знания добавлены (${newLines.size} записей)")
+            Log.d(TAG, "Base memory appended: ${newLines.size} new lines")
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to restore base memory: ${e.message}")
+            appendSystemMessage("❌ Ошибка восстановления базовых знаний")
+        }
+    }
+
+    fun restoreBaseBrain() {
+        try {
+            val baseBrain = readBaseBrainFromAssets()
+            if (baseBrain.isEmpty()) {
+                appendSystemMessage("❌ Не удалось прочитать базовые записи мозга")
+                return
+            }
+
+            if (!brainFile.exists()) {
+                brainFile.createNewFile()
+            }
+
+            val existing = brainFile.readText()
+
+            if (existing.isBlank()) {
+                brainFile.writeText(baseBrain)
+                appendSystemMessage("🧠 Базовые записи добавлены в мозг")
+                Log.d(TAG, "Base brain added (file was empty)")
+                return
+            }
+
+            // Сравнение построчно: не добавляем строки, которые уже есть
+            val existingLines = existing.split("\n").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+            val baseLines = baseBrain.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+            val newLines = baseLines.filter { it !in existingLines }
+
+            if (newLines.isEmpty()) {
+                appendSystemMessage("✅ Базовые записи уже есть в мозге")
+                Log.d(TAG, "Base brain already present")
+                return
+            }
+
+            // Дописываем новые строки через двойной перенос
+            val toAppend = "\n\n" + newLines.joinToString("\n\n")
+            brainFile.appendText(toAppend)
+            appendSystemMessage("🧠 Базовые записи добавлены в мозг (${newLines.size} строк)")
+            Log.d(TAG, "Base brain appended: ${newLines.size} new lines")
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to restore base brain: ${e.message}")
+            appendSystemMessage("❌ Ошибка восстановления базовых записей мозга")
+        }
+    }
+
+    fun overwriteLongTermMemory(newFullText: String) {
+        try {
+            if (!memoryFile.exists()) {
+                memoryFile.createNewFile()
+            }
+
+            val lines = newFullText
+                .split("\n")
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+
+            val grouped = mutableMapOf<String, MutableList<String>>()
+
+            for (line in lines) {
+                val category = determineCategory(line)
+                if (!grouped.containsKey(category)) {
+                    grouped[category] = mutableListOf()
+                }
+                grouped[category]!!.add(line)
+            }
+
+            val output = StringBuilder()
+
+            for (category in CATEGORIES) {
+                val entries = grouped[category]
+                if (entries != null && entries.isNotEmpty()) {
+                    output.append(category).append("\n")
+                    for (entry in entries) {
+                        output.append(entry).append("\n")
+                    }
+                    output.append("\n")
+                }
+            }
+
+            memoryFile.writeText(output.toString().trim() + "\n")
+            memorySearchEngine.clearCache()
+            Log.d(TAG, "База знаний успешно обновлена и упорядочена")
+            appendSystemMessage("🧠 База знаний обновлена и упорядочена")
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка перезаписи базы знаний: ${e.message}")
+        }
+    }
+
+    private fun saveBrain(text: String) {
+        try {
+            if (!brainFile.exists()) {
+                brainFile.createNewFile()
+            }
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+            val timestamp = dateFormat.format(Date())
+            brainFile.appendText("[$timestamp]\n$text\n\n")
+            Log.d(TAG, "Записано в мозг: $text")
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка записи мозга: ${e.message}")
+        }
+    }
+
+        fun clearChat() {
+        _chatHistory.value = emptyList()
+        _generatedText.value = ""
+        _cloudGeneratedText.value = ""
+        syncChatToFile()
+    }
+
+        fun updateSystemPrompt(newPrompt: String) {
+        _systemPrompt.value = newPrompt
+    }
+
+    // Активный промпт переводчика (для подсветки кнопки языка)
+    private val _activeTranslationPrompt = MutableStateFlow<String?>(null)
+    val activeTranslationPrompt: StateFlow<String?> = _activeTranslationPrompt.asStateFlow()
+
+    fun applyTranslationPrompt(promptText: String, label: String) {
+        _systemPrompt.value = promptText
+        _activeTranslationPrompt.value = promptText
+        appendSystemMessage("✅ Промпт «$label» активирован. Говори или пиши — модель переведёт.")
+        Log.d(TAG, "Translation prompt applied: $label")
+    }
+
+    fun clearActiveTranslationPrompt() {
+        _activeTranslationPrompt.value = null
+    }
+
+    fun updateTemperature(temp: Float) {
+        temperature.value = temp.coerceIn(0.0f, 1.0f)
+    }
+
+        fun updateContextSize(size: Int) {
+        contextSize.value = size.coerceAtLeast(512)
+    }
+
+    /**
+     * Безопасный сброс контекста на 8192.
+     * Используется кнопкой в настройках движка — если пользователь
+     * выставил слишком много и модель падает по RAM.
+     */
+    fun resetContextToSafe() {
+        contextSize.value = 8192
+        appendSystemMessage("🧮 Контекст сброшен на безопасное значение 8192")
+    }
+        fun updateMaxTokens(tokens: Int) {
+        maxTokens.value = tokens.coerceIn(1, 32768)
+    }
+
+    fun releaseModel() {
+        _isModelLoaded.value = false
+        _loadedModelName.value = ""
+        llamaHelper.release()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        instance = null
+        _isTtsReady.value = false
+        _isSpeaking.value = false
+        _isModelLoaded.value = false
+        llamaHelper.abort()
+        llamaHelper.release()
+        viewModelJob.cancel()
+
+        try {
+            val ttsStopIntent = Intent(getApplication<Application>(), TtsService::class.java)
+            getApplication<Application>().stopService(ttsStopIntent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping TTS service: ${e.message}")
+        }
+
+               try {
+            getApplication<Application>().unregisterReceiver(ttsReceiver)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error unregistering TTS receiver: ${e.message}")
+        }
+
+        languageIdentifier?.close()
+        languageIdentifier = null
+        androidTts?.shutdown()
+        androidTts = null
+        androidTtsReady = false
+    }
+}
+
+private fun getFileNameFromUri(contentResolver: ContentResolver, uri: Uri): String {
+    var name = ""
+    try {
+        val cursor = contentResolver.query(uri, null, null, null, null)
+        cursor?.use {
+            if (it.moveToFirst()) {
+                val index = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (index != -1) name = it.getString(index)
+            }
+        }
+    } catch (e: Exception) {
+        Log.e("MainViewModel", "Ошибка чтения имени файла: ${e.message}")
+    }
+    if (name.isEmpty()) {
+        name = uri.lastPathSegment ?: ""
+    }
+    val cleanName = name.replace(Regex("^primary%3AModels%"), "").replace(Regex("^primary:Models:"), "")
+    return cleanName
+}
+
+class MemorySearchEngine(private val memoryFile: File) {
+    companion object {
+        private const val TAG = "MemorySearchEngine"
+        private const val K1 = 1.5
+        private const val B = 0.75
+
+               private val STOP_WORDS = setOf(
+            "и", "в", "во", "не", "что", "он", "на", "я", "с", "со", "как", "а", "то", "все",
+            "она", "так", "его", "но", "да", "ты", "к", "у", "же", "вы", "за", "бы", "по",
+            "только", "ее", "мне", "было", "вот", "от", "меня", "еще", "нет", "о", "из",
+            "ему", "теперь", "когда", "даже", "ну", "вдруг", "ли", "если", "уже", "или",
+            "ни", "быть", "был", "него", "до", "вас", "нибудь", "опять", "уж", "вам",
+            "сказал", "ведь", "потом", "себя", "ничего", "ей", "может", "они", "тут",
+            "где", "есть", "надо", "ней", "для", "мы", "тебя", "их", "чем", "была",
+            "сам", "чтоб", "без", "будто", "чего", "раз", "тоже", "себе", "под",
+            "будет", "ж", "тогда", "кто", "этот", "того", "потому", "этого", "какой",
+            "совсем", "ним", "здесь", "этом", "один", "почти", "мой", "тем", "чтобы",
+            "нее", "сейчас", "были", "куда", "зачем", "всех", "никогда", "можно",
+            "при", "наконец", "два", "об", "другой", "хоть", "после", "над", "больше",
+            "тот", "через", "эти", "нас", "про", "всего", "них", "какая", "много",
+            "разве", "три", "эту", "моя", "впрочем", "хорошо", "свою", "этой", "перед",
+            "иногда", "лучше", "чуть", "том", "нельзя", "такой", "им", "более", "всегда",
+            "конечно", "всю", "между",
+            // Команды приложения — не должны попадать в поисковые токены
+            "найди", "поищи", "вспомни", "посмотри", "чате", "запомни", "напомни",
+            "будильник", "покажи", "пожалуйста"
+        )
+
+                       private val SYNONYMS = mapOf(
+            "телефон" to listOf("номер", "мобильный", "тел", "звонить", "вызов", "сотовый"),
+            "пароль" to listOf("код", "пин", "логин", "доступ", "секрет", "ключ", "auth"),
+            "адрес" to listOf("улица", "дом", "квартира", "место", "локация", "где"),
+            "цена" to listOf("стоимость", "прайс", "руб", "деньги", "оплата", "тариф", "сколько", "стоит"),
+            "время" to listOf("дата", "час", "когда", "срок", "дедлайн", "встреча", "начало"),
+            "работа" to listOf("задача", "дело", "проект", "обязанность", "заказ"),
+            "человек" to listOf("личность", "персона", "клиент", "партнер", "заказчик"),
+            "компания" to listOf("фирма", "организация", "бизнес", "предприятие"),
+            "машина" to listOf("авто", "автомобиль", "транспорт", "тачка", "автосервис"),
+            "плитк" to listOf("плитк", "кафел", "керамогранит", "мозаик", "керамик"),
+            "покраск" to listOf("покраск", "окраск", "малярн", "краск", "побелк"),
+            "труб" to listOf("труб", "вгп", "э/с", "профильн", "трубопровод", "профтруб"),
+            "лист" to listOf("лист", "листов", "пластин", "профлист", "профнастил"),
+            "металл" to listOf("металл", "стальн", "желез", "сплав", "прокат", "металлопрокат"),
+            "укладк" to listOf("укладк", "монтаж", "установк", "инсталляц"),
+            "ремонт" to listOf("ремонт", "починк", "восстановлен", "исправлен", "переделка"),
+            "строительств" to listOf("строительств", "стройк", "возведен", "монтаж"),
+            "материал" to listOf("материал", "сырье", "ресурс", "товар", "продукция"),
+            "работ" to listOf("работ", "услуг", "выполнить", "сделать"),
+            "руб" to listOf("рублей", "стоимость", "цена", "р.", "р", "rub", "денег"),
+            "стоимость" to listOf("цена", "руб", "сколько", "стоит", "прайс"),
+            "скидк" to listOf("скидка", "акция", "распродажа", "уценка"),
+            "дом" to listOf("квартира", "жилье", "недвижимость", "коттедж", "дача"),
+            "еда" to listOf("питание", "продукты", "обед", "ужин", "завтрак", "блюдо"),
+            "ремонт_квартир" to listOf("отделка", "шпаклевка", "штукатурка", "грунтовка", "обои"),
+            "кабель" to listOf("провод", "кабел", "электропровод", "ввг", "nyy"),
+            "насос" to listOf("помпа", "водоснабжен", "откачк", "циркуляц"),
+            "котел" to listOf("бойлер", "колонка", "отоплен", "обогрев", "водонагрев"),
+            "карбюратор" to listOf("карб", "жиклер", "жиклёр", "поплавков", "дроссел"),
+            "двигатель" to listOf("мотор", "двс", "силов", "агрегат"),
+            "запчаст" to listOf("запчасть", "деталь", "комплектующ"),
+            "масло" to listOf("смазка", "жидкость", "машинное")
+        )
+
+        /**
+         * Нормализованный словарь синонимов.
+         * Ключи и значения прогнаны через extractRussianRoot, чтобы совпадать
+         * со стемами, которые получаются при токенизации.
+         *
+         * Строится ЛЕНИВО при первом обращении.
+         * Например, ключ "покраск" после стемминга становится "покрас",
+         * значение "штукатурка" → "штукатур" и т.д.
+         */
+               private val SYNONYMS_NORMALIZED: Map<String, List<String>> by lazy {
+            val result = mutableMapOf<String, MutableList<String>>()
+
+            for ((rawKey, rawValues) in SYNONYMS) {
+                val normalizedKey = stem(rawKey)
+
+                // Нормализуем значения
+                val normalizedValues = rawValues
+                    .flatMap { value ->
+                        // Разбиваем значения с пробелами (например, "водонагрев 1 м.кв.")
+                        value.split(Regex("[\\s,.;:!?]+"))
+                    }
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .map { stem(it) }
+                    .distinct()
+
+                // Ключ кладём в индекс, + все значения тоже могут быть ключами
+                if (!result.containsKey(normalizedKey)) {
+                    result[normalizedKey] = mutableListOf()
+                }
+                result[normalizedKey]!!.addAll(normalizedValues)
+
+                // И сам ключ как синоним значений — чтобы работало в обе стороны
+                for (normValue in normalizedValues) {
+                    if (!result.containsKey(normValue)) {
+                        result[normValue] = mutableListOf()
+                    }
+                    result[normValue]!!.add(normalizedKey)
+                    result[normValue]!!.addAll(normalizedValues.filter { it != normValue })
+                }
+            }
+
+                       // Убираем дубли
+            result.mapValues { (_, values) -> values.distinct() }
+        }
+
+        /**
+         * Портер (Snowball) для русского. Статический — доступен и из companion,
+         * и из instance-методов класса.
+         */
+        internal fun stem(word: String): String {
+            val lowerWord = word.lowercase()
+            if (!lowerWord.any { it in 'а'..'я' || it == 'ё' }) return lowerWord
+            var w = lowerWord.replace('ё', 'е')
+            if (w.length < 3) return w
+
+            val vowels = "аеиоуыэюя"
+            fun isVowel(c: Char): Boolean = c in vowels
+
+            fun findRVRegion(s: String): Int {
+                for (i in s.indices) if (isVowel(s[i])) return i + 1
+                return s.length
+            }
+
+            fun findRRegion(s: String, start: Int): Int {
+                var i = start
+                while (i < s.length - 1) {
+                    if (!isVowel(s[i]) && isVowel(s[i + 1])) return i + 2
+                    i++
+                }
+                return s.length
+            }
+
+            val rvStart = findRVRegion(w)
+            val r1Start = findRRegion(w, 0)
+            val r2Start = findRRegion(w, r1Start)
+
+            val endings = listOf(
+                "иями", "ями", "ами", "ией", "иям", "ием", "иях", "ию",
+                "ью", "ия", "ья", "ев", "ов", "ие", "ье", "еи", "ии",
+                "ей", "ой", "ий", "йм", "ым", "ом", "его", "ого",
+                "ему", "ому", "их", "ых", "ую", "юю", "ая", "яя", "ою", "ею",
+                "ах", "ях", "ам", "ям", "ий", "ый", "ой", "ей",
+                "и", "ы", "а", "я", "о", "е", "у", "ю", "й", "ь"
+            )
+            for (ending in endings) {
+                if (w.length - rvStart >= ending.length &&
+                    w.endsWith(ending) &&
+                    w.length - ending.length >= rvStart) {
+                    w = w.substring(0, w.length - ending.length)
+                    break
+                }
+            }
+
+            val suffixesR2 = listOf(
+                "иями", "ями", "ами", "ейше", "ейш", "нн",
+                "ость", "ост", "ей", "ий"
+            )
+            for (suffix in suffixesR2) {
+                if (w.length - r2Start >= suffix.length && w.endsWith(suffix)) {
+                    w = w.substring(0, w.length - suffix.length)
+                    break
+                }
+            }
+
+            val suffixesR1 = listOf(
+                "иями", "ями", "ами", "еи", "ии", "ей",
+                "ием", "иям", "иях", "ию", "ью", "ия", "ья",
+                "ев", "ов", "ие", "ье",
+                "ейше", "ейш", "нн",
+                "ость", "ост",
+                "ивш", "ывш", "ующ", "ся", "сь",
+                "его", "ого", "ему", "ому",
+                "их", "ых", "ую", "юю",
+                "ая", "яя", "ою", "ею",
+                "ах", "ях", "ам", "ям",
+                "ом", "ем", "ой", "ый", "ий",
+                "у", "ю", "а", "я", "о", "е", "и", "ы", "ь", "й",
+                "ав", "ыв", "ив", "ов", "ев", "уй",
+                "нн", "вш", "н", "в"
+            )
+            for (suffix in suffixesR1) {
+                if (w.length - r1Start >= suffix.length && w.endsWith(suffix)) {
+                    w = w.substring(0, w.length - suffix.length)
+                    break
+                }
+            }
+
+            if (w.endsWith("ь")) w = w.substring(0, w.length - 1)
+            w = w.replace(Regex("нн$"), "н")
+
+            return if (w.length < 2) lowerWord else w
+        }
+    }
+
+       data class SearchResult(
+        val category: String,
+        val text: String,
+        val score: Double,
+        val timestamp: String
+    )
+
+    data class IndexedDocument(
+        val category: String,
+        val text: String,
+        val timestamp: String,
+        val tokens: List<String>,
+        val tokenFreqs: Map<String, Int>
+    )
+
+    private var cachedIndex: List<IndexedDocument>? = null
+    private var lastModified: Long = 0
+
+    fun search(query: String, category: String? = null): String {
+        if (query.isBlank()) return ""
+
+        val index = getIndex()
+        if (index.isEmpty()) return ""
+
+        val queryTokens = tokenize(query)
+        if (queryTokens.isEmpty()) return ""
+
+        val queryNumbers = Regex("\\d+").findAll(query).map { it.value }.toList()
+
+        val avgDocLength = index.map { it.tokens.size }.average()
+
+        val idfMap = queryTokens.associateWith { token ->
+            computeIDF(token, index)
+        }
+
+        val documents = if (category != null) {
+            index.filter { it.category == category }
+        } else {
+            index
+        }
+
+                val scoredResults = documents.map { doc ->
+            val score = computeBM25(doc, queryTokens, queryNumbers, idfMap, avgDocLength)
+            SearchResult(doc.category, doc.text, score, doc.timestamp)
+        }
+        .filter { it.score > 0.0 }
+        .sortedByDescending { it.score }
+        .let { results ->
+            // Лимит по объёму текста (в символах), а не по количеству записей.
+            // ~8000 символов ≈ 2000 токенов — безопасно для контекста модели.
+            val maxChars = 8000
+            var totalChars = 0
+            val limited = mutableListOf<SearchResult>()
+            for (result in results) {
+                if (totalChars + result.text.length > maxChars && limited.isNotEmpty()) break
+                totalChars += result.text.length
+                limited.add(result)
+            }
+            limited
+        }
+
+        if (scoredResults.isEmpty()) return ""
+
+        val grouped = scoredResults.groupBy { it.category }
+
+        return buildString {
+            grouped.forEach { (cat, results) ->
+                appendLine(cat)
+                results.take(50).forEach { result ->
+                    appendLine(result.text)
+                }
+                appendLine()
+            }
+        }.trim()
+    }
+
+    private fun computeBM25(
+        doc: IndexedDocument,
+        queryTokens: List<String>,
+        queryNumbers: List<String>,
+        idfMap: Map<String, Double>,
+        avgDocLength: Double
+    ): Double {
+        var score = 0.0
+        val docLength = doc.tokens.size
+
+        for (queryToken in queryTokens) {
+            val exactFreq = doc.tokenFreqs[queryToken] ?: 0
+            if (exactFreq > 0) {
+                val tf = exactFreq.toDouble()
+                val idf = idfMap[queryToken] ?: 0.0
+                val numerator = tf * (K1 + 1)
+                val denominator = tf + K1 * (1 - B + B * docLength / avgDocLength)
+                score += idf * numerator / denominator * 2.0
+            }
+
+            val stemMatches = doc.tokens.count {
+                extractRussianRoot(it) == extractRussianRoot(queryToken)
+            }
+            if (stemMatches > 0) {
+                score += stemMatches * 1.5
+            }
+
+            val fuzzyMatches = doc.tokens.count { token ->
+                levenshteinDistance(token, queryToken) <= 2
+            }
+            if (fuzzyMatches > 0) {
+                score += fuzzyMatches * 0.8
+            }
+
+                       val normalizedQuery = extractRussianRoot(queryToken)
+            val synonyms = SYNONYMS_NORMALIZED[normalizedQuery] ?: emptyList()
+            for (synonym in synonyms) {
+                val synFreq = doc.tokenFreqs[synonym] ?: 0
+                if (synFreq > 0) {
+                    score += synFreq * 1.2
+                }
+            }
+        }
+
+        if (queryNumbers.isNotEmpty()) {
+            val docNumbers = Regex("\\d+").findAll(doc.text).map { it.value }.toList()
+            val numberMatches = queryNumbers.count { num -> docNumbers.contains(num) }
+            if (numberMatches > 0) {
+                score += numberMatches * 10.0
+            }
+        }
+
+                val phraseBonus = computePhraseBonus(doc, queryTokens)
+        score += phraseBonus
+
+        // Бонус за полное покрытие — если все токены запроса найдены в записи
+        val coveredTokens = queryTokens.count { queryToken ->
+            doc.tokens.any { docToken ->
+                extractRussianRoot(docToken) == extractRussianRoot(queryToken) ||
+                levenshteinDistance(docToken, queryToken) <= 2
+            }
+        }
+        if (queryTokens.isNotEmpty() && coveredTokens == queryTokens.size) {
+            score += 20.0
+        }
+
+        // Бонус за свежесть записи
+        if (doc.timestamp.isNotEmpty()) {
+            try {
+                val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
+                val docDate = dateFormat.parse(doc.timestamp)
+                if (docDate != null) {
+                    val ageMs = System.currentTimeMillis() - docDate.time
+                    val ageDays = ageMs / 86400000.0
+                    val freshnessMultiplier = when {
+                        ageDays <= 7 -> 1.5
+                        ageDays <= 30 -> 1.2
+                        ageDays <= 90 -> 1.0
+                        else -> 0.8
+                    }
+                    score *= freshnessMultiplier
+                }
+            } catch (e: Exception) {
+                // Если не удалось распарсить дату — не меняем score
+            }
+        }
+
+        return score
+    }
+
+    private fun computePhraseBonus(doc: IndexedDocument, queryTokens: List<String>): Double {
+        if (queryTokens.size < 2) return 0.0
+
+        var bonus = 0.0
+        for (i in 0 until doc.tokens.size - queryTokens.size + 1) {
+            var matchCount = 0
+            for (j in queryTokens.indices) {
+                if (i + j < doc.tokens.size &&
+                    extractRussianRoot(doc.tokens[i + j]) == extractRussianRoot(queryTokens[j])) {
+                    matchCount++
+                }
+            }
+            if (matchCount == queryTokens.size) {
+                bonus += 3.0
+                break
+            }
+        }
+        return bonus
+    }
+
+    private fun computeIDF(token: String, documents: List<IndexedDocument>): Double {
+        val docCount = documents.size
+        val stemToken = extractRussianRoot(token)
+
+        val matchingDocs = documents.count { doc ->
+            doc.tokens.any {
+                extractRussianRoot(it) == stemToken ||
+                levenshteinDistance(it, token) <= 2
+            }
+        }
+
+        if (matchingDocs == 0) return 0.0
+
+        return log10(docCount.toDouble() / matchingDocs) + 1.0
+    }
+
+        private fun tokenize(text: String): List<String> {
+        return text.lowercase()
+            // Сначала заменяем "х", "x", "*" между цифрами на пробел (60х40х4 → 60 40 4)
+            .replace(Regex("(?<=\\d)\\s*[хxX*×]\\s*(?=\\d)"), " ")
+            // Потом убираем всё, кроме букв, цифр и пробелов
+            .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
+            .split(Regex("\\s+"))
+            .map { it.trim() }
+            .filter { it.length > 1 }
+            .filter { it !in STOP_WORDS }
+            .map { extractRussianRoot(it) }
+            .distinct()
+    }
+
+          private fun extractRussianRoot(word: String): String {
+        // Делегируем в статический стеммер из companion object.
+        return stem(word)
+    }
+
+    private fun levenshteinDistance(s1: String, s2: String): Int {
+        if (s1 == s2) return 0
+        if (s1.isEmpty()) return s2.length
+        if (s2.isEmpty()) return s1.length
+
+        val distances = Array(s1.length + 1) { IntArray(s2.length + 1) }
+
+        for (i in 0..s1.length) distances[i][0] = i
+        for (j in 0..s2.length) distances[0][j] = j
+
+        for (i in 1..s1.length) {
+            for (j in 1..s2.length) {
+                val cost = if (s1[i - 1] == s2[j - 1]) 0 else 1
+                distances[i][j] = minOf(
+                    distances[i - 1][j] + 1,
+                    distances[i][j - 1] + 1,
+                    distances[i - 1][j - 1] + cost
+                )
+            }
+        }
+
+        return distances[s1.length][s2.length]
+    }
+
+    private fun getIndex(): List<IndexedDocument> {
+        val currentModified = if (memoryFile.exists()) memoryFile.lastModified() else 0
+
+        if (cachedIndex != null && currentModified == lastModified) {
+            return cachedIndex!!
+        }
+
+        val index = buildIndex()
+        cachedIndex = index
+        lastModified = currentModified
+
+        return index
+    }
+
+    private fun buildIndex(): List<IndexedDocument> {
+        if (!memoryFile.exists()) return emptyList()
+
+        val documents = mutableListOf<IndexedDocument>()
+        val lines = memoryFile.readText().split("\n")
+
+        var currentCategory = ""
+        val categoryLines = mutableListOf<String>()
+
+        for (line in lines) {
+            val trimmed = line.trim()
+            if (trimmed.isEmpty()) continue
+
+            if (trimmed.startsWith("[") && trimmed.endsWith("]") && !trimmed.contains("20")) {
+                if (currentCategory.isNotEmpty() && categoryLines.isNotEmpty()) {
+                    documents.addAll(createDocumentsFromCategory(currentCategory, categoryLines))
+                }
+                currentCategory = trimmed
+                categoryLines.clear()
+            } else {
+                categoryLines.add(trimmed)
+            }
+        }
+
+        if (currentCategory.isNotEmpty() && categoryLines.isNotEmpty()) {
+            documents.addAll(createDocumentsFromCategory(currentCategory, categoryLines))
+        }
+
+        Log.d(TAG, "Built index with ${documents.size} documents")
+        return documents
+    }
+
+    private fun createDocumentsFromCategory(
+        category: String,
+        lines: List<String>
+    ): List<IndexedDocument> {
+        return lines.mapNotNull { line ->
+            val timestampMatch = Regex("\\[([^]]+)\\]").find(line)
+            val timestamp = timestampMatch?.groupValues?.get(1) ?: ""
+            val text = line.replace(Regex("\\[[^]]+\\]"), "").trim()
+
+            if (text.isEmpty()) return@mapNotNull null
+
+            val tokens = tokenize(text)
+            if (tokens.isEmpty()) return@mapNotNull null
+
+            val tokenFreqs = tokens.groupingBy { it }.eachCount()
+
+            IndexedDocument(category, text, timestamp, tokens, tokenFreqs)
+        }
+    }
+
+    fun clearCache() {
+        cachedIndex = null
+        lastModified = 0
+    }
+}
