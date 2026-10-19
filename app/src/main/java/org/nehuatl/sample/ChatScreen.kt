@@ -3,8 +3,11 @@ package org.nehuatl.sample
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.Build
+import android.os.ParcelFileDescriptor
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -34,6 +37,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -44,16 +48,15 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
-import java.io.File
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
@@ -91,13 +94,14 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -112,9 +116,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
@@ -124,6 +129,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -131,13 +137,13 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -147,23 +153,21 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
-import androidx.compose.animation.core.*
+import java.io.File
+import java.util.Random
 import kotlin.math.PI
 import kotlin.math.abs
-import kotlin.math.sin
-import kotlin.math.cos
 import kotlin.math.atan2
+import kotlin.math.cos
 import kotlin.math.min
+import kotlin.math.sin
 import kotlin.math.sqrt
-import androidx.compose.animation.core.keyframes
-import java.util.Random
-import androidx.compose.runtime.rememberUpdatedState
-import com.rizzi.bouquet.VerticalPDFReader
-import com.rizzi.bouquet.rememberVerticalPdfReaderState
-import com.rizzi.bouquet.ResourceType
-import androidx.core.net.toUri
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 // Длительность плавной смены темы. 600–900 мс — комфортно.
 // Хочешь затянуть — ставь 1200–1500. Больше 1500 — уже раздражает.
 private const val THEME_ANIMATION_MS = 4500
@@ -7167,18 +7171,69 @@ private fun BibliotekaDialog(
                                 }
                             }
                         }
-                                        } else if (selectedBook?.name?.endsWith(".pdf", ignoreCase = true) == true) {
-                        // PDF-просмотр
-                        val pdfState = rememberVerticalPdfReaderState(
-                            resource = ResourceType.Local(selectedBook!!.toUri()),
-                            isZoomEnable = true
-                        )
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                            VerticalPDFReader(
-                            state = pdfState,
-                            modifier = Modifier.fillMaxWidth().height(500.dp)
+                    } else if (selectedBook?.name?.endsWith(".pdf", ignoreCase = true) == true) {
+                        // PDF-просмотр через собственный рендер (PdfRenderer + LazyColumn).
+                        // Кнопки A−/A+ — сверху, вместо поля поиска (поиск по PDF не работает).
+                        // Ручной вертикальный скролл — как в обычной читалке.
+                        val density = LocalDensity.current
+                        var pdfScale by remember(selectedBook) { mutableStateOf(1.0f) }
+                        val pdfScaleRange = 0.6f..2.0f
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Button(
+                                onClick = {
+                                    pdfScale = (pdfScale - 0.1f)
+                                        .coerceIn(pdfScaleRange.start, pdfScaleRange.endInclusive)
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = colors.accent,
+                                    contentColor = colors.background
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, colors.borderGray),
+                                modifier = Modifier.weight(1f).height(38.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                            ) {
+                                Text("A−", color = colors.background, fontSize = 14.sp)
+                            }
+                            Text(
+                                text = "${(pdfScale * 100).toInt()}%",
+                                color = colors.text,
+                                fontSize = 12.sp,
+                                fontFamily = FontFamily.Monospace,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.width(56.dp)
                             )
+                            Button(
+                                onClick = {
+                                    pdfScale = (pdfScale + 0.1f)
+                                        .coerceIn(pdfScaleRange.start, pdfScaleRange.endInclusive)
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = colors.accent,
+                                    contentColor = colors.background
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, colors.borderGray),
+                                modifier = Modifier.weight(1f).height(38.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                            ) {
+                                Text("A+", color = colors.background, fontSize = 14.sp)
+                            }
                         }
+
+                        PdfReaderView(
+                            file = selectedBook!!,
+                            pageWidthFraction = pdfScale,
+                            colors = colors,
+                            modifier = Modifier.fillMaxWidth().height(500.dp)
+                        )
                     } else {
                                                Row(
                             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
@@ -7404,8 +7459,173 @@ private fun BibliotekaDialog(
                     }
                 }
             },
-            dismissButton = null
+                       dismissButton = null
         )
+    }
+}
+
+// ========== PDF-ЧИТАЛКА (свой рендер через PdfRenderer + LazyColumn) ==========
+// Заменяет VerticalPDFReader из bouquet в PDF-ветке библиотеки.
+// Даёт ручной вертикальный скролл как в обычной читалке и кнопки A−/A+.
+// Страницы рендерятся ЛЕНИВО — только видимые в LazyColumn.
+// Кэш — LRU на PDF_CACHE_SIZE битмапов, чтобы листание туда-обратно
+// не рендерило заново, но и не держало всю книгу в памяти.
+// PdfRenderer не потокобезопасен — рендер строго под Mutex в Dispatchers.IO.
+
+private const val PDF_CACHE_SIZE = 5
+private const val PDF_MAX_RENDER_WIDTH_PX = 2048
+
+@Composable
+private fun PdfReaderView(
+    file: File,
+    pageWidthFraction: Float,
+    colors: AppColors,
+    modifier: Modifier = Modifier
+) {
+    val density = LocalDensity.current
+
+    val renderer by produceState<PdfRenderer?>(initialValue = null, file) {
+        value = withContext(Dispatchers.IO) {
+            try {
+                val pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+                PdfRenderer(pfd)
+            } catch (e: Exception) {
+                android.util.Log.e("PdfReaderView", "open failed: ${e.message}", e)
+                null
+            }
+        }
+    }
+
+    val cache = remember(file) {
+        object : android.util.LruCache<Int, Bitmap>(PDF_CACHE_SIZE) {
+            override fun entryRemoved(evicted: Boolean, key: Int, oldValue: Bitmap, newValue: Bitmap?) {
+                if (evicted && oldValue !== newValue) oldValue.recycle()
+            }
+        }
+    }
+
+    val renderMutex = remember(file) { Mutex() }
+
+    LaunchedEffect(pageWidthFraction) {
+        cache.evictAll()
+    }
+
+    DisposableEffect(renderer) {
+        onDispose {
+            cache.evictAll()
+            try { renderer?.close() } catch (_: Exception) {}
+        }
+    }
+
+    val currentRenderer = renderer
+    if (currentRenderer == null) {
+        Box(
+            modifier = modifier
+                .background(colors.surfaceGray, RoundedCornerShape(12.dp))
+                .border(1.dp, colors.borderGray, RoundedCornerShape(12.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(color = colors.accent)
+        }
+        return
+    }
+
+    val pageCount = currentRenderer.pageCount
+    val screenWidthPx = with(density) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
+
+    LazyColumn(
+        modifier = modifier
+            .background(colors.background.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+            .border(1.dp, colors.borderGray, RoundedCornerShape(12.dp))
+            .padding(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        items(pageCount) { index ->
+            PdfPageItem(
+                renderer = currentRenderer,
+                pageIndex = index,
+                pageWidthFraction = pageWidthFraction,
+                screenWidthPx = screenWidthPx,
+                cache = cache,
+                renderMutex = renderMutex,
+                colors = colors
+            )
+        }
+    }
+}
+
+@Composable
+private fun PdfPageItem(
+    renderer: PdfRenderer,
+    pageIndex: Int,
+    pageWidthFraction: Float,
+    screenWidthPx: Float,
+    cache: android.util.LruCache<Int, Bitmap>,
+    renderMutex: Mutex,
+    colors: AppColors
+) {
+    var bitmap by remember(pageIndex, pageWidthFraction) { mutableStateOf(cache.get(pageIndex)) }
+
+    LaunchedEffect(pageIndex, pageWidthFraction) {
+        if (bitmap != null) return@LaunchedEffect
+
+        val rendered = withContext(Dispatchers.IO) {
+            renderMutex.withLock {
+                val cached = cache.get(pageIndex)
+                if (cached != null) return@withLock cached
+
+                try {
+                    val page = renderer.openPage(pageIndex)
+                    try {
+                        val renderWidth = (screenWidthPx * pageWidthFraction)
+                            .toInt()
+                            .coerceIn(1, PDF_MAX_RENDER_WIDTH_PX)
+                        val renderHeight = (page.height.toFloat() * renderWidth / page.width.toFloat())
+                            .toInt()
+                            .coerceAtLeast(1)
+
+                        val bmp = Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.ARGB_8888)
+                        bmp.eraseColor(android.graphics.Color.WHITE)
+                        page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        cache.put(pageIndex, bmp)
+                        bmp
+                    } finally {
+                        page.close()
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("PdfReaderView", "render page $pageIndex failed: ${e.message}", e)
+                    null
+                }
+            }
+        }
+        bitmap = rendered
+    }
+
+    val bmp = bitmap
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(colors.surfaceGray, RoundedCornerShape(8.dp))
+            .border(1.dp, colors.borderGray, RoundedCornerShape(8.dp)),
+        contentAlignment = Alignment.Center
+    ) {
+        if (bmp != null) {
+            Image(
+                bitmap = bmp.asImageBitmap(),
+                contentDescription = "Страница ${pageIndex + 1}",
+                modifier = Modifier.fillMaxWidth(),
+                contentScale = ContentScale.FillWidth
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f / 1.414f),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = colors.accent)
+            }
+        }
     }
 }
 
