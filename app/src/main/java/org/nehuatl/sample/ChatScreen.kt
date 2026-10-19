@@ -391,6 +391,17 @@ fun ChatScreen(
     var showMediaPicker by remember { mutableStateOf(false) }
     var showBiblioteka by remember { mutableStateOf(false) }
     var showOrganizerEditor by remember { mutableStateOf(false) }
+
+    // Состояние диалога выбора страниц PDF
+    var pendingPdfUri by remember { mutableStateOf<Uri?>(null) }
+    var showPdfPagePicker by remember { mutableStateOf(false) }
+    var pdfPageInput by remember { mutableStateOf("") }
+
+    // Очередь страниц PDF для последовательной отправки в vision.
+    // Каждый элемент — file:// URI готового JPEG.
+    var pdfPageQueue by remember { mutableStateOf<List<String>>(emptyList()) }
+    var pdfQueueActive by remember { mutableStateOf(false) }
+    var pdfQueueCurrentIndex by remember { mutableStateOf(0) }
     // Сигнал для махания рукой — устанавливается, когда нужно помахать
     var waveSignal by remember { mutableStateOf(false) }
     // Сигнал для полёта в центр экрана и увеличения
@@ -442,14 +453,9 @@ fun ChatScreen(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
-            viewModel.renderPdfToJpegAndSetImage(uri) { jpegPath ->
-                if (jpegPath != null) {
-                    // Отправляем как картинку с пустым текстом — модель опишет/прочитает
-                    viewModel.sendUserMessage("", jpegPath)
-                } else {
-                    viewModel.appendSystemMessage("❌ Не удалось прочитать PDF. Возможно, он защищён паролем или повреждён.")
-                }
-            }
+            pendingPdfUri = uri
+            pdfPageInput = ""
+            showPdfPagePicker = true
         }
     }
 
@@ -680,6 +686,39 @@ fun ChatScreen(
         }
     }
 
+    // ========== ОЧЕРЕДЬ СТРАНИЦ PDF → VISION ==========
+    // Отправляет страницы по одной. Следующая уходит только когда предыдущая
+    // полностью обработана: vision не занята, модель не думает, TTS не говорит.
+    // Защита от «⏳ Зрение загружается» на 2-й и 3-й страницах.
+    LaunchedEffect(pdfQueueActive, pdfQueueCurrentIndex, visionPhase, state, cloudState, isSpeaking, isPreparingSpeech) {
+        if (!pdfQueueActive) return@LaunchedEffect
+        if (pdfQueueCurrentIndex >= pdfPageQueue.size) {
+            pdfQueueActive = false
+            pdfQueueCurrentIndex = 0
+            pdfPageQueue = emptyList()
+            return@LaunchedEffect
+        }
+
+        val visionBusy = visionPhase == VisionPhase.RELEASING_TEXT ||
+                         visionPhase == VisionPhase.LOADING_VISION ||
+                         visionPhase == VisionPhase.RESTORING_TEXT
+        if (visionBusy) return@LaunchedEffect
+
+        val modelBusy = state is GenerationState.Generating ||
+                        state is GenerationState.LoadingModel ||
+                        state is GenerationState.AnalyzingImage ||
+                        cloudState is CloudAIState.Generating
+        if (modelBusy) return@LaunchedEffect
+
+        if (isSpeaking || isPreparingSpeech) return@LaunchedEffect
+
+        if (visionPhase == VisionPhase.VISION_READY) return@LaunchedEffect
+
+        val path = pdfPageQueue[pdfQueueCurrentIndex]
+        pdfQueueCurrentIndex = pdfQueueCurrentIndex + 1
+        viewModel.sendUserMessage("", path)
+    }
+
             if (isAppLocked) {
         LockScreen(
             secretPhrase = secretPhraseInput,
@@ -848,6 +887,112 @@ fun ChatScreen(
             onDismiss = { showBiblioteka = false },
             colors = colors,
             isDarkTheme = isDarkTheme
+        )
+    }
+
+                if (showPdfPagePicker && pendingPdfUri != null) {
+        AlertDialog(
+            onDismissRequest = { showPdfPagePicker = false; pendingPdfUri = null },
+            title = { Text("📄 Отправить страницы в модель", color = colors.text, fontSize = 16.sp) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "SmolVLM2 обрабатывает одну страницу за раз. Выберите, что отправить.",
+                        color = colors.text.copy(alpha = 0.7f),
+                        fontSize = 11.sp
+                    )
+                    Button(
+                        onClick = {
+                            showPdfPagePicker = false
+                            val uri = pendingPdfUri
+                            pendingPdfUri = null
+                            if (uri != null) {
+                                viewModel.renderPdfPagesToCache(uri, listOf(0)) { paths ->
+                                    if (paths.isNotEmpty()) {
+                                        pdfPageQueue = paths
+                                        pdfQueueCurrentIndex = 0
+                                        pdfQueueActive = true
+                                    } else {
+                                        viewModel.appendSystemMessage("❌ Не удалось прочитать PDF.")
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.background)
+                    ) { Text("Первую страницу", color = colors.background) }
+
+                    Button(
+                        onClick = {
+                            showPdfPagePicker = false
+                            val uri = pendingPdfUri
+                            pendingPdfUri = null
+                            if (uri != null) {
+                                viewModel.renderPdfPagesToCache(uri, listOf(0, 1, 2)) { paths ->
+                                    if (paths.isNotEmpty()) {
+                                        pdfPageQueue = paths
+                                        pdfQueueCurrentIndex = 0
+                                        pdfQueueActive = true
+                                    } else {
+                                        viewModel.appendSystemMessage("❌ Не удалось прочитать PDF.")
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.background)
+                    ) { Text("Первые 3 страницы (по очереди)", color = colors.background) }
+
+                    OutlinedTextField(
+                        value = pdfPageInput,
+                        onValueChange = { pdfPageInput = it.filter { c -> c.isDigit() } },
+                        placeholder = { Text("Номер страницы (с 1)", color = colors.text.copy(alpha = 0.5f), fontSize = 11.sp) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = colors.text,
+                            unfocusedTextColor = colors.text,
+                            focusedContainerColor = colors.surfaceGray,
+                            unfocusedContainerColor = colors.surfaceGray,
+                            focusedBorderColor = colors.accent,
+                            unfocusedBorderColor = colors.borderGray,
+                            cursorColor = colors.accent
+                        )
+                    )
+                    Button(
+                        onClick = {
+                            val n = pdfPageInput.toIntOrNull()
+                            if (n == null || n < 1) {
+                                viewModel.appendSystemMessage("⚠️ Введите номер страницы (начиная с 1)")
+                                return@Button
+                            }
+                            showPdfPagePicker = false
+                            val uri = pendingPdfUri
+                            pendingPdfUri = null
+                            if (uri != null) {
+                                viewModel.renderPdfPagesToCache(uri, listOf(n - 1)) { paths ->
+                                    if (paths.isNotEmpty()) {
+                                        pdfPageQueue = paths
+                                        pdfQueueCurrentIndex = 0
+                                        pdfQueueActive = true
+                                    } else {
+                                        viewModel.appendSystemMessage("❌ Не удалось прочитать страницу $n. Возможно, в PDF меньше страниц.")
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = colors.borderGray, contentColor = colors.text)
+                    ) { Text("Отправить выбранную страницу", color = colors.text) }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showPdfPagePicker = false; pendingPdfUri = null }) {
+                    Text("Отмена", color = colors.accent)
+                }
+            },
+            containerColor = colors.surfaceGray
         )
     }
 
