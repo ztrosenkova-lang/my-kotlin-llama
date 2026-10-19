@@ -3492,7 +3492,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             } ?: return null
 
             val cacheDir = File(context.cacheDir, "vision_input").apply {
-                if (exists()) listFiles()?.forEach { it.delete() } else mkdirs()
+                if (exists()) {
+                    listFiles()?.forEach { f ->
+                        if (!f.name.startsWith("pdf_page_")) f.delete()
+                    }
+                } else mkdirs()
             }
             val file = File(cacheDir, "converted_${System.currentTimeMillis()}.jpg")
             FileOutputStream(file).use { out ->
@@ -3542,7 +3546,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 }
 
                 val cacheDir = File(getApplication<Application>().cacheDir, "vision_input").apply {
-                    if (exists()) listFiles()?.forEach { it.delete() } else mkdirs()
+                    if (exists()) {
+                        listFiles()?.forEach { f ->
+                            if (f.name.startsWith("pdf_page_")) f.delete()
+                        }
+                    } else mkdirs()
                 }
 
                 for (index in pageIndices) {
