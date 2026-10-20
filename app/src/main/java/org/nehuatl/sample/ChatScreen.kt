@@ -7185,6 +7185,9 @@ private fun BibliotekaDialog(
     var currentSentenceIndex by remember { mutableStateOf(-1) }
     var bookChunks by remember { mutableStateOf<List<String>>(emptyList()) }
     var currentChunkIndex by remember { mutableStateOf(-1) }
+    var prefetchedFiles by remember { mutableStateOf<Map<Int, File>>(emptyMap()) }
+    var prefetchingIndices by remember { mutableStateOf<Set<Int>>(emptySet()) }
+    var mediaPlayer by remember { mutableStateOf<android.media.MediaPlayer?>(null) }
     var isReading by remember { mutableStateOf(false) }
     var isPaused by remember { mutableStateOf(false) }
     var fontSizeSp by remember { mutableStateOf(12) }
@@ -7230,16 +7233,40 @@ private fun BibliotekaDialog(
         }
     }
 
-    LaunchedEffect(isReading, isPaused, currentChunkIndex, isSpeaking) {
-        if (isReading && !isPaused && currentChunkIndex >= 0 && currentChunkIndex < bookChunks.size) {
-            if (!isSpeaking) {
-                delay(50)
-                if (isReading && !isPaused && !isSpeaking) {
-                    val next = currentChunkIndex + 1
-                    if (next < bookChunks.size) {
-                        currentChunkIndex = next
-                        currentSentenceIndex = firstSentenceOfChunk(next, bookChunks, bookSentences)
-                        viewModel.speakText(bookChunks[next])
+    LaunchedEffect(isReading, isPaused, currentChunkIndex) {
+        if (!isReading || isPaused) return@LaunchedEffect
+        if (currentChunkIndex < 0 || currentChunkIndex >= bookChunks.size) return@LaunchedEffect
+
+        // Синтезировать текущий + 2 следующих, если ещё нет в буфере
+        val toSynthesize = listOf(currentChunkIndex, currentChunkIndex + 1, currentChunkIndex + 2)
+            .filter { it in bookChunks.indices }
+            .filter { prefetchedFiles[it] == null && it !in prefetchingIndices }
+
+        for (idx in toSynthesize) {
+            prefetchingIndices = prefetchingIndices + idx
+            val dir = File(context.cacheDir, "book_tts").apply { mkdirs() }
+            val file = File(dir, "book_chunk_${idx}_${System.currentTimeMillis()}.wav")
+            val intent = Intent(context, TtsService::class.java).apply {
+                action = TtsService.ACTION_SYNTHESIZE_TO_FILE
+                putExtra(TtsService.EXTRA_TEXT, bookChunks[idx])
+                putExtra(TtsService.EXTRA_FILE_PATH, file.absolutePath)
+            }
+            context.startService(intent)
+        }
+
+        // Играть текущий, если готов и плеер свободен
+        val currentFile = prefetchedFiles[currentChunkIndex]
+        if (currentFile != null && mediaPlayer == null) {
+            mediaPlayer = android.media.MediaPlayer().apply {
+                setDataSource(currentFile.absolutePath)
+                setOnCompletionListener {
+                    mediaPlayer?.release()
+                    mediaPlayer = null
+                    prefetchedFiles = prefetchedFiles - currentChunkIndex
+                    currentFile.delete()
+                    if (currentChunkIndex + 1 < bookChunks.size) {
+                        currentChunkIndex = currentChunkIndex + 1
+                        currentSentenceIndex = firstSentenceOfChunk(currentChunkIndex, bookChunks, bookSentences)
                     } else {
                         isReading = false
                         isPaused = false
@@ -7247,12 +7274,40 @@ private fun BibliotekaDialog(
                         currentSentenceIndex = -1
                     }
                 }
+                prepare()
+                start()
             }
         }
     }
 
     DisposableEffect(Unit) {
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(ctx: android.content.Context?, intent: android.content.Intent?) {
+                if (intent?.action == TtsService.ACTION_SYNTHESIZE_DONE) {
+                    val path = intent.getStringExtra(TtsService.EXTRA_FILE_PATH) ?: ""
+                    if (path.isNotEmpty()) {
+                        val idx = chunkIndexForFile(path)
+                        if (idx >= 0) {
+                            prefetchedFiles = prefetchedFiles + (idx to File(path))
+                            prefetchingIndices = prefetchingIndices - idx
+                        }
+                    }
+                }
+            }
+        }
+        androidx.core.content.ContextCompat.registerReceiver(
+            context, receiver,
+            android.content.IntentFilter(TtsService.ACTION_SYNTHESIZE_DONE),
+            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         onDispose {
+            try { context.unregisterReceiver(receiver) } catch (_: Exception) {}
+            mediaPlayer?.release()
+            mediaPlayer = null
+            prefetchedFiles.values.forEach { it.delete() }
+            prefetchedFiles = emptyMap()
+            prefetchingIndices = emptySet()
+            File(context.cacheDir, "book_tts").deleteRecursively()
             if (isReading) viewModel.abortLocal()
         }
     }
@@ -7401,12 +7456,10 @@ private fun BibliotekaDialog(
                                 onClick = {
                                     if (isReading && !isPaused) {
                                         isPaused = true
-                                        viewModel.abortLocal()
+                                        mediaPlayer?.pause()
                                     } else if (isReading && isPaused) {
                                         isPaused = false
-                                        bookChunks.getOrNull(currentChunkIndex)?.let { chunk ->
-                                            viewModel.speakText(chunk)
-                                        }
+                                        mediaPlayer?.start()
                                     } else {
                                         isReading = true
                                         isPaused = false
@@ -7417,9 +7470,6 @@ private fun BibliotekaDialog(
                                         currentSentenceIndex = firstSentenceOfChunk(
                                             startChunk, bookChunks, bookSentences
                                         )
-                                        bookChunks.getOrNull(startChunk)?.let { chunk ->
-                                            viewModel.speakText(chunk)
-                                        }
                                     }
                                 },
                                 colors = ButtonDefaults.buttonColors(
@@ -7550,11 +7600,17 @@ private fun BibliotekaDialog(
                                 Text("⬇ Свернуть", color = colors.background, fontSize = 11.sp)
                             }
                             Button(
-                                onClick = {
+                                 onClick = {
                                     isReading = false
                                     isPaused = false
                                     currentSentenceIndex = -1
                                     currentChunkIndex = -1
+                                    mediaPlayer?.release()
+                                    mediaPlayer = null
+                                    prefetchedFiles.values.forEach { it.delete() }
+                                    prefetchedFiles = emptyMap()
+                                    prefetchingIndices = emptySet()
+                                    File(context.cacheDir, "book_tts").deleteRecursively()
                                     selectedBook = null
                                     bookSentences = emptyList()
                                     bookChunks = emptyList()
@@ -7574,6 +7630,12 @@ private fun BibliotekaDialog(
                                 onClick = {
                                     isReading = false
                                     currentChunkIndex = -1
+                                    mediaPlayer?.release()
+                                    mediaPlayer = null
+                                    prefetchedFiles.values.forEach { it.delete() }
+                                    prefetchedFiles = emptyMap()
+                                    prefetchingIndices = emptySet()
+                                    File(context.cacheDir, "book_tts").deleteRecursively()
                                     onDismiss()
                                 },
                                 colors = ButtonDefaults.buttonColors(
@@ -7842,6 +7904,12 @@ private fun PdfPageItem(
 // блоков (раз в ~450 символов). Склейка — по границам предложений.
 
 private const val BOOK_CHUNK_TARGET_CHARS = 450
+
+private fun chunkIndexForFile(path: String): Int {
+    val name = path.substringAfterLast("/")
+    val match = Regex("book_chunk_(\\d+)_").find(name) ?: return -1
+    return match.groupValues[1].toIntOrNull() ?: -1
+}
 
 private fun buildBookChunks(
     sentences: List<String>,
