@@ -38,8 +38,11 @@ class TtsService : Service() {
         const val ACTION_TTS_ERROR = "org.nehuatl.sample.action.TTS_ERROR"
         const val ACTION_SPEAK_START = "org.nehuatl.sample.action.SPEAK_START"
         const val ACTION_SPEAK_END = "org.nehuatl.sample.action.SPEAK_END"
+        const val ACTION_SYNTHESIZE_TO_FILE = "org.nehuatl.sample.action.SYNTHESIZE_TO_FILE"
+        const val ACTION_SYNTHESIZE_DONE = "org.nehuatl.sample.action.SYNTHESIZE_DONE"
         const val EXTRA_TEXT = "extra_text"
         const val EXTRA_MESSAGE = "extra_message"
+        const val EXTRA_FILE_PATH = "extra_file_path"
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -62,6 +65,16 @@ class TtsService : Service() {
                     serviceScope.launch {
                         waitForTts()
                         speakText(text)
+                    }
+                }
+            }
+            ACTION_SYNTHESIZE_TO_FILE -> {
+                val text = intent.getStringExtra(EXTRA_TEXT) ?: ""
+                val filePath = intent.getStringExtra(EXTRA_FILE_PATH) ?: ""
+                if (text.isNotBlank() && filePath.isNotBlank()) {
+                    serviceScope.launch {
+                        waitForTts()
+                        synthesizeToFile(text, filePath)
                     }
                 }
             }
@@ -169,6 +182,36 @@ class TtsService : Service() {
         while (!isTtsInitialized && attempts < 100) {
             delay(100)
             attempts++
+        }
+    }
+
+    private suspend fun synthesizeToFile(text: String, filePath: String) {
+        ttsMutex.withLock {
+            try {
+                val tts = offlineTts ?: return
+                val filtered = text.replace(Regex("[^\\p{L}\\p{N}\\s.,!?]"), "")
+                    .replace(Regex("\\s+"), " ")
+                    .trim()
+                if (filtered.isBlank()) {
+                    sendBroadcast(Intent(ACTION_SYNTHESIZE_DONE).apply {
+                        setPackage(packageName)
+                        putExtra(EXTRA_FILE_PATH, filePath)
+                    })
+                    return
+                }
+                val audio = tts.generate(filtered, sid = 0, speed = 0.85f)
+                audio.save(filename = filePath)
+                sendBroadcast(Intent(ACTION_SYNTHESIZE_DONE).apply {
+                    setPackage(packageName)
+                    putExtra(EXTRA_FILE_PATH, filePath)
+                })
+            } catch (e: Exception) {
+                Log.e(TAG, "synthesizeToFile error: ${e.message}", e)
+                sendBroadcast(Intent(ACTION_SYNTHESIZE_DONE).apply {
+                    setPackage(packageName)
+                    putExtra(EXTRA_FILE_PATH, "")
+                })
+            }
         }
     }
 
