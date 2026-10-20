@@ -311,6 +311,15 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     // когда prefs уже инициализирован.
     private val _overlayRobotScale = MutableStateFlow(1.0f)
     val overlayRobotScale: StateFlow<Float> = _overlayRobotScale.asStateFlow()
+    // Угол наклона робота 2 в overlay по гравитации (в градусах).
+    // 0f — робот смотрит «вниз по экрану». Сервис пишет сглаженный угол,
+    // RobotOverlayContent читает и крутит картинку через graphicsLayer.
+    private val _overlayGravityRotation = MutableStateFlow(0f)
+    val overlayGravityRotation: StateFlow<Float> = _overlayGravityRotation.asStateFlow()
+
+    fun setOverlayGravityRotation(angle: Float) {
+        _overlayGravityRotation.value = angle
+    }
 
         fun setOverlayRobotScale(scale: Float) {
         val coerced = scale.coerceIn(0.5f, 3.0f)
