@@ -21,6 +21,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.sin
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.view.Surface
 class FloatingRobotService : LifecycleService() {
 
     companion object {
@@ -48,6 +53,11 @@ class FloatingRobotService : LifecycleService() {
     private lateinit var windowManager: WindowManager
     private var robotView: ComposeOverlayView? = null
     private var voiceRecognizer: VoiceRecognizer? = null
+
+    private var sensorManager: SensorManager? = null
+    private var accelerometer: Sensor? = null
+    private var gravitySensorListener: SensorEventListener? = null
+    @Volatile private var smoothedGravityRotation: Float = 0f
 
         // Флаги для единой анимации окна (bob + jump).
     // Объявлены как поля класса, чтобы обе корутины видели их.
@@ -77,6 +87,8 @@ class FloatingRobotService : LifecycleService() {
         MainViewModel.instance?.setFloatingRunning(true)
 
     windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+
+    setupGravitySensor()
 
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
@@ -272,6 +284,9 @@ class FloatingRobotService : LifecycleService() {
 
         override fun onDestroy() {
         super.onDestroy()
+        gravitySensorListener?.let { sensorManager?.unregisterListener(it) }
+        gravitySensorListener = null
+        sensorManager = null
         removeRobotOverlay()
         voiceRecognizer?.destroy()
         voiceRecognizer = null
@@ -579,6 +594,76 @@ class FloatingRobotService : LifecycleService() {
             }
             robotView = null
         }
+    }
+
+    // ========== ГРАВИТАЦИЯ (наклон робота 2) ==========
+
+    private fun setupGravitySensor() {
+        sensorManager = getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+        accelerometer = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        if (accelerometer == null) {
+            Log.w(TAG, "Accelerometer not available — gravity rotation disabled")
+            return
+        }
+
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+                if (event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
+
+                val x = event.values[0]
+                val y = event.values[1]
+                val z = event.values[2]
+
+                // Телефон лежит плашмя — гравитации в плоскости экрана нет.
+                // Плавно ведём угол к 0, чтобы робот не дёргался.
+                if (kotlin.math.abs(z) > 8f) {
+                    smoothedGravityRotation = smoothedGravityRotation * 0.9f
+                    MainViewModel.instance?.setOverlayGravityRotation(smoothedGravityRotation)
+                    return
+                }
+
+                // Угол наклона телефона в плоскости экрана.
+                // atan2(-x, y) даёт угол, на который надо довернуть робота,
+                // чтобы его низ смотрел вниз по гравитации.
+                var angleDeg = Math.toDegrees(kotlin.math.atan2(-x.toDouble(), y.toDouble())).toFloat()
+
+                // Компенсация поворота экрана (ландшафт).
+                // Акселерометр всегда в системе координат устройства,
+                // поэтому для ландшафта добавляем поворот дисплея.
+                val displayRotation = try {
+                    @Suppress("DEPRECATION")
+                    windowManager.defaultDisplay.rotation
+                } catch (e: Exception) {
+                    Surface.ROTATION_0
+                }
+                angleDeg += when (displayRotation) {
+                    Surface.ROTATION_90 -> -90f
+                    Surface.ROTATION_180 -> 180f
+                    Surface.ROTATION_270 -> 90f
+                    else -> 0f
+                }
+
+                // Нормализуем в диапазон -180..180, чтобы не было скачков.
+                if (angleDeg > 180f) angleDeg -= 360f
+                if (angleDeg < -180f) angleDeg += 360f
+
+                // Low-pass фильтр: сглаживаем шум акселерометра.
+                smoothedGravityRotation = smoothedGravityRotation * 0.85f + angleDeg * 0.15f
+                MainViewModel.instance?.setOverlayGravityRotation(smoothedGravityRotation)
+            }
+
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
+                // не используется
+            }
+        }
+
+        gravitySensorListener = listener
+        sensorManager?.registerListener(
+            listener,
+            accelerometer,
+            SensorManager.SENSOR_DELAY_GAME
+        )
+        Log.d(TAG, "Gravity sensor registered")
     }
 
     // ========== NOTIFICATION ==========
