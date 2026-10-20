@@ -7661,22 +7661,15 @@ private fun PdfReaderView(
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
+    val context = LocalContext.current
 
-    // Состояние открытия PDF: загрузка / ошибка / готовый рендерер.
-    // Нужно, чтобы битый или запароленный PDF не висел вечным спиннером.
     var openError by remember(file) { mutableStateOf(false) }
-    val renderer by produceState<PdfRenderer?>(initialValue = null, file) {
+    val pdfiumCore = remember(file) { com.shockwave.pdfium.PdfiumCore(context) }
+    val document by produceState<com.shockwave.pdfium.PdfDocument?>(initialValue = null, file) {
         value = withContext(Dispatchers.IO) {
             try {
-                withTimeoutOrNull(8000L) {
-                    val pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-                    PdfRenderer(pfd)
-                }.also { result ->
-                    if (result == null) {
-                        android.util.Log.e("PdfReaderView", "open timeout after 8s")
-                        openError = true
-                    }
-                }
+                val pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+                pdfiumCore.newDocument(pfd)
             } catch (e: Exception) {
                 android.util.Log.e("PdfReaderView", "open failed: ${e.message}", e)
                 openError = true
@@ -7695,15 +7688,17 @@ private fun PdfReaderView(
         cache.evictAll()
     }
 
-    DisposableEffect(renderer) {
+    DisposableEffect(document) {
         onDispose {
             cache.evictAll()
-            try { renderer?.close() } catch (_: Exception) {}
+            try {
+                document?.let { pdfiumCore.closeDocument(it) }
+            } catch (_: Exception) {}
         }
     }
 
-    val currentRenderer = renderer
-    if (currentRenderer == null) {
+    val currentDocument = document
+    if (currentDocument == null) {
         Box(
             modifier = modifier
                 .background(colors.surfaceGray, RoundedCornerShape(12.dp))
@@ -7726,7 +7721,7 @@ private fun PdfReaderView(
         return
     }
 
-    val pageCount = currentRenderer.pageCount
+    val pageCount = pdfiumCore.getPageCount(currentDocument)
 
     BoxWithConstraints(modifier = modifier) {
         // Реальная ширина колонки (без полей AlertDialog), а не ширина экрана.
@@ -7743,8 +7738,9 @@ private fun PdfReaderView(
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             items(pageCount) { index ->
-                PdfPageItem(
-                    renderer = currentRenderer,
+                               PdfPageItem(
+                    pdfiumCore = pdfiumCore,
+                    document = currentDocument,
                     pageIndex = index,
                     pageWidthFraction = pageWidthFraction,
                     columnWidthPx = columnWidthPx,
@@ -7759,7 +7755,8 @@ private fun PdfReaderView(
 
 @Composable
 private fun PdfPageItem(
-    renderer: PdfRenderer,
+    pdfiumCore: com.shockwave.pdfium.PdfiumCore,
+    document: com.shockwave.pdfium.PdfDocument,
     pageIndex: Int,
     pageWidthFraction: Float,
     columnWidthPx: Float,
@@ -7778,25 +7775,31 @@ private fun PdfPageItem(
                 if (cached != null) return@withLock cached
 
                 try {
-                    val page = renderer.openPage(pageIndex)
-                    try {
-                        val renderWidth = (columnWidthPx * pageWidthFraction)
-                            .toInt()
-                            .coerceIn(1, PDF_MAX_RENDER_WIDTH_PX)
-                        val renderHeight = (page.height.toFloat() * renderWidth / page.width.toFloat())
-                            .toInt()
-                            .coerceAtLeast(1)
+                    pdfiumCore.openPage(document, pageIndex)
 
-                        val bmp = Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.ARGB_8888)
-                        bmp.eraseColor(android.graphics.Color.WHITE)
-                        page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                        cache.put(pageIndex, bmp)
-                        bmp
-                    } finally {
-                        page.close()
-                    }
+                    val pageWidthPt = pdfiumCore.getPageWidthPoint(document, pageIndex)
+                    val pageHeightPt = pdfiumCore.getPageHeightPoint(document, pageIndex)
+
+                    val renderWidth = (columnWidthPx * pageWidthFraction)
+                        .toInt()
+                        .coerceIn(1, PDF_MAX_RENDER_WIDTH_PX)
+                    val renderHeight = (pageHeightPt.toFloat() * renderWidth / pageWidthPt.toFloat())
+                        .toInt()
+                        .coerceAtLeast(1)
+
+                    val bmp = Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.ARGB_8888)
+                    bmp.eraseColor(android.graphics.Color.WHITE)
+                    pdfiumCore.renderPageBitmap(
+                        document, bmp, pageIndex, 0, 0, renderWidth, renderHeight
+                    )
+
+                    pdfiumCore.closePage(document, pageIndex)
+
+                    cache.put(pageIndex, bmp)
+                    bmp
                 } catch (e: Exception) {
                     android.util.Log.e("PdfReaderView", "render page $pageIndex failed: ${e.message}", e)
+                    try { pdfiumCore.closePage(document, pageIndex) } catch (_: Exception) {}
                     null
                 }
             }
