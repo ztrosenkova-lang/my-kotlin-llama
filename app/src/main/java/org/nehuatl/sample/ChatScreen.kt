@@ -7316,7 +7316,6 @@ private fun BibliotekaDialog(
                                     file.delete()
                                     if (currentSegmentIndex + 1 < segmentQueue.size) {
                                         currentSegmentIndex = currentSegmentIndex + 1
-                                        currentSentenceIndex = firstSentenceOfChunk(currentChunkIndex, bookChunks, bookSentences)
                                     } else {
                                         isReading = false
                                         isPaused = false
