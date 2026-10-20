@@ -108,7 +108,10 @@ dependencies {
     implementation("org.gnit.lucene-kmp:lucene-kmp-queryparser:10.2.0-alpha14")
 
     implementation("io.github.grizzi91:bouquet:1.1.2")
-    implementation("com.github.barteksc:pdfium-android:1.9.0")
+    implementation("com.github.barteksc:pdfium-android:1.9.0") {
+        exclude group: "com.android.support", module: "support-compat"
+        exclude group: "com.android.support", module: "support-v4"
+    }
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
