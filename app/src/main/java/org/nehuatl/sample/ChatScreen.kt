@@ -7188,6 +7188,9 @@ private fun BibliotekaDialog(
     var prefetchedFiles by remember { mutableStateOf<Map<Int, File>>(emptyMap()) }
     var prefetchingIndices by remember { mutableStateOf<Set<Int>>(emptySet()) }
     var mediaPlayer by remember { mutableStateOf<android.media.MediaPlayer?>(null) }
+    var segmentQueue by remember { mutableStateOf<List<Pair<String, Boolean>>>(emptyList()) }
+    var currentSegmentIndex by remember { mutableStateOf(-1) }
+    var englishSegmentPlaying by remember { mutableStateOf(false) }
     var isReading by remember { mutableStateOf(false) }
     var isPaused by remember { mutableStateOf(false) }
     var fontSizeSp by remember { mutableStateOf(12) }
@@ -7233,49 +7236,63 @@ private fun BibliotekaDialog(
         }
     }
 
-    LaunchedEffect(isReading, isPaused, currentChunkIndex) {
+    LaunchedEffect(isReading, isPaused, currentSegmentIndex, isSpeaking) {
         if (!isReading || isPaused) return@LaunchedEffect
-        if (currentChunkIndex < 0 || currentChunkIndex >= bookChunks.size) return@LaunchedEffect
+        if (currentSegmentIndex < 0 || currentSegmentIndex >= segmentQueue.size) return@LaunchedEffect
 
-        // Синтезировать текущий + 2 следующих, если ещё нет в буфере
-        val toSynthesize = listOf(currentChunkIndex, currentChunkIndex + 1, currentChunkIndex + 2)
-            .filter { it in bookChunks.indices }
-            .filter { prefetchedFiles[it] == null && it !in prefetchingIndices }
+        val (text, isRussian) = segmentQueue[currentSegmentIndex]
 
-        for (idx in toSynthesize) {
-            prefetchingIndices = prefetchingIndices + idx
-            val dir = File(context.cacheDir, "book_tts").apply { mkdirs() }
-            val file = File(dir, "book_chunk_${idx}_${System.currentTimeMillis()}.wav")
-            val intent = Intent(context, TtsService::class.java).apply {
-                action = TtsService.ACTION_SYNTHESIZE_TO_FILE
-                putExtra(TtsService.EXTRA_TEXT, bookChunks[idx])
-                putExtra(TtsService.EXTRA_FILE_PATH, file.absolutePath)
-            }
-            context.startService(intent)
-        }
-
-        // Играть текущий, если готов и плеер свободен
-        val currentFile = prefetchedFiles[currentChunkIndex]
-        if (currentFile != null && mediaPlayer == null) {
-            mediaPlayer = android.media.MediaPlayer().apply {
-                setDataSource(currentFile.absolutePath)
-                setOnCompletionListener {
-                    mediaPlayer?.release()
-                    mediaPlayer = null
-                    prefetchedFiles = prefetchedFiles - currentChunkIndex
-                    currentFile.delete()
-                    if (currentChunkIndex + 1 < bookChunks.size) {
-                        currentChunkIndex = currentChunkIndex + 1
-                        currentSentenceIndex = firstSentenceOfChunk(currentChunkIndex, bookChunks, bookSentences)
-                    } else {
-                        isReading = false
-                        isPaused = false
-                        currentChunkIndex = -1
-                        currentSentenceIndex = -1
-                    }
+        if (isRussian) {
+            if (mediaPlayer == null) {
+                val dir = File(context.cacheDir, "book_tts").apply { mkdirs() }
+                val file = File(dir, "book_seg_${currentSegmentIndex}_${System.currentTimeMillis()}.wav")
+                val intent = Intent(context, TtsService::class.java).apply {
+                    action = TtsService.ACTION_SYNTHESIZE_TO_FILE
+                    putExtra(TtsService.EXTRA_TEXT, text)
+                    putExtra(TtsService.EXTRA_FILE_PATH, file.absolutePath)
                 }
-                prepare()
-                start()
+                context.startService(intent)
+            }
+        } else {
+            if (!isSpeaking && !englishSegmentPlaying) {
+                englishSegmentPlaying = true
+                viewModel.speakText(text)
+            }
+        }
+    }
+
+    LaunchedEffect(isSpeaking, englishSegmentPlaying, currentSegmentIndex) {
+        if (englishSegmentPlaying && !isSpeaking && isReading && !isPaused && currentSegmentIndex >= 0) {
+            // TTS доиграл (или не начинал) — двигаемся дальше.
+            // Если isSpeaking вообще не становился true — это ловит страховка ниже.
+            englishSegmentPlaying = false
+            if (currentSegmentIndex + 1 < segmentQueue.size) {
+                currentSegmentIndex = currentSegmentIndex + 1
+            } else {
+                isReading = false
+                isPaused = false
+                currentSegmentIndex = -1
+                segmentQueue = emptyList()
+            }
+        }
+    }
+
+    // Страховка: если английский сегмент запущен, но TTS так и не начал играть
+    // (нет голосовых данных, язык не установлен, TTS завис) — через 3 секунды
+    // пропускаем сегмент, чтобы очередь не встала намертво.
+    LaunchedEffect(englishSegmentPlaying, currentSegmentIndex) {
+        if (englishSegmentPlaying && currentSegmentIndex >= 0) {
+            delay(3000)
+            if (englishSegmentPlaying && !isSpeaking && isReading && !isPaused) {
+                englishSegmentPlaying = false
+                if (currentSegmentIndex + 1 < segmentQueue.size) {
+                    currentSegmentIndex = currentSegmentIndex + 1
+                } else {
+                    isReading = false
+                    isPaused = false
+                    currentSegmentIndex = -1
+                    segmentQueue = emptyList()
+                }
             }
         }
     }
@@ -7285,12 +7302,37 @@ private fun BibliotekaDialog(
             override fun onReceive(ctx: android.content.Context?, intent: android.content.Intent?) {
                 if (intent?.action == TtsService.ACTION_SYNTHESIZE_DONE) {
                     val path = intent.getStringExtra(TtsService.EXTRA_FILE_PATH) ?: ""
-                    if (path.isNotEmpty()) {
-                        val idx = chunkIndexForFile(path)
-                        if (idx >= 0) {
-                            prefetchedFiles = prefetchedFiles + (idx to File(path))
-                            prefetchingIndices = prefetchingIndices - idx
+                    if (path.isEmpty()) return
+                    val file = File(path)
+                    if (!file.exists()) return
+                    if (mediaPlayer == null && isReading && !isPaused && currentSegmentIndex >= 0) {
+                        val seg = segmentQueue.getOrNull(currentSegmentIndex) ?: return
+                        if (seg.second) {
+                            mediaPlayer = android.media.MediaPlayer().apply {
+                                setDataSource(file.absolutePath)
+                                setOnCompletionListener {
+                                    mediaPlayer?.release()
+                                    mediaPlayer = null
+                                    file.delete()
+                                    if (currentSegmentIndex + 1 < segmentQueue.size) {
+                                        currentSegmentIndex = currentSegmentIndex + 1
+                                        currentSentenceIndex = firstSentenceOfChunk(currentChunkIndex, bookChunks, bookSentences)
+                                    } else {
+                                        isReading = false
+                                        isPaused = false
+                                        currentSegmentIndex = -1
+                                        segmentQueue = emptyList()
+                                        currentSentenceIndex = -1
+                                    }
+                                }
+                                prepare()
+                                start()
+                            }
+                        } else {
+                            file.delete()
                         }
+                    } else {
+                        file.delete()
                     }
                 }
             }
@@ -7304,6 +7346,9 @@ private fun BibliotekaDialog(
             try { context.unregisterReceiver(receiver) } catch (_: Exception) {}
             mediaPlayer?.release()
             mediaPlayer = null
+            segmentQueue = emptyList()
+            currentSegmentIndex = -1
+            englishSegmentPlaying = false
             prefetchedFiles.values.forEach { it.delete() }
             prefetchedFiles = emptyMap()
             prefetchingIndices = emptySet()
@@ -7452,7 +7497,7 @@ private fun BibliotekaDialog(
                             modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Button(
+                             Button(
                                 onClick = {
                                     if (isReading && !isPaused) {
                                         isPaused = true
@@ -7463,13 +7508,16 @@ private fun BibliotekaDialog(
                                     } else {
                                         isReading = true
                                         isPaused = false
+                                        englishSegmentPlaying = false
                                         val startChunk = findChunkForSentence(
                                             currentSentenceIndex, bookChunks, bookSentences
                                         ).takeIf { it >= 0 } ?: 0
-                                        currentChunkIndex = startChunk
-                                        currentSentenceIndex = firstSentenceOfChunk(
-                                            startChunk, bookChunks, bookSentences
-                                        )
+                                        val allSegments = mutableListOf<Pair<String, Boolean>>()
+                                        for (i in startChunk until bookChunks.size) {
+                                            allSegments.addAll(viewModel.splitTextByLanguage(bookChunks[i]))
+                                        }
+                                        segmentQueue = allSegments
+                                        currentSegmentIndex = if (allSegments.isNotEmpty()) 0 else -1
                                     }
                                 },
                                 colors = ButtonDefaults.buttonColors(
@@ -7568,10 +7616,15 @@ private fun BibliotekaDialog(
                                             val chunkIdx = findChunkForSentence(index, bookChunks, bookSentences)
                                             currentChunkIndex = chunkIdx
                                             if (isReading) {
-                                                isPaused = false
-                                                bookChunks.getOrNull(chunkIdx)?.let { chunk ->
-                                                    viewModel.speakText(chunk)
+                                                mediaPlayer?.release()
+                                                mediaPlayer = null
+                                                englishSegmentPlaying = false
+                                                val allSegments = mutableListOf<Pair<String, Boolean>>()
+                                                for (i in chunkIdx until bookChunks.size) {
+                                                    allSegments.addAll(viewModel.splitTextByLanguage(bookChunks[i]))
                                                 }
+                                                segmentQueue = allSegments
+                                                currentSegmentIndex = if (allSegments.isNotEmpty()) 0 else -1
                                             }
                                         }
                                         .padding(6.dp)
@@ -7600,11 +7653,14 @@ private fun BibliotekaDialog(
                                 Text("⬇ Свернуть", color = colors.background, fontSize = 11.sp)
                             }
                             Button(
-                                 onClick = {
+                                onClick = {
                                     isReading = false
                                     isPaused = false
                                     currentSentenceIndex = -1
                                     currentChunkIndex = -1
+                                    currentSegmentIndex = -1
+                                    segmentQueue = emptyList()
+                                    englishSegmentPlaying = false
                                     mediaPlayer?.release()
                                     mediaPlayer = null
                                     prefetchedFiles.values.forEach { it.delete() }
@@ -7630,6 +7686,9 @@ private fun BibliotekaDialog(
                                 onClick = {
                                     isReading = false
                                     currentChunkIndex = -1
+                                    currentSegmentIndex = -1
+                                    segmentQueue = emptyList()
+                                    englishSegmentPlaying = false
                                     mediaPlayer?.release()
                                     mediaPlayer = null
                                     prefetchedFiles.values.forEach { it.delete() }
