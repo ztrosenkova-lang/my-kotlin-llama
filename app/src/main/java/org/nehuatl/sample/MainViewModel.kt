@@ -2136,6 +2136,47 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     // Озвучка фраз интерфейса — всегда через Sherpa (русский движок),
     // без определения языка через ML Kit.
+    /**
+     * Разбивает текст на сегменты по языку: русский / не-русский.
+     * Нужно для книг, где английские вставки идут регулярно —
+     * русские куски читает Sherpa, английские — Android TTS.
+     */
+    fun splitTextByLanguage(text: String): List<Pair<String, Boolean>> {
+        // Регулярка: русские слова (кириллица), английские слова (латиница),
+        // всё остальное (цифры, пунктуация, пробелы) — приклеиваем к предыдущему.
+        val tokenRegex = Regex("[\\p{IsCyrillic}]+|[A-Za-z]+")
+        val result = mutableListOf<Pair<String, Boolean>>()
+        var lastEnd = 0
+        var currentIsRussian: Boolean? = null
+        val currentSb = StringBuilder()
+
+        for (match in tokenRegex.findAll(text)) {
+            val between = text.substring(lastEnd, match.range.first)
+            val word = match.value
+            val isRussian = word.any { it in 'а'..'я' || it in 'А'..'Я' || it == 'ё' || it == 'Ё' }
+
+            if (currentIsRussian == null) {
+                currentSb.append(between).append(word)
+                currentIsRussian = isRussian
+            } else if (isRussian == currentIsRussian) {
+                currentSb.append(between).append(word)
+            } else {
+                result.add(currentSb.toString() to currentIsRussian)
+                currentSb.setLength(0)
+                currentSb.append(between).append(word)
+                currentIsRussian = isRussian
+            }
+            lastEnd = match.range.last + 1
+        }
+        if (lastEnd < text.length) {
+            currentSb.append(text.substring(lastEnd))
+        }
+        if (currentSb.isNotEmpty() && currentIsRussian != null) {
+            result.add(currentSb.toString() to currentIsRussian)
+        }
+        return result.filter { it.first.isNotBlank() }
+    }
+
     fun speakUiPhrase(text: String) {
         if (!isTtsEnabled || text.isBlank()) {
             return
