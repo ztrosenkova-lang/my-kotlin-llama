@@ -7913,13 +7913,10 @@ private fun PdfPageItem(
                         document, bmp, pageIndex, 0, 0, renderWidth, renderHeight
                     )
 
-                    pdfiumCore.closePage(document, pageIndex)
-
                     cache.put(pageIndex, bmp)
                     bmp
                 } catch (e: Exception) {
                     android.util.Log.e("PdfReaderView", "render page $pageIndex failed: ${e.message}", e)
-                    try { pdfiumCore.closePage(document, pageIndex) } catch (_: Exception) {}
                     null
                 }
             }
