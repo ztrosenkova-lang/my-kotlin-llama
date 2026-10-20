@@ -3517,7 +3517,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
      * одна за другой (openPage → render → close).
      * Очередь отправки в vision — на стороне UI (ChatScreen).
      */
-    fun renderPdfPagesToCache(
+        fun renderPdfPagesToCache(
         pdfUri: Uri,
         pageIndices: List<Int>,
         onResult: (List<String>) -> Unit
@@ -3525,43 +3525,56 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         scope.launch(Dispatchers.IO) {
             val result = mutableListOf<String>()
             var pfd: android.os.ParcelFileDescriptor? = null
-            var renderer: android.graphics.pdf.PdfRenderer? = null
+            var pdfiumCore: com.shockwave.pdfium.PdfiumCore? = null
+            var pdfDocument: com.shockwave.pdfium.PdfDocument? = null
             try {
                 pfd = contentResolver.openFileDescriptor(pdfUri, "r")
                 if (pfd == null) {
                     withContext(Dispatchers.Main) { onResult(emptyList()) }
                     return@launch
                 }
-                renderer = android.graphics.pdf.PdfRenderer(pfd)
-                if (renderer.pageCount == 0) {
+                val core = com.shockwave.pdfium.PdfiumCore(getApplication())
+                pdfiumCore = core
+                val doc = core.newDocument(pfd)
+                pdfDocument = doc
+                val pageCount = core.getPageCount(doc)
+                if (pageCount == 0) {
                     withContext(Dispatchers.Main) { onResult(emptyList()) }
                     return@launch
                 }
 
                 val cacheDir = File(getApplication<Application>().cacheDir, "vision_input").apply {
-                    if (exists()) {
-                        listFiles()?.forEach { f ->
-                            if (f.name.startsWith("pdf_page_")) f.delete()
-                        }
-                    } else mkdirs()
+                    if (exists()) listFiles()?.forEach { it.delete() } else mkdirs()
                 }
 
                 for (index in pageIndices) {
-                    if (index < 0 || index >= renderer.pageCount) {
-                        Log.w(TAG, "renderPdfPagesToCache: страница $index вне диапазона (всего ${renderer.pageCount})")
+                    if (index < 0 || index >= pageCount) {
+                        Log.w(TAG, "renderPdfPagesToCache: страница $index вне диапазона (всего $pageCount)")
                         continue
                     }
-                    var page: android.graphics.pdf.PdfRenderer.Page? = null
+                    var pageOpened = false
                     try {
-                        page = renderer.openPage(index)
+                        core.openPage(doc, index)
+                        pageOpened = true
+
+                        val pageWidthPt = core.getPageWidthPoint(doc, index)
+                        val pageHeightPt = core.getPageHeightPoint(doc, index)
+                        if (pageWidthPt <= 0 || pageHeightPt <= 0) {
+                            Log.w(TAG, "renderPdfPagesToCache: страница $index имеет нулевой размер")
+                            continue
+                        }
+
                         val scale = 2
+                        val renderWidth = (pageWidthPt * scale).coerceAtLeast(1)
+                        val renderHeight = (pageHeightPt * scale).coerceAtLeast(1)
+
                         val bitmap = android.graphics.Bitmap.createBitmap(
-                            page.width * scale,
-                            page.height * scale,
+                            renderWidth,
+                            renderHeight,
                             android.graphics.Bitmap.Config.ARGB_8888
                         )
                         bitmap.eraseColor(android.graphics.Color.WHITE)
-                        page.render(bitmap, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        core.renderPageBitmap(doc, bitmap, index, 0, 0, renderWidth, renderHeight)
 
                         val file = File(cacheDir, "pdf_page_${index}_${System.currentTimeMillis()}.jpg")
                         FileOutputStream(file).use { out ->
@@ -3572,7 +3585,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     } catch (e: Exception) {
                         Log.e(TAG, "renderPdfPagesToCache: ошибка страницы $index: ${e.message}", e)
                     } finally {
-                        try { page?.close() } catch (_: Exception) {}
+                        if (pageOpened) {
+                            try { core.closePage(doc, index) } catch (_: Exception) {}
+                        }
                     }
                 }
             } catch (e: SecurityException) {
@@ -3580,8 +3595,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             } catch (e: Exception) {
                 Log.e(TAG, "renderPdfPagesToCache failed: ${e.message}", e)
             } finally {
-                try { renderer?.close() } catch (_: Exception) {}
-                try { pfd?.close() } catch (_: Exception) {}
+                try { pdfDocument?.let { pdfiumCore?.closeDocument(it) } } catch (_: Exception) {}
+                // pfd закрывается внутри closeDocument. Вручную не закрываем.
             }
             withContext(Dispatchers.Main) { onResult(result) }
         }
