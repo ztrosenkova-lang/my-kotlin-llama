@@ -3602,10 +3602,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         Log.w(TAG, "renderPdfPagesToCache: страница $index вне диапазона (всего $pageCount)")
                         continue
                     }
-                    var pageOpened = false
                     try {
                         core.openPage(doc, index)
-                        pageOpened = true
 
                         val pageWidthPt = core.getPageWidthPoint(doc, index)
                         val pageHeightPt = core.getPageHeightPoint(doc, index)
@@ -3635,9 +3633,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     } catch (e: Exception) {
                         Log.e(TAG, "renderPdfPagesToCache: ошибка страницы $index: ${e.message}", e)
                     } finally {
-                        if (pageOpened) {
-                            try { core.closePage(doc, index) } catch (_: Exception) {}
-                        }
+                        // PdfiumCore 1.9.0 не имеет публичного closePage.
+                        // Страницы закрываются внутри renderPageBitmap или при closeDocument.
                     }
                 }
             } catch (e: SecurityException) {
