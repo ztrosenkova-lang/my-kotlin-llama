@@ -179,6 +179,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 // Длительность плавной смены темы. 600–900 мс — комфортно.
 // Хочешь затянуть — ставь 1200–1500. Больше 1500 — уже раздражает.
@@ -7667,8 +7668,15 @@ private fun PdfReaderView(
     val renderer by produceState<PdfRenderer?>(initialValue = null, file) {
         value = withContext(Dispatchers.IO) {
             try {
-                val pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-                PdfRenderer(pfd)
+                withTimeoutOrNull(8000L) {
+                    val pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+                    PdfRenderer(pfd)
+                }.also { result ->
+                    if (result == null) {
+                        android.util.Log.e("PdfReaderView", "open timeout after 8s")
+                        openError = true
+                    }
+                }
             } catch (e: Exception) {
                 android.util.Log.e("PdfReaderView", "open failed: ${e.message}", e)
                 openError = true
