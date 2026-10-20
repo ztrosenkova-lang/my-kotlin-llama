@@ -502,10 +502,10 @@ fun ChatScreen(
                         }
                         command == "махни рукой" -> {waveSignal = true
                    }
-                        command == "стань большим" -> {
+                        command == "расти" || command == "рости" -> {
                             growBigSignal = true
                         }
-                        command == "стань маленьким" -> {
+                        command == "сдуйся" || command == "сдуйсь" -> {
                             shrinkSmallSignal = true
                         }
                         command == "выйди из матрицы" -> {
@@ -1386,11 +1386,11 @@ fun ChatScreen(
                                        command == "махни рукой" -> { waveSignal = true
                    promptInput = ""
 }
-                        command == "стань большим" -> {
+                        command == "расти" || command == "рости" -> {
                             growBigSignal = true
                             promptInput = ""
                         }
-                        command == "стань маленьким" -> {
+                        command == "сдуйся" || command == "сдуйсь" -> {
                             shrinkSmallSignal = true
                             promptInput = ""
                         }
