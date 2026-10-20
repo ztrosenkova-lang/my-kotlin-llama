@@ -2862,7 +2862,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 return
             }
 
-                                   when (_currentMode.value) {
+            when (_currentMode.value) {
                 AIMode.LOCAL -> {
                     if (_isModelLoaded.value && currentMmprojPath != null) {
                         generateLocal("", jpegPath)
@@ -2873,14 +2873,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     }
                 }
                 AIMode.NEUTRAL -> {
-                    appendSystemMessage("🖼️ Описываю картинку локальной vision-моделью. После описания она будет выгружена, режим NEUTRAL останется чистым.")
-                    ensureVisionModelLoaded {
-                        generateLocal("", jpegPath)
-                        scope.launch {
-                            delay(500)
-                            restorePreviousModelIfNeeded()
-                        }
-                    }
+                    appendSystemMessage("⚠️ Анализ изображений и PDF доступен только в локальном режиме. Переключитесь на Local.")
                 }
                 AIMode.CLOUD -> {
                     if (_cloudState.value.isActive()) {
