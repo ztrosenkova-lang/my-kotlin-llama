@@ -8889,7 +8889,7 @@ private fun MediaPickerDialog(
                     MediaOptionRow(
                         emoji = "📄",
                         label = "PDF",
-                        description = "Выбрать PDF и отправить первую страницу в модель",
+                        description = "Выбрать PDF и указать страницы для отправки в модель",
                         onClick = onPickPdf,
                         colors = colors
                     )
