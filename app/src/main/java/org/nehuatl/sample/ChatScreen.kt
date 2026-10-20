@@ -465,6 +465,10 @@ fun ChatScreen(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
+            if (currentMode != AIMode.LOCAL && currentMode != AIMode.CLOUD) {
+                viewModel.appendSystemMessage("⚠️ Анализ PDF доступен только в локальном или облачном режиме. Переключитесь на Local или Cloud.")
+                return@rememberLauncherForActivityResult
+            }
             pendingPdfUri = uri
             pdfPageInput = ""
             showPdfPagePicker = true
