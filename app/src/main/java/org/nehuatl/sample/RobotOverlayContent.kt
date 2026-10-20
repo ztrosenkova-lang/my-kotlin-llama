@@ -11,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.graphics.graphicsLayer
 
 @Composable
 fun RobotOverlayContent(
@@ -36,6 +37,7 @@ fun RobotOverlayContent(
     val hasActiveAlarm = organizerEntries.isNotEmpty()
     val robotJumpSignal by viewModel.robotJumpSignal.collectAsStateWithLifecycle(initialValue = false)
     val overlayRobotScale by viewModel.overlayRobotScale.collectAsStateWithLifecycle(initialValue = 1.0f)
+    val overlayGravityRotation by viewModel.overlayGravityRotation.collectAsStateWithLifecycle(initialValue = 0f)
 
     val isThinking = state is GenerationState.Generating ||
                      cloudState is CloudAIState.Generating
@@ -44,7 +46,10 @@ fun RobotOverlayContent(
                    Box(
         modifier = Modifier
             .width(290.dp * overlayRobotScale * 0.85f)
-            .height(290.dp * overlayRobotScale),
+            .height(290.dp * overlayRobotScale)
+            .graphicsLayer {
+                rotationZ = overlayGravityRotation
+            },
         contentAlignment = Alignment.Center
     ) {
             ThinkingRobotAnimation(
