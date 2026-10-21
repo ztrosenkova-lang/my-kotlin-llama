@@ -733,7 +733,7 @@ fun ChatScreen(
 
         val path = pdfPageQueue[pdfQueueCurrentIndex]
         pdfQueueCurrentIndex = pdfQueueCurrentIndex + 1
-        viewModel.sendUserMessage("", path)
+        viewModel.sendUserMessage("Extract all visible text from this image. Return only the text, no descriptions.", path)
     }
 
             if (isAppLocked) {
