@@ -625,8 +625,7 @@ class FloatingRobotService : LifecycleService() {
                 // Угол наклона телефона в плоскости экрана.
                 // atan2(-x, y) даёт угол, на который надо довернуть робота,
                 // чтобы его низ смотрел вниз по гравитации.
-                var angleDeg = Math.toDegrees(kotlin.math.atan2(-x.toDouble(), y.toDouble())).toFloat()
-
+            var angleDeg = Math.toDegrees(kotlin.math.atan2(x.toDouble(), y.toDouble())).toFloat()
                 // Компенсация поворота экрана (ландшафт).
                 // Акселерометр всегда в системе координат устройства,
                 // поэтому для ландшафта добавляем поворот дисплея.
@@ -647,8 +646,14 @@ class FloatingRobotService : LifecycleService() {
                 if (angleDeg > 180f) angleDeg -= 360f
                 if (angleDeg < -180f) angleDeg += 360f
 
-                // Low-pass фильтр: сглаживаем шум акселерометра.
-                smoothedGravityRotation = smoothedGravityRotation * 0.85f + angleDeg * 0.15f
+                // Мёртвая зона: если изменение угла меньше 2.5°, не двигаем робота.
+                // Убирает мелкую дрожь от шума акселерометра.
+                val delta = angleDeg - smoothedGravityRotation
+                if (kotlin.math.abs(delta) < 2.5f) {
+                    return
+                }
+                // Low-pass фильтр: сильнее сглаживаем, чтобы не было дрожи.
+                smoothedGravityRotation = smoothedGravityRotation * 0.94f + angleDeg * 0.06f
                 MainViewModel.instance?.setOverlayGravityRotation(smoothedGravityRotation)
             }
 
