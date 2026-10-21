@@ -7188,8 +7188,6 @@ private fun BibliotekaDialog(
     var prefetchedFiles by remember { mutableStateOf<Map<Int, File>>(emptyMap()) }
     var prefetchingIndices by remember { mutableStateOf<Set<Int>>(emptySet()) }
     var mediaPlayer by remember { mutableStateOf<android.media.MediaPlayer?>(null) }
-    var prefetchedFiles by remember { mutableStateOf<Map<Int, File>>(emptyMap()) }
-    var prefetchingIndices by remember { mutableStateOf<Set<Int>>(emptySet()) }
     var segmentQueue by remember { mutableStateOf<List<Pair<String, Boolean>>>(emptyList()) }
     var currentSegmentIndex by remember { mutableStateOf(-1) }
     var englishSegmentPlaying by remember { mutableStateOf(false) }
