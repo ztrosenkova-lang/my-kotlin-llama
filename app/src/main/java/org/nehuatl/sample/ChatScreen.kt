@@ -7188,6 +7188,8 @@ private fun BibliotekaDialog(
     var prefetchedFiles by remember { mutableStateOf<Map<Int, File>>(emptyMap()) }
     var prefetchingIndices by remember { mutableStateOf<Set<Int>>(emptySet()) }
     var mediaPlayer by remember { mutableStateOf<android.media.MediaPlayer?>(null) }
+    var prefetchedFiles by remember { mutableStateOf<Map<Int, File>>(emptyMap()) }
+    var prefetchingIndices by remember { mutableStateOf<Set<Int>>(emptySet()) }
     var segmentQueue by remember { mutableStateOf<List<Pair<String, Boolean>>>(emptyList()) }
     var currentSegmentIndex by remember { mutableStateOf(-1) }
     var englishSegmentPlaying by remember { mutableStateOf(false) }
@@ -7242,16 +7244,59 @@ private fun BibliotekaDialog(
 
         val (text, isRussian) = segmentQueue[currentSegmentIndex]
 
-        if (isRussian) {
-            if (mediaPlayer == null) {
+        // Предсинтез следующего русского сегмента в WAV, пока играет текущий.
+        // Не трогаем, если он уже в очереди или уже синтезируется.
+        val nextIndex = currentSegmentIndex + 1
+        if (nextIndex < segmentQueue.size) {
+            val (nextText, nextIsRussian) = segmentQueue[nextIndex]
+            if (nextIsRussian && !prefetchedFiles.containsKey(nextIndex) && !prefetchingIndices.contains(nextIndex)) {
+                prefetchingIndices = prefetchingIndices + nextIndex
                 val dir = File(context.cacheDir, "book_tts").apply { mkdirs() }
-                val file = File(dir, "book_seg_${currentSegmentIndex}_${System.currentTimeMillis()}.wav")
+                val file = File(dir, "book_seg_${nextIndex}_${System.currentTimeMillis()}.wav")
                 val intent = Intent(context, TtsService::class.java).apply {
                     action = TtsService.ACTION_SYNTHESIZE_TO_FILE
-                    putExtra(TtsService.EXTRA_TEXT, text)
+                    putExtra(TtsService.EXTRA_TEXT, nextText)
                     putExtra(TtsService.EXTRA_FILE_PATH, file.absolutePath)
                 }
                 context.startService(intent)
+            }
+        }
+
+        if (isRussian) {
+            if (mediaPlayer == null) {
+                val prefetched = prefetchedFiles[currentSegmentIndex]
+                if (prefetched != null && prefetched.exists()) {
+                    // Уже предсинтезирован — играем сразу
+                    prefetchedFiles = prefetchedFiles - currentSegmentIndex
+                    mediaPlayer = android.media.MediaPlayer().apply {
+                        setDataSource(prefetched.absolutePath)
+                        setOnCompletionListener {
+                            mediaPlayer?.release()
+                            mediaPlayer = null
+                            prefetched.delete()
+                            if (currentSegmentIndex + 1 < segmentQueue.size) {
+                                currentSegmentIndex = currentSegmentIndex + 1
+                            } else {
+                                isReading = false
+                                isPaused = false
+                                currentSegmentIndex = -1
+                                segmentQueue = emptyList()
+                                currentSentenceIndex = -1
+                            }
+                        }
+                        prepare()
+                        start()
+                    }
+                } else {
+                    val dir = File(context.cacheDir, "book_tts").apply { mkdirs() }
+                    val file = File(dir, "book_seg_${currentSegmentIndex}_${System.currentTimeMillis()}.wav")
+                    val intent = Intent(context, TtsService::class.java).apply {
+                        action = TtsService.ACTION_SYNTHESIZE_TO_FILE
+                        putExtra(TtsService.EXTRA_TEXT, text)
+                        putExtra(TtsService.EXTRA_FILE_PATH, file.absolutePath)
+                    }
+                    context.startService(intent)
+                }
             }
         } else {
             if (!isSpeaking && !englishSegmentPlaying) {
@@ -7305,33 +7350,49 @@ private fun BibliotekaDialog(
                     if (path.isEmpty()) return
                     val file = File(path)
                     if (!file.exists()) return
+
+                    // Определяем, для какого сегмента этот файл
+                    val match = Regex("book_seg_(\\d+)_").find(file.name)
+                    val segIndex = match?.groupValues?.get(1)?.toIntOrNull() ?: -1
+
+                    if (segIndex >= 0) {
+                        prefetchingIndices = prefetchingIndices - segIndex
+                        prefetchedFiles = prefetchedFiles + (segIndex to file)
+                    }
+
+                    // Если сейчас как раз должен играть этот сегмент — играем
                     if (mediaPlayer == null && isReading && !isPaused && currentSegmentIndex >= 0) {
                         val seg = segmentQueue.getOrNull(currentSegmentIndex) ?: return
                         if (seg.second) {
-                            mediaPlayer = android.media.MediaPlayer().apply {
-                                setDataSource(file.absolutePath)
-                                setOnCompletionListener {
-                                    mediaPlayer?.release()
-                                    mediaPlayer = null
-                                    file.delete()
-                                    if (currentSegmentIndex + 1 < segmentQueue.size) {
-                                        currentSegmentIndex = currentSegmentIndex + 1
-                                    } else {
-                                        isReading = false
-                                        isPaused = false
-                                        currentSegmentIndex = -1
-                                        segmentQueue = emptyList()
-                                        currentSentenceIndex = -1
+                            val playFile = if (segIndex == currentSegmentIndex) file
+                                            else prefetchedFiles[currentSegmentIndex]
+                            if (playFile != null && playFile.exists()) {
+                                prefetchedFiles = prefetchedFiles - currentSegmentIndex
+                                mediaPlayer = android.media.MediaPlayer().apply {
+                                    setDataSource(playFile.absolutePath)
+                                    setOnCompletionListener {
+                                        mediaPlayer?.release()
+                                        mediaPlayer = null
+                                        playFile.delete()
+                                        if (currentSegmentIndex + 1 < segmentQueue.size) {
+                                            currentSegmentIndex = currentSegmentIndex + 1
+                                        } else {
+                                            isReading = false
+                                            isPaused = false
+                                            currentSegmentIndex = -1
+                                            segmentQueue = emptyList()
+                                            currentSentenceIndex = -1
+                                        }
                                     }
+                                    prepare()
+                                    start()
                                 }
-                                prepare()
-                                start()
                             }
                         } else {
                             file.delete()
                         }
-                    } else {
-                        file.delete()
+                    } else if (segIndex != currentSegmentIndex) {
+                        // Предсинтез для будущего сегмента — оставляем в prefetchedFiles
                     }
                 }
             }
