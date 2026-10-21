@@ -7909,20 +7909,25 @@ private fun PdfPageItem(
 
                     val pageWidthPt = pdfiumCore.getPageWidthPoint(document, pageIndex)
                     val pageHeightPt = pdfiumCore.getPageHeightPoint(document, pageIndex)
+                    if (pageWidthPt <= 0 || pageHeightPt <= 0) {
+                        android.util.Log.e("PdfReaderView", "page $pageIndex invalid size: ${pageWidthPt}x${pageHeightPt}")
+                        return@withLock null
+                    }
 
-                    val renderWidth = (columnWidthPx * pageWidthFraction)
-                        .toInt()
-                        .coerceIn(1, PDF_MAX_RENDER_WIDTH_PX)
-                    val renderHeight = (pageHeightPt.toFloat() * renderWidth / pageWidthPt.toFloat())
-                        .toInt()
-                        .coerceAtLeast(1)
+                    // PdfiumAndroid: width/height для Bitmap и renderPageBitmap
+                    // должны совпадать с getPageWidthPoint/getPageHeightPoint.
+                    // Масштаб для зума — через умножение обоих значений на один коэффициент.
+                    val scale = (columnWidthPx * pageWidthFraction) / pageWidthPt.toFloat()
+                    val renderWidth = (pageWidthPt * scale).toInt().coerceAtLeast(1)
+                    val renderHeight = (pageHeightPt * scale).toInt().coerceAtLeast(1)
+
+                    android.util.Log.d("PdfReaderView", "render $pageIndex: pt=${pageWidthPt}x${pageHeightPt}, scale=$scale, px=${renderWidth}x${renderHeight}")
 
                     val bmp = Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.ARGB_8888)
                     bmp.eraseColor(android.graphics.Color.WHITE)
                     pdfiumCore.renderPageBitmap(
                         document, bmp, pageIndex, 0, 0, renderWidth, renderHeight
                     )
-
                     cache.put(pageIndex, bmp)
                     bmp
                 } catch (e: Exception) {
