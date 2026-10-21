@@ -7803,6 +7803,8 @@ private fun PdfReaderView(
     }
 
     val renderMutex = remember(file) { Mutex() }
+    var isClosed by remember(file) { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(pageWidthFraction) {
         cache.evictAll()
@@ -7811,9 +7813,14 @@ private fun PdfReaderView(
     DisposableEffect(document) {
         onDispose {
             cache.evictAll()
-            try {
-                document?.let { pdfiumCore.closeDocument(it) }
-            } catch (_: Exception) {}
+            isClosed = true
+            scope.launch {
+                renderMutex.withLock {
+                    try {
+                        document?.let { pdfiumCore.closeDocument(it) }
+                    } catch (_: Exception) {}
+                }
+            }
         }
     }
 
@@ -7841,7 +7848,7 @@ private fun PdfReaderView(
         return
     }
 
-    val pageCount = pdfiumCore.getPageCount(currentDocument)
+    val pageCount = runCatching { pdfiumCore.getPageCount(currentDocument) }.getOrDefault(0)
 
     BoxWithConstraints(modifier = modifier) {
         // Реальная ширина колонки (без полей AlertDialog), а не ширина экрана.
@@ -7866,6 +7873,7 @@ private fun PdfReaderView(
                     columnWidthPx = columnWidthPx,
                     cache = cache,
                     renderMutex = renderMutex,
+                    isClosed = { isClosed },
                     colors = colors
                 )
             }
@@ -7882,6 +7890,7 @@ private fun PdfPageItem(
     columnWidthPx: Float,
     cache: android.util.LruCache<Int, Bitmap>,
     renderMutex: Mutex,
+    isClosed: () -> Boolean,
     colors: AppColors
 ) {
     var bitmap by remember(pageIndex, pageWidthFraction) { mutableStateOf(cache.get(pageIndex)) }
@@ -7891,6 +7900,7 @@ private fun PdfPageItem(
 
         val rendered = withContext(Dispatchers.IO) {
             renderMutex.withLock {
+                if (isClosed()) return@withLock null
                 val cached = cache.get(pageIndex)
                 if (cached != null) return@withLock cached
 
