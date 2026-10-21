@@ -7917,11 +7917,9 @@ private fun PdfPageItem(
                     // PdfiumAndroid: width/height для Bitmap и renderPageBitmap
                     // должны совпадать с getPageWidthPoint/getPageHeightPoint.
                     // Масштаб для зума — через умножение обоих значений на один коэффициент.
-                    val scale = (columnWidthPx * pageWidthFraction) / pageWidthPt.toFloat()
-                    val renderWidth = (pageWidthPt * scale).toInt().coerceAtLeast(1)
-                    val renderHeight = (pageHeightPt * scale).toInt().coerceAtLeast(1)
-
-                    android.util.Log.d("PdfReaderView", "render $pageIndex: pt=${pageWidthPt}x${pageHeightPt}, scale=$scale, px=${renderWidth}x${renderHeight}")
+                    val renderWidth = pageWidthPt
+                    val renderHeight = pageHeightPt
+                    android.util.Log.d("PdfReaderView", "render $pageIndex: pt=${pageWidthPt}x${pageHeightPt}, px=${renderWidth}x${renderHeight}")
 
                     val bmp = Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.ARGB_8888)
                     bmp.eraseColor(android.graphics.Color.WHITE)
