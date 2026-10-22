@@ -7966,10 +7966,11 @@ private fun PdfPageItem(
                 try {
                     pdfiumCore.openPage(document, pageIndex)
 
-                    val pageWidthPt = pdfiumCore.getPageWidthPoint(document, pageIndex)
-                    val pageHeightPt = pdfiumCore.getPageHeightPoint(document, pageIndex)
+                    val pageSize = pdfiumCore.getPageSize(document, pageIndex)
+                    val pageWidthPt = pageSize.width
+                    val pageHeightPt = pageSize.height
                     if (pageWidthPt <= 0 || pageHeightPt <= 0) {
-                        android.util.Log.e("PdfReaderView", "page $pageIndex invalid size: ${pageWidthPt}x${pageHeightPt}")
+                        android.util.Log.e("PdfReaderView", "page $pageIndex getPageSize=${pageWidthPt}x${pageHeightPt}")
                         return@withLock null
                     }
 
