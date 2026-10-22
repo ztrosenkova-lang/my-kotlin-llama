@@ -111,10 +111,8 @@ class LlamaHelper(
         loaded: (Long) -> Unit
     ) {
         // Отменяем предыдущую загрузку, если она ещё идёт.
-        loadJob?.cancel()
-        loadJob = null
-
-        currentContext?.let { id -> llama.releaseContext(id) }
+    loadJob?.cancel()
+    loadJob = null
         
         try {
             // Автоопределение формата модели
