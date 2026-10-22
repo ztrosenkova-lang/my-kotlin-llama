@@ -2891,62 +2891,51 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         text: String,
         imagePath: String? = null
     ) {
-               // Если есть картинка без текста — не пишем пустое сообщение в чат,
-               // а сразу отправляем в модель
-                        if (text.isBlank() && imagePath != null) {
-            Log.d(TAG, "Картинка без текста. imagePath=$imagePath, currentMmprojPath=$currentMmprojPath, isModelLoaded=${_isModelLoaded.value}")
-            _chatHistory.value = _chatHistory.value + ChatMessage(
-                role = "user",
-                text = "[Изображение]",
-                hasImage = true
-            )
-            syncChatToFile()
-
-            // Конвертируем картинку в JPEG во временный файл.
-            // mtmd/stb_image не читает HEIC/HEIF и некоторые WebP/PNG,
-            // а камера отдаёт JPEG — поэтому камера работает, а галерея нет.
-            val jpegPath = convertImageToJpeg(getApplication(), imagePath)
-            if (jpegPath == null) {
-                appendSystemMessage("❌ Не удалось конвертировать изображение. Формат не поддерживается.")
-                _visionPhase.value = VisionPhase.IDLE
-                return
-            }
-
-            when (_currentMode.value) {
-                AIMode.LOCAL -> {
-                    if (_isModelLoaded.value && currentMmprojPath != null) {
-                        generateLocal("", jpegPath)
-                    } else {
-                        ensureVisionModelLoaded {
-                            generateLocal("", jpegPath)
-                        }
-                    }
-                }
-                AIMode.NEUTRAL -> {
-                    appendSystemMessage("⚠️ Анализ изображений и PDF доступен только в локальном режиме. Переключитесь на Local.")
-                }
-                AIMode.CLOUD -> {
-                    if (_cloudState.value.isActive()) {
-                        appendSystemMessage("⏳ Дождитесь ответа облака, потом отправьте картинку")
-                        return
-                    }
-                    appendSystemMessage("🖼️ Описание локальное (vision-модель). Дальше вопросы пойдут в облако.")
-                    ensureVisionModelLoaded {
-                        generateLocal("", jpegPath)
-                        scope.launch {
-                            delay(500)
-                            restorePreviousModelIfNeeded()
-                        }
-                    }
-                }
-            }
-            return
-        }
+    if (imagePath != null) {
+        Log.d(TAG, "Картинка. text='$text', imagePath=$imagePath, currentMmprojPath=$currentMmprojPath, isModelLoaded=${_isModelLoaded.value}")
         _chatHistory.value = _chatHistory.value + ChatMessage(
             role = "user",
-            text = text,
-            hasImage = imagePath != null
+            text = if (text.isBlank()) "[Изображение]" else text,
+            hasImage = true
         )
+        syncChatToFile()
+
+        val jpegPath = if (
+            imagePath.startsWith("file://") &&
+            imagePath.endsWith(".jpg", ignoreCase = true)
+        ) {
+            imagePath
+        } else {
+            convertImageToJpeg(getApplication(), imagePath)
+        }
+
+        if (jpegPath == null) {
+            appendSystemMessage("❌ Не удалось конвертировать изображение. Формат не поддерживается.")
+            _visionPhase.value = VisionPhase.IDLE
+            return
+        }
+
+        when (_currentMode.value) {
+            AIMode.LOCAL -> {
+                if (_isModelLoaded.value && currentMmprojPath != null) {
+                    generateLocal(text, jpegPath)
+                } else {
+                    ensureVisionModelLoaded {
+                        generateLocal(text, jpegPath)
+                    }
+                }
+            }
+            else -> {
+                appendSystemMessage("⚠️ Анализ изображений доступен только в локальном режиме")
+            }
+        }
+        return
+    }
+    _chatHistory.value = _chatHistory.value + ChatMessage(
+        role = "user",
+        text = text,
+        hasImage = false
+    )
         syncChatToFile()
         userMessageCount++
 
