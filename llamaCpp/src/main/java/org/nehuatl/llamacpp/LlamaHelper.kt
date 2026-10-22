@@ -845,7 +845,7 @@ class LlamaHelper(
         }
     }
 
-fun release() {
+suspend fun release() {
     completionJob?.cancel()
     completionJob = null
 
@@ -853,17 +853,15 @@ fun release() {
     currentContext = null
 
     if (id != null) {
-        scope.launch {
-            try {
-                llama.stopCompletion(id)
-            } catch (e: Exception) {
-                Log.w("LlamaHelper", "stopCompletion before release failed: ${e.message}")
-            }
-            try {
-                llama.releaseContext(id)
-            } catch (e: Exception) {
-                Log.w("LlamaHelper", "releaseContext failed: ${e.message}")
-            }
+        try {
+            llama.stopCompletion(id)
+        } catch (e: Exception) {
+            Log.w("LlamaHelper", "stopCompletion before release failed: ${e.message}")
+        }
+        try {
+            llama.releaseContext(id)
+        } catch (e: Exception) {
+            Log.w("LlamaHelper", "releaseContext failed: ${e.message}")
         }
     }
 }
