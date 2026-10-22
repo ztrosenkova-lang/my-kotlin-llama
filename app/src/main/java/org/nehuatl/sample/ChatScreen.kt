@@ -7830,7 +7830,7 @@ private fun BibliotekaDialog(
 // PdfRenderer не потокобезопасен — рендер строго под Mutex в Dispatchers.IO.
 
 private const val PDF_CACHE_SIZE = 5
-private const val PDF_MAX_RENDER_WIDTH_PX = 2048
+private const val PDF_MAX_RENDER_WIDTH_PX = 1080
 
 @Composable
 private fun PdfReaderView(
@@ -7848,7 +7848,11 @@ private fun PdfReaderView(
         value = withContext(Dispatchers.IO) {
             try {
                 val pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-                pdfiumCore.newDocument(pfd)
+                val doc = pdfiumCore.newDocument(pfd)
+                if (doc == null) {
+                    openError = true
+                }
+                doc
             } catch (e: Exception) {
                 android.util.Log.e("PdfReaderView", "open failed: ${e.message}", e)
                 openError = true
@@ -7869,10 +7873,9 @@ private fun PdfReaderView(
         cache.evictAll()
     }
 
-    DisposableEffect(document) {
+    DisposableEffect(Unit) {
         onDispose {
             cache.evictAll()
-            isClosed = true
             scope.launch {
                 renderMutex.withLock {
                     try {
@@ -7974,14 +7977,13 @@ private fun PdfPageItem(
                         return@withLock null
                     }
 
-                    // PdfiumAndroid: width/height для Bitmap и renderPageBitmap
-                    // должны совпадать с getPageWidthPoint/getPageHeightPoint.
-                    // Масштаб для зума — через умножение обоих значений на один коэффициент.
-                    val renderWidth = pageWidthPt
-                    val renderHeight = pageHeightPt
-                    android.util.Log.d("PdfReaderView", "render $pageIndex: pt=${pageWidthPt}x${pageHeightPt}, px=${renderWidth}x${renderHeight}")
+                    val fitScale = (PDF_MAX_RENDER_WIDTH_PX.toFloat() / pageWidthPt.toFloat()).coerceAtMost(1f)
+                    val scale = fitScale * pageWidthFraction
+                    val renderWidth = (pageWidthPt * scale).toInt().coerceAtLeast(1)
+                    val renderHeight = (pageHeightPt * scale).toInt().coerceAtLeast(1)
+                    android.util.Log.d("PdfReaderView", "render $pageIndex: pt=${pageWidthPt}x${pageHeightPt}, fit=$fitScale, fraction=$pageWidthFraction, px=${renderWidth}x${renderHeight}")
 
-                    val bmp = Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.ARGB_8888)
+                    val bmp = Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.RGB_565)
                     bmp.eraseColor(android.graphics.Color.WHITE)
                     pdfiumCore.renderPageBitmap(
                         document, bmp, pageIndex, 0, 0, renderWidth, renderHeight
