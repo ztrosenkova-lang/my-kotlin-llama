@@ -160,6 +160,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.draw.clipToBounds
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -7837,7 +7840,7 @@ private fun BibliotekaDialog(
 // PdfRenderer не потокобезопасен — рендер строго под Mutex в Dispatchers.IO.
 
 private const val PDF_CACHE_SIZE = 5
-private const val PDF_MAX_RENDER_WIDTH_PX = 1080
+private const val PDF_MAX_RENDER_WIDTH_PX = 2048
 
 @Composable
 private fun PdfReaderView(
@@ -7876,9 +7879,8 @@ private fun PdfReaderView(
     var isClosed by remember(file) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(pageWidthFraction) {
-        cache.evictAll()
-    }
+    // Кэш не сбрасываем при смене масштаба — перерендер идёт лениво
+    // по требованию в PdfPageItem. Сброс кэша при смене файла — в remember(file).
 
     DisposableEffect(Unit) {
         onDispose {
@@ -7924,27 +7926,41 @@ private fun PdfReaderView(
         // Именно её умножаем на pageWidthFraction — тогда 100% = точная
         // ширина колонки, без лишнего рендера и мыла при сжатии.
         val columnWidthPx = constraints.maxWidth.toFloat()
+        val density = LocalDensity.current
+        val columnWidthDp = with(density) { columnWidthPx.toDp() }
 
-        LazyColumn(
+        // Горизонтальный скролл нужен, когда страница шире колонки
+        // (pageWidthFraction > 1.0). При 100% и меньше — скролла нет.
+        val horizontalScrollState = rememberScrollState()
+
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(colors.background.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
                 .border(1.dp, colors.borderGray, RoundedCornerShape(12.dp))
-                .padding(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+                .clipToBounds()
         ) {
-            items(pageCount) { index ->
-                               PdfPageItem(
-                    pdfiumCore = pdfiumCore,
-                    document = currentDocument,
-                    pageIndex = index,
-                    pageWidthFraction = pageWidthFraction,
-                    columnWidthPx = columnWidthPx,
-                    cache = cache,
-                    renderMutex = renderMutex,
-                    isClosed = { isClosed },
-                    colors = colors
-                )
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .horizontalScroll(horizontalScrollState)
+                    .padding(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(pageCount) { index ->
+                    PdfPageItem(
+                        pdfiumCore = pdfiumCore,
+                        document = currentDocument,
+                        pageIndex = index,
+                        pageWidthFraction = pageWidthFraction,
+                        columnWidthPx = columnWidthPx,
+                        columnWidthDp = columnWidthDp,
+                        cache = cache,
+                        renderMutex = renderMutex,
+                        isClosed = { isClosed },
+                        colors = colors
+                    )
+                }
             }
         }
     }
@@ -7957,19 +7973,40 @@ private fun PdfPageItem(
     pageIndex: Int,
     pageWidthFraction: Float,
     columnWidthPx: Float,
+    columnWidthDp: Dp,
     cache: android.util.LruCache<Int, Bitmap>,
     renderMutex: Mutex,
     isClosed: () -> Boolean,
     colors: AppColors
 ) {
-    var bitmap by remember(pageIndex, pageWidthFraction) { mutableStateOf<Bitmap?>(null) }
+    // Ширина отображения страницы = ширина колонки * масштаб.
+    // При 200% страница выходит за колонку, LazyColumn+horizontalScroll
+    // дают горизонтальную прокрутку.
+    val displayWidthDp = columnWidthDp * pageWidthFraction
+
+    // Требуемая ширина рендера в пикселях — по фактическому размеру
+    // отображения, а не по pageWidthFraction. Ограничение сверху —
+    // PDF_MAX_RENDER_WIDTH_PX, чтобы не рендерить сверх меры.
+    val density = LocalDensity.current
+    val targetRenderWidthPx = with(density) { displayWidthDp.toPx() }
+        .coerceAtMost(PDF_MAX_RENDER_WIDTH_PX.toFloat())
+        .coerceAtLeast(1f)
+
+    var bitmap by remember(pageIndex) { mutableStateOf<Bitmap?>(null) }
 
     LaunchedEffect(pageIndex, pageWidthFraction) {
         val rendered = withContext(Dispatchers.IO) {
             renderMutex.withLock {
                 if (isClosed()) return@withLock null
+
+                // Кэш валиден, если ширина кэшированного битмапа
+                // не меньше требуемой (то есть картинка не мыльнее нужного).
+                // Тогда при уменьшении масштаба перерендер не нужен —
+                // просто сжимаем существующий битмап.
                 val cached = cache.get(pageIndex)
-                if (cached != null) return@withLock cached
+                if (cached != null && cached.width >= targetRenderWidthPx.toInt()) {
+                    return@withLock cached
+                }
 
                 try {
                     pdfiumCore.openPage(document, pageIndex)
@@ -7982,11 +8019,10 @@ private fun PdfPageItem(
                         return@withLock null
                     }
 
-                    val fitScale = (PDF_MAX_RENDER_WIDTH_PX.toFloat() / pageWidthPt.toFloat()).coerceAtMost(1f)
-                    val scale = fitScale * pageWidthFraction
+                    val scale = (targetRenderWidthPx / pageWidthPt.toFloat()).coerceAtLeast(0.1f)
                     val renderWidth = (pageWidthPt * scale).toInt().coerceAtLeast(1)
                     val renderHeight = (pageHeightPt * scale).toInt().coerceAtLeast(1)
-                    android.util.Log.d("PdfReaderView", "render $pageIndex: pt=${pageWidthPt}x${pageHeightPt}, fit=$fitScale, fraction=$pageWidthFraction, px=${renderWidth}x${renderHeight}")
+                    android.util.Log.d("PdfReaderView", "render $pageIndex: pt=${pageWidthPt}x${pageHeightPt}, fraction=$pageWidthFraction, px=${renderWidth}x${renderHeight}")
 
                     val bmp = Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.RGB_565)
                     bmp.eraseColor(android.graphics.Color.WHITE)
@@ -8007,7 +8043,7 @@ private fun PdfPageItem(
     val bmp = bitmap
     Box(
         modifier = Modifier
-            .fillMaxWidth()
+            .width(displayWidthDp)
             .background(colors.surfaceGray, RoundedCornerShape(8.dp))
             .border(1.dp, colors.borderGray, RoundedCornerShape(8.dp)),
         contentAlignment = Alignment.Center
@@ -8016,7 +8052,9 @@ private fun PdfPageItem(
             Image(
                 bitmap = bmp.asImageBitmap(),
                 contentDescription = "Страница ${pageIndex + 1}",
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 200.dp),
                 contentScale = ContentScale.FillWidth
             )
         } else {
