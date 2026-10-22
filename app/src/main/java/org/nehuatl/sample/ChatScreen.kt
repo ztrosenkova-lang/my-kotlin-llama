@@ -1417,7 +1417,7 @@ fun ChatScreen(
                             viewModel.disableSmartMode()
                             promptInput = ""
                         }
-                                promptInput.trim() == "--пароль Связность--" -> {
+                                promptInput.trim() == "Связность" -> {
                             showBiblioteka = true
                             promptInput = ""
                         }
