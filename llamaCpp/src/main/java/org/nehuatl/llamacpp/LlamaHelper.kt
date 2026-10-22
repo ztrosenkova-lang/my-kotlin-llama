@@ -849,24 +849,24 @@ fun release() {
     completionJob?.cancel()
     completionJob = null
 
-    currentContext?.let { id ->
-        // stopCompletion() синхронно, ДО releaseContext().
-        // Раньше stopPrediction() запускал stopCompletion в отдельной корутине
-        // и не ждал её, а releaseContext() освобождал контекст немедленно.
-        // Корутина обращалась к уже освобождённой памяти — use-after-free
-        // повреждал нативный слой llama.cpp, и следующий startEngine()
-        // (загрузка текстовой модели после vision) падал с
-        // "Model initialization failed".
-        try {
-            llama.stopCompletion(id)
-        } catch (e: Exception) {
-            Log.w("LlamaHelper", "stopCompletion before release failed: ${e.message}")
-        }
-        llama.releaseContext(id)
-    }
+    val id = currentContext
     currentContext = null
-}
 
+    if (id != null) {
+        scope.launch {
+            try {
+                llama.stopCompletion(id)
+            } catch (e: Exception) {
+                Log.w("LlamaHelper", "stopCompletion before release failed: ${e.message}")
+            }
+            try {
+                llama.releaseContext(id)
+            } catch (e: Exception) {
+                Log.w("LlamaHelper", "releaseContext failed: ${e.message}")
+            }
+        }
+    }
+}
     fun abort() {
         loadJob?.cancel()
         stopPrediction()
