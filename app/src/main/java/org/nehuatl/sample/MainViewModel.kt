@@ -27,6 +27,7 @@ import com.google.mlkit.nl.languageid.LanguageIdentification
 import com.google.mlkit.nl.languageid.LanguageIdentifier
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -1381,9 +1382,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         try {
                 _visionPhase.value = VisionPhase.RELEASING_TEXT
                 llamaHelper.release()
-                // Даём время контексту освободиться — иначе load()
-                // может начаться раньше, чем release() завершится.
-                delay(500)
 
                 _visionPhase.value = VisionPhase.LOADING_VISION
 
@@ -1442,7 +1440,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 _visionPhase.value = VisionPhase.RESTORING_TEXT
                 llamaHelper.release()
                 isVisionModelLoaded = false
-
                 if (savedModelPath != null) {
                     appendSystemMessage("🤖 Возвращаю текстовую модель...")
 
@@ -3872,7 +3869,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     fun releaseModel() {
         _isModelLoaded.value = false
         _loadedModelName.value = ""
-        llamaHelper.release()
+        scope.launch {
+            llamaHelper.release()
+        }
     }
 
     override fun onCleared() {
@@ -3882,7 +3881,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _isSpeaking.value = false
         _isModelLoaded.value = false
         llamaHelper.abort()
-        llamaHelper.release()
+        runBlocking {
+            llamaHelper.release()
+        }
         viewModelJob.cancel()
 
         try {
