@@ -7962,11 +7962,9 @@ private fun PdfPageItem(
     isClosed: () -> Boolean,
     colors: AppColors
 ) {
-    var bitmap by remember(pageIndex, pageWidthFraction) { mutableStateOf(cache.get(pageIndex)) }
+    var bitmap by remember(pageIndex, pageWidthFraction) { mutableStateOf<Bitmap?>(null) }
 
     LaunchedEffect(pageIndex, pageWidthFraction) {
-        if (bitmap != null) return@LaunchedEffect
-
         val rendered = withContext(Dispatchers.IO) {
             renderMutex.withLock {
                 if (isClosed()) return@withLock null
