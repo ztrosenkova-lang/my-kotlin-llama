@@ -7269,6 +7269,7 @@ private fun BibliotekaDialog(
                     mediaPlayer = android.media.MediaPlayer().apply {
                         setDataSource(prefetched.absolutePath)
                         setOnCompletionListener {
+                            viewModel.setSpeaking(false)
                             mediaPlayer?.release()
                             mediaPlayer = null
                             prefetched.delete()
@@ -7283,6 +7284,7 @@ private fun BibliotekaDialog(
                             }
                         }
                         prepare()
+                        viewModel.setSpeaking(true)
                         start()
                     }
                 } else {
@@ -7369,6 +7371,7 @@ private fun BibliotekaDialog(
                                 mediaPlayer = android.media.MediaPlayer().apply {
                                     setDataSource(playFile.absolutePath)
                                     setOnCompletionListener {
+                                        viewModel.setSpeaking(false)
                                         mediaPlayer?.release()
                                         mediaPlayer = null
                                         playFile.delete()
@@ -7383,6 +7386,7 @@ private fun BibliotekaDialog(
                                         }
                                     }
                                     prepare()
+                                    viewModel.setSpeaking(true)
                                     start()
                                 }
                             }
@@ -7411,6 +7415,7 @@ private fun BibliotekaDialog(
             prefetchedFiles = emptyMap()
             prefetchingIndices = emptySet()
             File(context.cacheDir, "book_tts").deleteRecursively()
+             viewModel.setSpeaking(false)
             if (isReading) viewModel.abortLocal()
         }
     }
@@ -7557,13 +7562,15 @@ private fun BibliotekaDialog(
                         ) {
                              Button(
                                 onClick = {
-                                    if (isReading && !isPaused) {
-                                        isPaused = true
-                                        mediaPlayer?.pause()
-                                    } else if (isReading && isPaused) {
-                                        isPaused = false
-                                        mediaPlayer?.start()
-                                    } else {
+                                        if (isReading && !isPaused) {
+                                            isPaused = true
+                                            viewModel.setSpeaking(false)
+                                            mediaPlayer?.pause()
+                                        } else if (isReading && isPaused) {
+                                            isPaused = false
+                                            viewModel.setSpeaking(true)
+                                            mediaPlayer?.start()
+                                        } else {
                                         isReading = true
                                         isPaused = false
                                         englishSegmentPlaying = false
