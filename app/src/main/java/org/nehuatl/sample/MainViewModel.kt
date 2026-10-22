@@ -1439,6 +1439,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             try {
                 _visionPhase.value = VisionPhase.RESTORING_TEXT
                 llamaHelper.release()
+                delay(1500)
                 isVisionModelLoaded = false
                 if (savedModelPath != null) {
                     appendSystemMessage("🤖 Возвращаю текстовую модель...")
