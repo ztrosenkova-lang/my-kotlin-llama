@@ -2272,6 +2272,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             _isPreparingSpeech.value = preparing
         }
     }
+
+    fun setSpeaking(speaking: Boolean) {
+        if (_isSpeaking.value != speaking) {
+            _isSpeaking.value = speaking
+        }
+    }
     fun setCloudReady(modelId: String) {
         _cloudState.value = CloudAIState.Ready(modelId)
         Log.d(TAG, "Cloud state set to Ready for model: $modelId")
