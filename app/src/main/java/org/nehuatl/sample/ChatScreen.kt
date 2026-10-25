@@ -3851,14 +3851,6 @@ fun ThinkingRobotAnimation(
             )
         }
 
-        drawLine(
-            color = whiteHighlight.copy(alpha = 0.3f),
-            start = pt(-nozzleTopWidth / 2f + 3f, nozzleTop + 2f),
-            end = pt(-nozzleBottomWidth / 2f + 2f, nozzleBottom - 2f),
-            strokeWidth = 1.5f * u,
-            cap = StrokeCap.Round
-        )
-
         drawRoundRect(
             color = mediumGray,
             topLeft = pt(-nozzleTopWidth / 2f - 1f, nozzleTop - 1f),
