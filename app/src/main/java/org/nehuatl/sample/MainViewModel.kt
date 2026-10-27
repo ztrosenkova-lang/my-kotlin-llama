@@ -2615,7 +2615,40 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         return sectionLines.joinToString("\n")
     }
+    /**
+     * Точный фильтр по результатам MemorySearchEngine.
+     * Оставляет только строки, в которых есть ВСЕ ключевые слова запроса
+     * (по стеммированным корням). Служебные слова («поищи», «найди», «цена»,
+     * «сколько» и т.п.) из запроса исключаются, чтобы не мешать совпадению.
+     */
+    private fun exactMatchLines(query: String, candidateLines: List<String>): List<String> {
+        val stopWords = setOf(
+            "поищи", "найди", "найти", "поиск", "цена", "цену", "цены", "цен",
+            "сколько", "стоит", "стоимость", "прайс", "покажи", "скажи",
+            "мне", "на", "по", "и", "в", "с", "для", "от", "до"
+        )
+        val queryRoots = query.lowercase()
+            .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
+            .split(Regex("\\s+"))
+            .map { it.trim() }
+            .filter { it.length > 2 && it !in stopWords }
+            .map { extractRussianRoot(it) }
+            .distinct()
 
+        if (queryRoots.isEmpty()) return emptyList()
+
+        return candidateLines.filter { line ->
+            val lineRoots = line.lowercase()
+                .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
+                .split(Regex("\\s+"))
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .map { extractRussianRoot(it) }
+                .toSet()
+            queryRoots.all { root -> lineRoots.contains(root) }
+        }
+    }
+    
     private fun searchMemory(query: String, category: String? = null): String {
         return try {
             val result = memorySearchEngine.search(query, category)
@@ -3035,9 +3068,32 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                             else -> {
                                 val memoryData = searchMemory(text, null)
                                 if (memoryData.isNotEmpty()) {
-                                    appendSystemMessage("🔍 Найдено в базе знаний:\n$memoryData")
+                                    val allLines = memoryData.split("\n")
+                                        .map { it.trim() }
+                                        .filter { it.isNotEmpty() }
+
+                                    val exact = exactMatchLines(text, allLines)
+
+                                    if (exact.isNotEmpty()) {
+                                        // Точное совпадение — выводим и озвучиваем все строки
+                                        val joined = exact.joinToString("\n")
+                                        appendSystemMessage("🔍 Найдено в базе знаний:\n$joined")
+                                        speakText(exact.joinToString(". "))
+                                    } else {
+                                        // Точного нет — говорим «точных данных нет»
+                                        // и озвучиваем первую строку как fallback
+                                        val first = allLines.firstOrNull()
+                                        if (first != null) {
+                                            appendSystemMessage("🔍 Точных данных нет. Ближайшее:\n$first")
+                                            speakText("Точных данных нет. Ближайшее: $first")
+                                        } else {
+                                            appendSystemMessage("🔍 Ничего не найдено. Перефразируйте запрос.")
+                                            speakText("Точных данных нет")
+                                        }
+                                    }
                                 } else {
                                     appendSystemMessage("🔍 Ничего не найдено. Перефразируйте запрос.")
+                                    speakText("Точных данных нет")
                                 }
                             }
                         }
