@@ -2589,6 +2589,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     fun saveToLongTermMemory(text: String) {
         appendToCategory(text)
         appendSystemMessage("🧠 Запомнено: $text")
+        // Озвучиваем подтверждение, чтобы в overlay было слышно,
+        // что запись прошла успешно.
+        speakText("База знаний обновлена")
+        // Визуальный отклик робота в overlay: кивок головы.
+        triggerOverlayHeadTilt(1f)
     }
 
     private fun getCategorySection(category: String): String {
