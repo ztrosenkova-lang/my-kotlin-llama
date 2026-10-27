@@ -68,6 +68,7 @@ class FloatingRobotService : LifecycleService() {
     // пользователем, чтобы корутина анимации не возвращала окно
     // на старое место.
     @Volatile private var baselineY: Int = -1
+    @Volatile private var baselineX: Int = -1
 
         // Флаг «палец сейчас на роботе». Пока true — корутина анимации
     // пропускает итерации, чтобы не дёргать окно под пальцем.
@@ -160,7 +161,46 @@ class FloatingRobotService : LifecycleService() {
         // запоминается его текущий params.y. До появления робота цикл просто
         // ждёт. Это решает проблему, что onCreate выполняется раньше
         // onStartCommand (когда robotView ещё null).
+
+                // Горизонтальное покачивание окна overlay — 6 dp, период 3100 мс,
+        // чтобы не совпадать с bob по Y (2400 мс). Окно плавно смещается
+        // влево-вправо, робот внутри поворачивается по гравитации отдельно.
         lifecycleScope.launch {
+            val density = resources.displayMetrics.density
+            val swayAmplitudePx = (6 * density).toInt()
+            var swayPhaseMs = 0L
+            val frameMs = 16L
+
+            while (true) {
+                delay(frameMs)
+
+                val currentView = robotView
+                val currentParams = currentView?.layoutParams as? WindowManager.LayoutParams
+                if (currentView == null || currentParams == null) continue
+                if (isDragging) continue
+
+                if (baselineX < 0) {
+                    baselineX = currentParams.x
+                }
+
+                swayPhaseMs = (swayPhaseMs + frameMs) % 3100L
+                val phase = (swayPhaseMs.toFloat() / 3100f) * 2f * PI.toFloat()
+                val offsetX = (sin(phase) * swayAmplitudePx).toInt()
+
+                val screenW = resources.displayMetrics.widthPixels
+                val newX = (baselineX + offsetX).coerceIn(0, (screenW - currentParams.width).coerceAtLeast(0))
+                if (currentParams.x != newX) {
+                    currentParams.x = newX
+                    try {
+                        windowManager.updateViewLayout(currentView, currentParams)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to update window layout on sway: ${e.message}")
+                    }
+                }
+            }
+        }
+
+            lifecycleScope.launch {
             val density = resources.displayMetrics.density
             val bobAmplitudePx = (BOB_WINDOW_AMPLITUDE_DP * density).toInt()
             val jumpAmplitudePx = (JUMP_WINDOW_AMPLITUDE_DP * density).toInt()
@@ -451,6 +491,7 @@ class FloatingRobotService : LifecycleService() {
                         params.y = initialY + dyTotal.toInt()
                         windowManager.updateViewLayout(view, params)
                         baselineY = params.y
+                        baselineX = params.x
                     }
                     return true
                 }
