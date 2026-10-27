@@ -695,6 +695,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         } else if (sessionUnlocked) {
             // Сессия уже разблокирована — не спрашиваем пароль
             Log.i(TAG, "Session already unlocked — skipping password")
+            // Читаем флаг permanently, иначе updateRemainingTime через сутки
+            // снова заблокирует приложение, даже если фраза была верной.
+            isUnlockedPermanently = prefs.getBoolean("unlocked_permanently", false)
             _isAppLocked.value = false
             _isDeviceBound.value = true
             _isPermanentlyUnlocked.value = true
