@@ -48,6 +48,22 @@ class FloatingRobotService : LifecycleService() {
         private const val BOB_WINDOW_PERIOD_MS = 2400L
         // Амплитуда прыжка окна overlay, в dp.
         private const val JUMP_WINDOW_AMPLITUDE_DP = 80
+
+        // Размеры робота внутри окна при scale = 1.0 (dp).
+        // Окно: 340 × 380 dp. Робот: 290 × 0.85 × 290 dp = 246.5 × 290 dp.
+        // Поле вокруг робота внутри окна: padX = (340 - 246.5) / 2 = 46.75 dp,
+        // padY = (380 - 290) / 2 = 45 dp.
+        private const val ROBOT_WIDTH_DP = 246.5f
+        private const val ROBOT_HEIGHT_DP = 290f
+        private const val WINDOW_WIDTH_DP = 340f
+        private const val WINDOW_HEIGHT_DP = 380f
+        private const val ROBOT_PAD_X_DP = (WINDOW_WIDTH_DP - ROBOT_WIDTH_DP) / 2f   // 46.75
+        private const val ROBOT_PAD_Y_DP = (WINDOW_HEIGHT_DP - ROBOT_HEIGHT_DP) / 2f // 45
+
+        // Насколько робот может уйти за край экрана (доля от размера робота).
+        private const val ROBOT_OVERFLOW_X_FRACTION = 0.5f        // половина за левый/правый край
+        private const val ROBOT_OVERFLOW_TOP_FRACTION = 0.5f      // половина за верхний край
+        private const val ROBOT_OVERFLOW_BOTTOM_FRACTION = 0.75f  // 3/4 за нижний край
     }
 
     private lateinit var windowManager: WindowManager
@@ -188,7 +204,12 @@ class FloatingRobotService : LifecycleService() {
                 val offsetX = (sin(phase) * swayAmplitudePx).toInt()
 
                 val screenW = resources.displayMetrics.widthPixels
-                val newX = (baselineX + offsetX).coerceIn(0, (screenW - currentParams.width).coerceAtLeast(0))
+                val scale = MainViewModel.instance?.overlayRobotScale?.value ?: 1f
+                val robotW = ROBOT_WIDTH_DP * density * scale
+                val padX = ROBOT_PAD_X_DP * density * scale
+                val minX = -robotW * ROBOT_OVERFLOW_X_FRACTION - padX
+                val maxX = screenW + robotW * ROBOT_OVERFLOW_X_FRACTION - padX - robotW
+                val newX = (baselineX + offsetX).coerceIn(minX.toInt(), maxX.toInt())
                 if (currentParams.x != newX) {
                     currentParams.x = newX
                     try {
@@ -470,6 +491,20 @@ class FloatingRobotService : LifecycleService() {
                             params.x = clampedCenterX - newW / 2
                             params.y = clampedCenterY - newH / 2
 
+                            // Применяем ограничения по РОБОТУ (не по окну) после pinch.
+                            // Иначе в крупном размере окно почти всё занимает экран,
+                            // и робот «прилипает» к центру.
+                            val robotW = ROBOT_WIDTH_DP * density * newScale
+                            val robotH = ROBOT_HEIGHT_DP * density * newScale
+                            val padX = ROBOT_PAD_X_DP * density * newScale
+                            val padY = ROBOT_PAD_Y_DP * density * newScale
+                            val minX = -robotW * ROBOT_OVERFLOW_X_FRACTION - padX
+                            val maxX = screenW + robotW * ROBOT_OVERFLOW_X_FRACTION - padX - robotW
+                            val minY = -robotH * ROBOT_OVERFLOW_TOP_FRACTION - padY
+                            val maxY = screenH + robotH * ROBOT_OVERFLOW_BOTTOM_FRACTION - padY - robotH
+                            params.x = params.x.coerceIn(minX.toInt(), maxX.toInt())
+                            params.y = params.y.coerceIn(minY.toInt(), maxY.toInt())
+
                             // Синхронизируем baselineX/baselineY — чтобы bob/sway/jump
                             // не дёрнулись после изменения размера окна.
                             if (baselineY >= 0) {
@@ -478,6 +513,10 @@ class FloatingRobotService : LifecycleService() {
                             if (baselineX >= 0) {
                                 baselineX = baselineX - deltaX
                             }
+                            // И сразу пересчитываем baseline под новые границы.
+                            baselineX = params.x
+                            baselineY = params.y
+
                             windowManager.updateViewLayout(view, params)
                             MainViewModel.instance?.setOverlayRobotScale(newScale)
                         }
@@ -490,14 +529,30 @@ class FloatingRobotService : LifecycleService() {
                     val moved = kotlin.math.abs(dxTotal) > 15 || kotlin.math.abs(dyTotal) > 15
 
                     if (moved) {
-                        params.x = initialX + dxTotal.toInt()
-                        params.y = initialY + dyTotal.toInt()
+                        val density = resources.displayMetrics.density
+                        val scale = MainViewModel.instance?.overlayRobotScale?.value ?: 1f
+                        val screenW = resources.displayMetrics.widthPixels
+                        val screenH = resources.displayMetrics.heightPixels
+
+                        val robotW = ROBOT_WIDTH_DP * density * scale
+                        val robotH = ROBOT_HEIGHT_DP * density * scale
+                        val padX = ROBOT_PAD_X_DP * density * scale
+                        val padY = ROBOT_PAD_Y_DP * density * scale
+
+                        // Границы params.x/params.y, при которых РОБОТ (не окно)
+                        // может уйти за край экрана на заданную долю.
+                        val minX = -robotW * ROBOT_OVERFLOW_X_FRACTION - padX
+                        val maxX = screenW + robotW * ROBOT_OVERFLOW_X_FRACTION - padX - robotW
+                        val minY = -robotH * ROBOT_OVERFLOW_TOP_FRACTION - padY
+                        val maxY = screenH + robotH * ROBOT_OVERFLOW_BOTTOM_FRACTION - padY - robotH
+
+                        params.x = (initialX + dxTotal.toInt()).coerceIn(minX.toInt(), maxX.toInt())
+                        params.y = (initialY + dyTotal.toInt()).coerceIn(minY.toInt(), maxY.toInt())
                         windowManager.updateViewLayout(view, params)
                         baselineY = params.y
                         baselineX = params.x
                     }
                     return true
-                }
 
                 MotionEvent.ACTION_POINTER_UP -> {
                     // Один из двух пальцев поднят. Pinch заканчивается.
