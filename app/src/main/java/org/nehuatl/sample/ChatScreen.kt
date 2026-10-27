@@ -4141,7 +4141,7 @@ fun ThinkingRobotAnimation(
         drawText(
             textLayoutResult = labelLayout,
             topLeft = Offset(
-                x = size.width / 2f - labelLayout.size.width / 2f,
+                x = labelCenterPos.x - labelLayout.size.width / 2f,
                 y = labelCenterPos.y - labelLayout.size.height / 2f
             )
         )
