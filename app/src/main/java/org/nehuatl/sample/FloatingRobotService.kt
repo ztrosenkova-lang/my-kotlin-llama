@@ -470,11 +470,14 @@ class FloatingRobotService : LifecycleService() {
                             params.x = clampedCenterX - newW / 2
                             params.y = clampedCenterY - newH / 2
 
-                            // Синхронизируем baselineY — чтобы bob/jump не дёрнулись.
+                            // Синхронизируем baselineX/baselineY — чтобы bob/sway/jump
+                            // не дёрнулись после изменения размера окна.
                             if (baselineY >= 0) {
                                 baselineY = baselineY - deltaY
                             }
-
+                            if (baselineX >= 0) {
+                                baselineX = baselineX - deltaX
+                            }
                             windowManager.updateViewLayout(view, params)
                             MainViewModel.instance?.setOverlayRobotScale(newScale)
                         }
@@ -498,10 +501,18 @@ class FloatingRobotService : LifecycleService() {
 
                 MotionEvent.ACTION_POINTER_UP -> {
                     // Один из двух пальцев поднят. Pinch заканчивается.
-                    // Оставшийся палец больше не тащит окно до нового ACTION_DOWN —
-                    // иначе окно дёрнется на разницу между позицией пальцев.
                     isPinching = false
                     pinchBaseDistance = 0f
+                    // Синхронизируем опорные координаты под текущее положение окна
+                    // и оставшийся палец. Иначе перетаскивание одним пальцем после
+                    // pinch возвращает окно на позицию до pinch.
+                    initialX = params.x
+                    initialY = params.y
+                    val remainingIndex = if (event.actionIndex == 0) 1 else 0
+                    if (event.pointerCount > remainingIndex) {
+                        touchX = event.getRawX(remainingIndex)
+                        touchY = event.getRawY(remainingIndex)
+                    }
                     return true
                 }
 
@@ -620,6 +631,8 @@ class FloatingRobotService : LifecycleService() {
     try {
         windowManager.addView(view, params)
         robotView = view
+        baselineX = params.x
+        baselineY = params.y
         Log.d(TAG, "Robot overlay added")
     } catch (e: Exception) {
         Log.e(TAG, "Failed to add robot overlay: ${e.message}", e)
