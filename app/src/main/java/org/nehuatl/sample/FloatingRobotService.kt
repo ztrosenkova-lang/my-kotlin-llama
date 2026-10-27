@@ -654,15 +654,20 @@ class FloatingRobotService : LifecycleService() {
 
     private fun setupGravitySensor() {
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as? SensorManager
-        accelerometer = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-        if (accelerometer == null) {
-            Log.w(TAG, "Accelerometer not available — gravity rotation disabled")
+        // TYPE_GRAVITY даёт уже отфильтрованный гравитационный вектор
+        // без шума от движений телефона. Если сенсора нет — fallback на акселерометр.
+        val gravitySensor = sensorManager?.getDefaultSensor(Sensor.TYPE_GRAVITY)
+        val fallbackAccel = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        val sensorToUse = gravitySensor ?: fallbackAccel
+        if (sensorToUse == null) {
+            Log.w(TAG, "No gravity/accelerometer sensor — gravity rotation disabled")
             return
         }
 
         val listener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent) {
-                if (event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
+                if (event.sensor.type != Sensor.TYPE_GRAVITY &&
+                    event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
 
                 val x = event.values[0]
                 val y = event.values[1]
@@ -700,9 +705,13 @@ class FloatingRobotService : LifecycleService() {
                 if (angleDeg > 180f) angleDeg -= 360f
                 if (angleDeg < -180f) angleDeg += 360f
 
+                // Нормализуем delta в диапазон [-180, 180] — кратчайший путь.
+                // Без этого при перевороте телефона угол скачет с +180 на -180,
+                // и сглаживание дёргается, не зная, куда крутиться.
+                var delta = angleDeg - smoothedGravityRotation
+                delta = ((delta + 540f) % 360f) - 180f
+
                 // Мёртвая зона: если изменение угла меньше 2.5°, не двигаем робота.
-                // Убирает мелкую дрожь от шума акселерометра.
-                val delta = angleDeg - smoothedGravityRotation
                 if (kotlin.math.abs(delta) < 2.5f) {
                     return
                 }
@@ -719,7 +728,7 @@ class FloatingRobotService : LifecycleService() {
         gravitySensorListener = listener
         sensorManager?.registerListener(
             listener,
-            accelerometer,
+            sensorToUse,
             SensorManager.SENSOR_DELAY_GAME
         )
         Log.d(TAG, "Gravity sensor registered")
