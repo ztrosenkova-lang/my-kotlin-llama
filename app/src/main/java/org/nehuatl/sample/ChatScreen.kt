@@ -1788,6 +1788,7 @@ fun ChatScreen(
                         isPreparingSpeech = isPreparingSpeech,
                         hasActiveAlarm = hasActiveAlarm,
                         isJumping = robotJumpSignal,
+                        enableSway = true,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -2063,7 +2064,8 @@ fun ThinkingRobotAnimation(
     isJumping: Boolean = false,
     // Амплитуда внутреннего покачивания (bob) в единицах u.
     // В overlay передаётся 0f, чтобы покачивание делало окно, а не канвас.
-    bobAmplitude: Float = 10f
+    bobAmplitude: Float = 10f,
+    enableSway: Boolean = false
 ) {
     val transition = rememberInfiniteTransition(label = "robot")
 
@@ -2517,6 +2519,9 @@ fun ThinkingRobotAnimation(
             "canvas=${size.width}x${size.height}, uDivisor=$uDivisor, u=$u, ratio=${size.width / size.height}"
         )
         val bobOffset = if (isActive) sin(bob) * bobAmplitude * u else 0f
+        // Горизонтальное покачивание 6 dp, период не совпадает с bob по Y,
+        // чтобы траектория была «восьмёркой», а не кругом.
+        val swayX = if (isActive && enableSway) sin(bob * 0.77f) * 6f * u else 0f
         // Смещение корпуса от прыжка: 20 единиц u на пике.
                val jumpOffset = 0f
                 // Взгляд: естественное блуждание (lookX) + фазовый взгляд для 10/11.
@@ -2556,7 +2561,7 @@ fun ThinkingRobotAnimation(
             neonBlue
         }
 
-        fun pt(x: Float, y: Float) = Offset(cx + x * u, y * u + bobOffset + staticYOffset - jumpOffset)
+        fun pt(x: Float, y: Float) = Offset(cx + x * u + swayX, y * u + bobOffset + staticYOffset - jumpOffset)
 
         // Функция для элементов головы — добавляет смещение головы
         fun ptHead(x: Float, y: Float): Offset {
