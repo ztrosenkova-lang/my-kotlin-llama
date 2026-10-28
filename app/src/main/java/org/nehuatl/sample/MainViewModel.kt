@@ -2063,6 +2063,61 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             isTtsShuttingDown = false
         }
     }
+    private fun humanizePriceForSpeech(text: String): String {
+        var t = text
+
+        // Стрелка и скобки — в паузу
+        t = t.replace("→", ", ")
+        t = t.replace(Regex("\\(([^)]+)\\)"), ", $1,")
+
+        // Единицы измерения
+        t = t.replace(Regex("(?i)р/м²|р/м2"), " рублей за метр квадратный")
+        t = t.replace(Regex("(?i)р/пм|р/м\\.п\\."), " рублей за погонный метр")
+        t = t.replace(Regex("(?i)р/шт\\.?"), " рублей за штуку")
+        t = t.replace(Regex("(?i)р/кг"), " рублей за килограмм")
+        t = t.replace(Regex("(?i)р/т"), " рублей за тонну")
+        t = t.replace(Regex("(?i)р/лист"), " рублей за лист")
+        t = t.replace(Regex("(?i)р/рулон"), " рублей за рулон")
+        t = t.replace(Regex("(?i)р/пара"), " рублей за пару")
+        t = t.replace(Regex("(?i)р/точка"), " рублей за точку")
+        t = t.replace(Regex("(?i)р/система"), " рублей за систему")
+        t = t.replace(Regex("(?i)р/марш"), " рублей за марш")
+        t = t.replace(Regex("(?i)р/мешок"), " рублей за мешок")
+        t = t.replace(Regex("(?i)р/рейс"), " рублей за рейс")
+        t = t.replace(Regex("(?i)р/см"), " рублей за сантиметр")
+        t = t.replace(Regex("(?i)р/м\\b"), " рублей за метр")
+        t = t.replace(Regex("(?i)\\bруб\\b\\.?"), " рублей")
+        t = t.replace(Regex("(?i)р\\.?\\b"), " рублей")
+
+        // м.п. без р/ — погонный метр
+        t = t.replace(Regex("(?i)\\bм\\.п\\."), " погонный метр")
+
+        // Размеры: 60х40х4 → шестьдесят на сорок на четыре
+        t = t.replace(Regex("(?<=\\d)\\s*[хxX*×]\\s*(?=\\d)"), " на ")
+
+        // Ø → диаметр
+        t = t.replace("Ø", " диаметр ")
+
+        // Плюс
+        t = t.replace("+", " плюс ")
+
+        // 252,10 → двести пятьдесят два рублей десять копеек
+        t = t.replace(Regex("(\\d+),(\\d{2})\\b")) { m ->
+            "${m.groupValues[1]} рублей ${m.groupValues[2]} копеек"
+        }
+        // 1,5 → одна целая пять десятых
+        t = t.replace(Regex("(\\d+),(\\d)\\b")) { m ->
+            "${m.groupValues[1]} целых ${m.groupValues[2]} десятых"
+        }
+
+        // Слэш в других местах — пробел
+        t = t.replace("/", " ")
+
+        t = t.replace(Regex("[^\\p{L}\\p{N}\\s.,!?]"), " ")
+        t = t.replace(Regex("\\s+"), " ").trim()
+        return t
+    }
+              
        private fun filterTextForSpeech(text: String): String {
         var cleanText = text
 
@@ -2628,10 +2683,12 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             "мне", "на", "по", "и", "в", "с", "для", "от", "до"
         )
         val queryRoots = query.lowercase()
+            .replace(Regex("(?<=\\d)\\s*на\\s*(?=\\d)"), "х")
+            .replace(Regex("(?<=\\d)\\s*[хxX*×]\\s*(?=\\d)"), " ")
             .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
             .split(Regex("\\s+"))
             .map { it.trim() }
-            .filter { it.length > 2 && it !in stopWords }
+            .filter { (it.length > 2 || it.all { c -> c.isDigit() }) && it !in stopWords }
             .map { extractRussianRoot(it) }
             .distinct()
 
@@ -2639,6 +2696,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         return candidateLines.filter { line ->
             val lineRoots = line.lowercase()
+                .replace(Regex("(?<=\\d)\\s*на\\s*(?=\\d)"), "х")
+                .replace(Regex("(?<=\\d)\\s*[хxX*×]\\s*(?=\\d)"), " ")
                 .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
                 .split(Regex("\\s+"))
                 .map { it.trim() }
@@ -3075,27 +3134,22 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                     val exact = exactMatchLines(text, allLines)
 
                                     if (exact.isNotEmpty()) {
-                                        // Точное совпадение — выводим и озвучиваем все строки
                                         val joined = exact.joinToString("\n")
                                         appendSystemMessage("🔍 Найдено в базе знаний:\n$joined")
-                                        speakText(exact.joinToString(". "))
+                                        speakText(humanizePriceForSpeech(exact.joinToString(". ")))
                                     } else {
-                                        // Точного нет — говорим «точных данных нет»
-                                        // и озвучиваем первую строку как fallback
-                                        val first = allLines.firstOrNull()
+                                        val first = allLines.firstOrNull { line ->
+                                            !(line.startsWith("[") && line.endsWith("]")) &&
+                                            (line.contains("→") || line.contains("р/"))
+                                        }
                                         if (first != null) {
                                             appendSystemMessage("🔍 Точных данных нет. Ближайшее:\n$first")
-                                            speakText("Точных данных нет. Ближайшее: $first")
+                                            speakText("Точных данных нет. Ближайшее: " + humanizePriceForSpeech(first))
                                         } else {
                                             appendSystemMessage("🔍 Ничего не найдено. Перефразируйте запрос.")
                                             speakText("Точных данных нет")
                                         }
                                     }
-                                } else {
-                                    appendSystemMessage("🔍 Ничего не найдено. Перефразируйте запрос.")
-                                    speakText("Точных данных нет")
-                                }
-                            }
                         }
                         return
                     }
