@@ -553,6 +553,7 @@ class FloatingRobotService : LifecycleService() {
                         baselineX = params.x
                     }
                     return true
+                }
 
                 MotionEvent.ACTION_POINTER_UP -> {
                     // Один из двух пальцев поднят. Pinch заканчивается.
