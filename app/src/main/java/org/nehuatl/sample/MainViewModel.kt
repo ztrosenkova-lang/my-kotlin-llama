@@ -3150,6 +3150,8 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                                             speakText("Точных данных нет")
                                         }
                                     }
+                                }
+                            }
                         }
                         return
                     }
