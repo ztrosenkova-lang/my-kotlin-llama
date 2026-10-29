@@ -6837,15 +6837,43 @@ private fun MemoryEditorDialog(
     onDismiss: () -> Unit,
     colors: AppColors
 ) {
-    var text by remember { mutableStateOf(initialText) }
+    var textFieldValue by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(initialText)) }
+    var searchQuery by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("🧠 База Знаний ИИ", style = MaterialTheme.typography.titleLarge, color = colors.text) },
         text = {
             OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
+                value = searchQuery,
+                onValueChange = { q ->
+                    searchQuery = q
+                    if (q.isNotEmpty()) {
+                        val idx = textFieldValue.text.indexOf(q, ignoreCase = true)
+                        if (idx >= 0) {
+                            textFieldValue = textFieldValue.copy(
+                                selection = androidx.compose.ui.text.TextRange(idx, idx + q.length)
+                            )
+                        }
+                    }
+                },
+                placeholder = { Text("Найти в базе знаний...", color = colors.text.copy(alpha = 0.5f), fontSize = 10.sp) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, color = colors.text),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = colors.text,
+                    unfocusedTextColor = colors.text,
+                    focusedContainerColor = colors.surfaceGray,
+                    unfocusedContainerColor = colors.surfaceGray,
+                    focusedBorderColor = colors.accent,
+                    unfocusedBorderColor = colors.borderGray,
+                    cursorColor = colors.accent
+                )
+            )            
+            OutlinedTextField(
+                value = textFieldValue,
+                onValueChange = { textFieldValue = it },
                 placeholder = { Text("Вставь сюда свой прайс-лист или данные...", color = colors.text.copy(alpha = 0.5f), fontSize = 10.sp) },
                 modifier = Modifier.fillMaxWidth().height(400.dp),
                 maxLines = 100,
@@ -6874,7 +6902,7 @@ private fun MemoryEditorDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Button(
-                        onClick = { onSave(text); onDismiss() },
+                        onClick = { onSave(textFieldValue.text); onDismiss() },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = colors.accent,
                             contentColor = colors.background
@@ -6903,7 +6931,7 @@ private fun MemoryEditorDialog(
                 }
 
                 Button(
-                    onClick = { onRestoreBase(); onDismiss() },
+                    onClick = { onRestoreBase(); textFieldValue = androidx.compose.ui.text.input.TextFieldValue(""); onDismiss() },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = colors.borderGray,
                         contentColor = colors.text
