@@ -6844,6 +6844,7 @@ private fun MemoryEditorDialog(
         onDismissRequest = onDismiss,
         title = { Text("🧠 База Знаний ИИ", style = MaterialTheme.typography.titleLarge, color = colors.text) },
         text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { q ->
@@ -6889,6 +6890,7 @@ private fun MemoryEditorDialog(
                     cursorColor = colors.accent
                 )
             )
+            }
         },
                 confirmButton = {
             Column(
