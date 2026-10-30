@@ -68,6 +68,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
@@ -6839,6 +6841,8 @@ private fun MemoryEditorDialog(
 ) {
     var textFieldValue by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(initialText)) }
     var searchQuery by remember { mutableStateOf("") }
+    val editorBringIntoView = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+    val editorScope = rememberCoroutineScope()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -6855,6 +6859,9 @@ private fun MemoryEditorDialog(
                             textFieldValue = textFieldValue.copy(
                                 selection = androidx.compose.ui.text.TextRange(idx, idx + q.length)
                             )
+                            editorScope.launch {
+                                editorBringIntoView.bringIntoView()
+                            }
                         }
                     }
                 },
@@ -6876,7 +6883,10 @@ private fun MemoryEditorDialog(
                 value = textFieldValue,
                 onValueChange = { textFieldValue = it },
                 placeholder = { Text("Вставь сюда свой прайс-лист или данные...", color = colors.text.copy(alpha = 0.5f), fontSize = 10.sp) },
-                modifier = Modifier.fillMaxWidth().height(400.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(400.dp)
+                    .bringIntoViewRequester(editorBringIntoView),
                 maxLines = 100,
                 singleLine = false,
                 textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, color = colors.text),
