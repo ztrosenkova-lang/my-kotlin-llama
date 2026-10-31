@@ -655,15 +655,6 @@ fun ChatScreen(
     val currentThinking = state is GenerationState.Generating || cloudState is CloudAIState.Generating
 
     LaunchedEffect(currentThinking) {
-        if (prevIsThinking && !currentThinking) {
-            // Модель только что закончила. Ждём, пока крышка закроется.
-            delay(2000)
-            // Показываем «Готовлю озвучку» только если ответ ещё не начал
-            // звучать и TTS включён.
-            if (isTtsReady && !isSpeaking) {
-                viewModel.setPreparingSpeech(true)
-            }
-        }
         prevIsThinking = currentThinking
     }
         LaunchedEffect(isPreparingSpeech) {
