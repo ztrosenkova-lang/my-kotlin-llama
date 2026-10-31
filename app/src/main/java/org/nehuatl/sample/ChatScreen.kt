@@ -6843,6 +6843,7 @@ private fun MemoryEditorDialog(
     var searchQuery by remember { mutableStateOf("") }
     val editorBringIntoView = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
     val editorScope = rememberCoroutineScope()
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -6860,7 +6861,9 @@ private fun MemoryEditorDialog(
                                 selection = androidx.compose.ui.text.TextRange(idx, idx + q.length)
                             )
                             editorScope.launch {
-                                editorBringIntoView.bringIntoView()
+                                focusManager.clearFocus()
+                                delay(16)
+                                focusManager.clearFocus()
                             }
                         }
                     }
