@@ -614,6 +614,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                         appendSystemMessage(message)
                         Log.e(TAG, "TTS error broadcast received: $message")
                     }
+                TtsService.ACTION_SYNTHESIZE_START -> {
+                        _isPreparingSpeech.value = true
+                        Log.d(TAG, "SYNTHESIZE_START broadcast received")
+                    }
                 TtsService.ACTION_SPEAK_START -> {
                         _isSpeaking.value = true
                         _isPreparingSpeech.value = false
@@ -633,6 +637,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         val ttsFilter = IntentFilter().apply {
             addAction(TtsService.ACTION_TTS_READY)
             addAction(TtsService.ACTION_TTS_ERROR)
+            addAction(TtsService.ACTION_SYNTHESIZE_START)
             addAction(TtsService.ACTION_SPEAK_START)
             addAction(TtsService.ACTION_SPEAK_END)
         }
