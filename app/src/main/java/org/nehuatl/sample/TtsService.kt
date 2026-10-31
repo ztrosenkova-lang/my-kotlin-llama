@@ -37,6 +37,7 @@ class TtsService : Service() {
         const val ACTION_TTS_READY = "org.nehuatl.sample.action.TTS_READY"
         const val ACTION_TTS_ERROR = "org.nehuatl.sample.action.TTS_ERROR"
         const val ACTION_SPEAK_START = "org.nehuatl.sample.action.SPEAK_START"
+        const val ACTION_SYNTHESIZE_START = "org.nehuatl.sample.action.SYNTHESIZE_START"
         const val ACTION_SPEAK_END = "org.nehuatl.sample.action.SPEAK_END"
         const val ACTION_SYNTHESIZE_TO_FILE = "org.nehuatl.sample.action.SYNTHESIZE_TO_FILE"
         const val ACTION_SYNTHESIZE_DONE = "org.nehuatl.sample.action.SYNTHESIZE_DONE"
@@ -223,6 +224,11 @@ class TtsService : Service() {
                     .replace(Regex("\\s+"), " ")
                     .trim()
                 if (filtered.isBlank()) return
+
+                val synthStartIntent = Intent(ACTION_SYNTHESIZE_START).apply {
+                    setPackage(packageName)
+                }
+                sendBroadcast(synthStartIntent)
 
                 val audio = tts.generate(filtered, sid = 0, speed = 0.85f)
 
