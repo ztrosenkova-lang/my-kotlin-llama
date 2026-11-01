@@ -2779,8 +2779,8 @@ fun RobotSkin2(
         // орбита 2 (наклон +22°)
         val o2 = Path().apply {
             val cx2 = headPt(0f, 26f)
-            val a = rad(orbitTiltB)
-            val cosA = cos(a); val sinA = sin(a)
+            val a = orbitTiltB * (PI.toFloat() / 180f)
+            val cosA = kotlin.math.cos(a); val sinA = kotlin.math.sin(a)
             val p1 = Offset(cx2.x - orbitRadiusX * cosA, cx2.y - orbitRadiusX * sinA - orbitRadiusY * 0.3f)
             val p2 = Offset(cx2.x + orbitRadiusX * cosA, cx2.y + orbitRadiusX * sinA + orbitRadiusY * 0.3f)
             moveTo(p1.x, p1.y)
