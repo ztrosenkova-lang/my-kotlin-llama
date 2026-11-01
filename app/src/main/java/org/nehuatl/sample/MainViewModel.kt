@@ -335,6 +335,24 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _isSmartMode = MutableStateFlow(false)
     val isSmartMode: StateFlow<Boolean> = _isSmartMode.asStateFlow()
 
+    private val _robotSkin = MutableStateFlow(1)
+    val robotSkin: StateFlow<Int> = _robotSkin.asStateFlow()
+
+    fun setRobotSkin(skin: Int) {
+        val coerced = if (skin == 2) 2 else 1
+        if (_robotSkin.value != coerced) {
+            _robotSkin.value = coerced
+            prefs.edit().putInt("robot_skin", coerced).apply()
+            if (coerced == 2) {
+                appendSystemMessage("🐙 Скин робота: медуза")
+                speakUiPhrase("Медуза активирована")
+            } else {
+                appendSystemMessage("🤖 Скин робота: классический")
+                speakUiPhrase("Классический робот активирован")
+            }
+        }
+    }
+
     // ========== СОСТОЯНИЕ ДЛЯ VISION-МОДЕЛИ ==========
     private var savedTemperature: Float = 0.3f
     private var savedContextSize: Int = 8192
@@ -564,6 +582,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         _isDarkTheme.value = prefs.getBoolean(KEY_DARK_THEME, false)
         _isSmartMode.value = prefs.getBoolean(KEY_SMART_MODE, false)
+        _robotSkin.value = prefs.getInt("robot_skin", 1)
         _isFirstLaunch.value = prefs.getBoolean("first_launch", true)
 
         // Читаем chat.txt и восстанавливаем чат
