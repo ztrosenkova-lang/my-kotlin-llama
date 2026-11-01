@@ -2916,6 +2916,8 @@ fun RobotSkin2(
         } else 0f
         val browY = 39f + browLiftTarget + idleWiggle
         val browTiltRad = browTiltTarget * PI.toFloat() / 180f
+        val cosTilt = cos(browTiltRad)
+        val sinTilt = sin(browTiltRad)
         for (side in listOf(-1f, 1f)) {
             val brow = Path().apply {
                 val innerX = side * 12f
@@ -2927,8 +2929,8 @@ fun RobotSkin2(
                 fun rotPoint(x: Float, y: Float): Offset {
                     val dx = (x - pivotX) * u
                     val dy = (y - pivotY) * u
-                    val rx = dx * cos(browTiltRad) - dy * sin(browTiltRad)
-                    val ry = dx * sin(browTiltRad) + dy * cos(browTiltRad)
+                    val rx = dx * cosTilt - dy * sinTilt
+                    val ry = dx * sinTilt + dy * cosTilt
                     val base = headPt(pivotX, pivotY)
                     return Offset(base.x + rx, base.y + ry)
                 }
@@ -2941,7 +2943,6 @@ fun RobotSkin2(
             drawPath(brow, glowBlue.copy(alpha = 0.9f), style = Stroke(width = 1.6f * u, cap = StrokeCap.Round))
             drawPath(brow, coreWhite.copy(alpha = 0.4f), style = Stroke(width = 0.6f * u, cap = StrokeCap.Round))
         }
-
         // ===== НОС =====
         // Две точки-дуги, как у аниме-персонажа. Небольшой, чуть выше рта.
         val noseY = 64f
