@@ -325,6 +325,7 @@ fun ChatScreen(
     val isCompressing by viewModel.isCompressing.collectAsStateWithLifecycle(initialValue = false)
     val visionPhase by viewModel.visionPhase.collectAsStateWithLifecycle(initialValue = VisionPhase.IDLE)
     val isSmartMode by viewModel.isSmartMode.collectAsStateWithLifecycle(initialValue = false)
+    val robotSkin by viewModel.robotSkin.collectAsStateWithLifecycle(initialValue = 1)
     val activeTranslationPrompt by viewModel.activeTranslationPrompt.collectAsStateWithLifecycle(initialValue = null)
 
        // Единый Transition для всех цветов темы — плавная одновременная смена
@@ -490,7 +491,7 @@ fun ChatScreen(
             if (!results.isNullOrEmpty()) {
                 val recognizedText = results[0]
                 if (recognizedText.isNotBlank()) {
-                                        val command = recognizedText.trim().lowercase()
+                val command = recognizedText.trim().lowercase()
                     when {
                         command == "лети домой" -> {
                             robotIsFlyingHome = true
@@ -534,6 +535,14 @@ fun ChatScreen(
                         }
                         command == "режим калькулятора" -> {
                             viewModel.disableSmartMode()
+                        }
+                        command == "медуза" -> {
+                            viewModel.setRobotSkin(2)
+                            promptInput = ""
+                        }
+                        command == "робот" -> {
+                            viewModel.setRobotSkin(1)
+                            promptInput = ""
                         }
                        command == "режим админа" -> {
                             if (currentMode == AIMode.NEUTRAL) {
@@ -1379,7 +1388,7 @@ fun ChatScreen(
                             viewModel.appendSystemMessage("🤖 Робот прилетает с орбиты")
                             promptInput = ""
                         }
-                                       command == "махни рукой" -> { waveSignal = true
+                        command == "махни рукой" -> { waveSignal = true
                    promptInput = ""
 }
                         command == "расти" || command == "рости" -> {
@@ -1390,13 +1399,13 @@ fun ChatScreen(
                             shrinkSmallSignal = true
                             promptInput = ""
                         }
-                                               command == "выйди из матрицы" -> {
+                        command == "выйди из матрицы" -> {
                             if (!FloatingRobotService.isRunning) {
                                 (context as? MainActivity)?.startFloatingWithPermissionCheck()
                             }
                             promptInput = ""
                         }
-                                               command == "уйди" -> {
+                        command == "уйди" -> {
                             if (FloatingRobotService.isRunning) {
                                 val stopIntent = Intent(context, FloatingRobotService::class.java).apply {
                                     action = FloatingRobotService.ACTION_STOP
@@ -1409,7 +1418,7 @@ fun ChatScreen(
                             viewModel.enableSmartMode()
                             promptInput = ""
                         }
-                                    command == "режим калькулятора" -> {
+                        command == "режим калькулятора" -> {
                             viewModel.disableSmartMode()
                             promptInput = ""
                         }
@@ -1419,6 +1428,14 @@ fun ChatScreen(
                         }
                         command == "редактировать органайзер" -> {
                             showOrganizerEditor = true
+                            promptInput = ""
+                        }
+                        command == "медуза" -> {
+                            viewModel.setRobotSkin(2)
+                            promptInput = ""
+                        }
+                        command == "робот" -> {
+                            viewModel.setRobotSkin(1)
                             promptInput = ""
                         }
                         command == "режим админа" -> {
@@ -1517,7 +1534,7 @@ fun ChatScreen(
                             rotationZ = (orbitAngle * 180f / PI.toFloat()) + 90f
                         )
                 ) {
-                                        ThinkingRobotAnimation(
+                        ThinkingRobotAnimation(
                         height = robotSizeDp,
                         isActive = false,
                         isSpeaking = false,
@@ -1764,6 +1781,7 @@ fun ChatScreen(
                 ) {
         ThinkingRobotAnimation(
                         height = 70.dp,
+                        skin = robotSkin,
                         isActive = true,
                         isSpeaking = isSpeaking,
                         isThinking = state is GenerationState.Generating || cloudState is CloudAIState.Generating,
