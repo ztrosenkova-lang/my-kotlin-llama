@@ -2173,6 +2173,26 @@ fun RobotSkin2(
         animationSpec = tween(400, easing = FastOutSlowInEasing),
         label = "jelly_wave"
     )
+    val browLiftTarget by animateFloatAsState(
+        targetValue = when {
+            isThinking -> -2.5f
+            isSpeaking -> 1.5f
+            isListening -> -3f
+            else -> 0f
+        },
+        animationSpec = tween(500, easing = FastOutSlowInEasing),
+        label = "jelly_brow_lift"
+    )
+    val browTiltTarget by animateFloatAsState(
+        targetValue = when {
+            isThinking -> 8f
+            isSpeaking -> -4f
+            isListening -> -6f
+            else -> 0f
+        },
+        animationSpec = tween(500, easing = FastOutSlowInEasing),
+        label = "jelly_brow_tilt"
+    )
 
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
@@ -2223,47 +2243,192 @@ fun RobotSkin2(
         )
 
         // ===== ЩУПАЛЬЦА =====
-        val tentacleCount = 7
-        for (i in 0 until tentacleCount) {
-            val spread = (i - (tentacleCount - 1) / 2f) / ((tentacleCount - 1) / 2f)
-            val baseX = spread * 42f
-            val baseY = 92f
-            val phaseOffset = i * 0.7f
-            val sway = sin(tentaclePhase + phaseOffset) * (6f + abs(spread) * 3f)
-            val sway2 = sin(tentaclePhase * 0.7f + phaseOffset + 1.3f) * 5f
+        // 9 щупалец: 2 внутренних (к соплу) + 7 внешних.
+        // Каждое — толстая основа + тонкий кончик + светящаяся жила внутри.
+        data class Tentacle(
+            val baseX: Float,
+            val baseY: Float,
+            val endX: Float,
+            val endY: Float,
+            val swayAmp: Float,
+            val phase: Float,
+            val thickness: Float,
+            val inner: Boolean
+        )
 
+        // Основание щупалец — эллипс (как 3D-круг снизу купола).
+        // Чем ближе к центру по X — тем ниже baseY (передний край).
+        // Чем дальше от центра — тем выше baseY (задний край).
+        // Это создаёт объём: передние щупальца «ближе к зрителю», задние «дальше».
+        val baseYCenter = 94f
+        val baseYSpread = 4f  // насколько задние выше передних
+        val ellipseRx = 34f
+        val ellipseRy = 5f
+
+        fun baseYFor(x: Float): Float {
+            val nx = (x / ellipseRx).coerceIn(-1f, 1f)
+            return baseYCenter + baseYSpread * (1f - kotlin.math.sqrt(1f - nx * nx))
+        }
+        // ===== ОБОД ОСНОВАНИЯ КУПОЛА =====
+        // Эллипс, из которого «растут» щупальца. Даёт 3D-эффект кольца.
+        val rimCenterY = 92f
+        val rimRx = 44f
+        val rimRy = 7f
+        val rimTopLeft = headPt(-rimRx, rimCenterY - rimRy)
+        val rimSize = Size(rimRx * 2f * u, rimRy * 2f * u)
+        // внешняя тень
+        drawOval(
+            color = deepBlue.copy(alpha = 0.9f),
+            topLeft = rimTopLeft,
+            size = rimSize
+        )
+        // внутренняя яркая часть (свет из купола)
+        drawOval(
+            brush = Brush.radialGradient(
+                listOf(
+                    brightBlue.copy(alpha = 0.7f),
+                    midBlue.copy(alpha = 0.5f),
+                    deepBlue.copy(alpha = 0.9f)
+                ),
+                center = headPt(0f, rimCenterY),
+                radius = rimRx * u
+            ),
+            topLeft = headPt(-rimRx * 0.85f, rimCenterY - rimRy * 0.7f),
+            size = Size(rimRx * 1.7f * u, rimRy * 1.4f * u)
+        )
+        // контур обода
+        drawOval(
+            color = glowBlue.copy(alpha = 0.85f),
+            topLeft = rimTopLeft,
+            size = rimSize,
+            style = Stroke(width = 1.2f * u)
+        )
+        // блик на передней кромке обода (нижняя дуга)
+        drawArc(
+            color = coreWhite.copy(alpha = 0.6f),
+            startAngle = 20f,
+            sweepAngle = 140f,
+            useCenter = false,
+            topLeft = Offset(rimTopLeft.x, rimTopLeft.y + rimSize.height * 0.5f),
+            size = Size(rimSize.width, rimSize.height),
+            style = Stroke(width = 1.4f * u, cap = StrokeCap.Round)
+        )
+        // точки-заклёпки по ободу (как на картинке)
+        for (i in 0 until 6) {
+            val angle = (i / 6f) * 2f * PI.toFloat() + PI.toFloat() * 0.5f
+            val dotX = cos(angle) * rimRx * 0.9f
+            val dotY = rimCenterY + sin(angle) * rimRy * 0.9f
+            drawCircle(
+                color = glowBlue.copy(alpha = 0.7f),
+                radius = 1.2f * u,
+                center = headPt(dotX, dotY)
+            )
+            drawCircle(
+                color = coreWhite.copy(alpha = 0.5f),
+                radius = 0.5f * u,
+                center = headPt(dotX, dotY)
+            )
+        }
+        val tentacles = listOf(
+            // внутренние — уходят к соплу (в центре, значит ниже всех)
+            Tentacle(-8f, baseYFor(-8f) + 2f, -4f, 145f, 3f, 0.3f, 3.2f, true),
+            Tentacle(8f, baseYFor(8f) + 2f, 4f, 145f, 3f, 1.1f, 3.2f, true),
+            // внешние — от края (задние, выше) к центру (передние, ниже)
+            Tentacle(-30f, baseYFor(-30f), -42f, 138f, 6f, 0.0f, 2.6f, false),
+            Tentacle(-18f, baseYFor(-18f), -22f, 148f, 5f, 0.9f, 2.8f, false),
+            Tentacle(-4f, baseYFor(-4f) + 1f, -8f, 152f, 4f, 1.7f, 2.4f, false),
+            Tentacle(4f, baseYFor(4f) + 1f, 8f, 152f, 4f, 2.3f, 2.4f, false),
+            Tentacle(18f, baseYFor(18f), 22f, 148f, 5f, 3.1f, 2.8f, false),
+            Tentacle(30f, baseYFor(30f), 42f, 138f, 6f, 3.9f, 2.6f, false),
+            Tentacle(0f, baseYFor(0f) + 2f, 0f, 140f, 3f, 4.5f, 2.2f, false)
+        )
+
+        for (t in tentacles) {
+            val sway = sin(tentaclePhase + t.phase) * t.swayAmp
+            val sway2 = sin(tentaclePhase * 0.7f + t.phase + 1.3f) * t.swayAmp * 0.6f
+
+            // основная кривая щупальца
             val path = Path().apply {
-                val p0 = pt(baseX, baseY)
+                val p0 = pt(t.baseX, t.baseY)
                 moveTo(p0.x, p0.y)
-                val p1x = baseX + sway * 0.4f + spread * 4f
-                val p1y = baseY + 18f
-                val p2x = baseX + sway * 0.8f + spread * 8f
-                val p2y = baseY + 38f
-                val p3x = baseX + sway + sway2 * 0.3f
-                val p3y = baseY + 58f + abs(spread) * 4f
-                val c1 = pt(p1x, p1y)
-                val c2 = pt(p2x, p2y)
-                val e = pt(p3x, p3y)
-                cubicTo(c1.x, c1.y, c2.x, c2.y, e.x, e.y)
+                val c1 = pt(t.baseX + sway * 0.3f, t.baseY + (t.endY - t.baseY) * 0.35f)
+                val c2 = pt(
+                    t.baseX + sway * 0.8f + (t.endX - t.baseX) * 0.5f,
+                    t.baseY + (t.endY - t.baseY) * 0.7f
+                )
+                val c3 = pt(
+                    t.baseX + sway + sway2 * 0.4f,
+                    t.endY - 8f
+                )
+                val e = pt(t.endX + sway * 0.5f, t.endY)
+                cubicTo(c1.x, c1.y, c2.x, c2.y, c3.x, c3.y)
+                quadraticBezierTo(
+                    (c3.x + e.x) / 2f, (c3.y + e.y) / 2f,
+                    e.x, e.y
+                )
             }
+
+            // тень-подложка (толстая, тёмная)
+            drawPath(
+                path,
+                color = deepBlue.copy(alpha = 0.85f),
+                style = Stroke(width = (t.thickness + 1.2f) * u, cap = StrokeCap.Round)
+            )
+            // основное тело
             drawPath(
                 path,
                 brush = Brush.verticalGradient(
                     listOf(
-                        brightBlue.copy(alpha = 0.9f),
-                        midBlue.copy(alpha = 0.6f),
-                        deepBlue.copy(alpha = 0.2f)
+                        brightBlue.copy(alpha = 0.95f),
+                        midBlue.copy(alpha = 0.85f),
+                        deepBlue.copy(alpha = 0.5f)
                     ),
-                    startY = pt(baseX, baseY).y,
-                    endY = pt(baseX, baseY + 60f).y
+                    startY = pt(t.baseX, t.baseY).y,
+                    endY = pt(t.endX, t.endY).y
                 ),
-                style = Stroke(width = 2.4f * u, cap = StrokeCap.Round)
+                style = Stroke(width = t.thickness * u, cap = StrokeCap.Round)
             )
+            // светящаяся жила внутри
             drawPath(
                 path,
-                color = glowBlue.copy(alpha = 0.5f),
-                style = Stroke(width = 0.8f * u, cap = StrokeCap.Round)
+                color = glowBlue.copy(alpha = 0.7f),
+                style = Stroke(width = (t.thickness * 0.35f) * u, cap = StrokeCap.Round)
             )
+            // яркая точка у основания (свечение)
+            drawCircle(
+                brush = Brush.radialGradient(
+                    listOf(
+                        coreWhite.copy(alpha = 0.5f),
+                        glowBlue.copy(alpha = 0.3f),
+                        Color.Transparent
+                    ),
+                    center = pt(t.baseX, t.baseY),
+                    radius = (t.thickness * 1.8f) * u
+                ),
+                radius = (t.thickness * 1.8f) * u,
+                center = pt(t.baseX, t.baseY)
+            )
+            // пульсирующие искры вдоль щупальца (только внутренние и при isThinking)
+            if (t.inner && isThinking) {
+                val sparkPhase = (pulse * 3f + t.phase) % (2f * PI.toFloat())
+                val sparkProg = sparkPhase / (2f * PI.toFloat())
+                val spX = t.baseX + (t.endX - t.baseX) * sparkProg + sway * sparkProg
+                val spY = t.baseY + (t.endY - t.baseY) * sparkProg
+                val spAlpha = sin(sparkProg * PI.toFloat())
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        listOf(
+                            coreWhite.copy(alpha = spAlpha * 0.9f),
+                            glowBlue.copy(alpha = spAlpha * 0.5f),
+                            Color.Transparent
+                        ),
+                        center = pt(spX, spY),
+                        radius = 3f * u
+                    ),
+                    radius = 3f * u,
+                    center = pt(spX, spY)
+                )
+            }
         }
 
         // ===== СОПЛО И ПЛАМЯ =====
@@ -2376,90 +2541,329 @@ fun RobotSkin2(
             size = Size(80f * u, 70f * u),
             style = Stroke(width = 3f * u, cap = StrokeCap.Round)
         )
-        // внутренние схемы
+        // ===== СХЕМНЫЕ ДОРОЖКИ НА КУПОЛЕ (как на картинке) =====
+        // Несколько изогнутых линий с точками-контактами по бокам купола.
+        val circuitAlpha = if (isThinking) 0.9f else 0.6f
+        val circuitPulse = if (isThinking) {
+            0.7f + 0.3f * sin(pulse * 3f)
+        } else 1f
+
+        data class CircuitLine(
+            val points: List<Pair<Float, Float>>,
+            val dotAt: List<Int>
+        )
+
         for (side in listOf(-1f, 1f)) {
-            val linePath = Path().apply {
-                val a = headPt(side * 50f, 70f)
-                val b = headPt(side * 50f, 50f)
-                val c = headPt(side * 44f, 40f)
-                moveTo(a.x, a.y)
-                lineTo(b.x, b.y)
-                lineTo(c.x, c.y)
+            val lines = listOf(
+                CircuitLine(
+                    points = listOf(
+                        side * 52f to 78f,
+                        side * 52f to 66f,
+                        side * 48f to 60f,
+                        side * 48f to 46f,
+                        side * 44f to 40f
+                    ),
+                    dotAt = listOf(1, 3, 4)
+                ),
+                CircuitLine(
+                    points = listOf(
+                        side * 58f to 72f,
+                        side * 58f to 58f,
+                        side * 54f to 52f,
+                        side * 54f to 36f
+                    ),
+                    dotAt = listOf(1, 3)
+                ),
+                CircuitLine(
+                    points = listOf(
+                        side * 46f to 82f,
+                        side * 46f to 74f,
+                        side * 42f to 68f,
+                        side * 42f to 58f,
+                        side * 38f to 52f
+                    ),
+                    dotAt = listOf(2, 4)
+                ),
+                CircuitLine(
+                    points = listOf(
+                        side * 38f to 34f,
+                        side * 42f to 28f,
+                        side * 48f to 24f
+                    ),
+                    dotAt = listOf(0, 2)
+                ),
+                CircuitLine(
+                    points = listOf(
+                        side * 54f to 22f,
+                        side * 58f to 28f,
+                        side * 62f to 34f
+                    ),
+                    dotAt = listOf(0, 2)
+                ),
+                CircuitLine(
+                    points = listOf(
+                        side * 62f to 60f,
+                        side * 62f to 48f,
+                        side * 58f to 42f
+                    ),
+                    dotAt = listOf(1, 2)
+                )
+            )
+
+            for (line in lines) {
+                val path = Path()
+                line.points.forEachIndexed { idx, (x, y) ->
+                    val p = headPt(x, y)
+                    if (idx == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
+                }
+                // тень-подложка
+                drawPath(
+                    path,
+                    color = deepBlue.copy(alpha = 0.6f),
+                    style = Stroke(width = 1.6f * u, cap = StrokeCap.Round)
+                )
+                // основная дорожка
+                drawPath(
+                    path,
+                    color = glowBlue.copy(alpha = circuitAlpha * 0.7f * circuitPulse),
+                    style = Stroke(width = 0.9f * u, cap = StrokeCap.Round)
+                )
+                // яркая жила
+                drawPath(
+                    path,
+                    color = coreWhite.copy(alpha = circuitAlpha * 0.5f * circuitPulse),
+                    style = Stroke(width = 0.3f * u, cap = StrokeCap.Round)
+                )
+                // точки-контакты
+                for (dotIdx in line.dotAt) {
+                    val (dx, dy) = line.points[dotIdx]
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            listOf(
+                                coreWhite.copy(alpha = circuitAlpha * circuitPulse),
+                                glowBlue.copy(alpha = circuitAlpha * 0.6f * circuitPulse),
+                                Color.Transparent
+                            ),
+                            center = headPt(dx, dy),
+                            radius = 2.5f * u
+                        ),
+                        radius = 2.5f * u,
+                        center = headPt(dx, dy)
+                    )
+                    drawCircle(
+                        color = coreWhite.copy(alpha = circuitAlpha),
+                        radius = 0.7f * u,
+                        center = headPt(dx, dy)
+                    )
+                    drawCircle(
+                        color = glowBlue.copy(alpha = circuitAlpha * 0.8f),
+                        radius = 1.3f * u,
+                        center = headPt(dx, dy),
+                        style = Stroke(width = 0.3f * u)
+                    )
+                }
             }
-            drawPath(linePath, glowBlue.copy(alpha = 0.5f), style = Stroke(width = 0.7f * u))
-            drawCircle(glowBlue.copy(alpha = 0.8f), radius = 1f * u, center = headPt(side * 50f, 50f))
         }
 
         // ===== МОЗГ =====
-        val brainPulse = 0.6f + 0.4f * sin(pulse * 2f) * (if (isThinking) 1f else 0.5f)
+        val brainPulse = if (isThinking) {
+            0.8f + 0.2f * sin(pulse * 4f)
+        } else if (isSpeaking) {
+            0.7f + 0.15f * sin(pulse * 2.5f)
+        } else {
+            0.6f + 0.1f * sin(pulse * 1.5f)
+        }
+        val orbitSpeed = if (isThinking) 3f else 1.2f
+        val sparkAlphaBoost = if (isThinking) 1f else 0.5f
+
+        // 1. Внешнее свечение мозга
         drawCircle(
             brush = Brush.radialGradient(
                 listOf(
-                    glowBlue.copy(alpha = 0.5f * brainPulse),
-                    brightBlue.copy(alpha = 0.2f),
+                    glowBlue.copy(alpha = 0.35f * brainPulse),
+                    brightBlue.copy(alpha = 0.15f * brainPulse),
                     Color.Transparent
                 ),
-                center = headPt(0f, 28f),
-                radius = 40f * u
+                center = headPt(0f, 26f),
+                radius = 42f * u
             ),
-            radius = 40f * u,
-            center = headPt(0f, 28f)
+            radius = 42f * u,
+            center = headPt(0f, 26f)
         )
-        drawOval(
+
+        // 2. Основа мозга — два полушария (перекрывающиеся овалы)
+        val brainLeft = Path().apply {
+            val a = headPt(-20f, 16f)
+            moveTo(a.x, a.y)
+            val c1 = headPt(-26f, 22f); val c2 = headPt(-22f, 36f); val c3 = headPt(-8f, 38f)
+            cubicTo(c1.x, c1.y, c2.x, c2.y, c3.x, c3.y)
+            val c4 = headPt(-4f, 34f); val c5 = headPt(-6f, 20f); val c6 = headPt(-14f, 14f)
+            cubicTo(c4.x, c4.y, c5.x, c5.y, c6.x, c6.y)
+            close()
+        }
+        val brainRight = Path().apply {
+            val a = headPt(20f, 16f)
+            moveTo(a.x, a.y)
+            val c1 = headPt(26f, 22f); val c2 = headPt(22f, 36f); val c3 = headPt(8f, 38f)
+            cubicTo(c1.x, c1.y, c2.x, c2.y, c3.x, c3.y)
+            val c4 = headPt(4f, 34f); val c5 = headPt(6f, 20f); val c6 = headPt(14f, 14f)
+            cubicTo(c4.x, c4.y, c5.x, c5.y, c6.x, c6.y)
+            close()
+        }
+        drawPath(brainLeft, brush = Brush.radialGradient(
+            listOf(brightBlue.copy(alpha = 0.95f), midBlue.copy(alpha = 0.85f), deepBlue.copy(alpha = 0.7f)),
+            center = headPt(-12f, 24f), radius = 22f * u
+        ))
+        drawPath(brainRight, brush = Brush.radialGradient(
+            listOf(brightBlue.copy(alpha = 0.95f), midBlue.copy(alpha = 0.85f), deepBlue.copy(alpha = 0.7f)),
+            center = headPt(12f, 24f), radius = 22f * u
+        ))
+
+        // 3. Контур мозга
+        drawPath(brainLeft, color = glowBlue.copy(alpha = 0.8f * brainPulse), style = Stroke(width = 0.8f * u))
+        drawPath(brainRight, color = glowBlue.copy(alpha = 0.8f * brainPulse), style = Stroke(width = 0.8f * u))
+
+        // 4. Извилины — изогнутые линии по поверхности мозга
+        val folds = Path()
+        fun fold(x1: Float, y1: Float, cx: Float, cy: Float, x2: Float, y2: Float) {
+            val a = headPt(x1, y1); val b = headPt(cx, cy); val c = headPt(x2, y2)
+            folds.moveTo(a.x, a.y)
+            folds.quadraticBezierTo(b.x, b.y, c.x, c.y)
+        }
+        // левое полушарие
+        fold(-18f, 22f, -16f, 19f, -12f, 22f)
+        fold(-16f, 26f, -13f, 23f, -9f, 27f)
+        fold(-18f, 30f, -15f, 27f, -11f, 31f)
+        fold(-14f, 34f, -11f, 31f, -7f, 34f)
+        fold(-20f, 18f, -17f, 16f, -14f, 18f)
+        // правое полушарие
+        fold(18f, 22f, 16f, 19f, 12f, 22f)
+        fold(16f, 26f, 13f, 23f, 9f, 27f)
+        fold(18f, 30f, 15f, 27f, 11f, 31f)
+        fold(14f, 34f, 11f, 31f, 7f, 34f)
+        fold(20f, 18f, 17f, 16f, 14f, 18f)
+        // центральная борозда
+        fold(0f, 16f, 0f, 26f, 0f, 36f)
+        drawPath(folds, color = glowBlue.copy(alpha = 0.9f * brainPulse), style = Stroke(width = 0.7f * u, cap = StrokeCap.Round))
+        drawPath(folds, color = coreWhite.copy(alpha = 0.4f * brainPulse), style = Stroke(width = 0.3f * u, cap = StrokeCap.Round))
+
+        // 5. Ядро (центральное свечение)
+        drawCircle(
             brush = Brush.radialGradient(
-                listOf(brightBlue.copy(alpha = 0.9f), deepBlue.copy(alpha = 0.7f)),
-                center = headPt(-8f, 26f),
-                radius = 14f * u
-            ),
-            topLeft = headPt(-22f, 14f),
-            size = Size(22f * u, 18f * u)
-        )
-        drawOval(
-            brush = Brush.radialGradient(
-                listOf(brightBlue.copy(alpha = 0.9f), deepBlue.copy(alpha = 0.7f)),
-                center = headPt(8f, 26f),
-                radius = 14f * u
-            ),
-            topLeft = headPt(0f, 14f),
-            size = Size(22f * u, 18f * u)
-        )
-        drawOval(
-            brush = Brush.radialGradient(
-                listOf(brightBlue.copy(alpha = 0.9f), deepBlue.copy(alpha = 0.7f)),
-                center = headPt(0f, 36f),
+                listOf(
+                    coreWhite.copy(alpha = 0.9f * brainPulse),
+                    brightBlue.copy(alpha = 0.6f * brainPulse),
+                    Color.Transparent
+                ),
+                center = headPt(0f, 26f),
                 radius = 10f * u
             ),
-            topLeft = headPt(-8f, 30f),
-            size = Size(16f * u, 12f * u)
+            radius = 10f * u,
+            center = headPt(0f, 26f)
         )
-        drawOval(glowBlue.copy(alpha = 0.85f), topLeft = headPt(-22f, 14f), size = Size(22f * u, 18f * u), style = Stroke(width = 0.9f * u))
-        drawOval(glowBlue.copy(alpha = 0.85f), topLeft = headPt(0f, 14f), size = Size(22f * u, 18f * u), style = Stroke(width = 0.9f * u))
-        // извилины
-        val folds = Path().apply {
-            fun seg(x1: Float, y1: Float, cx1: Float, cy1: Float, x2: Float, y2: Float) {
-                val a = headPt(x1, y1)
-                val b = headPt(cx1, cy1)
-                val c = headPt(x2, y2)
-                moveTo(a.x, a.y)
-                quadraticBezierTo(b.x, b.y, c.x, c.y)
-            }
-            seg(-18f, 22f, -14f, 18f, -10f, 22f)
-            seg(-10f, 22f, -6f, 26f, -2f, 22f)
-            seg(4f, 22f, 8f, 18f, 12f, 22f)
-            seg(12f, 22f, 16f, 26f, 20f, 22f)
-            seg(-16f, 28f, -11f, 25f, -6f, 29f)
-            seg(6f, 28f, 11f, 25f, 16f, 29f)
-        }
-        drawPath(folds, glowBlue.copy(alpha = 0.8f), style = Stroke(width = 0.7f * u, cap = StrokeCap.Round))
-        // орбита
+
+        // 6. Орбиты с электрическими огнями
+        val orbitTiltA = -18f
+        val orbitTiltB = 22f
+        val orbitTiltC = -8f
+        val orbitRadiusX = 26f * u
+        val orbitRadiusY = 9f * u
+
+        // орбита 1 (наклон -18°)
         drawOval(
-            color = glowBlue.copy(alpha = 0.6f),
-            topLeft = headPt(-26f, 20f),
+            color = glowBlue.copy(alpha = 0.35f * sparkAlphaBoost),
+            topLeft = headPt(-26f, 22f),
             size = Size(52f * u, 16f * u),
-            style = Stroke(width = 0.6f * u)
+            style = Stroke(width = 0.5f * u)
         )
-        drawCircle(coreWhite, radius = 1.4f * u, center = headPt(-26f, 28f))
-        drawCircle(glowBlue, radius = 1.4f * u, center = headPt(26f, 28f))
+        // орбита 2 (наклон +22°)
+        val o2 = Path().apply {
+            val cx2 = headPt(0f, 26f)
+            val a = rad(orbitTiltB)
+            val cosA = cos(a); val sinA = sin(a)
+            val p1 = Offset(cx2.x - orbitRadiusX * cosA, cx2.y - orbitRadiusX * sinA - orbitRadiusY * 0.3f)
+            val p2 = Offset(cx2.x + orbitRadiusX * cosA, cx2.y + orbitRadiusX * sinA + orbitRadiusY * 0.3f)
+            moveTo(p1.x, p1.y)
+            val ctrl = Offset(cx2.x, cx2.y + orbitRadiusY * 2f)
+            quadraticBezierTo(ctrl.x, ctrl.y, p2.x, p2.y)
+        }
+        drawPath(o2, color = glowBlue.copy(alpha = 0.25f * sparkAlphaBoost), style = Stroke(width = 0.5f * u))
+
+        // огни на орбитах
+        val sparkCount = if (isThinking) 6 else 3
+        for (i in 0 until sparkCount) {
+            val angle = pulse * orbitSpeed + i * (2f * PI.toFloat() / sparkCount)
+            // огонь на орбите 1
+            val sx = cos(angle) * 26f
+            val sy = 26f + sin(angle) * 8f
+            val sparkAlpha = (0.5f + 0.5f * sin(pulse * 6f + i * 1.7f)) * sparkAlphaBoost
+            drawCircle(
+                brush = Brush.radialGradient(
+                    listOf(
+                        coreWhite.copy(alpha = sparkAlpha * 0.9f),
+                        glowBlue.copy(alpha = sparkAlpha * 0.6f),
+                        Color.Transparent
+                    ),
+                    center = headPt(sx, sy),
+                    radius = 3.5f * u
+                ),
+                radius = 3.5f * u,
+                center = headPt(sx, sy)
+            )
+            drawCircle(coreWhite.copy(alpha = sparkAlpha), radius = 1f * u, center = headPt(sx, sy))
+
+            // огонь на орбите 2 (обратное вращение)
+            val angle2 = -pulse * orbitSpeed * 0.7f + i * (2f * PI.toFloat() / sparkCount) + 1.2f
+            val sx2 = cos(angle2) * 22f
+            val sy2 = 26f + sin(angle2) * 6f
+            val sparkAlpha2 = (0.4f + 0.6f * sin(pulse * 5f + i * 2.3f + 0.8f)) * sparkAlphaBoost
+            drawCircle(
+                brush = Brush.radialGradient(
+                    listOf(
+                        coreWhite.copy(alpha = sparkAlpha2 * 0.8f),
+                        brightBlue.copy(alpha = sparkAlpha2 * 0.5f),
+                        Color.Transparent
+                    ),
+                    center = headPt(sx2, sy2),
+                    radius = 3f * u
+                ),
+                radius = 3f * u,
+                center = headPt(sx2, sy2)
+            )
+            drawCircle(glowBlue.copy(alpha = sparkAlpha2), radius = 0.8f * u, center = headPt(sx2, sy2))
+        }
+
+        // 7. Электрические разряды между полушариями (только при isThinking)
+        if (isThinking) {
+            val boltCount = 3
+            for (i in 0 until boltCount) {
+                val phase = pulse * 4f + i * 2.1f
+                val startX = -4f + i * 4f
+                val startY = 18f
+                val endX = startX + sin(phase) * 3f
+                val endY = startY + 16f + sin(phase * 1.3f) * 4f
+                val bolt = Path().apply {
+                    val a = headPt(startX, startY)
+                    val mid1 = headPt(startX + sin(phase) * 2f, startY + 5f)
+                    val mid2 = headPt(endX + cos(phase) * 2f, endY - 6f)
+                    val b = headPt(endX, endY)
+                    moveTo(a.x, a.y)
+                    lineTo(mid1.x, mid1.y)
+                    lineTo(mid2.x, mid2.y)
+                    lineTo(b.x, b.y)
+                }
+                val boltAlpha = 0.5f + 0.5f * sin(pulse * 8f + i * 1.9f)
+                drawPath(bolt, color = coreWhite.copy(alpha = 0.8f * boltAlpha), style = Stroke(width = 0.6f * u))
+                drawPath(bolt, color = glowBlue.copy(alpha = 0.5f * boltAlpha), style = Stroke(width = 1.4f * u))
+            }
+        }
+
+        // 8. Пульсирующий центр (ядро)
+        drawCircle(
+            color = coreWhite.copy(alpha = 0.7f * brainPulse),
+            radius = 2f * u,
+            center = headPt(0f, 26f)
+        )
 
         // ===== ГЛАЗА =====
         val eyeOpen = when {
@@ -2507,22 +2911,67 @@ fun RobotSkin2(
         }
 
         // ===== БРОВИ =====
-        val browY = if (isThinking) 43f else 45f
+        val idleWiggle = if (isIdle && !isThinking && !isSpeaking) {
+            sin(pulse * 0.9f) * 1.2f
+        } else 0f
+        val browY = 39f + browLiftTarget + idleWiggle
+        val browTiltRad = browTiltTarget * PI.toFloat() / 180f
         for (side in listOf(-1f, 1f)) {
             val brow = Path().apply {
-                val a = headPt(side * 36f, browY)
-                val b = headPt(side * 24f, browY - 4f)
-                val c = headPt(side * 12f, browY)
+                val innerX = side * 12f
+                val outerX = side * 36f
+                val innerY = browY
+                val outerY = browY - 3f
+                val pivotX = innerX
+                val pivotY = innerY
+                fun rotPoint(x: Float, y: Float): Offset {
+                    val dx = (x - pivotX) * u
+                    val dy = (y - pivotY) * u
+                    val rx = dx * cos(browTiltRad) - dy * sin(browTiltRad)
+                    val ry = dx * sin(browTiltRad) + dy * cos(browTiltRad)
+                    val base = headPt(pivotX, pivotY)
+                    return Offset(base.x + rx, base.y + ry)
+                }
+                val a = rotPoint(outerX, outerY)
+                val b = rotPoint(side * 24f, browY - 3f)
+                val c = rotPoint(innerX, innerY)
                 moveTo(a.x, a.y)
                 quadraticBezierTo(b.x, b.y, c.x, c.y)
             }
-            drawPath(brow, glowBlue.copy(alpha = 0.9f), style = Stroke(width = 2f * u, cap = StrokeCap.Round))
+            drawPath(brow, glowBlue.copy(alpha = 0.9f), style = Stroke(width = 1.6f * u, cap = StrokeCap.Round))
+            drawPath(brow, coreWhite.copy(alpha = 0.4f), style = Stroke(width = 0.6f * u, cap = StrokeCap.Round))
         }
 
+        // ===== НОС =====
+        // Две точки-дуги, как у аниме-персонажа. Небольшой, чуть выше рта.
+        val noseY = 64f
+        for (side in listOf(-1f, 1f)) {
+            val noseArc = Path().apply {
+                val a = headPt(side * 4f, noseY - 1f)
+                val b = headPt(side * 1.5f, noseY + 2f)
+                val c = headPt(0f, noseY + 1.5f)
+                moveTo(a.x, a.y)
+                quadraticBezierTo(b.x, b.y, c.x, c.y)
+            }
+            drawPath(noseArc, glowBlue.copy(alpha = 0.7f), style = Stroke(width = 1f * u, cap = StrokeCap.Round))
+            drawPath(noseArc, coreWhite.copy(alpha = 0.4f), style = Stroke(width = 0.4f * u, cap = StrokeCap.Round))
+        }
+        // лёгкая тень-полутень под носом
+        drawCircle(
+            brush = Brush.radialGradient(
+                listOf(deepBlue.copy(alpha = 0.35f), Color.Transparent),
+                center = headPt(0f, noseY + 3f),
+                radius = 4f * u
+            ),
+            radius = 4f * u,
+            center = headPt(0f, noseY + 3f)
+        )
+
         // ===== РОТ =====
-        val mouthY = 68f
+        val mouthY = 72f
         if (isSpeaking) {
             val open = 2f + abs(sin(mouthPhase * 2f)) * 4f
+            // внешний контур
             drawOval(
                 color = deepBlue,
                 topLeft = headPt(-9f, mouthY - open / 2f),
@@ -2534,21 +2983,34 @@ fun RobotSkin2(
                 size = Size(18f * u, open * u),
                 style = Stroke(width = 1f * u)
             )
+            // язык / внутреннее свечение
             drawCircle(
                 color = coreWhite.copy(alpha = 0.6f),
                 radius = (open / 3f) * u,
                 center = headPt(0f, mouthY)
             )
         } else {
+            // Широкая U-образная улыбка с уголками вверх
             val smile = Path().apply {
-                val a = headPt(-10f, mouthY - 2f)
-                val b = headPt(0f, mouthY + 5f)
-                val c = headPt(10f, mouthY - 2f)
+                val a = headPt(-11f, mouthY - 3f)
+                val ctrl1 = headPt(-8f, mouthY + 4f)
+                val mid = headPt(0f, mouthY + 5f)
+                val ctrl2 = headPt(8f, mouthY + 4f)
+                val c = headPt(11f, mouthY - 3f)
                 moveTo(a.x, a.y)
-                quadraticBezierTo(b.x, b.y, c.x, c.y)
+                cubicTo(ctrl1.x, ctrl1.y, ctrl2.x, ctrl2.y, c.x, c.y)
+                // лёгкая нижняя губа (обратная дуга) — чтобы улыбка была «заполненной»
+                val ctrl3 = headPt(6f, mouthY + 6f)
+                val ctrl4 = headPt(-6f, mouthY + 6f)
+                cubicTo(ctrl3.x, ctrl3.y, ctrl4.x, ctrl4.y, a.x, a.y)
+                close()
             }
-            drawPath(smile, glowBlue.copy(alpha = 0.9f), style = Stroke(width = 2f * u, cap = StrokeCap.Round))
-            drawPath(smile, coreWhite.copy(alpha = 0.5f), style = Stroke(width = 0.8f * u, cap = StrokeCap.Round))
+            // заливка рта
+            drawPath(smile, color = deepBlue.copy(alpha = 0.85f))
+            // контур
+            drawPath(smile, color = glowBlue.copy(alpha = 0.9f), style = Stroke(width = 1.6f * u, cap = StrokeCap.Round))
+            // жила внутри
+            drawPath(smile, color = coreWhite.copy(alpha = 0.4f), style = Stroke(width = 0.6f * u, cap = StrokeCap.Round))
         }
 
         // ===== ИНДИКАТОР НА ГРУДИ =====
