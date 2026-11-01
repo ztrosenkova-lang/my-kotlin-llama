@@ -2020,6 +2020,624 @@ private fun VoiceWaveAnimation(
 }
 
 @Composable
+fun RobotSkin2(
+    modifier: Modifier = Modifier,
+    height: Dp = 85.dp,
+    isActive: Boolean = true,
+    isSpeaking: Boolean = false,
+    isThinking: Boolean = false,
+    isIdle: Boolean = false,
+    shouldWave: Boolean = false,
+    isAiReady: Boolean = false,
+    isSmartMode: Boolean = false,
+    isListening: Boolean = false,
+    isCompressing: Boolean = false,
+    isLoadingModel: Boolean = false,
+    visionPhase: VisionPhase = VisionPhase.IDLE,
+    isPreparingSpeech: Boolean = false,
+    hasActiveAlarm: Boolean = false,
+    headTilt: Float = 0f,
+    headNod: Float = 0f,
+    tapWaveDirection: Float = 0f,
+    autoAnimation: Int = 0,
+    isJumping: Boolean = false,
+    uDivisor: Float = 200f,
+    yOffsetUnits: Float = 0f
+) {
+    val transition = rememberInfiniteTransition(label = "jelly")
+
+    val bob by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2 * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(2400, easing = SineClientEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "jelly_bob"
+    )
+    val tentaclePhase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2 * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(if (isSpeaking) 900 else 2200, easing = LinearEasing)
+        ),
+        label = "tentacle_phase"
+    )
+    val blink by transition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = keyframes {
+                durationMillis = 6000
+                1f at 0
+                1f at 4500
+                0.05f at 4700
+                0.05f at 5600
+                1f at 5800
+                1f at 6000
+            }
+        ),
+        label = "jelly_blink"
+    )
+    val mouthPhase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2 * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(380, easing = LinearEasing)
+        ),
+        label = "jelly_mouth"
+    )
+    val pulse by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2 * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = LinearEasing)
+        ),
+        label = "jelly_pulse"
+    )
+    val alarmPulse by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2 * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(if (hasActiveAlarm) 900 else 2400, easing = LinearEasing)
+        ),
+        label = "jelly_alarm"
+    )
+
+    val jumpAnim = remember { Animatable(0f) }
+    val flameAnim = remember { Animatable(0f) }
+    LaunchedEffect(isJumping) {
+        if (isJumping) {
+            launch {
+                jumpAnim.animateTo(
+                    targetValue = 1f,
+                    animationSpec = keyframes {
+                        durationMillis = 1100
+                        0f at 0 using FastOutSlowInEasing
+                        0f at 250 using LinearEasing
+                        1f at 450 using FastOutSlowInEasing
+                        1f at 650 using LinearEasing
+                        0f at 900 using FastOutSlowInEasing
+                        0f at 1100
+                    }
+                )
+            }
+            launch {
+                flameAnim.animateTo(
+                    targetValue = 0f,
+                    animationSpec = keyframes {
+                        durationMillis = 1100
+                        0f at 0
+                        1f at 250
+                        1f at 650
+                        0f at 900
+                        0f at 1100
+                    }
+                )
+            }
+        }
+    }
+    val jumpProgress = jumpAnim.value
+    val flameIntensity = flameAnim.value
+
+    val headTiltAnim by animateFloatAsState(
+        targetValue = headTilt,
+        animationSpec = tween(500, easing = FastOutSlowInEasing),
+        label = "jelly_head_tilt"
+    )
+    val headNodAnim by animateFloatAsState(
+        targetValue = headNod,
+        animationSpec = tween(500, easing = FastOutSlowInEasing),
+        label = "jelly_head_nod"
+    )
+    val waveAmount by animateFloatAsState(
+        targetValue = if (shouldWave || tapWaveDirection != 0f) 1f else 0f,
+        animationSpec = tween(400, easing = FastOutSlowInEasing),
+        label = "jelly_wave"
+    )
+
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+
+    Canvas(
+        modifier = modifier
+            .height(height)
+            .width(height * 0.85f)
+    ) {
+        val u = size.height / uDivisor
+        val cx = size.width / 2f
+        val staticYOffset = yOffsetUnits * u
+        val bobOffset = if (isActive) sin(bob) * 6f * u else 0f
+        val jumpOffset = -jumpProgress * 18f * u
+
+        fun pt(x: Float, y: Float) = Offset(cx + x * u, y * u + staticYOffset + bobOffset + jumpOffset)
+        fun headPt(x: Float, y: Float): Offset {
+            val base = pt(x, y)
+            val tilt = headTiltAnim * PI.toFloat() / 180f
+            val pivot = pt(0f, 80f)
+            val dx = base.x - pivot.x
+            val dy = base.y - pivot.y
+            return Offset(
+                pivot.x + dx * cos(tilt) - dy * sin(tilt),
+                pivot.y + dx * sin(tilt) + dy * cos(tilt) + headNodAnim * 5f * u
+            )
+        }
+
+        val deepBlue = Color(0xFF0A1E5C)
+        val midBlue = Color(0xFF1E5BE0)
+        val brightBlue = Color(0xFF2D7BFF)
+        val glowBlue = Color(0xFF5CE1FF)
+        val coreWhite = Color(0xFFFFFFFF)
+
+        // ===== СВЕЧЕНИЕ СЗАДИ =====
+        drawCircle(
+            brush = Brush.radialGradient(
+                listOf(
+                    glowBlue.copy(alpha = if (isListening) 0.35f else 0.18f),
+                    brightBlue.copy(alpha = 0.08f),
+                    Color.Transparent
+                ),
+                center = headPt(0f, 55f),
+                radius = 95f * u
+            ),
+            radius = 95f * u,
+            center = headPt(0f, 55f)
+        )
+
+        // ===== ЩУПАЛЬЦА =====
+        val tentacleCount = 7
+        for (i in 0 until tentacleCount) {
+            val spread = (i - (tentacleCount - 1) / 2f) / ((tentacleCount - 1) / 2f)
+            val baseX = spread * 42f
+            val baseY = 92f
+            val phaseOffset = i * 0.7f
+            val sway = sin(tentaclePhase + phaseOffset) * (6f + abs(spread) * 3f)
+            val sway2 = sin(tentaclePhase * 0.7f + phaseOffset + 1.3f) * 5f
+
+            val path = Path().apply {
+                val p0 = pt(baseX, baseY)
+                moveTo(p0.x, p0.y)
+                val p1x = baseX + sway * 0.4f + spread * 4f
+                val p1y = baseY + 18f
+                val p2x = baseX + sway * 0.8f + spread * 8f
+                val p2y = baseY + 38f
+                val p3x = baseX + sway + sway2 * 0.3f
+                val p3y = baseY + 58f + abs(spread) * 4f
+                val c1 = pt(p1x, p1y)
+                val c2 = pt(p2x, p2y)
+                val e = pt(p3x, p3y)
+                cubicTo(c1.x, c1.y, c2.x, c2.y, e.x, e.y)
+            }
+            drawPath(
+                path,
+                brush = Brush.verticalGradient(
+                    listOf(
+                        brightBlue.copy(alpha = 0.9f),
+                        midBlue.copy(alpha = 0.6f),
+                        deepBlue.copy(alpha = 0.2f)
+                    ),
+                    startY = pt(baseX, baseY).y,
+                    endY = pt(baseX, baseY + 60f).y
+                ),
+                style = Stroke(width = 2.4f * u, cap = StrokeCap.Round)
+            )
+            drawPath(
+                path,
+                color = glowBlue.copy(alpha = 0.5f),
+                style = Stroke(width = 0.8f * u, cap = StrokeCap.Round)
+            )
+        }
+
+        // ===== СОПЛО И ПЛАМЯ =====
+        val nozzleY = 148f
+        val flameLen = 30f * (1f + flameIntensity * 1.5f)
+        val outerFlame = Path().apply {
+            val a = pt(-9f, nozzleY + 4f)
+            val b = pt(0f, nozzleY + 4f + flameLen)
+            val c = pt(9f, nozzleY + 4f)
+            moveTo(a.x, a.y)
+            quadraticBezierTo(
+                pt(-11f, nozzleY + flameLen * 0.5f).x, pt(-11f, nozzleY + flameLen * 0.5f).y,
+                b.x, b.y
+            )
+            quadraticBezierTo(
+                pt(11f, nozzleY + flameLen * 0.5f).x, pt(11f, nozzleY + flameLen * 0.5f).y,
+                c.x, c.y
+            )
+            close()
+        }
+        drawPath(
+            outerFlame,
+            brush = Brush.verticalGradient(
+                listOf(
+                    glowBlue.copy(alpha = 0.95f),
+                    brightBlue.copy(alpha = 0.7f),
+                    Color.Transparent
+                ),
+                startY = pt(0f, nozzleY).y,
+                endY = pt(0f, nozzleY + flameLen).y
+            )
+        )
+        val innerFlame = Path().apply {
+            val a = pt(-4f, nozzleY + 5f)
+            val b = pt(0f, nozzleY + 4f + flameLen * 0.65f)
+            val c = pt(4f, nozzleY + 5f)
+            moveTo(a.x, a.y)
+            quadraticBezierTo(pt(-5f, nozzleY + flameLen * 0.35f).x, pt(-5f, nozzleY + flameLen * 0.35f).y, b.x, b.y)
+            quadraticBezierTo(pt(5f, nozzleY + flameLen * 0.35f).x, pt(5f, nozzleY + flameLen * 0.35f).y, c.x, c.y)
+            close()
+        }
+        drawPath(
+            innerFlame,
+            brush = Brush.verticalGradient(
+                listOf(coreWhite.copy(alpha = 0.9f), Color.Transparent),
+                startY = pt(0f, nozzleY).y,
+                endY = pt(0f, nozzleY + flameLen * 0.65f).y
+            )
+        )
+        // корпус сопла
+        val nozzleTop = pt(-8f, nozzleY - 8f)
+        val nozzleSize = Size(16f * u, 10f * u)
+        drawRoundRect(
+            deepBlue,
+            topLeft = nozzleTop,
+            size = nozzleSize,
+            cornerRadius = CornerRadius(3f * u)
+        )
+        drawRoundRect(
+            brightBlue,
+            topLeft = nozzleTop,
+            size = nozzleSize,
+            cornerRadius = CornerRadius(3f * u),
+            style = Stroke(width = 1.2f * u)
+        )
+        drawCircle(glowBlue, radius = 2f * u, center = pt(0f, nozzleY - 3f))
+        drawCircle(coreWhite.copy(alpha = 0.9f), radius = 1f * u, center = pt(0f, nozzleY - 3f))
+
+        // ===== КУПОЛ =====
+        val domePath = Path().apply {
+            val left = headPt(-56f, 85f)
+            val top = headPt(0f, -8f)
+            val right = headPt(56f, 85f)
+            moveTo(left.x, left.y)
+            val c1 = headPt(-62f, 30f)
+            val c2 = headPt(-30f, -8f)
+            cubicTo(c1.x, c1.y, c2.x, c2.y, top.x, top.y)
+            val c3 = headPt(30f, -8f)
+            val c4 = headPt(62f, 30f)
+            cubicTo(c3.x, c3.y, c4.x, c4.y, right.x, right.y)
+            val c5 = headPt(30f, 92f)
+            val c6 = headPt(-30f, 92f)
+            cubicTo(c5.x, c5.y, c6.x, c6.y, left.x, left.y)
+            close()
+        }
+        drawPath(
+            domePath,
+            brush = Brush.radialGradient(
+                listOf(
+                    brightBlue.copy(alpha = 0.85f),
+                    midBlue.copy(alpha = 0.75f),
+                    deepBlue.copy(alpha = 0.85f)
+                ),
+                center = headPt(-12f, 25f),
+                radius = 80f * u
+            )
+        )
+        drawPath(
+            domePath,
+            color = glowBlue.copy(alpha = 0.9f),
+            style = Stroke(width = 1.6f * u)
+        )
+        // блик на куполе
+        drawArc(
+            color = coreWhite.copy(alpha = 0.35f),
+            startAngle = 200f,
+            sweepAngle = 60f,
+            useCenter = false,
+            topLeft = headPt(-40f, 8f),
+            size = Size(80f * u, 70f * u),
+            style = Stroke(width = 3f * u, cap = StrokeCap.Round)
+        )
+        // внутренние схемы
+        for (side in listOf(-1f, 1f)) {
+            val linePath = Path().apply {
+                val a = headPt(side * 50f, 70f)
+                val b = headPt(side * 50f, 50f)
+                val c = headPt(side * 44f, 40f)
+                moveTo(a.x, a.y)
+                lineTo(b.x, b.y)
+                lineTo(c.x, c.y)
+            }
+            drawPath(linePath, glowBlue.copy(alpha = 0.5f), style = Stroke(width = 0.7f * u))
+            drawCircle(glowBlue.copy(alpha = 0.8f), radius = 1f * u, center = headPt(side * 50f, 50f))
+        }
+
+        // ===== МОЗГ =====
+        val brainPulse = 0.6f + 0.4f * sin(pulse * 2f) * (if (isThinking) 1f else 0.5f)
+        drawCircle(
+            brush = Brush.radialGradient(
+                listOf(
+                    glowBlue.copy(alpha = 0.5f * brainPulse),
+                    brightBlue.copy(alpha = 0.2f),
+                    Color.Transparent
+                ),
+                center = headPt(0f, 28f),
+                radius = 40f * u
+            ),
+            radius = 40f * u,
+            center = headPt(0f, 28f)
+        )
+        drawOval(
+            brush = Brush.radialGradient(
+                listOf(brightBlue.copy(alpha = 0.9f), deepBlue.copy(alpha = 0.7f)),
+                center = headPt(-8f, 26f),
+                radius = 14f * u
+            ),
+            topLeft = headPt(-22f, 14f),
+            size = Size(22f * u, 18f * u)
+        )
+        drawOval(
+            brush = Brush.radialGradient(
+                listOf(brightBlue.copy(alpha = 0.9f), deepBlue.copy(alpha = 0.7f)),
+                center = headPt(8f, 26f),
+                radius = 14f * u
+            ),
+            topLeft = headPt(0f, 14f),
+            size = Size(22f * u, 18f * u)
+        )
+        drawOval(
+            brush = Brush.radialGradient(
+                listOf(brightBlue.copy(alpha = 0.9f), deepBlue.copy(alpha = 0.7f)),
+                center = headPt(0f, 36f),
+                radius = 10f * u
+            ),
+            topLeft = headPt(-8f, 30f),
+            size = Size(16f * u, 12f * u)
+        )
+        drawOval(glowBlue.copy(alpha = 0.85f), topLeft = headPt(-22f, 14f), size = Size(22f * u, 18f * u), style = Stroke(width = 0.9f * u))
+        drawOval(glowBlue.copy(alpha = 0.85f), topLeft = headPt(0f, 14f), size = Size(22f * u, 18f * u), style = Stroke(width = 0.9f * u))
+        // извилины
+        val folds = Path().apply {
+            fun seg(x1: Float, y1: Float, cx1: Float, cy1: Float, x2: Float, y2: Float) {
+                val a = headPt(x1, y1)
+                val b = headPt(cx1, cy1)
+                val c = headPt(x2, y2)
+                moveTo(a.x, a.y)
+                quadraticBezierTo(b.x, b.y, c.x, c.y)
+            }
+            seg(-18f, 22f, -14f, 18f, -10f, 22f)
+            seg(-10f, 22f, -6f, 26f, -2f, 22f)
+            seg(4f, 22f, 8f, 18f, 12f, 22f)
+            seg(12f, 22f, 16f, 26f, 20f, 22f)
+            seg(-16f, 28f, -11f, 25f, -6f, 29f)
+            seg(6f, 28f, 11f, 25f, 16f, 29f)
+        }
+        drawPath(folds, glowBlue.copy(alpha = 0.8f), style = Stroke(width = 0.7f * u, cap = StrokeCap.Round))
+        // орбита
+        drawOval(
+            color = glowBlue.copy(alpha = 0.6f),
+            topLeft = headPt(-26f, 20f),
+            size = Size(52f * u, 16f * u),
+            style = Stroke(width = 0.6f * u)
+        )
+        drawCircle(coreWhite, radius = 1.4f * u, center = headPt(-26f, 28f))
+        drawCircle(glowBlue, radius = 1.4f * u, center = headPt(26f, 28f))
+
+        // ===== ГЛАЗА =====
+        val eyeOpen = when {
+            isListening -> 1.25f
+            isThinking -> 0.7f
+            else -> 1f
+        } * (if (blink < 0.5f) 0.05f else 1f)
+        for (side in listOf(-1f, 1f)) {
+            val ex = side * 24f
+            val ey = 54f
+            drawCircle(
+                brush = Brush.radialGradient(
+                    listOf(deepBlue, Color(0xFF050A20)),
+                    center = headPt(ex, ey),
+                    radius = 13f * u
+                ),
+                radius = 13f * u,
+                center = headPt(ex, ey)
+            )
+            drawCircle(
+                color = glowBlue.copy(alpha = 0.9f),
+                radius = 13f * u,
+                center = headPt(ex, ey),
+                style = Stroke(width = 1.2f * u)
+            )
+            // радужка
+            drawCircle(
+                brush = Brush.radialGradient(
+                    listOf(coreWhite, brightBlue, midBlue, deepBlue),
+                    center = headPt(ex, ey + 1f),
+                    radius = 7.5f * u * eyeOpen
+                ),
+                radius = 7.5f * u * eyeOpen,
+                center = headPt(ex, ey + 1f)
+            )
+            // зрачок
+            drawCircle(
+                color = Color(0xFF050A20),
+                radius = 3.5f * u * eyeOpen,
+                center = headPt(ex, ey + 1f)
+            )
+            // блики
+            drawCircle(coreWhite, radius = 2.2f * u, center = headPt(ex + 2.5f, ey - 3f))
+            drawCircle(coreWhite.copy(alpha = 0.7f), radius = 1f * u, center = headPt(ex - 2.5f, ey + 4f))
+        }
+
+        // ===== БРОВИ =====
+        val browY = if (isThinking) 43f else 45f
+        for (side in listOf(-1f, 1f)) {
+            val brow = Path().apply {
+                val a = headPt(side * 36f, browY)
+                val b = headPt(side * 24f, browY - 4f)
+                val c = headPt(side * 12f, browY)
+                moveTo(a.x, a.y)
+                quadraticBezierTo(b.x, b.y, c.x, c.y)
+            }
+            drawPath(brow, glowBlue.copy(alpha = 0.9f), style = Stroke(width = 2f * u, cap = StrokeCap.Round))
+        }
+
+        // ===== РОТ =====
+        val mouthY = 68f
+        if (isSpeaking) {
+            val open = 2f + abs(sin(mouthPhase * 2f)) * 4f
+            drawOval(
+                color = deepBlue,
+                topLeft = headPt(-9f, mouthY - open / 2f),
+                size = Size(18f * u, open * u)
+            )
+            drawOval(
+                color = glowBlue.copy(alpha = 0.9f),
+                topLeft = headPt(-9f, mouthY - open / 2f),
+                size = Size(18f * u, open * u),
+                style = Stroke(width = 1f * u)
+            )
+            drawCircle(
+                color = coreWhite.copy(alpha = 0.6f),
+                radius = (open / 3f) * u,
+                center = headPt(0f, mouthY)
+            )
+        } else {
+            val smile = Path().apply {
+                val a = headPt(-10f, mouthY - 2f)
+                val b = headPt(0f, mouthY + 5f)
+                val c = headPt(10f, mouthY - 2f)
+                moveTo(a.x, a.y)
+                quadraticBezierTo(b.x, b.y, c.x, c.y)
+            }
+            drawPath(smile, glowBlue.copy(alpha = 0.9f), style = Stroke(width = 2f * u, cap = StrokeCap.Round))
+            drawPath(smile, coreWhite.copy(alpha = 0.5f), style = Stroke(width = 0.8f * u, cap = StrokeCap.Round))
+        }
+
+        // ===== ИНДИКАТОР НА ГРУДИ =====
+        val indicatorColor = when {
+            hasActiveAlarm -> Color(0xFF4CAF50)
+            isAiReady -> Color(0xFF4CAF50)
+            else -> glowBlue
+        }
+        val indicatorAlpha = when {
+            hasActiveAlarm -> 0.5f + 0.5f * sin(alarmPulse)
+            isAiReady -> 0.6f + 0.4f * sin(pulse)
+            else -> 0.9f
+        }
+        if (isAiReady || hasActiveAlarm) {
+            drawCircle(
+                brush = Brush.radialGradient(
+                    listOf(
+                        indicatorColor.copy(alpha = 0.5f * indicatorAlpha),
+                        Color.Transparent
+                    ),
+                    center = pt(0f, 96f),
+                    radius = 8f * u
+                ),
+                radius = 8f * u,
+                center = pt(0f, 96f)
+            )
+        }
+        drawCircle(
+            color = indicatorColor.copy(alpha = indicatorAlpha),
+            radius = 2.4f * u,
+            center = pt(0f, 96f)
+        )
+        drawCircle(
+            color = coreWhite.copy(alpha = 0.7f),
+            radius = 1f * u,
+            center = pt(0f, 96f)
+        )
+
+        // ===== СТАТУС НА ПОЯСЕ =====
+        val statusText: String? = when {
+            visionPhase == VisionPhase.RELEASING_TEXT -> "Выгружаю текст..."
+            visionPhase == VisionPhase.LOADING_VISION -> "Загружаю зрение..."
+            visionPhase == VisionPhase.VISION_READY -> "Зрение готово"
+            visionPhase == VisionPhase.RESTORING_TEXT -> "Возвращаю текст..."
+            visionPhase == VisionPhase.TEXT_RESTORED -> "Текст готов"
+            isPreparingSpeech -> "Готовлю озвучку..."
+            isCompressing -> "Сжимаю беседу..."
+            isThinking -> "ИИ думает..."
+            isLoadingModel -> "Загружаю модель..."
+            isListening -> "Слушаю..."
+            else -> null
+        }
+        if (statusText != null) {
+            val blinkAlpha = 0.3f + 0.7f * ((sin(pulse * 5f) + 1f) / 2f)
+            val beltY = 104f
+            drawRoundRect(
+                color = deepBlue.copy(alpha = 0.85f),
+                topLeft = pt(-30f, beltY - 4f),
+                size = Size(60f * u, 8f * u),
+                cornerRadius = CornerRadius(2f * u)
+            )
+            drawRoundRect(
+                color = glowBlue.copy(alpha = 0.6f),
+                topLeft = pt(-30f, beltY - 4f),
+                size = Size(60f * u, 8f * u),
+                cornerRadius = CornerRadius(2f * u),
+                style = Stroke(width = 0.8f * u)
+            )
+            val maxTextHeightPx = 5f * u * 0.8f
+            val probeStyle = TextStyle(
+                color = glowBlue,
+                fontSize = with(density) { maxTextHeightPx.toSp() },
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold
+            )
+            val probeLayout = textMeasurer.measure("Mg", probeStyle)
+            val probeHeight = probeLayout.size.height.toFloat()
+            val scale = if (probeHeight > 0f) maxTextHeightPx / probeHeight else 1f
+            val finalStyle = TextStyle(
+                color = glowBlue.copy(alpha = blinkAlpha),
+                fontSize = with(density) { (maxTextHeightPx * scale).toSp() },
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold
+            )
+            val layout = textMeasurer.measure(statusText, finalStyle)
+            drawText(
+                textLayoutResult = layout,
+                topLeft = Offset(
+                    pt(0f, beltY).x - layout.size.width / 2f,
+                    pt(0f, beltY).y - layout.size.height / 2f
+                )
+            )
+        }
+
+        // ===== ЗВЁЗДЫ ВОКРУГ =====
+        val stars = listOf(
+            Triple(-75f, 20f, 0.8f), Triple(-82f, 60f, 0.6f), Triple(-70f, 110f, 0.7f),
+            Triple(72f, 30f, 0.7f), Triple(80f, 70f, 0.6f), Triple(68f, 120f, 0.8f),
+            Triple(-60f, 145f, 0.6f), Triple(62f, 150f, 0.7f)
+        )
+        for ((sx, sy, sr) in stars) {
+            val tw = 0.5f + 0.5f * sin(pulse * 2f + sx * 0.1f)
+            drawCircle(coreWhite.copy(alpha = 0.4f * tw), radius = sr * u, center = pt(sx, sy))
+        }
+    }
+}
+@Composable
 fun ThinkingRobotAnimation(
     modifier: Modifier = Modifier,
     height: Dp = 85.dp,
@@ -2058,8 +2676,36 @@ fun ThinkingRobotAnimation(
     // Амплитуда внутреннего покачивания (bob) в единицах u.
     // В overlay передаётся 0f, чтобы покачивание делало окно, а не канвас.
     bobAmplitude: Float = 10f,
-    enableSway: Boolean = false
+    enableSway: Boolean = false,
+    skin: Int = 1
 ) {
+    if (skin == 2) {
+        RobotSkin2(
+            modifier = modifier,
+            height = height,
+            isActive = isActive,
+            isSpeaking = isSpeaking,
+            isThinking = isThinking,
+            isIdle = isIdle,
+            shouldWave = shouldWave,
+            isAiReady = isAiReady,
+            isSmartMode = isSmartMode,
+            isListening = isListening,
+            isCompressing = isCompressing,
+            isLoadingModel = isLoadingModel,
+            visionPhase = visionPhase,
+            isPreparingSpeech = isPreparingSpeech,
+            hasActiveAlarm = hasActiveAlarm,
+            headTilt = headTilt,
+            headNod = headNod,
+            tapWaveDirection = tapWaveDirection,
+            autoAnimation = autoAnimation,
+            isJumping = isJumping,
+            uDivisor = uDivisor,
+            yOffsetUnits = yOffsetUnits
+        )
+        return
+    }
     val transition = rememberInfiniteTransition(label = "robot")
 
     val bob by transition.animateFloat(
