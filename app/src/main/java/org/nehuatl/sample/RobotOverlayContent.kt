@@ -24,6 +24,7 @@ fun RobotOverlayContent(
     val isModelLoaded by viewModel.isModelLoaded.collectAsStateWithLifecycle()
     val waveSignal by viewModel.overlayWaveSignal.collectAsStateWithLifecycle(initialValue = false)
     val isSmartMode by viewModel.isSmartMode.collectAsStateWithLifecycle(initialValue = false)
+    val robotSkin by viewModel.robotSkin.collectAsStateWithLifecycle(initialValue = 1)
     val robotGreetingSignal by viewModel.robotGreetingSignal.collectAsStateWithLifecycle(initialValue = false)
     val overlayListening by viewModel.overlayListening.collectAsStateWithLifecycle(initialValue = false)
     val overlayHeadTilt by viewModel.overlayHeadTilt.collectAsStateWithLifecycle(initialValue = 0f)
@@ -54,6 +55,7 @@ fun RobotOverlayContent(
     ) {
             ThinkingRobotAnimation(
             height = (290 * overlayRobotScale).dp,
+            skin = robotSkin,
             isActive = true,
             isSpeaking = isSpeaking,
             isThinking = isThinking,
