@@ -2260,7 +2260,7 @@ fun RobotSkin2(
         // Чем ближе к центру по X — тем ниже baseY (передний край).
         // Чем дальше от центра — тем выше baseY (задний край).
         // Это создаёт объём: передние щупальца «ближе к зрителю», задние «дальше».
-        val baseYCenter = 94f
+        val baseYCenter = 99f
         val baseYSpread = 4f  // насколько задние выше передних
         val ellipseRx = 34f
         val ellipseRy = 5f
@@ -2269,78 +2269,55 @@ fun RobotSkin2(
             val nx = (x / ellipseRx).coerceIn(-1f, 1f)
             return baseYCenter + baseYSpread * (1f - kotlin.math.sqrt(1f - nx * nx))
         }
-        // ===== ОБОД ОСНОВАНИЯ КУПОЛА =====
-        // Эллипс, из которого «растут» щупальца. Даёт 3D-эффект кольца.
-        val rimCenterY = 92f
+        val rimCenterY = 98f
         val rimRx = 44f
         val rimRy = 7f
-        val rimTopLeft = headPt(-rimRx, rimCenterY - rimRy)
-        val rimSize = Size(rimRx * 2f * u, rimRy * 2f * u)
-        // внешняя тень
-        drawOval(
-            color = deepBlue.copy(alpha = 0.9f),
-            topLeft = rimTopLeft,
-            size = rimSize
+        // Задние щупальца — выходят из дальней (верхней) части эллипса,
+        // тусклее и тоньше передних. Рисуются ДО обода, чтобы обод их перекрыл.
+        val backTentacles = listOf(
+            Tentacle(-24f, rimCenterY - rimRy * 0.5f, -34f, 138f, 5f, 1.7f, 2.0f, false),
+            Tentacle(-12f, rimCenterY - rimRy * 0.7f, -16f, 142f, 4f, 2.5f, 2.2f, false),
+            Tentacle(0f, rimCenterY - rimRy * 0.8f, 0f, 144f, 3f, 3.3f, 2.2f, false),
+            Tentacle(12f, rimCenterY - rimRy * 0.7f, 16f, 142f, 4f, 4.1f, 2.2f, false),
+            Tentacle(24f, rimCenterY - rimRy * 0.5f, 34f, 138f, 5f, 4.7f, 2.0f, false)
         )
-        // внутренняя яркая часть (свет из купола)
-        drawOval(
-            brush = Brush.radialGradient(
-                listOf(
-                    brightBlue.copy(alpha = 0.7f),
-                    midBlue.copy(alpha = 0.5f),
-                    deepBlue.copy(alpha = 0.9f)
-                ),
-                center = headPt(0f, rimCenterY),
-                radius = rimRx * u
-            ),
-            topLeft = headPt(-rimRx * 0.85f, rimCenterY - rimRy * 0.7f),
-            size = Size(rimRx * 1.7f * u, rimRy * 1.4f * u)
-        )
-        // контур обода
-        drawOval(
-            color = glowBlue.copy(alpha = 0.85f),
-            topLeft = rimTopLeft,
-            size = rimSize,
-            style = Stroke(width = 1.2f * u)
-        )
-        // блик на передней кромке обода (нижняя дуга)
-        drawArc(
-            color = coreWhite.copy(alpha = 0.6f),
-            startAngle = 20f,
-            sweepAngle = 140f,
-            useCenter = false,
-            topLeft = Offset(rimTopLeft.x, rimTopLeft.y + rimSize.height * 0.5f),
-            size = Size(rimSize.width, rimSize.height),
-            style = Stroke(width = 1.4f * u, cap = StrokeCap.Round)
-        )
-        // точки-заклёпки по ободу (как на картинке)
-        for (i in 0 until 6) {
-            val angle = (i / 6f) * 2f * PI.toFloat() + PI.toFloat() * 0.5f
-            val dotX = cos(angle) * rimRx * 0.9f
-            val dotY = rimCenterY + sin(angle) * rimRy * 0.9f
-            drawCircle(
-                color = glowBlue.copy(alpha = 0.7f),
-                radius = 1.2f * u,
-                center = headPt(dotX, dotY)
+
+        // Рисуем задние щупальца (тусклые, без яркой жилы)
+        for (t in backTentacles) {
+            val sway = sin(tentaclePhase + t.phase) * t.swayAmp
+            val sway2 = sin(tentaclePhase * 0.7f + t.phase + 1.3f) * t.swayAmp * 0.6f
+            val path = Path().apply {
+                val p0 = pt(t.baseX, t.baseY)
+                moveTo(p0.x, p0.y)
+                val segY = t.endY - t.baseY
+                val c1 = pt(t.baseX + sway * 0.2f, t.baseY + segY * 0.4f)
+                val c2 = pt(t.endX + sway2 * 0.3f + sway * 0.6f, t.baseY + segY * 0.75f)
+                val e = pt(t.endX + sway * 0.3f, t.endY)
+                cubicTo(c1.x, c1.y, c2.x, c2.y, e.x, e.y)
+            }
+            drawPath(
+                path,
+                color = deepBlue.copy(alpha = 0.7f),
+                style = Stroke(width = (t.thickness + 0.8f) * u, cap = StrokeCap.Round)
             )
-            drawCircle(
-                color = coreWhite.copy(alpha = 0.5f),
-                radius = 0.5f * u,
-                center = headPt(dotX, dotY)
+            drawPath(
+                path,
+                color = midBlue.copy(alpha = 0.5f),
+                style = Stroke(width = t.thickness * u, cap = StrokeCap.Round)
             )
         }
         val tentacles = listOf(
             // внутренние — уходят к соплу (в центре, значит ниже всех)
-            Tentacle(-8f, baseYFor(-8f) + 2f, -4f, 145f, 3f, 0.3f, 3.2f, true),
-            Tentacle(8f, baseYFor(8f) + 2f, 4f, 145f, 3f, 1.1f, 3.2f, true),
+            Tentacle(-8f, baseYFor(-8f) + 2f, -4f, 150f, 3f, 0.3f, 3.2f, true),
+            Tentacle(8f, baseYFor(8f) + 2f, 4f, 150f, 3f, 1.1f, 3.2f, true),
             // внешние — от края (задние, выше) к центру (передние, ниже)
-            Tentacle(-30f, baseYFor(-30f), -42f, 138f, 6f, 0.0f, 2.6f, false),
-            Tentacle(-18f, baseYFor(-18f), -22f, 148f, 5f, 0.9f, 2.8f, false),
-            Tentacle(-4f, baseYFor(-4f) + 1f, -8f, 152f, 4f, 1.7f, 2.4f, false),
-            Tentacle(4f, baseYFor(4f) + 1f, 8f, 152f, 4f, 2.3f, 2.4f, false),
-            Tentacle(18f, baseYFor(18f), 22f, 148f, 5f, 3.1f, 2.8f, false),
-            Tentacle(30f, baseYFor(30f), 42f, 138f, 6f, 3.9f, 2.6f, false),
-            Tentacle(0f, baseYFor(0f) + 2f, 0f, 140f, 3f, 4.5f, 2.2f, false)
+            Tentacle(-30f, baseYFor(-30f), -42f, 143f, 6f, 0.0f, 2.6f, false),
+            Tentacle(-18f, baseYFor(-18f), -22f, 153f, 5f, 0.9f, 2.8f, false),
+            Tentacle(-4f, baseYFor(-4f) + 1f, -8f, 157f, 4f, 1.7f, 2.4f, false),
+            Tentacle(4f, baseYFor(4f) + 1f, 8f, 157f, 4f, 2.3f, 2.4f, false),
+            Tentacle(18f, baseYFor(18f), 22f, 153f, 5f, 3.1f, 2.8f, false),
+            Tentacle(30f, baseYFor(30f), 42f, 143f, 6f, 3.9f, 2.6f, false),
+            Tentacle(0f, baseYFor(0f) + 2f, 0f, 145f, 3f, 4.5f, 2.2f, false)
         )
 
         for (t in tentacles) {
@@ -2431,71 +2408,20 @@ fun RobotSkin2(
             }
         }
 
-        // ===== СОПЛО И ПЛАМЯ =====
-        val nozzleY = 148f
-        val flameLen = 30f * (1f + flameIntensity * 1.5f)
-        val outerFlame = Path().apply {
-            val a = pt(-9f, nozzleY + 4f)
-            val b = pt(0f, nozzleY + 4f + flameLen)
-            val c = pt(9f, nozzleY + 4f)
-            moveTo(a.x, a.y)
-            quadraticBezierTo(
-                pt(-11f, nozzleY + flameLen * 0.5f).x, pt(-11f, nozzleY + flameLen * 0.5f).y,
-                b.x, b.y
-            )
-            quadraticBezierTo(
-                pt(11f, nozzleY + flameLen * 0.5f).x, pt(11f, nozzleY + flameLen * 0.5f).y,
-                c.x, c.y
-            )
-            close()
-        }
-        drawPath(
-            outerFlame,
-            brush = Brush.verticalGradient(
-                listOf(
-                    glowBlue.copy(alpha = 0.95f),
-                    brightBlue.copy(alpha = 0.7f),
-                    Color.Transparent
-                ),
-                startY = pt(0f, nozzleY).y,
-                endY = pt(0f, nozzleY + flameLen).y
-            )
+        // ===== ОБОД (поверх щупалец) =====
+        val rimTopLeftFinal = headPt(-rimRx, rimCenterY - rimRy)
+        val rimSizeFinal = Size(rimRx * 2f * u, rimRy * 2f * u)
+        drawOval(deepBlue.copy(alpha = 0.9f), rimTopLeftFinal, rimSizeFinal)
+        drawOval(
+            brush = Brush.radialGradient(
+                listOf(brightBlue.copy(alpha = 0.7f), midBlue.copy(alpha = 0.5f), deepBlue.copy(alpha = 0.9f)),
+                center = headPt(0f, rimCenterY),
+                radius = rimRx * u
+            ),
+            topLeft = headPt(-rimRx * 0.85f, rimCenterY - rimRy * 0.7f),
+            size = Size(rimRx * 1.7f * u, rimRy * 1.4f * u)
         )
-        val innerFlame = Path().apply {
-            val a = pt(-4f, nozzleY + 5f)
-            val b = pt(0f, nozzleY + 4f + flameLen * 0.65f)
-            val c = pt(4f, nozzleY + 5f)
-            moveTo(a.x, a.y)
-            quadraticBezierTo(pt(-5f, nozzleY + flameLen * 0.35f).x, pt(-5f, nozzleY + flameLen * 0.35f).y, b.x, b.y)
-            quadraticBezierTo(pt(5f, nozzleY + flameLen * 0.35f).x, pt(5f, nozzleY + flameLen * 0.35f).y, c.x, c.y)
-            close()
-        }
-        drawPath(
-            innerFlame,
-            brush = Brush.verticalGradient(
-                listOf(coreWhite.copy(alpha = 0.9f), Color.Transparent),
-                startY = pt(0f, nozzleY).y,
-                endY = pt(0f, nozzleY + flameLen * 0.65f).y
-            )
-        )
-        // корпус сопла
-        val nozzleTop = pt(-8f, nozzleY - 8f)
-        val nozzleSize = Size(16f * u, 10f * u)
-        drawRoundRect(
-            deepBlue,
-            topLeft = nozzleTop,
-            size = nozzleSize,
-            cornerRadius = CornerRadius(3f * u)
-        )
-        drawRoundRect(
-            brightBlue,
-            topLeft = nozzleTop,
-            size = nozzleSize,
-            cornerRadius = CornerRadius(3f * u),
-            style = Stroke(width = 1.2f * u)
-        )
-        drawCircle(glowBlue, radius = 2f * u, center = pt(0f, nozzleY - 3f))
-        drawCircle(coreWhite.copy(alpha = 0.9f), radius = 1f * u, center = pt(0f, nozzleY - 3f))
+        drawOval(glowBlue.copy(alpha = 0.85f), rimTopLeftFinal, rimSizeFinal, style = Stroke(width = 1.2f * u))
 
         // ===== КУПОЛ =====
         val domePath = Path().apply {
@@ -2531,18 +2457,10 @@ fun RobotSkin2(
             color = glowBlue.copy(alpha = 0.9f),
             style = Stroke(width = 1.6f * u)
         )
-        // блик на куполе
-        drawArc(
-            color = coreWhite.copy(alpha = 0.35f),
-            startAngle = 200f,
-            sweepAngle = 60f,
-            useCenter = false,
-            topLeft = headPt(-40f, 8f),
-            size = Size(80f * u, 70f * u),
-            style = Stroke(width = 3f * u, cap = StrokeCap.Round)
-        )
-        // ===== СХЕМНЫЕ ДОРОЖКИ НА КУПОЛЕ (как на картинке) =====
-        // Несколько изогнутых линий с точками-контактами по бокам купола.
+
+        // ===== СХЕМНЫЕ ДОРОЖКИ НА КУПОЛЕ =====
+        // Часть линий — яркие (передний план, под стеклом), часть — тусклые (глубина).
+        // Все внутри купола, за границы не выходят.
         val circuitAlpha = if (isThinking) 0.9f else 0.6f
         val circuitPulse = if (isThinking) {
             0.7f + 0.3f * sin(pulse * 3f)
@@ -2550,63 +2468,69 @@ fun RobotSkin2(
 
         data class CircuitLine(
             val points: List<Pair<Float, Float>>,
-            val dotAt: List<Int>
+            val dotAt: List<Int>,
+            val isFront: Boolean
         )
 
         for (side in listOf(-1f, 1f)) {
             val lines = listOf(
                 CircuitLine(
                     points = listOf(
-                        side * 52f to 78f,
-                        side * 52f to 66f,
-                        side * 48f to 60f,
-                        side * 48f to 46f,
-                        side * 44f to 40f
+                        side * 44f to 76f,
+                        side * 44f to 64f,
+                        side * 40f to 58f,
+                        side * 40f to 46f,
+                        side * 36f to 40f
                     ),
-                    dotAt = listOf(1, 3, 4)
+                    dotAt = listOf(1, 3, 4),
+                    isFront = true
                 ),
                 CircuitLine(
                     points = listOf(
-                        side * 58f to 72f,
-                        side * 58f to 58f,
-                        side * 54f to 52f,
-                        side * 54f to 36f
+                        side * 50f to 70f,
+                        side * 50f to 56f,
+                        side * 46f to 50f,
+                        side * 46f to 34f
                     ),
-                    dotAt = listOf(1, 3)
+                    dotAt = listOf(1, 3),
+                    isFront = false
                 ),
                 CircuitLine(
                     points = listOf(
-                        side * 46f to 82f,
-                        side * 46f to 74f,
-                        side * 42f to 68f,
-                        side * 42f to 58f,
-                        side * 38f to 52f
+                        side * 38f to 80f,
+                        side * 38f to 72f,
+                        side * 34f to 66f,
+                        side * 34f to 56f
                     ),
-                    dotAt = listOf(2, 4)
+                    dotAt = listOf(2),
+                    isFront = true
                 ),
                 CircuitLine(
                     points = listOf(
-                        side * 38f to 34f,
-                        side * 42f to 28f,
-                        side * 48f to 24f
+                        side * 34f to 30f,
+                        side * 38f to 24f,
+                        side * 42f to 20f
                     ),
-                    dotAt = listOf(0, 2)
+                    dotAt = listOf(0, 2),
+                    isFront = false
                 ),
                 CircuitLine(
                     points = listOf(
-                        side * 54f to 22f,
-                        side * 58f to 28f,
-                        side * 62f to 34f
+                        side * 44f to 22f,
+                        side * 48f to 26f,
+                        side * 52f to 30f
                     ),
-                    dotAt = listOf(0, 2)
+                    dotAt = listOf(0, 2),
+                    isFront = true
                 ),
                 CircuitLine(
                     points = listOf(
-                        side * 62f to 60f,
-                        side * 62f to 48f,
-                        side * 58f to 42f
+                        side * 52f to 58f,
+                        side * 52f to 46f,
+                        side * 48f to 40f
                     ),
-                    dotAt = listOf(1, 2)
+                    dotAt = listOf(1, 2),
+                    isFront = false
                 )
             )
 
@@ -2616,54 +2540,65 @@ fun RobotSkin2(
                     val p = headPt(x, y)
                     if (idx == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
                 }
+
+                val lineAlphaBase = if (line.isFront) 0.75f else 0.25f
+                val lineWidth = if (line.isFront) 1.1f else 0.6f
+                val dotRadius = if (line.isFront) 2.4f else 1.4f
+
                 // тень-подложка
                 drawPath(
                     path,
-                    color = deepBlue.copy(alpha = 0.6f),
-                    style = Stroke(width = 1.6f * u, cap = StrokeCap.Round)
+                    color = deepBlue.copy(alpha = if (line.isFront) 0.5f else 0.2f),
+                    style = Stroke(width = (lineWidth + 0.4f) * u, cap = StrokeCap.Round)
                 )
-                // основная дорожка
+                // основная линия
                 drawPath(
                     path,
-                    color = glowBlue.copy(alpha = circuitAlpha * 0.7f * circuitPulse),
-                    style = Stroke(width = 0.9f * u, cap = StrokeCap.Round)
+                    color = glowBlue.copy(alpha = lineAlphaBase * circuitAlpha * circuitPulse),
+                    style = Stroke(width = lineWidth * u, cap = StrokeCap.Round)
                 )
-                // яркая жила
-                drawPath(
-                    path,
-                    color = coreWhite.copy(alpha = circuitAlpha * 0.5f * circuitPulse),
-                    style = Stroke(width = 0.3f * u, cap = StrokeCap.Round)
-                )
-                // точки-контакты
+                // яркая жила (только у передних)
+                if (line.isFront) {
+                    drawPath(
+                        path,
+                        color = coreWhite.copy(alpha = 0.4f * circuitAlpha * circuitPulse),
+                        style = Stroke(width = 0.3f * u, cap = StrokeCap.Round)
+                    )
+                }
+
                 for (dotIdx in line.dotAt) {
                     val (dx, dy) = line.points[dotIdx]
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            listOf(
-                                coreWhite.copy(alpha = circuitAlpha * circuitPulse),
-                                glowBlue.copy(alpha = circuitAlpha * 0.6f * circuitPulse),
-                                Color.Transparent
+                    if (line.isFront) {
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                listOf(
+                                    coreWhite.copy(alpha = 0.8f * circuitAlpha * circuitPulse),
+                                    glowBlue.copy(alpha = 0.4f * circuitAlpha * circuitPulse),
+                                    Color.Transparent
+                                ),
+                                center = headPt(dx, dy),
+                                radius = dotRadius * 2.2f * u
                             ),
-                            center = headPt(dx, dy),
-                            radius = 2.5f * u
-                        ),
-                        radius = 2.5f * u,
+                            radius = dotRadius * 2.2f * u,
+                            center = headPt(dx, dy)
+                        )
+                    }
+                    drawCircle(
+                        color = coreWhite.copy(alpha = (if (line.isFront) 0.7f else 0.3f) * circuitAlpha),
+                        radius = dotRadius * 0.35f * u,
                         center = headPt(dx, dy)
                     )
                     drawCircle(
-                        color = coreWhite.copy(alpha = circuitAlpha),
-                        radius = 0.7f * u,
-                        center = headPt(dx, dy)
-                    )
-                    drawCircle(
-                        color = glowBlue.copy(alpha = circuitAlpha * 0.8f),
-                        radius = 1.3f * u,
+                        color = glowBlue.copy(alpha = (if (line.isFront) 0.6f else 0.2f) * circuitAlpha),
+                        radius = dotRadius * 0.7f * u,
                         center = headPt(dx, dy),
                         style = Stroke(width = 0.3f * u)
                     )
                 }
             }
         }
+
+        // ===== МОЗГ =====
 
         // ===== МОЗГ =====
         val brainPulse = if (isThinking) {
