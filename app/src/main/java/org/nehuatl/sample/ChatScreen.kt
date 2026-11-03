@@ -2485,16 +2485,7 @@ fun RobotSkin2(
                     dotAt = listOf(1, 3, 4),
                     isFront = true
                 ),
-                CircuitLine(
-                    points = listOf(
-                        side * 50f to 70f,
-                        side * 50f to 56f,
-                        side * 46f to 50f,
-                        side * 46f to 34f
-                    ),
-                    dotAt = listOf(1, 3),
-                    isFront = false
-                ),
+
                 CircuitLine(
                     points = listOf(
                         side * 38f to 80f,
@@ -2522,15 +2513,6 @@ fun RobotSkin2(
                     ),
                     dotAt = listOf(0, 2),
                     isFront = true
-                ),
-                CircuitLine(
-                    points = listOf(
-                        side * 52f to 58f,
-                        side * 52f to 46f,
-                        side * 48f to 40f
-                    ),
-                    dotAt = listOf(1, 2),
-                    isFront = false
                 )
             )
 
@@ -2599,8 +2581,7 @@ fun RobotSkin2(
         }
 
         // ===== МОЗГ =====
-
-        // ===== МОЗГ =====
+        translate(top = -5f * u) {
         val brainPulse = if (isThinking) {
             0.8f + 0.2f * sin(pulse * 4f)
         } else if (isSpeaking) {
@@ -2799,6 +2780,7 @@ fun RobotSkin2(
             radius = 2f * u,
             center = headPt(0f, 26f)
         )
+        }
 
         // ===== ГЛАЗА =====
         val eyeOpen = when {
