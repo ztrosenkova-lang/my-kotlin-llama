@@ -2827,7 +2827,7 @@ fun RobotSkin2(
             val ex = side * 24f
             val ey = 54f
             val eyeCenter = headPt(ex, ey)
-            scale(scaleY = blink.coerceIn(0.05f, 1f), pivot = eyeCenter) {
+             scale(scaleX = 1f, scaleY = blink.coerceIn(0.05f, 1f), pivot = eyeCenter) {
             drawCircle(
                 brush = Brush.radialGradient(
                     listOf(deepBlue, Color(0xFF050A20)),
