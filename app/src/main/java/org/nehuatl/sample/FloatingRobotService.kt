@@ -122,6 +122,8 @@ class FloatingRobotService : LifecycleService() {
                     val command = text.trim().lowercase()
                     when (command) {
                         "махни рукой" -> vm.triggerOverlayWave()
+                        "медуза" -> vm.setRobotSkin(2)
+                        "робот" -> vm.setRobotSkin(1)
                         "уйди" -> {
                             val stopIntent = Intent(this@FloatingRobotService, FloatingRobotService::class.java).apply {
                                 action = ACTION_STOP
