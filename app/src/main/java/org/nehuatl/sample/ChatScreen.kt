@@ -2427,6 +2427,37 @@ fun RobotSkin2(
         )
         drawOval(glowBlue.copy(alpha = 0.85f), rimTopLeftFinal, rimSizeFinal, style = Stroke(width = 1.2f * u))
 
+        // ===== БЕГУЩАЯ ПОЛОСКА ПО ТАРЕЛКЕ =====
+        val rimProgress = ((pulse % (2f * PI.toFloat())) / (2f * PI.toFloat())).toFloat()
+        val rimAngle = rimProgress * 2f * PI.toFloat()
+        val rimInnerRx = rimRx * 0.88f
+        val rimInnerRy = rimRy * 0.88f
+        // хвост из 8 точек позади головы
+        for (i in 0 until 8) {
+            val trailAngle = rimAngle - (i + 1) * 0.06f
+            val px = cos(trailAngle) * rimInnerRx
+            val py = rimCenterY + sin(trailAngle) * rimInnerRy
+            val alpha = (1f - i / 8f) * 0.7f
+            drawCircle(
+                color = glowBlue.copy(alpha = alpha),
+                radius = (1.4f - i * 0.12f) * u,
+                center = pt(px, py)
+            )
+        }
+        // голова
+        val headX = cos(rimAngle) * rimInnerRx
+        val headY = rimCenterY + sin(rimAngle) * rimInnerRy
+        drawCircle(
+            brush = Brush.radialGradient(
+                listOf(coreWhite, glowBlue.copy(alpha = 0.8f), Color.Transparent),
+                center = pt(headX, headY),
+                radius = 3.5f * u
+            ),
+            radius = 3.5f * u,
+            center = pt(headX, headY)
+        )
+        drawCircle(color = coreWhite, radius = 1f * u, center = pt(headX, headY))
+
         // ===== КУПОЛ =====
         val domePath = Path().apply {
             val left = headPt(-56f, 85f)
