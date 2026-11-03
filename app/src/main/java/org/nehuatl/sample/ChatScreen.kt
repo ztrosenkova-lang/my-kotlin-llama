@@ -2413,16 +2413,16 @@ fun RobotSkin2(
         }
 
         // ===== ОБОД (поверх щупалец) =====
-        val rimTopLeftFinal = headPt(-rimRx, rimCenterY - rimRy)
+        val rimTopLeftFinal = pt(-rimRx, rimCenterY - rimRy)
         val rimSizeFinal = Size(rimRx * 2f * u, rimRy * 2f * u)
         drawOval(deepBlue.copy(alpha = 0.9f), rimTopLeftFinal, rimSizeFinal)
         drawOval(
             brush = Brush.radialGradient(
                 listOf(brightBlue.copy(alpha = 0.7f), midBlue.copy(alpha = 0.5f), deepBlue.copy(alpha = 0.9f)),
-                center = headPt(0f, rimCenterY),
+                center = pt(0f, rimCenterY),
                 radius = rimRx * u
             ),
-            topLeft = headPt(-rimRx * 0.85f, rimCenterY - rimRy * 0.7f),
+            topLeft = pt(-rimRx * 0.85f, rimCenterY - rimRy * 0.7f),
             size = Size(rimRx * 1.7f * u, rimRy * 1.4f * u)
         )
         drawOval(glowBlue.copy(alpha = 0.85f), rimTopLeftFinal, rimSizeFinal, style = Stroke(width = 1.2f * u))
