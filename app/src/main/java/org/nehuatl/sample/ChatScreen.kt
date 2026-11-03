@@ -2795,6 +2795,8 @@ fun RobotSkin2(
         for (side in listOf(-1f, 1f)) {
             val ex = side * 24f
             val ey = 54f
+            val eyeCenter = headPt(ex, ey)
+            scale(scaleY = blink.coerceIn(0.05f, 1f), pivot = eyeCenter) {
             drawCircle(
                 brush = Brush.radialGradient(
                     listOf(deepBlue, Color(0xFF050A20)),
@@ -2829,6 +2831,7 @@ fun RobotSkin2(
             // блики
             drawCircle(coreWhite, radius = 2.2f * u, center = headPt(ex + 2.5f, ey - 3f))
             drawCircle(coreWhite.copy(alpha = 0.7f), radius = 1f * u, center = headPt(ex - 2.5f, ey + 4f))
+            }
         }
 
         // ===== БРОВИ =====
