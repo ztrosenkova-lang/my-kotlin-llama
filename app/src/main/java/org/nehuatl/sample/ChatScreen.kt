@@ -1536,6 +1536,7 @@ fun ChatScreen(
                 ) {
                         ThinkingRobotAnimation(
                         height = robotSizeDp,
+                        skin = robotSkin,
                         isActive = false,
                         isSpeaking = false,
                         isThinking = false,
@@ -1618,6 +1619,7 @@ fun ChatScreen(
                 ) {
                                 ThinkingRobotAnimation(
                         height = currentSizeDp,
+                        skin = robotSkin,
                         isActive = false,
                         isSpeaking = false,
                         isThinking = false,
@@ -2293,7 +2295,9 @@ fun RobotSkin2(
                 val c1 = pt(t.baseX + sway * 0.2f, t.baseY + segY * 0.4f)
                 val c2 = pt(t.endX + sway2 * 0.3f + sway * 0.6f, t.baseY + segY * 0.75f)
                 val e = pt(t.endX + sway * 0.3f, t.endY)
-                cubicTo(c1.x, c1.y, c2.x, c2.y, e.x, e.y)
+                val c3 = pt(t.endX + sway2 * 0.4f, t.endY - 8f)
+                cubicTo(c1.x, c1.y, c2.x, c2.y, c3.x, c3.y)
+                quadraticBezierTo((c3.x + e.x) / 2f, (c3.y + e.y) / 2f, e.x, e.y)
             }
             drawPath(
                 path,
