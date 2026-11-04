@@ -42,8 +42,10 @@ fun RobotOverlayContent(
 
     val isThinking = state is GenerationState.Generating ||
                      cloudState is CloudAIState.Generating
+    // isIdle как в чате: только «не говорит и не думает».
+    // overlayListening НЕ влияет — мимика покоя работает и во время прослушивания,
+    // как и в чате (там isListening = false всегда).
     val isIdle = !isSpeaking && !isThinking
-
                    Box(
         modifier = Modifier
             .width(290.dp * overlayRobotScale * 0.85f)
@@ -59,8 +61,8 @@ fun RobotOverlayContent(
             isActive = true,
             isSpeaking = isSpeaking,
             isThinking = isThinking,
-            isIdle = isIdle && !overlayListening,
-            isListening = overlayListening,
+            isIdle = isIdle,
+            isListening = false,
             shouldWave = waveSignal || robotGreetingSignal,
             isAiReady = isModelLoaded || (cloudState is CloudAIState.Ready),
             isSmartMode = isSmartMode,
