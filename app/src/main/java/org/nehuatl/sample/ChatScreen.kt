@@ -2240,17 +2240,12 @@ fun RobotSkin2(
 
     // ===== МИМИКА БРОВЕЙ В ПОКОЕ =====
     // Привязана к idleEyePhase — тому же таймлайну, что и у глаз (8000 мс).
-    // Пока глаза «обшаривают» сцену, брови плавно реагируют:
-    //   0.00–0.35 — спокойствие
-    //   0.35–0.50 — приподнял одну бровь (заинтересовался)
-    //   0.50–0.65 — спокойствие
-    //   0.65–0.80 — лёгкий наклон (сомнение)
-    //   0.80–1.00 — спокойствие
-    // В занятых состояниях мимика гасится в 0, чтобы не спорить с
-    // browLiftTarget / browTiltTarget.
+    // В покое брови плавно поднимаются/наклоняются в такт глазам.
+    // При isThinking/isSpeaking/isListening мимика плавно гасится (не рывком).
     val browIdlePhase = idleEyePhase
-    val browIdleLift = when {
-        isThinking || isSpeaking || isListening -> 0f
+
+    // «Сырая» мимика по фазам idleEyePhase (как было).
+    val browIdleLiftRaw = when {
         browIdlePhase < 0.35f -> 0f
         browIdlePhase < 0.50f -> {
             val t = (browIdlePhase - 0.35f) / 0.15f
@@ -2263,14 +2258,24 @@ fun RobotSkin2(
         }
         else -> 0f
     }
-    val browIdleTilt = when {
-        isThinking || isSpeaking || isListening -> 0f
+    val browIdleTiltRaw = when {
         browIdlePhase < 0.35f -> 0f
         browIdlePhase < 0.50f -> sin(((browIdlePhase - 0.35f) / 0.15f) * PI.toFloat()) * 3.5f
         browIdlePhase < 0.65f -> 0f
         browIdlePhase < 0.80f -> sin(((browIdlePhase - 0.65f) / 0.15f) * PI.toFloat()) * -2.5f
         else -> 0f
     }
+
+    // Плавный коэффициент гашения: 1 — покой, 0 — занят.
+    // Анимируется за 350 мс, чтобы не было рывка при входе/выходе.
+    val browIdleFade by animateFloatAsState(
+        targetValue = if (isThinking || isSpeaking || isListening) 0f else 1f,
+        animationSpec = tween(350, easing = FastOutSlowInEasing),
+        label = "jelly_brow_idle_fade"
+    )
+
+    val browIdleLift = browIdleLiftRaw * browIdleFade
+    val browIdleTilt = browIdleTiltRaw * browIdleFade
 
     // ===== «ДЫХАНИЕ» КУПОЛА =====
     val domeBreath by transition.animateFloat(
