@@ -2238,6 +2238,40 @@ fun RobotSkin2(
         label = "jelly_brow_tilt"
     )
 
+    // ===== МИМИКА БРОВЕЙ В ПОКОЕ =====
+    // Привязана к idleEyePhase — тому же таймлайну, что и у глаз (8000 мс).
+    // Пока глаза «обшаривают» сцену, брови плавно реагируют:
+    //   0.00–0.35 — спокойствие
+    //   0.35–0.50 — приподнял одну бровь (заинтересовался)
+    //   0.50–0.65 — спокойствие
+    //   0.65–0.80 — лёгкий наклон (сомнение)
+    //   0.80–1.00 — спокойствие
+    // В занятых состояниях мимика гасится в 0, чтобы не спорить с
+    // browLiftTarget / browTiltTarget.
+    val browIdlePhase = idleEyePhase
+    val browIdleLift = when {
+        isThinking || isSpeaking || isListening -> 0f
+        browIdlePhase < 0.35f -> 0f
+        browIdlePhase < 0.50f -> {
+            val t = (browIdlePhase - 0.35f) / 0.15f
+            sin(t * PI.toFloat()) * 1.8f
+        }
+        browIdlePhase < 0.65f -> 0f
+        browIdlePhase < 0.80f -> {
+            val t = (browIdlePhase - 0.65f) / 0.15f
+            sin(t * PI.toFloat()) * 1.0f
+        }
+        else -> 0f
+    }
+    val browIdleTilt = when {
+        isThinking || isSpeaking || isListening -> 0f
+        browIdlePhase < 0.35f -> 0f
+        browIdlePhase < 0.50f -> sin(((browIdlePhase - 0.35f) / 0.15f) * PI.toFloat()) * 3.5f
+        browIdlePhase < 0.65f -> 0f
+        browIdlePhase < 0.80f -> sin(((browIdlePhase - 0.65f) / 0.15f) * PI.toFloat()) * -2.5f
+        else -> 0f
+    }
+
     // ===== «ДЫХАНИЕ» КУПОЛА =====
     val domeBreath by transition.animateFloat(
         initialValue = 0f,
@@ -3223,31 +3257,19 @@ fun RobotSkin2(
         }
 
         // ===== БРОВИ =====
-        // В покое — микро-дрожание + редкие поднятия/сдвиги.
-        // При lookX — брови чуть смещаются в ту же сторону.
-        val browIdlePhase = pulse * 1.2f
-        val browIdleWiggle = if (isIdle && !isThinking && !isSpeaking) {
-            sin(browIdlePhase) * 0.8f
-        } else 0f
-        // Редкое «удивился» — раз в ~8 сек брови поднимаются на 0.1 сек.
-        val browSurprisePhase = (pulse * 0.8f) % (2f * PI.toFloat())
-        val browSurpriseLift = if (browSurprisePhase < 0.35f && isIdle) 1.2f else 0f
-        // Редкий «прищур» — раз в ~10 сек одна бровь поднимается.
-        val browWinkPhase = (pulse * 0.6f) % (2f * PI.toFloat())
-        val browWinkSide = if (browWinkPhase < 0.3f && isIdle) 1f else 0f
-        val browLookShift = lookX * 0.6f
-
-        val browY = 39f + browLiftTarget + browIdleWiggle + browSurpriseLift
-        val browTiltRad = browTiltTarget * PI.toFloat() / 180f
+        // Мимика (browIdleLift, browIdleTilt) и сдвиг за взглядом
+        // (browLookShift, browLookShiftY) уже объявлены выше, в начале
+        // функции RobotSkin2. Здесь только используем их.
+        val browY = 39f + browLiftCombined
+        val browTiltRad = browTiltCombined * PI.toFloat() / 180f
         val cosTilt = cos(browTiltRad)
         val sinTilt = sin(browTiltRad)
         for (side in listOf(-1f, 1f)) {
-            val extraLift = if (side == browWinkSide) 0.9f else 0f
             val brow = Path().apply {
                 val innerX = side * 12f + browLookShift
                 val outerX = side * 36f + browLookShift
-                val innerY = browY + extraLift
-                val outerY = browY - 3f + extraLift
+                val innerY = browY
+                val outerY = browY - 3f
                 val pivotX = innerX
                 val pivotY = innerY
                 fun rotPoint(x: Float, y: Float): Offset {
@@ -3259,7 +3281,7 @@ fun RobotSkin2(
                     return Offset(base.x + rx, base.y + ry)
                 }
                 val a = rotPoint(outerX, outerY)
-                val b = rotPoint(side * 24f + browLookShift, browY - 3f + extraLift)
+                val b = rotPoint(side * 24f + browLookShift, browY - 3f)
                 val c = rotPoint(innerX, innerY)
                 moveTo(a.x, a.y)
                 quadraticBezierTo(b.x, b.y, c.x, c.y)
