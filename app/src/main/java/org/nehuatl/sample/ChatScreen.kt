@@ -2165,8 +2165,6 @@ fun RobotSkin2(
         ),
         label = "jelly_lookY"
     )
-        label = "jelly_alarm"
-    )
 
     val jumpAnim = remember { Animatable(0f) }
     val flameAnim = remember { Animatable(0f) }
@@ -2239,6 +2237,17 @@ fun RobotSkin2(
         animationSpec = tween(500, easing = FastOutSlowInEasing),
         label = "jelly_brow_tilt"
     )
+
+    // ===== «ДЫХАНИЕ» КУПОЛА =====
+    val domeBreath by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2 * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(5200, easing = LinearEasing)
+        ),
+        label = "jelly_dome_breath"
+    )
+    val domeBreathVaried = sin(domeBreath) * 0.6f + sin(domeBreath * 1.7f + 1.3f) * 0.4f
 
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
@@ -2492,8 +2501,9 @@ fun RobotSkin2(
 
         // Рисуем задние щупальца (тусклые, без яркой жилы)
         for (t in backTentacles) {
-            val sway = sin(tentaclePhase + t.phase) * t.swayAmp
-            val sway2 = sin(tentaclePhase * 0.7f + t.phase + 1.3f) * t.swayAmp * 0.6f
+            val backPhase = tentaclePhase * 0.6f + t.phase
+            val sway = sin(backPhase) * t.swayAmp * 1.15f
+            val sway2 = sin(backPhase * 0.7f + t.phase + 1.3f) * t.swayAmp * 0.8f
             val path = Path().apply {
                 val p0 = pt(t.baseX, t.baseY)
                 moveTo(p0.x, p0.y)
@@ -2531,9 +2541,10 @@ fun RobotSkin2(
         )
 
         for (t in tentacles) {
-            val sway = sin(tentaclePhase + t.phase) * t.swayAmp
-            val sway2 = sin(tentaclePhase * 0.7f + t.phase + 1.3f) * t.swayAmp * 0.6f
-
+            val speakBoost = if (isSpeaking) 1.0f + 0.35f * sin(pulse * 6f + t.phase) else 1f
+            val frontPhase = tentaclePhase * 1.15f + t.phase
+            val sway = sin(frontPhase) * t.swayAmp * speakBoost
+            val sway2 = sin(frontPhase * 0.7f + t.phase + 1.3f) * t.swayAmp * 0.6f
             // основная кривая щупальца
             val path = Path().apply {
                 val p0 = pt(t.baseX, t.baseY)
@@ -2576,9 +2587,10 @@ fun RobotSkin2(
                 style = Stroke(width = t.thickness * u, cap = StrokeCap.Round)
             )
             // светящаяся жила внутри
+            val veinAlpha = if (isSpeaking) 0.85f + 0.1f * sin(pulse * 5f + t.phase) else 0.7f
             drawPath(
                 path,
-                color = glowBlue.copy(alpha = 0.7f),
+                color = glowBlue.copy(alpha = veinAlpha),
                 style = Stroke(width = (t.thickness * 0.35f) * u, cap = StrokeCap.Round)
             )
             // яркая точка у основания (свечение)
@@ -2681,23 +2693,93 @@ fun RobotSkin2(
             cubicTo(c5.x, c5.y, c6.x, c6.y, left.x, left.y)
             close()
         }
+        // Дыхание купола: лёгкое изменение яркости и радиуса градиента.
+        val domeAlpha = 0.85f + 0.05f * domeBreathVaried
+        val domeRadius = 80f * u * (1f + 0.015f * domeBreathVaried)
         drawPath(
             domePath,
             brush = Brush.radialGradient(
                 listOf(
-                    brightBlue.copy(alpha = 0.85f),
-                    midBlue.copy(alpha = 0.75f),
+                    brightBlue.copy(alpha = domeAlpha),
+                    midBlue.copy(alpha = 0.75f + 0.04f * domeBreathVaried),
                     deepBlue.copy(alpha = 0.85f)
                 ),
                 center = headPt(-12f, 25f),
-                radius = 80f * u
+                radius = domeRadius
             )
         )
         drawPath(
             domePath,
-            color = glowBlue.copy(alpha = 0.9f),
+            color = glowBlue.copy(alpha = 0.9f + 0.05f * domeBreathVaried),
             style = Stroke(width = 1.6f * u)
         )
+
+        // ===== ВНУТРЕННЕЕ СВЕЧЕНИЕ КУПОЛА ПРИ ПРОСЛУШИВАНИИ =====
+        if (isListening) {
+            val listenPulse = 0.5f + 0.5f * sin(pulse * 2.4f)
+            clipPath(domePath) {
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        listOf(
+                            glowBlue.copy(alpha = 0.28f * listenPulse),
+                            brightBlue.copy(alpha = 0.16f * listenPulse),
+                            Color.Transparent
+                        ),
+                        center = headPt(0f, 50f),
+                        radius = 70f * u
+                    ),
+                    radius = 70f * u,
+                    center = headPt(0f, 50f)
+                )
+            }
+        }
+
+        // ===== ПЛАВАЮЩИЕ ПУЗЫРЬКИ ПОД КУПОЛОМ =====
+        clipPath(domePath) {
+            data class Bubble(
+                val x: Float,
+                val baseY: Float,
+                val speed: Float,
+                val phase: Float,
+                val radius: Float
+            )
+            val bubbles = listOf(
+                Bubble(-32f, 80f, 0.35f, 0.0f, 2.2f),
+                Bubble(-12f, 86f, 0.28f, 2.1f, 1.6f),
+                Bubble(18f, 82f, 0.32f, 4.2f, 2.4f),
+                Bubble(34f, 78f, 0.40f, 1.3f, 1.8f)
+            )
+            for (b in bubbles) {
+                val raw = ((pulse * b.speed + b.phase) % (2f * PI.toFloat())) / (2f * PI.toFloat())
+                val prog = (raw + 0.12f * sin(raw * PI.toFloat() * 2f + b.phase)).coerceIn(0f, 1f)
+                val y = b.baseY + (0f - b.baseY) * prog
+                val x = b.x + sin(pulse * 0.8f + b.phase) * 3f
+                val fadeTop = (1f - prog).coerceIn(0f, 1f)
+                val alpha = (0.3f + 0.3f * sin(pulse * 1.5f + b.phase).coerceAtLeast(0f)) * fadeTop
+                if (alpha > 0.02f) {
+                    val pos = headPt(x, y)
+                    val rPx = b.radius * u
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            listOf(
+                                coreWhite.copy(alpha = alpha),
+                                glowBlue.copy(alpha = alpha * 0.6f),
+                                Color.Transparent
+                            ),
+                            center = pos,
+                            radius = rPx * 2.2f
+                        ),
+                        radius = rPx * 2.2f,
+                        center = pos
+                    )
+                    drawCircle(
+                        color = coreWhite.copy(alpha = alpha * 0.85f),
+                        radius = rPx,
+                        center = pos
+                    )
+                }
+            }
+        }
 
         // ===== СХЕМНЫЕ ДОРОЖКИ НА КУПОЛЕ =====
         // Часть линий — яркие (передний план, под стеклом), часть — тусклые (глубина).
@@ -2705,7 +2787,10 @@ fun RobotSkin2(
         val circuitAlpha = if (isThinking) 0.9f else 0.6f
         val circuitPulse = if (isThinking) {
             0.7f + 0.3f * sin(pulse * 3f)
-        } else 1f
+        } else {
+            0.85f + 0.15f * sin(pulse * 0.9f)
+        }
+        val circuitRunner = ((pulse * 0.55f) % (2f * PI.toFloat())) / (2f * PI.toFloat())
 
         data class CircuitLine(
             val points: List<Pair<Float, Float>>,
@@ -2818,6 +2903,64 @@ fun RobotSkin2(
                         style = Stroke(width = 0.3f * u)
                     )
                 }
+            }
+        }
+
+        // ===== БЕГУЩИЙ ОГОНЁК ПО ДОРОЖКАМ =====
+        val runnerLines = listOf(
+            listOf(-44f to 76f, -44f to 64f, -40f to 58f, -40f to 46f, -36f to 40f),
+            listOf(44f to 76f, 44f to 64f, 40f to 58f, 40f to 46f, 36f to 40f)
+        )
+        val runnerSpeed = if (isThinking) 1.1f else 0.55f
+        val runnerT = ((pulse * runnerSpeed) % (2f * PI.toFloat())) / (2f * PI.toFloat())
+        for ((lineIdx, pts) in runnerLines.withIndex()) {
+            val localT = (runnerT + lineIdx * 0.5f) % 1f
+            var totalLen = 0f
+            val segLens = mutableListOf<Float>()
+            for (i in 0 until pts.size - 1) {
+                val (x1, y1) = pts[i]
+                val (x2, y2) = pts[i + 1]
+                val d = kotlin.math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1))
+                segLens.add(d)
+                totalLen += d
+            }
+            val target = localT * totalLen
+            var acc = 0f
+            var rx = pts[0].first
+            var ry = pts[0].second
+            for (i in 0 until pts.size - 1) {
+                if (acc + segLens[i] >= target) {
+                    val f = (target - acc) / segLens[i]
+                    val (x1, y1) = pts[i]
+                    val (x2, y2) = pts[i + 1]
+                    rx = x1 + (x2 - x1) * f
+                    ry = y1 + (y2 - y1) * f
+                    break
+                }
+                acc += segLens[i]
+            }
+            val edgeFade = sin(localT * PI.toFloat()).coerceAtLeast(0f)
+            val runnerAlpha = edgeFade * (if (isThinking) 0.95f else 0.7f)
+            if (runnerAlpha > 0.02f) {
+                val pos = headPt(rx, ry)
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        listOf(
+                            coreWhite.copy(alpha = runnerAlpha),
+                            glowBlue.copy(alpha = runnerAlpha * 0.6f),
+                            Color.Transparent
+                        ),
+                        center = pos,
+                        radius = 4f * u
+                    ),
+                    radius = 4f * u,
+                    center = pos
+                )
+                drawCircle(
+                    color = coreWhite.copy(alpha = runnerAlpha * 0.9f),
+                    radius = 1.1f * u,
+                    center = pos
+                )
             }
         }
 
