@@ -2127,6 +2127,46 @@ fun RobotSkin2(
         ),
         label = "jelly_alarm"
     )
+    val lookX by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = keyframes {
+                durationMillis = 7000
+                0f at 0
+                0f at 900
+                1f at 1600
+                1f at 2600
+                -1f at 3300
+                -1f at 4400
+                0.5f at 5100
+                0.5f at 5800
+                0f at 6600
+                0f at 7000
+            }
+        ),
+        label = "jelly_lookX"
+    )
+    val lookY by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = keyframes {
+                durationMillis = 7000
+                0f at 0
+                0f at 1500
+                -0.6f at 2200
+                -0.6f at 3000
+                0.4f at 3800
+                0.4f at 4600
+                0f at 5400
+                0f at 7000
+            }
+        ),
+        label = "jelly_lookY"
+    )
+        label = "jelly_alarm"
+    )
 
     val jumpAnim = remember { Animatable(0f) }
     val flameAnim = remember { Animatable(0f) }
@@ -2984,16 +3024,21 @@ fun RobotSkin2(
         }
 
         // ===== ГЛАЗА =====
-        val eyeOpen = when {
+        val eyeOpenBase = when {
             isListening -> 1.25f
             isThinking -> 0.7f
+            isSpeaking -> 1.1f
             else -> 1f
-        } * (if (blink < 0.5f) 0.05f else 1f)
+        }
+        val eyeOpen = eyeOpenBase * (if (blink < 0.5f) 0.05f else 1f)
+        val pupilBreath = 0.9f + 0.1f * sin(pulse * 1.8f)
+        val lookOffsetX = lookX * 3.5f * u
+        val lookOffsetY = lookY * 2.5f * u
         for (side in listOf(-1f, 1f)) {
             val ex = side * 24f
             val ey = 54f
             val eyeCenter = headPt(ex, ey)
-             scale(scaleX = 1f, scaleY = blink.coerceIn(0.05f, 1f), pivot = eyeCenter) {
+            scale(scaleX = 1f, scaleY = blink.coerceIn(0.05f, 1f), pivot = eyeCenter) {
             drawCircle(
                 brush = Brush.radialGradient(
                     listOf(deepBlue, Color(0xFF050A20)),
@@ -3009,42 +3054,57 @@ fun RobotSkin2(
                 center = headPt(ex, ey),
                 style = Stroke(width = 1.2f * u)
             )
-            // радужка
+            // радужка — двигается по lookX/lookY, дышит
+            val irisRadius = 7.5f * u * eyeOpen * pupilBreath
+            val irisCenter = headPt(ex, ey + 1f) + Offset(lookOffsetX, lookOffsetY)
             drawCircle(
                 brush = Brush.radialGradient(
                     listOf(coreWhite, brightBlue, midBlue, deepBlue),
-                    center = headPt(ex, ey + 1f),
-                    radius = 7.5f * u * eyeOpen
+                    center = irisCenter,
+                    radius = irisRadius * 1.2f
                 ),
-                radius = 7.5f * u * eyeOpen,
-                center = headPt(ex, ey + 1f)
+                radius = irisRadius,
+                center = irisCenter
             )
-            // зрачок
+            // зрачок — двигается с радужкой, дышит
+            val pupilRadius = 3.5f * u * eyeOpen * pupilBreath
             drawCircle(
                 color = Color(0xFF050A20),
-                radius = 3.5f * u * eyeOpen,
-                center = headPt(ex, ey + 1f)
+                radius = pupilRadius,
+                center = irisCenter
             )
-            // блики
-            drawCircle(coreWhite, radius = 2.2f * u, center = headPt(ex + 2.5f, ey - 3f))
-            drawCircle(coreWhite.copy(alpha = 0.7f), radius = 1f * u, center = headPt(ex - 2.5f, ey + 4f))
+            // блики — двигаются вместе с радужкой
+            drawCircle(coreWhite, radius = 2.2f * u * eyeOpen, center = irisCenter + Offset(2.5f * u, -3f * u))
+            drawCircle(coreWhite.copy(alpha = 0.7f), radius = 1f * u * eyeOpen, center = irisCenter + Offset(-2.5f * u, 4f * u))
             }
         }
 
         // ===== БРОВИ =====
-        val idleWiggle = if (isIdle && !isThinking && !isSpeaking) {
-            sin(pulse * 0.9f) * 1.2f
+        // В покое — микро-дрожание + редкие поднятия/сдвиги.
+        // При lookX — брови чуть смещаются в ту же сторону.
+        val browIdlePhase = pulse * 1.2f
+        val browIdleWiggle = if (isIdle && !isThinking && !isSpeaking) {
+            sin(browIdlePhase) * 0.8f
         } else 0f
-        val browY = 39f + browLiftTarget + idleWiggle
+        // Редкое «удивился» — раз в ~8 сек брови поднимаются на 0.1 сек.
+        val browSurprisePhase = (pulse * 0.8f) % (2f * PI.toFloat())
+        val browSurpriseLift = if (browSurprisePhase < 0.35f && isIdle) 1.2f else 0f
+        // Редкий «прищур» — раз в ~10 сек одна бровь поднимается.
+        val browWinkPhase = (pulse * 0.6f) % (2f * PI.toFloat())
+        val browWinkSide = if (browWinkPhase < 0.3f && isIdle) 1f else 0f
+        val browLookShift = lookX * 0.6f
+
+        val browY = 39f + browLiftTarget + browIdleWiggle + browSurpriseLift
         val browTiltRad = browTiltTarget * PI.toFloat() / 180f
         val cosTilt = cos(browTiltRad)
         val sinTilt = sin(browTiltRad)
         for (side in listOf(-1f, 1f)) {
+            val extraLift = if (side == browWinkSide) 0.9f else 0f
             val brow = Path().apply {
-                val innerX = side * 12f
-                val outerX = side * 36f
-                val innerY = browY
-                val outerY = browY - 3f
+                val innerX = side * 12f + browLookShift
+                val outerX = side * 36f + browLookShift
+                val innerY = browY + extraLift
+                val outerY = browY - 3f + extraLift
                 val pivotX = innerX
                 val pivotY = innerY
                 fun rotPoint(x: Float, y: Float): Offset {
@@ -3056,7 +3116,7 @@ fun RobotSkin2(
                     return Offset(base.x + rx, base.y + ry)
                 }
                 val a = rotPoint(outerX, outerY)
-                val b = rotPoint(side * 24f, browY - 3f)
+                val b = rotPoint(side * 24f + browLookShift, browY - 3f + extraLift)
                 val c = rotPoint(innerX, innerY)
                 moveTo(a.x, a.y)
                 quadraticBezierTo(b.x, b.y, c.x, c.y)
@@ -3092,46 +3152,61 @@ fun RobotSkin2(
         // ===== РОТ =====
         val mouthY = 72f
         if (isSpeaking) {
-            val open = 2f + abs(sin(mouthPhase * 2f)) * 4f
-            // внешний контур
+            // Артикуляция: три синуса + паузы + микро-дрожание уголков.
+            // Период пауз — каждые ~1.5 сек рот чуть прикрывается на 0.1 сек.
+            val speakWave = (
+                sin(mouthPhase * 2.3f) * 0.5f +
+                sin(mouthPhase * 5.7f) * 0.3f +
+                sin(mouthPhase * 11.3f) * 0.2f
+            )
+            val pausePhase = (pulse * 4f) % (2f * PI.toFloat())
+            val pauseFactor = if (pausePhase < 0.4f) 0.35f else 1f
+            val open = (2f + abs(speakWave) * 5f) * pauseFactor
+            val widthOscillate = 1f + 0.15f * sin(mouthPhase * 1.7f)
+            val currentWidth = 18f * widthOscillate
+            val cornerJitter = sin(mouthPhase * 3.1f) * 0.4f
+
             drawOval(
                 color = deepBlue,
-                topLeft = headPt(-9f, mouthY - open / 2f),
-                size = Size(18f * u, open * u)
+                topLeft = headPt(-currentWidth / 2f, mouthY - open / 2f),
+                size = Size(currentWidth * u, open * u)
             )
             drawOval(
                 color = glowBlue.copy(alpha = 0.9f),
-                topLeft = headPt(-9f, mouthY - open / 2f),
-                size = Size(18f * u, open * u),
+                topLeft = headPt(-currentWidth / 2f, mouthY - open / 2f),
+                size = Size(currentWidth * u, open * u),
                 style = Stroke(width = 1f * u)
             )
-            // язык / внутреннее свечение
             drawCircle(
                 color = coreWhite.copy(alpha = 0.6f),
                 radius = (open / 3f) * u,
-                center = headPt(0f, mouthY)
+                center = headPt(cornerJitter, mouthY)
             )
         } else {
-            // Широкая U-образная улыбка с уголками вверх
+            // В покое улыбка «дышит» и иногда расширяется / сжимается.
+            val idlePhase = (pulse * 0.7f) % (2f * PI.toFloat())
+            val smileBreath = sin(idlePhase) * 0.6f
+            val wideMoment = if ((pulse % (2f * PI.toFloat())) < 1.2f) 1.4f else 0f
+            val narrowMoment = if ((pulse % (2f * PI.toFloat())) in 2.0f..2.8f) -0.8f else 0f
+            val smileLift = smileBreath + wideMoment + narrowMoment
+            val listenOpen = if (isListening) 1.2f else 0f
+            val thinkTight = if (isThinking) 0.6f else 1f
+            val currentSmileWidth = 11f * thinkTight
+
             val smile = Path().apply {
-                val a = headPt(-11f, mouthY - 3f)
-                val ctrl1 = headPt(-8f, mouthY + 4f)
-                val mid = headPt(0f, mouthY + 5f)
-                val ctrl2 = headPt(8f, mouthY + 4f)
-                val c = headPt(11f, mouthY - 3f)
+                val a = headPt(-currentSmileWidth, mouthY - 3f + smileLift)
+                val ctrl1 = headPt(-currentSmileWidth * 0.7f, mouthY + 4f + smileLift)
+                val ctrl2 = headPt(currentSmileWidth * 0.7f, mouthY + 4f + smileLift)
+                val c = headPt(currentSmileWidth, mouthY - 3f + smileLift)
                 moveTo(a.x, a.y)
                 cubicTo(ctrl1.x, ctrl1.y, ctrl2.x, ctrl2.y, c.x, c.y)
-                // лёгкая нижняя губа (обратная дуга) — чтобы улыбка была «заполненной»
-                val ctrl3 = headPt(6f, mouthY + 6f)
-                val ctrl4 = headPt(-6f, mouthY + 6f)
+                val ctrl3 = headPt(currentSmileWidth * 0.55f, mouthY + 6f + smileLift + listenOpen)
+                val ctrl4 = headPt(-currentSmileWidth * 0.55f, mouthY + 6f + smileLift + listenOpen)
                 cubicTo(ctrl3.x, ctrl3.y, ctrl4.x, ctrl4.y, a.x, a.y)
                 close()
             }
-            // заливка рта
             drawPath(smile, color = deepBlue.copy(alpha = 0.85f))
-            // контур
             drawPath(smile, color = glowBlue.copy(alpha = 0.9f), style = Stroke(width = 1.6f * u, cap = StrokeCap.Round))
-            // жила внутри
             drawPath(smile, color = coreWhite.copy(alpha = 0.4f), style = Stroke(width = 0.6f * u, cap = StrokeCap.Round))
         }
 
