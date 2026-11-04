@@ -150,7 +150,11 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -8043,8 +8047,25 @@ private fun HelpDialog(
                     .verticalScroll(rememberScrollState())
                     .padding(8.dp)
             ) {
+                val fullText = HelpText.fullHelp
+                val highlightStart = "Если однажды кто-то прочитает это"
+                val highlightEnd = "И это работает в обе стороны."
+                val startIdx = fullText.indexOf(highlightStart)
+                val endIdx = fullText.indexOf(highlightEnd)
+                val annotated = if (startIdx >= 0 && endIdx >= 0) {
+                    val endPos = endIdx + highlightEnd.length
+                    buildAnnotatedString {
+                        append(fullText.substring(0, startIdx))
+                        withStyle(SpanStyle(color = colors.accent, fontWeight = FontWeight.Bold)) {
+                            append(fullText.substring(startIdx, endPos))
+                        }
+                        append(fullText.substring(endPos))
+                    }
+                } else {
+                    buildAnnotatedString { append(fullText) }
+                }
                 Text(
-                    text = HelpText.fullHelp,
+                    text = annotated,
                     color = colors.text,
                     fontSize = 12.sp,
                     fontFamily = FontFamily.Monospace,
