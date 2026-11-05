@@ -2146,22 +2146,37 @@ fun RobotSkin2(
         ),
         label = "jelly_rim_dot"
     )
+    // lookX и lookY — с ОДИНАКОВЫМ периодом (8000 мс), чтобы их пики
+    // совпадали по времени. Это даёт строгие комбинации:
+    //   вправо-вверх, влево-вверх, вправо-вниз, влево-вниз,
+    //   горизонталь влево/вправо (lookY=0, lookX≠0),
+    //   вертикаль вверх/вниз (lookX=0, lookY≠0).
+    // Разные keyframes внутри периода — чтобы комбинации шли вразнобой,
+    // а не по кругу. Вертикаль у lookY «быстрее» (пики короче),
+    // горизонталь у lookX «медленнее» (пики длиннее).
     val lookX by transition.animateFloat(
         initialValue = 0f,
         targetValue = 0f,
         animationSpec = infiniteRepeatable(
             animation = keyframes {
-                durationMillis = 7000
+                durationMillis = 8000
                 0f at 0
-                0f at 900
+                0f at 400
+                1f at 900        // вправо (диагональ или горизонталь)
                 1f at 1600
-                1f at 2600
-                -1f at 3300
-                -1f at 4400
-                0.5f at 5100
-                0.5f at 5800
-                0f at 6600
+                -1f at 2100      // влево (диагональ или горизонталь)
+                -1f at 2800
+                0f at 3200       // вертикаль: lookX=0, lookY≠0
+                0f at 3600
+                0.7f at 4100     // вправо (слабая диагональ)
+                0.7f at 4800
+                -0.6f at 5300    // влево (слабая диагональ)
+                -0.6f at 6000
+                0f at 6500       // вертикаль
                 0f at 7000
+                0.9f at 7400     // вправо
+                0.9f at 7700
+                0f at 8000
             }
         ),
         label = "jelly_lookX"
@@ -2171,15 +2186,26 @@ fun RobotSkin2(
         targetValue = 0f,
         animationSpec = infiniteRepeatable(
             animation = keyframes {
-                durationMillis = 7000
+                durationMillis = 8000
                 0f at 0
-                0f at 1500
-                -0.6f at 2200
-                -0.6f at 3000
-                0.4f at 3800
-                0.4f at 4600
-                0f at 5400
-                0f at 7000
+                0f at 300
+                -1f at 900       // вверх — диагональ с lookX=1
+                -1f at 1400
+                -1f at 2100      // вверх — диагональ с lookX=-1
+                -1f at 2600
+                -1f at 3200      // вверх — ЧИСТАЯ вертикаль (lookX=0)
+                -1f at 3600
+                0f at 3800
+                1f at 4100       // вниз — диагональ с lookX=0.7
+                1f at 4600
+                1f at 5300       // вниз — диагональ с lookX=-0.6
+                1f at 5800
+                1f at 6200       // вниз — ЧИСТАЯ вертикаль (lookX=0)
+                1f at 6600
+                0f at 6800
+                -1f at 7200      // вверх — диагональ с lookX=0.9
+                -1f at 7600
+                0f at 8000
             }
         ),
         label = "jelly_lookY"
