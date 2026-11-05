@@ -628,8 +628,6 @@ class FloatingRobotService : LifecycleService() {
                             lastTapTime = 0L
 
                             voiceRecognizer?.stop()
-                            voiceRecognizer?.destroy()
-                            voiceRecognizer = null
                             vm.setOverlayListening(false)
 
                             val stopIntent = Intent(this@FloatingRobotService, FloatingRobotService::class.java).apply {
@@ -655,8 +653,6 @@ class FloatingRobotService : LifecycleService() {
                             lastTapTime = 0L
 
                             voiceRecognizer?.stop()
-                            voiceRecognizer?.destroy()
-                            voiceRecognizer = null
                             vm.setOverlayListening(false)
                         } else {
                             // ОДИНОЧНЫЙ ТАП В РЕЖИМЕ ПОКОЯ — запуск распознавания.
@@ -676,6 +672,48 @@ class FloatingRobotService : LifecycleService() {
                             }
 
                             vm.setOverlayListening(true)
+                            if (voiceRecognizer == null) {
+                                voiceRecognizer = VoiceRecognizer(
+                                    context = applicationContext,
+                                    onResult = { text ->
+                                        Log.d(TAG, "Voice result: $text")
+                                        val innerVm = MainViewModel.instance
+                                        if (innerVm == null) {
+                                            Log.w(TAG, "MainViewModel.instance is null, cannot send message")
+                                        } else {
+                                            val command = text.trim().lowercase()
+                                            when (command) {
+                                                "махни рукой" -> innerVm.triggerOverlayWave()
+                                                "медуза" -> innerVm.setRobotSkin(2)
+                                                "робот" -> innerVm.setRobotSkin(1)
+                                                "уйди" -> {
+                                                    val stopIntent = Intent(this@FloatingRobotService, FloatingRobotService::class.java).apply {
+                                                        action = ACTION_STOP
+                                                    }
+                                                    startService(stopIntent)
+                                                    try {
+                                                        val intent = Intent(this@FloatingRobotService, MainActivity::class.java).apply {
+                                                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                                                                    Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                                                        }
+                                                        startActivity(intent)
+                                                    } catch (e: Exception) {
+                                                        Log.w(TAG, "Failed to bring MainActivity to front: ${e.message}")
+                                                    }
+                                                }
+                                                "умный режим" -> innerVm.enableSmartMode()
+                                                "режим калькулятора" -> innerVm.disableSmartMode()
+                                                else -> innerVm.sendUserMessage(text)
+                                            }
+                                        }
+                                        MainViewModel.instance?.setOverlayListening(false)
+                                    },
+                                    onError = { error ->
+                                        Log.w(TAG, "Voice error: $error")
+                                        MainViewModel.instance?.setOverlayListening(false)
+                                    }
+                                )
+                            }
                             voiceRecognizer?.start()
                         }
                     }
