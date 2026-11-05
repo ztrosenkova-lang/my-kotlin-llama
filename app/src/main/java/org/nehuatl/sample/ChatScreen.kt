@@ -3004,8 +3004,9 @@ fun RobotSkin2(
             // зазор 2 единицы u, купол не сливается с тарелкой.
             // Волна асимметричная: вверх сильнее (1.8), вниз слабее (0.8),
             // чтобы низ купола не доставал до обода.
-            val waveAmpDown = 0.8f * domeBreathVaried
-            val waveAmpUp = 1.8f * domeBreathVaried
+            val wavePulse = (domePulseVaried - 0.5f) * 2f
+            val waveAmpDown = 0.8f * wavePulse
+            val waveAmpUp = 1.8f * wavePulse
             val segments = 24
             for (i in 0..segments) {
                 val t = i.toFloat() / segments
@@ -3663,8 +3664,7 @@ fun RobotSkin2(
                 radius = (open / 3f) * u,
                 center = headPt(0f, mouthY)
             )
-        }
-            } else {
+        } else {
                 // Живая мимика рта в покое. moodPhase — отдельная фаза:
                 // 0..2π за 17000 мс, RepeatMode.Reverse, без сброса 2π→0.
                 // Не зависит от pulse (тот сбрасывается каждые 1500 мс → дёрганье).
