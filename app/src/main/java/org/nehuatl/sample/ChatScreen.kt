@@ -2080,11 +2080,15 @@ fun RobotSkin2(
         ),
         label = "jelly_bob"
     )
+    // tentaclePhase 0..2π, RepeatMode.Reverse. Без сброса 2π→0,
+    // поэтому множители 0.6f/1.15f в backPhase/frontPhase не дают
+    // скачка. Щупальца плавно качаются туда-обратно.
     val tentaclePhase by transition.animateFloat(
         initialValue = 0f,
-        targetValue = 10000f,
+        targetValue = (2 * PI).toFloat(),
         animationSpec = infiniteRepeatable(
-            animation = tween(3500000, easing = LinearEasing)
+            animation = tween(2200, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
         ),
         label = "tentacle_phase"
     )
@@ -2337,11 +2341,12 @@ fun RobotSkin2(
         ),
         label = "jelly_squint"
     )
-    val squintIdle = 0.85f + 0.15f * sin(squintPhase)
+    // 0.55..0.95 — прищур заметен, но глаз не закрывается полностью.
+    val squintIdle = 0.75f + 0.20f * sin(squintPhase)
     val squintState = when {
-        isThinking -> 0.60f
-        isListening -> 0.80f
-        isSpeaking -> 0.90f
+        isThinking -> 0.55f
+        isListening -> 0.70f
+        isSpeaking -> 0.80f
         else -> 1.00f
     }
     val squintAmount = if (isThinking || isListening || isSpeaking) squintState else squintIdle
@@ -6833,52 +6838,6 @@ fun ThinkingRobotAnimation(
                 }
             }
 
-            fun createLivingBrowPath(
-                centerX: Float,
-                centerY: Float,
-                width: Float,
-                height: Float,
-                isLeft: Boolean,
-                lift: Float,
-                tilt: Float,
-                stretch: Float
-            ): Path {
-                val halfW = width * stretch / 2f
-                val browOffsetY = height * 0.9f
-
-                val innerX = if (isLeft) centerX + halfW * 0.9f else centerX - halfW * 0.9f
-                val outerX = if (isLeft) centerX - halfW * 1.1f else centerX + halfW * 1.1f
-                val innerY = centerY - browOffsetY + lift
-                val outerY = centerY - browOffsetY - height * 0.3f + lift
-
-                val pivotX = innerX
-                val pivotY = innerY
-                val rad = tilt * PI.toFloat() / 180f
-                val cosA = cos(rad)
-                val sinA = sin(rad)
-
-                fun rotatePoint(x: Float, y: Float): Offset {
-                    val dx = x - pivotX
-                    val dy = y - pivotY
-                    return Offset(
-                        pivotX + dx * cosA - dy * sinA,
-                        pivotY + dx * sinA + dy * cosA
-                    )
-                }
-
-                val innerRot = rotatePoint(innerX, innerY)
-                val outerRot = rotatePoint(outerX, outerY)
-                val ctrlRot = rotatePoint(
-                    (innerX + outerX) / 2f,
-                    innerY - height * 0.15f
-                )
-
-                return Path().apply {
-                    moveTo(innerRot.x, innerRot.y)
-                    quadraticBezierTo(ctrlRot.x, ctrlRot.y, outerRot.x, outerRot.y)
-                }
-            }
-
             fun createGearIrisPath(centerX: Float, centerY: Float, radius: Float, teethCount: Int = 8): Path {
                 val path = Path()
                 val outerRadius = radius
@@ -6904,44 +6863,6 @@ fun ThinkingRobotAnimation(
                 }
                 path.close()
                 return path
-            }
-
-            val browPhase = if (isThinking) {
-                -0.15f + sin(pulse * 2f) * 0.05f
-            } else if (isSpeaking) {
-                0.25f + sin(mouthPhase * 2f) * 0.08f
-            } else if (isIdle) {
-                val p = idleEyePhase
-                when {
-                    p < 0.4f -> 0f
-                    p < 0.6f -> ((p - 0.4f) / 0.2f) * 0.15f
-                    p < 0.8f -> 0.15f - ((p - 0.6f) / 0.2f) * 0.3f
-                    else -> -0.15f + ((p - 0.8f) / 0.2f) * 0.15f
-                }
-            } else {
-                0f
-            }
-
-            val browLift = when {
-                isBlinking -> -0.5f * u
-                isThinking -> -1.2f * u
-                isSpeaking -> 1.5f * u
-                isIdle -> browPhase * 3f * u
-                else -> 0f
-            }
-
-            val browTilt = when {
-                isThinking -> 12f
-                isSpeaking -> -6f
-                isIdle -> browPhase * 10f
-                else -> 0f
-            }
-
-            val browStretch = when {
-                isThinking -> 0.9f
-                isSpeaking -> 1.1f
-                isIdle -> 1f + browPhase * 0.15f
-                else -> 1f
             }
 
             val leftEyeCenterX = -12f + lookOffsetX / u
