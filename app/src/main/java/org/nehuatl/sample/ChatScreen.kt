@@ -2234,8 +2234,13 @@ fun RobotSkin2(
                 )
             }
             launch {
+                // snapTo(0f) гарантирует старт с нуля, animateTo(1f, keyframes)
+                // идёт по keyframes 0→1→0. Без snapTo при initial=0f и
+                // targetValue=0f анимация может не запуститься вовсе,
+                // flameIntensity останется 0, пузырьки не появятся.
+                flameAnim.snapTo(0f)
                 flameAnim.animateTo(
-                    targetValue = 0f,
+                    targetValue = 1f,
                     animationSpec = keyframes {
                         durationMillis = 1100
                         0f at 0
