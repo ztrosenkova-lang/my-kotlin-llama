@@ -2704,26 +2704,60 @@ fun RobotSkin2(
                 radius = (t.thickness * 1.8f) * u,
                 center = pt(t.baseX, t.baseY)
             )
-            // пульсирующие искры вдоль щупальца (только внутренние и при isThinking)
-            if (t.inner && isThinking) {
-                val sparkPhase = (pulse * 3f + t.phase) % (2f * PI.toFloat())
-                val sparkProg = sparkPhase / (2f * PI.toFloat())
-                val spX = t.baseX + (t.endX - t.baseX) * sparkProg + sway * sparkProg
-                val spY = t.baseY + (t.endY - t.baseY) * sparkProg
-                val spAlpha = sin(sparkProg * PI.toFloat())
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        listOf(
-                            coreWhite.copy(alpha = spAlpha * 0.9f),
-                            glowBlue.copy(alpha = spAlpha * 0.5f),
-                            Color.Transparent
+            // Бегущие огни по всем щупальцам при isThinking.
+            // Огонёк бежит от основания к кончику, с хвостом из 3 точек позади.
+            // У каждого щупальца своя фаза (t.phase) — огни бегут вразнобой.
+            if (isThinking) {
+                val headPhase = (pulse * 3f + t.phase) % (2f * PI.toFloat())
+                val headProg = headPhase / (2f * PI.toFloat())
+                // Хвост из 3 точек позади головы.
+                for (tailIdx in 0 until 3) {
+                    val tailProg = (headProg - tailIdx * 0.04f).coerceIn(0f, 1f)
+                    val spX = t.baseX + (t.endX - t.baseX) * tailProg + sway * tailProg
+                    val spY = t.baseY + (t.endY - t.baseY) * tailProg
+                    // Яркость хвоста гаснет к основанию.
+                    val tailAlpha = sin(tailProg * PI.toFloat()) * (1f - tailIdx * 0.3f)
+                    val tailRadius = (2.4f - tailIdx * 0.5f) * u
+                    if (tailAlpha > 0.02f && tailRadius > 0f) {
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                listOf(
+                                    coreWhite.copy(alpha = tailAlpha * 0.7f),
+                                    glowBlue.copy(alpha = tailAlpha * 0.4f),
+                                    Color.Transparent
+                                ),
+                                center = pt(spX, spY),
+                                radius = tailRadius * 2f
+                            ),
+                            radius = tailRadius * 2f,
+                            center = pt(spX, spY)
+                        )
+                    }
+                }
+                // Голова огонька — яркая точка.
+                val headX = t.baseX + (t.endX - t.baseX) * headProg + sway * headProg
+                val headY = t.baseY + (t.endY - t.baseY) * headProg
+                val headAlpha = sin(headProg * PI.toFloat())
+                if (headAlpha > 0.02f) {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            listOf(
+                                coreWhite.copy(alpha = headAlpha * 0.95f),
+                                glowBlue.copy(alpha = headAlpha * 0.6f),
+                                Color.Transparent
+                            ),
+                            center = pt(headX, headY),
+                            radius = 4f * u
                         ),
-                        center = pt(spX, spY),
-                        radius = 3f * u
-                    ),
-                    radius = 3f * u,
-                    center = pt(spX, spY)
-                )
+                        radius = 4f * u,
+                        center = pt(headX, headY)
+                    )
+                    drawCircle(
+                        color = coreWhite.copy(alpha = headAlpha),
+                        radius = 1.4f * u,
+                        center = pt(headX, headY)
+                    )
+                }
             }
         }
 
@@ -2906,21 +2940,23 @@ fun RobotSkin2(
             val c3 = headPt(30f, -8f)
             val c4 = headPt(62f, 30f)
             cubicTo(c3.x, c3.y, c4.x, c4.y, right.x, right.y)
-            // Низ купола — волнистый. Волна идёт по нижней дуге,
-            // амплитуда ±1.5 единицы u, 5 волн по ширине.
-            // Фаза волны синхронна с domeBreath — купол «дышит», низ колышется.
+            // Низ купола — волнистый. Волна добавляется в ЛОКАЛЬНОЙ системе
+            // купола (до headPt), поэтому наклоняется вместе с куполом.
+            // Интерполяция x и y идёт между наклонёнными right и left,
+            // поэтому нижняя линия совпадает с краями и не «отрывается».
             val waveAmp = 1.5f * domeBreathVaried
             val segments = 24
             for (i in 0..segments) {
                 val t = i.toFloat() / segments
-                // x идёт от right (t=0) к left (t=1) через правую половину.
-                // Плавно интерполируем по кубической Безье внизу купола.
-                val bx = right.x + (left.x - right.x) * t
-                // Базовая Y нижней дуги: квадратичная аппроксимация
-                // от right.y (85) через 92 (центр) к left.y (85).
-                val baseYNorm = 92f - (t - 0.5f) * (t - 0.5f) * 28f
-                val by = headPt(0f, baseYNorm).y + waveAmp * sin(t * PI.toFloat() * 5f) * u
-                if (i == 0) lineTo(bx, by) else lineTo(bx, by)
+                // Локальная x: от +56 (right) до -56 (left).
+                val localX = 56f + (-56f - 56f) * t
+                // Локальная y: квадратичная аппроксимация от 85 (края)
+                // через 92 (центр) к 85 (другой край).
+                val localBaseY = 85f - (t - 0.5f) * (t - 0.5f) * 28f
+                // Волна в локальной системе — наклоняется вместе с куполом.
+                val localY = localBaseY + waveAmp * sin(t * PI.toFloat() * 5f)
+                val p = headPt(localX, localY)
+                if (i == 0) lineTo(p.x, p.y) else lineTo(p.x, p.y)
             }
             close()
         }
