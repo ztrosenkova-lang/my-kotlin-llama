@@ -2797,6 +2797,28 @@ fun RobotSkin2(
             }
         }
 
+        // ===== ТЕНЬ ПОД КУПОЛОМ (эффект парения) =====
+        // Полупрозрачная тень на тарелке под куполом. Рисуется ДО обода,
+        // поэтому обод и индикатор (он на y=96) остаются поверх.
+        // alpha 0.12..0.22 — не закрывает индикатор.
+        // Ширина тени rimRx * 0.75f — уже обода, чтобы не вылезала за края.
+        val shadowWidth = rimRx * 0.75f
+        val shadowHeight = rimRy * 0.55f
+        val shadowAlpha = 0.12f + 0.10f * domePulseVaried
+        drawOval(
+            brush = Brush.radialGradient(
+                listOf(
+                    deepBlue.copy(alpha = shadowAlpha),
+                    deepBlue.copy(alpha = shadowAlpha * 0.5f),
+                    Color.Transparent
+                ),
+                center = pt(0f, rimCenterY - 0.5f),
+                radius = shadowWidth * u
+            ),
+            topLeft = pt(-shadowWidth, rimCenterY - 0.5f - shadowHeight),
+            size = Size(shadowWidth * 2f * u, shadowHeight * 2f * u)
+        )
+
         // ===== ОБОД (поверх щупалец) =====
         val rimTopLeftFinal = pt(-rimRx, rimCenterY - rimRy)
         val rimSizeFinal = Size(rimRx * 2f * u, rimRy * 2f * u)
@@ -2976,21 +2998,22 @@ fun RobotSkin2(
             val c3 = headPt(30f, -8f)
             val c4 = headPt(62f, 30f)
             cubicTo(c3.x, c3.y, c4.x, c4.y, right.x, right.y)
-            // Низ купола — волнистый. Волна добавляется в ЛОКАЛЬНОЙ системе
-            // купола (до headPt), поэтому наклоняется вместе с куполом.
-            // Интерполяция x и y идёт между наклонёнными right и left,
-            // поэтому нижняя линия совпадает с краями и не «отрывается».
-            val waveAmp = 1.5f * domeBreathVaried
+            // Низ купола — волнистый. Волна в ЛОКАЛЬНОЙ системе купола
+            // (до headPt), поэтому наклоняется вместе с куполом.
+            // Центр 89 (провисает вниз), края 85. Верх обода 91 —
+            // зазор 2 единицы u, купол не сливается с тарелкой.
+            // Волна асимметричная: вверх сильнее (1.8), вниз слабее (0.8),
+            // чтобы низ купола не доставал до обода.
+            val waveAmpDown = 0.8f * domeBreathVaried
+            val waveAmpUp = 1.8f * domeBreathVaried
             val segments = 24
             for (i in 0..segments) {
                 val t = i.toFloat() / segments
-                // Локальная x: от +56 (right) до -56 (left).
                 val localX = 56f + (-56f - 56f) * t
-                // Локальная y: квадратичная аппроксимация от 85 (края)
-                // через 92 (центр) к 85 (другой край).
-                val localBaseY = 85f - (t - 0.5f) * (t - 0.5f) * 28f
-                // Волна в локальной системе — наклоняется вместе с куполом.
-                val localY = localBaseY + waveAmp * sin(t * PI.toFloat() * 5f)
+                val localBaseY = 89f - (t - 0.5f) * (t - 0.5f) * 16f
+                val waveSin = sin(t * PI.toFloat() * 5f)
+                val waveAmp = if (waveSin >= 0f) waveAmpDown else waveAmpUp
+                val localY = localBaseY + waveAmp * waveSin
                 val p = headPt(localX, localY)
                 if (i == 0) lineTo(p.x, p.y) else lineTo(p.x, p.y)
             }
