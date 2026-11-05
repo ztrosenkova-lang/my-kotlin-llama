@@ -2688,6 +2688,34 @@ fun RobotSkin2(
         )
         drawOval(glowBlue.copy(alpha = 0.85f), rimTopLeftFinal, rimSizeFinal, style = Stroke(width = 1.2f * u))
 
+        // ===== МЯГКОЕ МЕРЦАНИЕ ТАРЕЛКИ ПРИ БУДИЛЬНИКЕ =====
+        // Туманный свет поверх овала. Ненавязчиво: alpha 0..0.18,
+        // период alarmPulse (900 мс при будильнике). Внимание не забирает,
+        // но видно, что будильник установлен.
+        if (hasActiveAlarm) {
+            val alarmGlow = 0.5f + 0.5f * sin(alarmPulse)  // 0..1
+            drawOval(
+                brush = Brush.radialGradient(
+                    listOf(
+                        glowBlue.copy(alpha = 0.10f * alarmGlow),
+                        midBlue.copy(alpha = 0.06f * alarmGlow),
+                        Color.Transparent
+                    ),
+                    center = pt(0f, rimCenterY),
+                    radius = rimRx * u * 1.1f
+                ),
+                topLeft = pt(-rimRx * 1.05f, rimCenterY - rimRy * 1.1f),
+                size = Size(rimRx * 2.1f * u, rimRy * 2.2f * u)
+            )
+            // Лёгкое усиление контура — чтобы мерцание читалось.
+            drawOval(
+                color = glowBlue.copy(alpha = 0.15f * alarmGlow),
+                topLeft = rimTopLeftFinal,
+                size = rimSizeFinal,
+                style = Stroke(width = 1.8f * u)
+            )
+        }
+
         // ===== БЕГУЩАЯ ПОЛОСКА ПО ТАРЕЛКЕ =====
         // Медленная фаза rimDotPhase (6000 мс) вместо быстрого pulse (1500 мс).
         val rimProgress = rimDotPhase
