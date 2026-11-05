@@ -2081,9 +2081,9 @@ fun RobotSkin2(
     )
     val tentaclePhase by transition.animateFloat(
         initialValue = 0f,
-        targetValue = (2 * PI).toFloat(),
+        targetValue = 10000f,
         animationSpec = infiniteRepeatable(
-            animation = tween(if (isSpeaking) 900 else 2200, easing = LinearEasing)
+            animation = tween(3500000, easing = LinearEasing)
         ),
         label = "tentacle_phase"
     )
@@ -2301,8 +2301,11 @@ fun RobotSkin2(
         val staticYOffset = yOffsetUnits * u
         val bobOffset = if (isActive) sin(bob) * 6f * u else 0f
         val jumpOffset = -jumpProgress * 18f * u
+        // Восьмёрка: период по X не совпадает с периодом по Y (bob),
+        // поэтому траектория — восьмёрка, а не круг.
+        val swayX = if (isActive) sin(bob * 0.77f) * 6f * u else 0f
 
-        fun pt(x: Float, y: Float) = Offset(cx + x * u, y * u + staticYOffset + bobOffset + jumpOffset)
+        fun pt(x: Float, y: Float) = Offset(cx + x * u + swayX, y * u + staticYOffset + bobOffset + jumpOffset)
         fun headPt(x: Float, y: Float): Offset {
             val base = pt(x, y)
             val tilt = headTiltAnim * PI.toFloat() / 180f
@@ -2732,26 +2735,33 @@ fun RobotSkin2(
             cubicTo(c5.x, c5.y, c6.x, c6.y, left.x, left.y)
             close()
         }
-        // Дыхание купола: лёгкое изменение яркости и радиуса градиента.
-        val domeAlpha = 0.85f + 0.05f * domeBreathVaried
-        val domeRadius = 80f * u * (1f + 0.015f * domeBreathVaried)
-        drawPath(
-            domePath,
-            brush = Brush.radialGradient(
-                listOf(
-                    brightBlue.copy(alpha = domeAlpha),
-                    midBlue.copy(alpha = 0.75f + 0.04f * domeBreathVaried),
-                    deepBlue.copy(alpha = 0.85f)
-                ),
-                center = headPt(-12f, 25f),
-                radius = domeRadius
+        // Дыхание купола: яркость, радиус градиента и лёгкое изменение размера.
+        // Амплитуды увеличены, чтобы было видно на глаз.
+        val domeAlpha = 0.85f + 0.18f * domeBreathVaried
+        val domeRadius = 80f * u * (1f + 0.06f * domeBreathVaried)
+        // Масштаб купола: ±2.5% вокруг центра головы. Купол «вдыхает» и «выдыхает».
+        val domeScale = 1f + 0.025f * domeBreathVaried
+        val domePivot = headPt(0f, 40f)
+
+        scale(scaleX = domeScale, scaleY = domeScale, pivot = domePivot) {
+            drawPath(
+                domePath,
+                brush = Brush.radialGradient(
+                    listOf(
+                        brightBlue.copy(alpha = domeAlpha),
+                        midBlue.copy(alpha = 0.75f + 0.12f * domeBreathVaried),
+                        deepBlue.copy(alpha = 0.85f)
+                    ),
+                    center = headPt(-12f, 25f),
+                    radius = domeRadius
+                )
             )
-        )
-        drawPath(
-            domePath,
-            color = glowBlue.copy(alpha = 0.9f + 0.05f * domeBreathVaried),
-            style = Stroke(width = 1.6f * u)
-        )
+            drawPath(
+                domePath,
+                color = glowBlue.copy(alpha = 0.9f + 0.10f * domeBreathVaried),
+                style = Stroke(width = 1.6f * u)
+            )
+        }
 
         // ===== ВНУТРЕННЕЕ СВЕЧЕНИЕ КУПОЛА ПРИ ПРОСЛУШИВАНИИ =====
         if (isListening) {
@@ -3220,6 +3230,11 @@ fun RobotSkin2(
             val ex = side * 24f
             val ey = 54f
             val eyeCenter = headPt(ex, ey)
+            // Прищур — отдельный внешний слой. blink внутри не трогается.
+            // Сначала сжимаем весь глаз по Y на squintAmount, затем внутри
+            // работает blink (моргание). Конфликта нет: blink отвечает
+            // только за моргание, squintAmount — только за прищур.
+            scale(scaleX = 1f, scaleY = squintAmount.coerceIn(0.05f, 1f), pivot = eyeCenter) {
             scale(scaleX = 1f, scaleY = blink.coerceIn(0.05f, 1f), pivot = eyeCenter) {
             drawCircle(
                 brush = Brush.radialGradient(
@@ -3258,6 +3273,7 @@ fun RobotSkin2(
             // блики — двигаются вместе с радужкой
             drawCircle(coreWhite, radius = 2.2f * u * eyeOpen, center = irisCenter + Offset(2.5f * u, -3f * u))
             drawCircle(coreWhite.copy(alpha = 0.7f), radius = 1f * u * eyeOpen, center = irisCenter + Offset(-2.5f * u, 4f * u))
+            }
             }
         }
 
@@ -3352,33 +3368,43 @@ fun RobotSkin2(
                 radius = (open / 3f) * u,
                 center = headPt(cornerJitter, mouthY)
             )
-        } else {
-            // В покое улыбка «дышит» и иногда расширяется / сжимается.
-            val idlePhase = (pulse * 0.7f) % (2f * PI.toFloat())
-            val smileBreath = sin(idlePhase) * 0.6f
-            val wideMoment = if ((pulse % (2f * PI.toFloat())) < 1.2f) 1.4f else 0f
-            val narrowMoment = if ((pulse % (2f * PI.toFloat())) in 2.0f..2.8f) -0.8f else 0f
-            val smileLift = smileBreath + wideMoment + narrowMoment
-            val listenOpen = if (isListening) 1.2f else 0f
-            val thinkTight = if (isThinking) 0.6f else 1f
-            val currentSmileWidth = 11f * thinkTight
+            } else {
+                // Живая мимика рта в покое: уголки и ширина плавно меняются
+                // по трём медленным синусам с разными периодами. Рот не «ездит»
+                // вверх-вниз, а меняет выражение: широкая улыбка → полуулыбка →
+                // нейтраль → лёгкое сомнение. Без порогов и рывков.
+                val idlePhase = pulse * 0.7f
+                // «Настроение»: -1 (сомнение) .. 0 (нейтраль) .. 1 (радость)
+                val mood = sin(idlePhase * 0.31f) * 0.6f +
+                           sin(idlePhase * 0.17f + 1.7f) * 0.4f
+                // Ширина рта: 0.85..1.15 от базовой, медленно.
+                val widthFactor = 1f + 0.15f * sin(idlePhase * 0.23f + 0.9f)
 
-            val smile = Path().apply {
-                val a = headPt(-currentSmileWidth, mouthY - 3f + smileLift)
-                val ctrl1 = headPt(-currentSmileWidth * 0.7f, mouthY + 4f + smileLift)
-                val ctrl2 = headPt(currentSmileWidth * 0.7f, mouthY + 4f + smileLift)
-                val c = headPt(currentSmileWidth, mouthY - 3f + smileLift)
-                moveTo(a.x, a.y)
-                cubicTo(ctrl1.x, ctrl1.y, ctrl2.x, ctrl2.y, c.x, c.y)
-                val ctrl3 = headPt(currentSmileWidth * 0.55f, mouthY + 6f + smileLift + listenOpen)
-                val ctrl4 = headPt(-currentSmileWidth * 0.55f, mouthY + 6f + smileLift + listenOpen)
-                cubicTo(ctrl3.x, ctrl3.y, ctrl4.x, ctrl4.y, a.x, a.y)
-                close()
+                val listenOpen = if (isListening) 1.2f else 0f
+                val thinkTight = if (isThinking) 0.6f else 1f
+                val currentSmileWidth = 11f * thinkTight * widthFactor
+
+                // Уголки: mood > 0 — вверх (улыбка), mood < 0 — вниз (сомнение).
+                val cornerY = mouthY - 3f - mood * 2.2f
+                // Глубина дуги: чем радостнее, тем глубже.
+                val arcDepth = mouthY + 4f + mood * 1.5f
+
+                val smile = Path().apply {
+                    val a = headPt(-currentSmileWidth, cornerY)
+                    val ctrl1 = headPt(-currentSmileWidth * 0.7f, arcDepth)
+                    val ctrl2 = headPt(currentSmileWidth * 0.7f, arcDepth)
+                    val c = headPt(currentSmileWidth, cornerY)
+                    moveTo(a.x, a.y)
+                    cubicTo(ctrl1.x, ctrl1.y, ctrl2.x, ctrl2.y, c.x, c.y)
+                    val ctrl3 = headPt(currentSmileWidth * 0.55f, mouthY + 6f + listenOpen + mood * 0.5f)
+                    val ctrl4 = headPt(-currentSmileWidth * 0.55f, mouthY + 6f + listenOpen + mood * 0.5f)
+                    cubicTo(ctrl3.x, ctrl3.y, ctrl4.x, ctrl4.y, a.x, a.y)
+                    close()
+                }
+                drawPath(smile, color = deepBlue.copy(alpha = 0.85f))
+                drawPath(smile, color = glowBlue.copy(alpha = 0.9f), style = Stroke(width = 1.6f * u, cap = StrokeCap.Round))
+                drawPath(smile, color = coreWhite.copy(alpha = 0.4f), style = Stroke(width = 0.6f * u, cap = StrokeCap.Round))
             }
-            drawPath(smile, color = deepBlue.copy(alpha = 0.85f))
-            drawPath(smile, color = glowBlue.copy(alpha = 0.9f), style = Stroke(width = 1.6f * u, cap = StrokeCap.Round))
-            drawPath(smile, color = coreWhite.copy(alpha = 0.4f), style = Stroke(width = 0.6f * u, cap = StrokeCap.Round))
-        }
 
         // ===== ИНДИКАТОР НА ГРУДИ =====
         val indicatorColor = when {
@@ -3725,7 +3751,27 @@ fun ThinkingRobotAnimation(
         label = "wave_amount"
     )
 
-        val textMeasurer = rememberTextMeasurer()
+    // Прищур в покое: плавное колебание 0.70..1.00 по Y, период 3400 мс.
+    // Период не совпадает с морганием (6000 мс), поэтому фазы плавают — живее.
+    val squintPhase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2 * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(3400, easing = SineClientEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "jelly_squint"
+    )
+    val squintIdle = 0.85f + 0.15f * sin(squintPhase)
+    val squintState = when {
+        isThinking -> 0.60f
+        isListening -> 0.80f
+        isSpeaking -> 0.90f
+        else -> 1.00f
+    }
+    val squintAmount = if (isThinking || isListening || isSpeaking) squintState else squintIdle
+
+    val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
 
         val animatedScale by animateFloatAsState(
