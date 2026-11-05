@@ -2066,7 +2066,8 @@ fun RobotSkin2(
     autoAnimation: Int = 0,
     isJumping: Boolean = false,
     uDivisor: Float = 200f,
-    yOffsetUnits: Float = 0f
+    yOffsetUnits: Float = 0f,
+    externalBobbing: Boolean = false
 ) {
     val transition = rememberInfiniteTransition(label = "jelly")
 
@@ -2299,8 +2300,8 @@ fun RobotSkin2(
         val u = size.height / uDivisor
         val cx = size.width / 2f
         val staticYOffset = yOffsetUnits * u
-        val bobOffset = if (isActive) sin(bob) * 6f * u else 0f
-        val jumpOffset = -jumpProgress * 18f * u
+        val bobOffset = if (isActive && !externalBobbing) sin(bob) * 6f * u else 0f
+        val jumpOffset = if (!externalBobbing) -jumpProgress * 18f * u else 0f
         // Восьмёрка: период по X не совпадает с периодом по Y (bob),
         // поэтому траектория — восьмёрка, а не круг.
         val swayX = if (isActive) sin(bob * 0.77f) * 6f * u else 0f
@@ -3712,7 +3713,8 @@ fun ThinkingRobotAnimation(
     // В overlay передаётся 0f, чтобы покачивание делало окно, а не канвас.
     bobAmplitude: Float = 10f,
     enableSway: Boolean = false,
-    skin: Int = 1
+    skin: Int = 1,
+    externalBobbing: Boolean = false
 ) {
     if (skin == 2) {
         RobotSkin2(
@@ -3737,7 +3739,8 @@ fun ThinkingRobotAnimation(
             autoAnimation = autoAnimation,
             isJumping = isJumping,
             uDivisor = uDivisor,
-            yOffsetUnits = yOffsetUnits
+            yOffsetUnits = yOffsetUnits,
+            externalBobbing = externalBobbing
         )
         return
     }
