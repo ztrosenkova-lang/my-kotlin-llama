@@ -79,6 +79,7 @@ fun RobotOverlayContent(
             hasActiveAlarm = hasActiveAlarm,
             isJumping = robotJumpSignal,
             bobAmplitude = 0f,
+            externalBobbing = true,
             modifier = Modifier
         )
     }
