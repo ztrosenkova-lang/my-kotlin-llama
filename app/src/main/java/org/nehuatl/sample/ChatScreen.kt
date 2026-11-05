@@ -2128,6 +2128,24 @@ fun RobotSkin2(
         ),
         label = "jelly_alarm"
     )
+    val idleEyePhase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(8000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "jelly_idle_eye_phase"
+    )
+    val rimDotPhase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(6000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "jelly_rim_dot"
+    )
     val lookX by transition.animateFloat(
         initialValue = 0f,
         targetValue = 0f,
@@ -2277,6 +2295,30 @@ fun RobotSkin2(
 
     val browIdleLift = browIdleLiftRaw * browIdleFade
     val browIdleTilt = browIdleTiltRaw * browIdleFade
+
+    val browLookShift = lookX * 1.2f
+    val browLookShiftY = lookY * 0.8f
+    val browLiftCombined = browLiftTarget + browIdleLift + browLookShiftY
+    val browTiltCombined = browTiltTarget + browIdleTilt
+
+    // Прищур в покое: плавное колебание 0.70..1.00 по Y, период 3400 мс.
+    val squintPhase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2 * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(3400, easing = SineClientEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "jelly_squint"
+    )
+    val squintIdle = 0.85f + 0.15f * sin(squintPhase)
+    val squintState = when {
+        isThinking -> 0.60f
+        isListening -> 0.80f
+        isSpeaking -> 0.90f
+        else -> 1.00f
+    }
+    val squintAmount = if (isThinking || isListening || isSpeaking) squintState else squintIdle
 
     // ===== «ДЫХАНИЕ» КУПОЛА =====
     val domeBreath by transition.animateFloat(
@@ -2795,10 +2837,10 @@ fun RobotSkin2(
                 val radius: Float   // радиус пузырька
             )
             val jumpBubbles = listOf(
-                JumpBubble(-PI.toFloat() * 0.85f, 55f, 1.2f),
-                JumpBubble(-PI.toFloat() * 0.65f, 65f, 0.9f),
-                JumpBubble(-PI.toFloat() * 0.45f, 60f, 1.1f),
-                JumpBubble(-PI.toFloat() * 0.25f, 70f, 0.8f),
+                JumpBubble((-PI).toFloat() * 0.85f, 55f, 1.2f),
+                JumpBubble((-PI).toFloat() * 0.65f, 65f, 0.9f),
+                JumpBubble((-PI).toFloat() * 0.45f, 60f, 1.1f),
+                JumpBubble((-PI).toFloat() * 0.25f, 70f, 0.8f),
                 JumpBubble(PI.toFloat() * 0.25f, 70f, 0.8f),
                 JumpBubble(PI.toFloat() * 0.45f, 60f, 1.1f),
                 JumpBubble(PI.toFloat() * 0.65f, 65f, 0.9f),
