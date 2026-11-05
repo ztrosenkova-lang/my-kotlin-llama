@@ -2724,15 +2724,29 @@ fun RobotSkin2(
             val top = headPt(0f, -8f)
             val right = headPt(56f, 85f)
             moveTo(left.x, left.y)
+            // Верх купола — гладкий, как было.
             val c1 = headPt(-62f, 30f)
             val c2 = headPt(-30f, -8f)
             cubicTo(c1.x, c1.y, c2.x, c2.y, top.x, top.y)
             val c3 = headPt(30f, -8f)
             val c4 = headPt(62f, 30f)
             cubicTo(c3.x, c3.y, c4.x, c4.y, right.x, right.y)
-            val c5 = headPt(30f, 92f)
-            val c6 = headPt(-30f, 92f)
-            cubicTo(c5.x, c5.y, c6.x, c6.y, left.x, left.y)
+            // Низ купола — волнистый. Волна идёт по нижней дуге,
+            // амплитуда ±1.5 единицы u, 5 волн по ширине.
+            // Фаза волны синхронна с domeBreath — купол «дышит», низ колышется.
+            val waveAmp = 1.5f * domeBreathVaried
+            val segments = 24
+            for (i in 0..segments) {
+                val t = i.toFloat() / segments
+                // x идёт от right (t=0) к left (t=1) через правую половину.
+                // Плавно интерполируем по кубической Безье внизу купола.
+                val bx = right.x + (left.x - right.x) * t
+                // Базовая Y нижней дуги: квадратичная аппроксимация
+                // от right.y (85) через 92 (центр) к left.y (85).
+                val baseYNorm = 92f - (t - 0.5f) * (t - 0.5f) * 28f
+                val by = headPt(0f, baseYNorm).y + waveAmp * sin(t * PI.toFloat() * 5f) * u
+                if (i == 0) lineTo(bx, by) else lineTo(bx, by)
+            }
             close()
         }
         // Дыхание купола: яркость, радиус градиента и лёгкое изменение размера.
