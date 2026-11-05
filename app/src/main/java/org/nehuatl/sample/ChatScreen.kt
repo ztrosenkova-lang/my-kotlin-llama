@@ -2347,15 +2347,25 @@ fun RobotSkin2(
     val squintAmount = if (isThinking || isListening || isSpeaking) squintState else squintIdle
 
     // ===== «ДЫХАНИЕ» КУПОЛА =====
+    // domeBreath идёт 0..2π за 4200 мс, RepeatMode.Reverse.
+    // Reverse — без сброса 2π→0, значит без скачка на границе цикла.
+    // SineClientEasing — плавные пики и паузы (как у живой медузы:
+    // сжалась → задержка → расслабилась → задержка).
     val domeBreath by transition.animateFloat(
         initialValue = 0f,
         targetValue = (2 * PI).toFloat(),
         animationSpec = infiniteRepeatable(
-            animation = tween(5200, easing = LinearEasing)
+            animation = tween(4200, easing = SineClientEasing),
+            repeatMode = RepeatMode.Reverse
         ),
         label = "jelly_dome_breath"
     )
-    val domeBreathVaried = sin(domeBreath) * 0.6f + sin(domeBreath * 1.7f + 1.3f) * 0.4f
+    // Основная пульсация — синус от domeBreath, диапазон 0..1.
+    val domePulse = (sin(domeBreath) + 1f) * 0.5f
+    // Лёгкое дрожание — второй синус с другим периодом, амплитуда мала.
+    // Даёт «неровность», чтобы пульсация не выглядела как метроном.
+    val domePulseVaried = domePulse * 0.85f +
+                          ((sin(domeBreath * 1.7f + 1.3f) + 1f) * 0.5f) * 0.15f
 
     // Отдельная фаза для мимики рта в покое: 0..2π за 17000 мс, Reverse.
     // Не зависит от pulse (тот сбрасывается каждые 1500 мс → дёрганье).
@@ -2986,21 +2996,27 @@ fun RobotSkin2(
             }
             close()
         }
-        // Дыхание купола: яркость, радиус градиента и лёгкое изменение размера.
-        // Амплитуды увеличены, чтобы было видно на глаз.
-        val domeAlpha = 0.85f + 0.18f * domeBreathVaried
-        val domeRadius = 80f * u * (1f + 0.06f * domeBreathVaried)
-        // Масштаб купола: ±2.5% вокруг центра головы. Купол «вдыхает» и «выдыхает».
-        val domeScale = 1f + 0.025f * domeBreathVaried
+        // Дыхание купола: пульсация размера имитирует живую медузу.
+        // domePulseVaried: 0 — сжатие, 1 — расширение.
+        //   domeScaleY: 1.03 + 0.07 * pulse → от 1.03 до 1.10 (по вертикали).
+        //   domeScaleX: 1.02 + 0.05 * pulse → от 1.02 до 1.07 (по горизонтали).
+        // Асимметрия: вертикаль пульсирует чуть сильнее, как у медузы
+        // (купол «сжимается сверху-вниз», а не как шар).
+        // Яркость и радиус градиента тоже зависят от pulse — купол
+        // при расширении чуть ярче, при сжатии чуть тусклее.
+        val domeAlpha = 0.82f + 0.20f * domePulseVaried
+        val domeRadius = 80f * u * (1f + 0.08f * domePulseVaried)
+        val domeScaleX = 1f + 0.05f * domePulseVaried
+        val domeScaleY = 1f + 0.07f * domePulseVaried
         val domePivot = headPt(0f, 40f)
 
-        scale(scaleX = domeScale, scaleY = domeScale, pivot = domePivot) {
+        scale(scaleX = domeScaleX, scaleY = domeScaleY, pivot = domePivot) {
             drawPath(
                 domePath,
                 brush = Brush.radialGradient(
                     listOf(
                         brightBlue.copy(alpha = domeAlpha),
-                        midBlue.copy(alpha = 0.75f + 0.12f * domeBreathVaried),
+                        midBlue.copy(alpha = 0.70f + 0.15f * domePulseVaried),
                         deepBlue.copy(alpha = 0.85f)
                     ),
                     center = headPt(-12f, 25f),
@@ -3009,7 +3025,7 @@ fun RobotSkin2(
             )
             drawPath(
                 domePath,
-                color = glowBlue.copy(alpha = 0.9f + 0.10f * domeBreathVaried),
+                color = glowBlue.copy(alpha = 0.85f + 0.15f * domePulseVaried),
                 style = Stroke(width = 1.6f * u)
             )
         }
