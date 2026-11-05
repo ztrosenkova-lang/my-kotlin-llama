@@ -2331,6 +2331,18 @@ fun RobotSkin2(
     )
     val domeBreathVaried = sin(domeBreath) * 0.6f + sin(domeBreath * 1.7f + 1.3f) * 0.4f
 
+    // Отдельная фаза для мимики рта в покое: 0..2π за 17000 мс, Reverse.
+    // Не зависит от pulse (тот сбрасывается каждые 1500 мс → дёрганье).
+    val mouthMoodPhase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2 * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(17000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "jelly_mouth_mood"
+    )
+
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
 
@@ -3546,25 +3558,23 @@ fun RobotSkin2(
                 center = headPt(cornerJitter, mouthY)
             )
             } else {
-                // Живая мимика рта в покое: уголки и ширина плавно меняются
-                // по трём медленным синусам с разными периодами. Рот не «ездит»
-                // вверх-вниз, а меняет выражение: широкая улыбка → полуулыбка →
-                // нейтраль → лёгкое сомнение. Без порогов и рывков.
-                val idlePhase = pulse * 0.7f
-                // «Настроение»: -1 (сомнение) .. 0 (нейтраль) .. 1 (радость)
-                val mood = sin(idlePhase * 0.31f) * 0.6f +
-                           sin(idlePhase * 0.17f + 1.7f) * 0.4f
-                // Ширина рта: 0.85..1.15 от базовой, медленно.
-                val widthFactor = 1f + 0.15f * sin(idlePhase * 0.23f + 0.9f)
+                // Живая мимика рта в покое. moodPhase — отдельная фаза:
+                // 0..2π за 17000 мс, RepeatMode.Reverse, без сброса 2π→0.
+                // Не зависит от pulse (тот сбрасывается каждые 1500 мс → дёрганье).
+                // Два синуса с разными периодами дают неровный, «человеческий» ритм.
+                val moodPhase = mouthMoodPhase
+                val mood = sin(moodPhase) * 0.6f +
+                           sin(moodPhase * 0.53f + 1.7f) * 0.4f
+                val widthFactor = 1f + 0.2f * sin(moodPhase * 0.71f + 0.9f)
 
                 val listenOpen = if (isListening) 1.2f else 0f
                 val thinkTight = if (isThinking) 0.6f else 1f
                 val currentSmileWidth = 11f * thinkTight * widthFactor
 
                 // Уголки: mood > 0 — вверх (улыбка), mood < 0 — вниз (сомнение).
-                val cornerY = mouthY - 3f - mood * 2.2f
+                val cornerY = mouthY - 3f - mood * 3.5f
                 // Глубина дуги: чем радостнее, тем глубже.
-                val arcDepth = mouthY + 4f + mood * 1.5f
+                val arcDepth = mouthY + 4f + mood * 2.5f
 
                 val smile = Path().apply {
                     val a = headPt(-currentSmileWidth, cornerY)
