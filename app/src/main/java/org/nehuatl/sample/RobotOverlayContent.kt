@@ -62,7 +62,7 @@ fun RobotOverlayContent(
             isSpeaking = isSpeaking,
             isThinking = isThinking,
             isIdle = isIdle,
-            isListening = false,
+            isListening = overlayListening,
             shouldWave = waveSignal || robotGreetingSignal,
             isAiReady = isModelLoaded || (cloudState is CloudAIState.Ready),
             isSmartMode = isSmartMode,
