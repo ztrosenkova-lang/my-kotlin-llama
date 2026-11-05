@@ -2108,7 +2108,7 @@ fun RobotSkin2(
         initialValue = 0f,
         targetValue = (2 * PI).toFloat(),
         animationSpec = infiniteRepeatable(
-            animation = tween(380, easing = LinearEasing)
+            animation = tween(700, easing = LinearEasing)
         ),
         label = "jelly_mouth"
     )
@@ -3628,19 +3628,23 @@ fun RobotSkin2(
         // ===== РОТ =====
         val mouthY = 72f
         if (isSpeaking) {
-            // Артикуляция: три синуса + паузы + микро-дрожание уголков.
-            // Период пауз — каждые ~1.5 сек рот чуть прикрывается на 0.1 сек.
+            // Живая артикуляция. mouthPhase — медленная (700 мс вместо 380),
+            // разные фазы (не множители одного cycle) — паттерн не повторяется.
+            // «Паузы» — плавный синус, без порогового if. Дрожание уголков убрано.
             val speakWave = (
-                sin(mouthPhase * 2.3f) * 0.5f +
-                sin(mouthPhase * 5.7f) * 0.3f +
-                sin(mouthPhase * 11.3f) * 0.2f
+                sin(mouthPhase) * 0.5f +                          // основная
+                sin(mouthPhase * 1.7f + 1.3f) * 0.3f +            // разная фаза
+                sin(mouthPhase * 2.9f + 2.7f) * 0.2f              // ещё одна
             )
-            val pausePhase = (pulse * 4f) % (2f * PI.toFloat())
-            val pauseFactor = if (pausePhase < 0.4f) 0.35f else 1f
-            val open = (2f + abs(speakWave) * 5f) * pauseFactor
-            val widthOscillate = 1f + 0.15f * sin(mouthPhase * 1.7f)
+            // Плавное «дыхание» речи: рот расширяется/сжимается медленно,
+            // не резко. Множитель 0.7 — медленнее, чем сама речь.
+            val breathPhase = mouthPhase * 0.35f
+            val breath = 0.7f + 0.3f * sin(breathPhase + 0.5f)
+            // Итоговое открытие: база 2 + модуляция 5.5, с плавным breath.
+            val open = (2f + abs(speakWave) * 5.5f) * breath
+            // Ширина рта: медленнее и меньше, чем было.
+            val widthOscillate = 1f + 0.1f * sin(mouthPhase * 0.7f + 0.4f)
             val currentWidth = 18f * widthOscillate
-            val cornerJitter = sin(mouthPhase * 3.1f) * 0.4f
 
             drawOval(
                 color = deepBlue,
@@ -3653,11 +3657,13 @@ fun RobotSkin2(
                 size = Size(currentWidth * u, open * u),
                 style = Stroke(width = 1f * u)
             )
+            // Лёгкий блик по центру, без дрожания уголков.
             drawCircle(
-                color = coreWhite.copy(alpha = 0.6f),
+                color = coreWhite.copy(alpha = 0.5f),
                 radius = (open / 3f) * u,
-                center = headPt(cornerJitter, mouthY)
+                center = headPt(0f, mouthY)
             )
+        }
             } else {
                 // Живая мимика рта в покое. moodPhase — отдельная фаза:
                 // 0..2π за 17000 мс, RepeatMode.Reverse, без сброса 2π→0.
