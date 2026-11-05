@@ -2688,7 +2688,8 @@ fun RobotSkin2(
         drawOval(glowBlue.copy(alpha = 0.85f), rimTopLeftFinal, rimSizeFinal, style = Stroke(width = 1.2f * u))
 
         // ===== БЕГУЩАЯ ПОЛОСКА ПО ТАРЕЛКЕ =====
-        val rimProgress = ((pulse % (2f * PI.toFloat())) / (2f * PI.toFloat())).toFloat()
+        // Медленная фаза rimDotPhase (6000 мс) вместо быстрого pulse (1500 мс).
+        val rimProgress = rimDotPhase
         val rimAngle = rimProgress * 2f * PI.toFloat()
         val rimInnerRx = rimRx * 0.88f
         val rimInnerRy = rimRy * 0.88f
@@ -2717,6 +2718,97 @@ fun RobotSkin2(
             center = pt(headX, headY)
         )
         drawCircle(color = coreWhite, radius = 1f * u, center = pt(headX, headY))
+
+        // ===== ПУЗЫРЬКИ И ВОЛНА ПРИ ПРЫЖКЕ =====
+        // Появляются только когда идёт прыжок (flameIntensity > 0).
+        // Рисуются до купола — визуально «под» медузой, вылетают из-под ножек.
+        if (flameIntensity > 0.01f) {
+            val jumpAlpha = flameIntensity
+            // Центр выброса — под ободом, откуда растут щупальца.
+            val burstCenter = pt(0f, 150f)
+
+            // 1. Расходящаяся волна-кольцо (как круги на воде).
+            // Расширяется от 8 до 40 единиц u по мере прыжка.
+            val waveRadius = (8f + 32f * jumpAlpha) * u
+            drawCircle(
+                color = glowBlue.copy(alpha = 0.35f * jumpAlpha),
+                radius = waveRadius,
+                center = burstCenter,
+                style = Stroke(width = (1.2f - 0.6f * jumpAlpha) * u)
+            )
+            drawCircle(
+                color = coreWhite.copy(alpha = 0.2f * jumpAlpha),
+                radius = waveRadius * 0.8f,
+                center = burstCenter,
+                style = Stroke(width = 0.6f * u)
+            )
+
+            // 2. Мягкое свечение под медузой.
+            drawCircle(
+                brush = Brush.radialGradient(
+                    listOf(
+                        glowBlue.copy(alpha = 0.3f * jumpAlpha),
+                        brightBlue.copy(alpha = 0.15f * jumpAlpha),
+                        Color.Transparent
+                    ),
+                    center = burstCenter,
+                    radius = 40f * u * jumpAlpha
+                ),
+                radius = 40f * u * jumpAlpha,
+                center = burstCenter
+            )
+
+            // 3. Пузырьки, вылетающие из-под ножек вниз и в стороны.
+            // 8 штук, каждый со своим углом и скоростью.
+            data class JumpBubble(
+                val angle: Float,   // угол вылета (радианы)
+                val dist: Float,    // расстояние вылета
+                val radius: Float   // радиус пузырька
+            )
+            val jumpBubbles = listOf(
+                JumpBubble(-PI.toFloat() * 0.85f, 55f, 1.2f),
+                JumpBubble(-PI.toFloat() * 0.65f, 65f, 0.9f),
+                JumpBubble(-PI.toFloat() * 0.45f, 60f, 1.1f),
+                JumpBubble(-PI.toFloat() * 0.25f, 70f, 0.8f),
+                JumpBubble(PI.toFloat() * 0.25f, 70f, 0.8f),
+                JumpBubble(PI.toFloat() * 0.45f, 60f, 1.1f),
+                JumpBubble(PI.toFloat() * 0.65f, 65f, 0.9f),
+                JumpBubble(PI.toFloat() * 0.85f, 55f, 1.2f)
+            )
+            for (jb in jumpBubbles) {
+                val bx = cos(jb.angle) * jb.dist * jumpAlpha
+                val by = sin(jb.angle) * jb.dist * jumpAlpha + 8f * jumpAlpha
+                val pos = pt(bx, 150f + by)
+                val rPx = jb.radius * u * (0.6f + 0.4f * jumpAlpha)
+                val bubbleAlpha = 0.7f * jumpAlpha
+                if (bubbleAlpha > 0.02f) {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            listOf(
+                                coreWhite.copy(alpha = bubbleAlpha * 0.4f),
+                                glowBlue.copy(alpha = bubbleAlpha * 0.25f),
+                                Color.Transparent
+                            ),
+                            center = pos,
+                            radius = rPx * 2.8f
+                        ),
+                        radius = rPx * 2.8f,
+                        center = pos
+                    )
+                    drawCircle(
+                        color = coreWhite.copy(alpha = bubbleAlpha * 0.8f),
+                        radius = rPx,
+                        center = pos,
+                        style = Stroke(width = 0.5f * u)
+                    )
+                    drawCircle(
+                        color = coreWhite.copy(alpha = bubbleAlpha),
+                        radius = rPx * 0.3f,
+                        center = pos + Offset(-rPx * 0.25f, -rPx * 0.25f)
+                    )
+                }
+            }
+        }
 
         // ===== КУПОЛ =====
         val domePath = Path().apply {
@@ -3512,15 +3604,71 @@ fun RobotSkin2(
             )
         }
 
-        // ===== ЗВЁЗДЫ ВОКРУГ =====
-        val stars = listOf(
-            Triple(-75f, 20f, 0.8f), Triple(-82f, 60f, 0.6f), Triple(-70f, 110f, 0.7f),
-            Triple(72f, 30f, 0.7f), Triple(80f, 70f, 0.6f), Triple(68f, 120f, 0.8f),
-            Triple(-60f, 145f, 0.6f), Triple(62f, 150f, 0.7f)
+        // ===== ПУЗЫРЬКИ ВОКРУГ МЕДУЗЫ =====
+        // 8 пузырьков поднимаются снизу вверх, как в воде.
+        // У каждого своя фаза, скорость и боковое колыхание.
+        // Прозрачность гаснет к верхней границе — без резкого «прыжка» вниз.
+        data class Bubble(
+            val x: Float,        // базовая X
+            val startY: Float,   // стартовая Y (низ)
+            val endY: Float,     // конечная Y (верх)
+            val speed: Float,    // скорость подъёма (0..1 цикл)
+            val phase: Float,    // фаза
+            val radius: Float    // радиус в единицах u
         )
-        for ((sx, sy, sr) in stars) {
-            val tw = 0.5f + 0.5f * sin(pulse * 2f + sx * 0.1f)
-            drawCircle(coreWhite.copy(alpha = 0.4f * tw), radius = sr * u, center = pt(sx, sy))
+        val bubbles = listOf(
+            Bubble(-70f, 150f, 10f, 0.35f, 0.0f, 0.9f),
+            Bubble(-55f, 160f, 20f, 0.28f, 1.3f, 0.6f),
+            Bubble(-30f, 155f, 15f, 0.32f, 2.7f, 1.1f),
+            Bubble(-10f, 165f, 25f, 0.25f, 4.1f, 0.7f),
+            Bubble(20f, 150f, 10f, 0.30f, 5.2f, 0.9f),
+            Bubble(45f, 160f, 20f, 0.27f, 0.8f, 0.6f),
+            Bubble(65f, 155f, 15f, 0.33f, 2.2f, 1.0f),
+            Bubble(78f, 150f, 10f, 0.29f, 3.9f, 0.7f)
+        )
+        for (b in bubbles) {
+            // Прогресс подъёма 0..1, с плавным сбросом через синус.
+            val raw = ((pulse * b.speed + b.phase) % (2f * PI.toFloat())) / (2f * PI.toFloat())
+            val prog = raw.coerceIn(0f, 1f)
+            // Y: от startY (низ) до endY (верх).
+            val y = b.startY + (b.endY - b.startY) * prog
+            // Лёгкое боковое колыхание.
+            val x = b.x + sin(pulse * 0.9f + b.phase) * 4f
+            // Прозрачность: появляется внизу, гаснет вверху.
+            val fadeIn = (prog * 4f).coerceAtMost(1f)
+            val fadeOut = ((1f - prog) * 4f).coerceAtMost(1f)
+            val alpha = 0.55f * fadeIn * fadeOut
+            if (alpha > 0.02f) {
+                val pos = pt(x, y)
+                val rPx = b.radius * u
+                // Свечение вокруг пузырька.
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        listOf(
+                            coreWhite.copy(alpha = alpha * 0.35f),
+                            glowBlue.copy(alpha = alpha * 0.25f),
+                            Color.Transparent
+                        ),
+                        center = pos,
+                        radius = rPx * 3f
+                    ),
+                    radius = rPx * 3f,
+                    center = pos
+                )
+                // Контур пузырька.
+                drawCircle(
+                    color = coreWhite.copy(alpha = alpha * 0.8f),
+                    radius = rPx,
+                    center = pos,
+                    style = Stroke(width = 0.6f * u)
+                )
+                // Блик внутри пузырька.
+                drawCircle(
+                    color = coreWhite.copy(alpha = alpha),
+                    radius = rPx * 0.35f,
+                    center = pos + Offset(-rPx * 0.3f, -rPx * 0.3f)
+                )
+            }
         }
     }
 }
@@ -3784,6 +3932,19 @@ fun ThinkingRobotAnimation(
         else -> 1.00f
     }
     val squintAmount = if (isThinking || isListening || isSpeaking) squintState else squintIdle
+
+    // Отдельная медленная фаза для бегущей точки по ободу.
+    // Период 6000 мс — в 4 раза медленнее, чем pulse (1500 мс).
+    // Не влияет на дыхание, мозг, глаза и т.д.
+    val rimDotPhase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(6000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "jelly_rim_dot"
+    )
 
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
