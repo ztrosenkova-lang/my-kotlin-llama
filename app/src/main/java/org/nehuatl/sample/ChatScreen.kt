@@ -2904,95 +2904,148 @@ fun RobotSkin2(
         )
         drawCircle(color = coreWhite, radius = 1f * u, center = pt(headX, headY))
 
-        // ===== ПУЗЫРЬКИ И ВОЛНА ПРИ ПРЫЖКЕ =====
-        // Появляются только когда идёт прыжок (flameIntensity > 0).
-        // Рисуются до купола — визуально «под» медузой, вылетают из-под ножек.
+        // ===== РЕАКТИВНАЯ СТРУЯ ИЗ ДНА ТАРЕЛКИ ПРИ ПРЫЖКЕ =====
+        // Как пламя у робота, но в стиле медузы: плотный туман +
+        // струя пузырьков + языки тумана, вырывающиеся СТРОГО ВНИЗ
+        // из дна тарелки (pt(0f, 105f)). Видно только при прыжке.
         if (flameIntensity > 0.01f) {
             val jumpAlpha = flameIntensity
-            // Центр выброса — под ободом, откуда растут щупальца.
-            val burstCenter = pt(0f, 150f)
+            // Дно тарелки: rimCenterY + rimRy ≈ 105.
+            val burstCenter = pt(0f, 105f)
+            // Длина струи — зависит от силы прыжка, до ~85 единиц u.
+            val jetLen = 85f * jumpAlpha
 
-            // 1. Расходящаяся волна-кольцо (как круги на воде).
-            // Расширяется от 8 до 40 единиц u по мере прыжка.
-            val waveRadius = (8f + 32f * jumpAlpha) * u
-            drawCircle(
-                color = glowBlue.copy(alpha = 0.35f * jumpAlpha),
-                radius = waveRadius,
-                center = burstCenter,
-                style = Stroke(width = (1.2f - 0.6f * jumpAlpha) * u)
-            )
-            drawCircle(
-                color = coreWhite.copy(alpha = 0.2f * jumpAlpha),
-                radius = waveRadius * 0.8f,
-                center = burstCenter,
-                style = Stroke(width = 0.6f * u)
-            )
-
-            // 2. Мягкое свечение под медузой.
+            // 1. ОБЩЕЕ ОБЛАКО ТУМАНА ВНИЗ (расширяется, гаснет).
             drawCircle(
                 brush = Brush.radialGradient(
                     listOf(
-                        glowBlue.copy(alpha = 0.3f * jumpAlpha),
-                        brightBlue.copy(alpha = 0.15f * jumpAlpha),
+                        glowBlue.copy(alpha = 0.45f * jumpAlpha),
+                        brightBlue.copy(alpha = 0.22f * jumpAlpha),
+                        deepBlue.copy(alpha = 0.10f * jumpAlpha),
                         Color.Transparent
                     ),
-                    center = burstCenter,
-                    radius = 40f * u * jumpAlpha
+                    center = pt(0f, 105f + jetLen * 0.35f),
+                    radius = jetLen * 0.9f
                 ),
-                radius = 40f * u * jumpAlpha,
-                center = burstCenter
+                radius = jetLen * 0.9f,
+                center = pt(0f, 105f + jetLen * 0.35f)
             )
 
-            // 3. Пузырьки, вылетающие из-под ножек вниз и в стороны.
-            // 8 штук, каждый со своим углом и скоростью.
-            data class JumpBubble(
-                val angle: Float,   // угол вылета (радианы)
-                val dist: Float,    // расстояние вылета
-                val radius: Float   // радиус пузырька
+            // 2. ЯЗЫКИ ТУМАНА (4 вытянутые полосы вниз, как струи пламени).
+            for (i in 0 until 4) {
+                val offsetX = (i - 1.5f) * 6f
+                val tongueLen = jetLen * (0.7f + 0.1f * i)
+                val tonguePath = Path().apply {
+                    val a = pt(offsetX - 4f, 105f)
+                    val b = pt(offsetX, 105f + tongueLen)
+                    val c = pt(offsetX + 4f, 105f)
+                    moveTo(a.x, a.y)
+                    quadraticBezierTo(
+                        pt(offsetX - 6f, 105f + tongueLen * 0.5f).x,
+                        pt(offsetX - 6f, 105f + tongueLen * 0.5f).y,
+                        b.x, b.y
+                    )
+                    quadraticBezierTo(
+                        pt(offsetX + 6f, 105f + tongueLen * 0.5f).x,
+                        pt(offsetX + 6f, 105f + tongueLen * 0.5f).y,
+                        c.x, c.y
+                    )
+                    close()
+                }
+                drawPath(
+                    tonguePath,
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            glowBlue.copy(alpha = 0.35f * jumpAlpha),
+                            brightBlue.copy(alpha = 0.15f * jumpAlpha),
+                            Color.Transparent
+                        ),
+                        startY = pt(0f, 105f).y,
+                        endY = pt(0f, 105f + tongueLen).y
+                    )
+                )
+            }
+
+            // 3. СТРУЯ ПУЗЫРЬКОВ (16 штук, строго вниз, разный разброс).
+            // Каждый пузырёк: фаза, боковое смещение, размер, скорость.
+            data class JetBubble(
+                val x0: Float,
+                val speed: Float,
+                val phase: Float,
+                val radius: Float
             )
-            val jumpBubbles = listOf(
-                JumpBubble((-PI).toFloat() * 0.85f, 55f, 1.2f),
-                JumpBubble((-PI).toFloat() * 0.65f, 65f, 0.9f),
-                JumpBubble((-PI).toFloat() * 0.45f, 60f, 1.1f),
-                JumpBubble((-PI).toFloat() * 0.25f, 70f, 0.8f),
-                JumpBubble(PI.toFloat() * 0.25f, 70f, 0.8f),
-                JumpBubble(PI.toFloat() * 0.45f, 60f, 1.1f),
-                JumpBubble(PI.toFloat() * 0.65f, 65f, 0.9f),
-                JumpBubble(PI.toFloat() * 0.85f, 55f, 1.2f)
+            val jetBubbles = listOf(
+                JetBubble(-10f, 0.9f, 0.0f, 2.4f),
+                JetBubble(-6f, 1.1f, 0.7f, 1.8f),
+                JetBubble(-3f, 1.0f, 1.4f, 2.0f),
+                JetBubble(0f, 1.3f, 2.1f, 2.6f),
+                JetBubble(3f, 1.0f, 2.8f, 2.0f),
+                JetBubble(6f, 1.1f, 3.5f, 1.8f),
+                JetBubble(10f, 0.9f, 4.2f, 2.4f),
+                JetBubble(-8f, 1.2f, 4.9f, 1.6f),
+                JetBubble(-4f, 0.8f, 5.6f, 2.2f),
+                JetBubble(0f, 1.4f, 6.3f, 2.8f),
+                JetBubble(4f, 0.8f, 7.0f, 2.2f),
+                JetBubble(8f, 1.2f, 7.7f, 1.6f),
+                JetBubble(-12f, 0.7f, 8.4f, 1.4f),
+                JetBubble(-2f, 1.5f, 9.1f, 1.9f),
+                JetBubble(2f, 1.5f, 9.8f, 1.9f),
+                JetBubble(12f, 0.7f, 10.5f, 1.4f)
             )
-            for (jb in jumpBubbles) {
-                val bx = cos(jb.angle) * jb.dist * jumpAlpha
-                val by = sin(jb.angle) * jb.dist * jumpAlpha + 8f * jumpAlpha
-                val pos = pt(bx, 150f + by)
-                val rPx = jb.radius * u * (0.6f + 0.4f * jumpAlpha)
-                val bubbleAlpha = 0.7f * jumpAlpha
-                if (bubbleAlpha > 0.02f) {
+            for (jb in jetBubbles) {
+                // Прогресс полёта вниз 0..1, циклический.
+                val prog = ((pulse * jb.speed + jb.phase) % (2f * PI.toFloat())) /
+                           (2f * PI.toFloat())
+                // Y: от дна тарелки вниз на jetLen.
+                val by = 105f + jetLen * prog
+                // Лёгкое боковое колыхание.
+                val bx = jb.x0 + sin(pulse * 1.3f + jb.phase) * 2f
+                val pos = pt(bx, by)
+                val rPx = jb.radius * u * (0.7f + 0.5f * jumpAlpha)
+                // Прозрачность: появляется у тарелки, гаснет внизу.
+                val fade = sin(prog * PI.toFloat()) * jumpAlpha
+                if (fade > 0.02f && rPx > 0f) {
                     drawCircle(
                         brush = Brush.radialGradient(
                             listOf(
-                                coreWhite.copy(alpha = bubbleAlpha * 0.4f),
-                                glowBlue.copy(alpha = bubbleAlpha * 0.25f),
+                                coreWhite.copy(alpha = fade * 0.5f),
+                                glowBlue.copy(alpha = fade * 0.3f),
                                 Color.Transparent
                             ),
                             center = pos,
-                            radius = rPx * 2.8f
+                            radius = rPx * 2.6f
                         ),
-                        radius = rPx * 2.8f,
+                        radius = rPx * 2.6f,
                         center = pos
                     )
                     drawCircle(
-                        color = coreWhite.copy(alpha = bubbleAlpha * 0.8f),
+                        color = coreWhite.copy(alpha = fade * 0.85f),
                         radius = rPx,
                         center = pos,
                         style = Stroke(width = 0.5f * u)
                     )
                     drawCircle(
-                        color = coreWhite.copy(alpha = bubbleAlpha),
+                        color = coreWhite.copy(alpha = fade),
                         radius = rPx * 0.3f,
                         center = pos + Offset(-rPx * 0.25f, -rPx * 0.25f)
                     )
                 }
             }
+
+            // 4. ЯРКОЕ ЯДРО У ДНА (там, где струя выходит).
+            drawCircle(
+                brush = Brush.radialGradient(
+                    listOf(
+                        coreWhite.copy(alpha = 0.7f * jumpAlpha),
+                        glowBlue.copy(alpha = 0.4f * jumpAlpha),
+                        Color.Transparent
+                    ),
+                    center = burstCenter,
+                    radius = 14f * u * jumpAlpha
+                ),
+                radius = 14f * u * jumpAlpha,
+                center = burstCenter
+            )
         }
 
         // ===== КУПОЛ =====
