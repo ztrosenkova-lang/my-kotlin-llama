@@ -2234,13 +2234,9 @@ fun RobotSkin2(
                 )
             }
             launch {
-                // snapTo(0f) гарантирует старт с нуля, animateTo(1f, keyframes)
-                // идёт по keyframes 0→1→0. Без snapTo при initial=0f и
-                // targetValue=0f анимация может не запуститься вовсе,
-                // flameIntensity останется 0, пузырьки не появятся.
                 flameAnim.snapTo(0f)
                 flameAnim.animateTo(
-                    targetValue = 1f,
+                    targetValue = 0f,
                     animationSpec = keyframes {
                         durationMillis = 1100
                         0f at 0
@@ -2251,6 +2247,11 @@ fun RobotSkin2(
                     }
                 )
             }
+        } else {
+            // isJumping = false — принудительно сбрасываем в 0.
+            // Даже если анимация была прервана на середине,
+            // flameIntensity не останется > 0, пузырьки исчезнут.
+            flameAnim.snapTo(0f)
         }
     }
     val jumpProgress = jumpAnim.value
