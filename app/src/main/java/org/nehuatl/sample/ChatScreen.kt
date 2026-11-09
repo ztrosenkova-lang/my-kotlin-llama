@@ -3840,17 +3840,18 @@ fun RobotSkin2(
             }
 
         // ===== ИНДИКАТОР НА ГРУДИ =====
+        // Точка сигнализирует только «модель загружена» (isAiReady).
+        // Активный будильник теперь показывают циферблат секунд и
+        // мерцание тарелки — отдельная зелёная пульсация точки не нужна.
         val indicatorColor = when {
-            hasActiveAlarm -> Color(0xFF4CAF50)
             isAiReady -> Color(0xFF4CAF50)
             else -> glowBlue
         }
         val indicatorAlpha = when {
-            hasActiveAlarm -> 0.5f + 0.5f * sin(alarmPulse)
             isAiReady -> 0.6f + 0.4f * sin(pulse)
             else -> 0.9f
         }
-        if (isAiReady || hasActiveAlarm) {
+        if (isAiReady) {
             drawCircle(
                 brush = Brush.radialGradient(
                     listOf(
