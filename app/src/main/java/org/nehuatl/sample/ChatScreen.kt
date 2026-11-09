@@ -2191,6 +2191,17 @@ fun RobotSkin2(
         ),
         label = "jelly_rim_dot"
     )
+    // Фаза «секунд» для циферблата на тарелке: 1 круг = 1 секунда.
+    // Используется только при hasActiveAlarm = true.
+    val secondsPhase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "jelly_seconds"
+    )
     // lookX и lookY — с ОДИНАКОВЫМ периодом (8000 мс), чтобы их пики
     // совпадали по времени. Это даёт строгие комбинации:
     //   вправо-вверх, влево-вверх, вправо-вниз, влево-вниз,
@@ -2991,6 +3002,42 @@ fun RobotSkin2(
         val rimAngle = rimProgress * 2f * PI.toFloat()
         val rimInnerRx = rimRx * 0.88f
         val rimInnerRy = rimRy * 0.88f
+
+        // ===== ЦИФЕРБЛАТ СЕКУНД =====
+        // При активном будильнике ВНУТРИ орбиты огонька рисуем эллипс из
+        // 60 чёрточек (как секунды в минуте). Радиус заметно меньше орбиты
+        // огонька — отступ, чтобы не пересекались. Одна чёрточка вспыхивает
+        // на секунду, как на электронных часах. Рисуется ДО огонька,
+        // чтобы огонёк оставался поверх шкалы.
+        // Когда напоминание отработало — organizerEntries пустеет →
+        // hasActiveAlarm становится false → блок не выполняется, циферблат пропадает.
+        if (hasActiveAlarm) {
+            val secRx = rimInnerRx * 0.55f
+            val secRy = rimInnerRy * 0.55f
+            val secCount = 60
+            val secStep = 2f * PI.toFloat() / secCount
+            val currentSecond = (secondsPhase * secCount).toInt().coerceIn(0, secCount - 1)
+            for (i in 0 until secCount) {
+                val a = i * secStep
+                val isMain = i % 15 == 0
+                val innerScale = if (isMain) 0.82f else 0.88f
+                val x1 = cos(a) * secRx * innerScale
+                val y1 = rimCenterY + sin(a) * secRy * innerScale
+                val x2 = cos(a) * secRx
+                val y2 = rimCenterY + sin(a) * secRy
+                val isActive = i == currentSecond
+                val tickColor = if (isActive) coreWhite.copy(alpha = 1f)
+                                else glowBlue.copy(alpha = 0.3f)
+                drawLine(
+                    color = tickColor,
+                    start = pt(x1, y1),
+                    end = pt(x2, y2),
+                    strokeWidth = 0.4f * u,
+                    cap = StrokeCap.Round
+                )
+            }
+        }
+
         // хвост из 8 точек позади головы
         for (i in 0 until 8) {
             val trailAngle = rimAngle - (i + 1) * 0.06f
