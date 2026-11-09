@@ -2043,6 +2043,47 @@ private fun VoiceWaveAnimation(
     }
 }
 
+private data class Tentacle(
+    val baseX: Float,
+    val baseY: Float,
+    val endX: Float,
+    val endY: Float,
+    val swayAmp: Float,
+    val phase: Float,
+    val thickness: Float,
+    val inner: Boolean
+)
+
+private data class CircuitLine(
+    val points: List<Pair<Float, Float>>,
+    val dotAt: List<Int>,
+    val isFront: Boolean
+)
+
+private data class DomeBubble(
+    val x: Float,
+    val baseY: Float,
+    val speed: Float,
+    val phase: Float,
+    val radius: Float
+)
+
+private data class AmbientBubble(
+    val x: Float,
+    val startY: Float,
+    val endY: Float,
+    val speed: Float,
+    val phase: Float,
+    val radius: Float
+)
+
+private data class JetBubble(
+    val x0: Float,
+    val speed: Float,
+    val phase: Float,
+    val radius: Float
+)
+
 @Composable
 fun RobotSkin2(
     modifier: Modifier = Modifier,
@@ -2393,6 +2434,91 @@ fun RobotSkin2(
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
 
+    // ===== ВЫНЕСЕНО ИЗ CANVAS: создаётся один раз, не каждый кадр =====
+    // backTentacles: числа 94.5f / 93.1f / 92.4f получены как
+    //   rimCenterY - rimRy * 0.5f = 98f - 7f * 0.5f = 94.5f
+    //   rimCenterY - rimRy * 0.7f = 98f - 7f * 0.7f = 93.1f
+    //   rimCenterY - rimRy * 0.8f = 98f - 7f * 0.8f = 92.4f
+    // Если в Canvas поменяются rimCenterY/rimRy — поменять и здесь.
+    val backTentacles = remember {
+        listOf(
+            Tentacle(-24f, 94.5f, -34f, 138f, 5f, 1.7f, 2.0f, false),
+            Tentacle(-12f, 93.1f, -16f, 142f, 4f, 2.5f, 2.2f, false),
+            Tentacle(0f, 92.4f, 0f, 144f, 3f, 3.3f, 2.2f, false),
+            Tentacle(12f, 93.1f, 16f, 142f, 4f, 4.1f, 2.2f, false),
+            Tentacle(24f, 94.5f, 34f, 138f, 5f, 4.7f, 2.0f, false)
+        )
+    }
+
+    val circuitLinesLeft = remember {
+        listOf(
+            CircuitLine(listOf(-44f to 76f, -44f to 64f, -40f to 58f, -40f to 46f, -36f to 40f), listOf(1, 3, 4), true),
+            CircuitLine(listOf(-38f to 80f, -38f to 72f, -34f to 66f, -34f to 56f), listOf(2), true),
+            CircuitLine(listOf(-34f to 30f, -38f to 24f, -42f to 20f), listOf(0, 2), false),
+            CircuitLine(listOf(-44f to 22f, -48f to 26f, -52f to 30f), listOf(0, 2), true)
+        )
+    }
+    val circuitLinesRight = remember {
+        listOf(
+            CircuitLine(listOf(44f to 76f, 44f to 64f, 40f to 58f, 40f to 46f, 36f to 40f), listOf(1, 3, 4), true),
+            CircuitLine(listOf(38f to 80f, 38f to 72f, 34f to 66f, 34f to 56f), listOf(2), true),
+            CircuitLine(listOf(34f to 30f, 38f to 24f, 42f to 20f), listOf(0, 2), false),
+            CircuitLine(listOf(44f to 22f, 48f to 26f, 52f to 30f), listOf(0, 2), true)
+        )
+    }
+
+    val domeBubbles = remember {
+        listOf(
+            DomeBubble(-32f, 80f, 0.35f, 0.0f, 2.2f),
+            DomeBubble(-12f, 86f, 0.28f, 2.1f, 1.6f),
+            DomeBubble(18f, 82f, 0.32f, 4.2f, 2.4f),
+            DomeBubble(34f, 78f, 0.40f, 1.3f, 1.8f)
+        )
+    }
+
+    val ambientBubbles = remember {
+        listOf(
+            AmbientBubble(-70f, 150f, 10f, 0.35f, 0.0f, 0.9f),
+            AmbientBubble(-55f, 160f, 20f, 0.28f, 1.3f, 0.6f),
+            AmbientBubble(-30f, 155f, 15f, 0.32f, 2.7f, 1.1f),
+            AmbientBubble(-10f, 165f, 25f, 0.25f, 4.1f, 0.7f),
+            AmbientBubble(20f, 150f, 10f, 0.30f, 5.2f, 0.9f),
+            AmbientBubble(45f, 160f, 20f, 0.27f, 0.8f, 0.6f),
+            AmbientBubble(65f, 155f, 15f, 0.33f, 2.2f, 1.0f),
+            AmbientBubble(78f, 150f, 10f, 0.29f, 3.9f, 0.7f)
+        )
+    }
+
+    val jetBubbles = remember {
+        listOf(
+            JetBubble(-10f, 0.9f, 0.0f, 2.4f),
+            JetBubble(-6f, 1.1f, 0.7f, 1.8f),
+            JetBubble(-3f, 1.0f, 1.4f, 2.0f),
+            JetBubble(0f, 1.3f, 2.1f, 2.6f),
+            JetBubble(3f, 1.0f, 2.8f, 2.0f),
+            JetBubble(6f, 1.1f, 3.5f, 1.8f),
+            JetBubble(10f, 0.9f, 4.2f, 2.4f),
+            JetBubble(-8f, 1.2f, 4.9f, 1.6f),
+            JetBubble(-4f, 0.8f, 5.6f, 2.2f),
+            JetBubble(0f, 1.4f, 6.3f, 2.8f),
+            JetBubble(4f, 0.8f, 7.0f, 2.2f),
+            JetBubble(8f, 1.2f, 7.7f, 1.6f),
+            JetBubble(-12f, 0.7f, 8.4f, 1.4f),
+            JetBubble(-2f, 1.5f, 9.1f, 1.9f),
+            JetBubble(2f, 1.5f, 9.8f, 1.9f),
+            JetBubble(12f, 0.7f, 10.5f, 1.4f)
+        )
+    }
+
+    val runnerLines = remember {
+        listOf(
+            listOf(-44f to 76f, -44f to 64f, -40f to 58f, -40f to 46f, -36f to 40f),
+            listOf(44f to 76f, 44f to 64f, 40f to 58f, 40f to 46f, 36f to 40f)
+        )
+    }
+
+    val sides = remember { listOf(-1f, 1f) }
+
     Canvas(
         modifier = modifier
             .height(height)
@@ -2606,16 +2732,7 @@ fun RobotSkin2(
         // ===== ЩУПАЛЬЦА =====
         // 9 щупалец: 2 внутренних (к соплу) + 7 внешних.
         // Каждое — толстая основа + тонкий кончик + светящаяся жила внутри.
-        data class Tentacle(
-            val baseX: Float,
-            val baseY: Float,
-            val endX: Float,
-            val endY: Float,
-            val swayAmp: Float,
-            val phase: Float,
-            val thickness: Float,
-            val inner: Boolean
-        )
+        // data class Tentacle и backTentacles вынесены в remember до Canvas.
 
         // Основание щупалец — эллипс (как 3D-круг снизу купола).
         // Чем ближе к центру по X — тем ниже baseY (передний край).
@@ -2635,13 +2752,8 @@ fun RobotSkin2(
         val rimRy = 7f
         // Задние щупальца — выходят из дальней (верхней) части эллипса,
         // тусклее и тоньше передних. Рисуются ДО обода, чтобы обод их перекрыл.
-        val backTentacles = listOf(
-            Tentacle(-24f, rimCenterY - rimRy * 0.5f, -34f, 138f, 5f, 1.7f, 2.0f, false),
-            Tentacle(-12f, rimCenterY - rimRy * 0.7f, -16f, 142f, 4f, 2.5f, 2.2f, false),
-            Tentacle(0f, rimCenterY - rimRy * 0.8f, 0f, 144f, 3f, 3.3f, 2.2f, false),
-            Tentacle(12f, rimCenterY - rimRy * 0.7f, 16f, 142f, 4f, 4.1f, 2.2f, false),
-            Tentacle(24f, rimCenterY - rimRy * 0.5f, 34f, 138f, 5f, 4.7f, 2.0f, false)
-        )
+        // backTentacles вынесен в remember до Canvas (числа 94.5f/93.1f/92.4f
+        // = rimCenterY - rimRy * 0.5f/0.7f/0.8f).
 
         // Рисуем задние щупальца (тусклые, без яркой жилы)
         for (t in backTentacles) {
@@ -2968,31 +3080,7 @@ fun RobotSkin2(
             }
 
             // 3. СТРУЯ ПУЗЫРЬКОВ (16 штук, строго вниз, разный разброс).
-            // Каждый пузырёк: фаза, боковое смещение, размер, скорость.
-            data class JetBubble(
-                val x0: Float,
-                val speed: Float,
-                val phase: Float,
-                val radius: Float
-            )
-            val jetBubbles = listOf(
-                JetBubble(-10f, 0.9f, 0.0f, 2.4f),
-                JetBubble(-6f, 1.1f, 0.7f, 1.8f),
-                JetBubble(-3f, 1.0f, 1.4f, 2.0f),
-                JetBubble(0f, 1.3f, 2.1f, 2.6f),
-                JetBubble(3f, 1.0f, 2.8f, 2.0f),
-                JetBubble(6f, 1.1f, 3.5f, 1.8f),
-                JetBubble(10f, 0.9f, 4.2f, 2.4f),
-                JetBubble(-8f, 1.2f, 4.9f, 1.6f),
-                JetBubble(-4f, 0.8f, 5.6f, 2.2f),
-                JetBubble(0f, 1.4f, 6.3f, 2.8f),
-                JetBubble(4f, 0.8f, 7.0f, 2.2f),
-                JetBubble(8f, 1.2f, 7.7f, 1.6f),
-                JetBubble(-12f, 0.7f, 8.4f, 1.4f),
-                JetBubble(-2f, 1.5f, 9.1f, 1.9f),
-                JetBubble(2f, 1.5f, 9.8f, 1.9f),
-                JetBubble(12f, 0.7f, 10.5f, 1.4f)
-            )
+            // data class JetBubble и jetBubbles вынесены в remember до Canvas.
             for (jb in jetBubbles) {
                 // Прогресс полёта вниз 0..1, циклический.
                 val prog = ((pulse * jb.speed + jb.phase) % (2f * PI.toFloat())) /
@@ -3140,20 +3228,8 @@ fun RobotSkin2(
 
         // ===== ПЛАВАЮЩИЕ ПУЗЫРЬКИ ПОД КУПОЛОМ =====
         clipPath(domePath) {
-            data class Bubble(
-                val x: Float,
-                val baseY: Float,
-                val speed: Float,
-                val phase: Float,
-                val radius: Float
-            )
-            val bubbles = listOf(
-                Bubble(-32f, 80f, 0.35f, 0.0f, 2.2f),
-                Bubble(-12f, 86f, 0.28f, 2.1f, 1.6f),
-                Bubble(18f, 82f, 0.32f, 4.2f, 2.4f),
-                Bubble(34f, 78f, 0.40f, 1.3f, 1.8f)
-            )
-            for (b in bubbles) {
+            // data class DomeBubble и domeBubbles вынесены в remember до Canvas.
+            for (b in domeBubbles) {
                 val raw = ((pulse * b.speed + b.phase) % (2f * PI.toFloat())) / (2f * PI.toFloat())
                 val prog = (raw + 0.12f * sin(raw * PI.toFloat() * 2f + b.phase)).coerceIn(0f, 1f)
                 val y = b.baseY + (0f - b.baseY) * prog
@@ -3196,55 +3272,10 @@ fun RobotSkin2(
         }
         val circuitRunner = ((pulse * 0.55f) % (2f * PI.toFloat())) / (2f * PI.toFloat())
 
-        data class CircuitLine(
-            val points: List<Pair<Float, Float>>,
-            val dotAt: List<Int>,
-            val isFront: Boolean
-        )
-
-        for (side in listOf(-1f, 1f)) {
-            val lines = listOf(
-                CircuitLine(
-                    points = listOf(
-                        side * 44f to 76f,
-                        side * 44f to 64f,
-                        side * 40f to 58f,
-                        side * 40f to 46f,
-                        side * 36f to 40f
-                    ),
-                    dotAt = listOf(1, 3, 4),
-                    isFront = true
-                ),
-
-                CircuitLine(
-                    points = listOf(
-                        side * 38f to 80f,
-                        side * 38f to 72f,
-                        side * 34f to 66f,
-                        side * 34f to 56f
-                    ),
-                    dotAt = listOf(2),
-                    isFront = true
-                ),
-                CircuitLine(
-                    points = listOf(
-                        side * 34f to 30f,
-                        side * 38f to 24f,
-                        side * 42f to 20f
-                    ),
-                    dotAt = listOf(0, 2),
-                    isFront = false
-                ),
-                CircuitLine(
-                    points = listOf(
-                        side * 44f to 22f,
-                        side * 48f to 26f,
-                        side * 52f to 30f
-                    ),
-                    dotAt = listOf(0, 2),
-                    isFront = true
-                )
-            )
+        // data class CircuitLine и списки линий вынесены в remember до Canvas:
+        // circuitLinesLeft (side = -1f) и circuitLinesRight (side = 1f).
+        for (side in sides) {
+            val lines = if (side < 0f) circuitLinesLeft else circuitLinesRight
 
             for (line in lines) {
                 val path = Path()
@@ -3311,10 +3342,7 @@ fun RobotSkin2(
         }
 
         // ===== БЕГУЩИЙ ОГОНЁК ПО ДОРОЖКАМ =====
-        val runnerLines = listOf(
-            listOf(-44f to 76f, -44f to 64f, -40f to 58f, -40f to 46f, -36f to 40f),
-            listOf(44f to 76f, 44f to 64f, 40f to 58f, 40f to 46f, 36f to 40f)
-        )
+        // runnerLines вынесен в remember до Canvas.
         val runnerSpeed = if (isThinking) 1.1f else 0.55f
         val runnerT = ((pulse * runnerSpeed) % (2f * PI.toFloat())) / (2f * PI.toFloat())
         for ((lineIdx, pts) in runnerLines.withIndex()) {
@@ -3581,7 +3609,7 @@ fun RobotSkin2(
         val pupilBreath = 0.9f + 0.1f * sin(pulse * 1.8f)
         val lookOffsetX = lookX * 3.5f * u
         val lookOffsetY = lookY * 2.5f * u
-        for (side in listOf(-1f, 1f)) {
+        for (side in sides) {
             val ex = side * 24f
             val ey = 54f
             val eyeCenter = headPt(ex, ey)
@@ -3860,25 +3888,8 @@ fun RobotSkin2(
         // 8 пузырьков поднимаются снизу вверх, как в воде.
         // У каждого своя фаза, скорость и боковое колыхание.
         // Прозрачность гаснет к верхней границе — без резкого «прыжка» вниз.
-        data class Bubble(
-            val x: Float,        // базовая X
-            val startY: Float,   // стартовая Y (низ)
-            val endY: Float,     // конечная Y (верх)
-            val speed: Float,    // скорость подъёма (0..1 цикл)
-            val phase: Float,    // фаза
-            val radius: Float    // радиус в единицах u
-        )
-        val bubbles = listOf(
-            Bubble(-70f, 150f, 10f, 0.35f, 0.0f, 0.9f),
-            Bubble(-55f, 160f, 20f, 0.28f, 1.3f, 0.6f),
-            Bubble(-30f, 155f, 15f, 0.32f, 2.7f, 1.1f),
-            Bubble(-10f, 165f, 25f, 0.25f, 4.1f, 0.7f),
-            Bubble(20f, 150f, 10f, 0.30f, 5.2f, 0.9f),
-            Bubble(45f, 160f, 20f, 0.27f, 0.8f, 0.6f),
-            Bubble(65f, 155f, 15f, 0.33f, 2.2f, 1.0f),
-            Bubble(78f, 150f, 10f, 0.29f, 3.9f, 0.7f)
-        )
-        for (b in bubbles) {
+        // data class AmbientBubble и ambientBubbles вынесены в remember до Canvas.
+        for (b in ambientBubbles) {
             // Прогресс подъёма 0..1, с плавным сбросом через синус.
             val raw = ((pulse * b.speed + b.phase) % (2f * PI.toFloat())) / (2f * PI.toFloat())
             val prog = raw.coerceIn(0f, 1f)
