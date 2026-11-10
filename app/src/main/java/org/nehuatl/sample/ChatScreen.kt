@@ -2191,13 +2191,14 @@ fun RobotSkin2(
         ),
         label = "jelly_rim_dot"
     )
-    // Фаза «секунд» для циферблата на тарелке: 1 круг = 1 секунда.
-    // Используется только при hasActiveAlarm = true.
+    // Фаза «секунд» для циферблата на тарелке: 1 круг = 60 секунд
+    // (60 чёрточек = 60 секунд, одна чёрточка в секунду — как секундная
+    // стрелка). Используется только при hasActiveAlarm = true.
     val secondsPhase by transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = LinearEasing),
+            animation = tween(60000, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "jelly_seconds"
