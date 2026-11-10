@@ -24,18 +24,35 @@ class AlarmReceiver : BroadcastReceiver() {
         // Показываем быстрый тост на экране
         Toast.makeText(context, "⏰ Напоминание: $message", Toast.LENGTH_LONG).show()
 
-        // Инициализируем голосовой движок Android (TTS) для озвучки
-        tts = TextToSpeech(context) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                tts?.language = Locale("ru") // Озвучиваем строго на русском языке
-                
-                // Формируем текст: повторяем фразу 5 раз для надежности
-                val speechText = "Внимание! Напоминание: $message. ".repeat(5)
-                
-                // Произносим текст вслух
-                tts?.speak(speechText, TextToSpeech.QUEUE_FLUSH, null, "AlarmTTS")
-                       } else {
-                Log.e("AlarmReceiver", "Ошибка инициализации TextToSpeech")
+        // Озвучка через штатный механизм приложения (Sherpa-ONNX для русского,
+        // Android TTS для остальных языков). Тогда MainViewModel.isSpeaking
+        // становится true — и робот (skin = 1), и медуза (skin = 2)
+        // открывают рот и анимируют речь, как при обычном ответе ИИ.
+        //
+        // Если MainViewModel.instance == null (процесс убит, приложение
+        // не запущено) — fallback на прямой Android TTS, чтобы звук был
+        // хотя бы без анимации робота.
+        val vm = MainViewModel.instance
+        if (vm != null) {
+            Log.d("AlarmReceiver", "Озвучка напоминания через MainViewModel.speakText")
+            // Повторяем фразу 3 раза — достаточно, чтобы услышать,
+            // но короче, чем 5 раз у прямого TTS (Sherpa чуть медленнее).
+            val speechText = "Внимание! Напоминание: $message. ".repeat(3)
+            vm.speakText(speechText)
+        } else {
+            Log.d("AlarmReceiver", "MainViewModel.instance == null — fallback на прямой Android TTS")
+            tts = TextToSpeech(context) { status ->
+                if (status == TextToSpeech.SUCCESS) {
+                    tts?.language = Locale("ru")
+
+                    // Формируем текст: повторяем фразу 5 раз для надежности
+                    val speechText = "Внимание! Напоминание: $message. ".repeat(5)
+
+                    // Произносим текст вслух
+                    tts?.speak(speechText, TextToSpeech.QUEUE_FLUSH, null, "AlarmTTS")
+                } else {
+                    Log.e("AlarmReceiver", "Ошибка инициализации TextToSpeech")
+                }
             }
         }
     }
