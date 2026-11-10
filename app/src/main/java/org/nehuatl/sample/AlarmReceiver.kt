@@ -71,8 +71,18 @@ class AlarmReceiver : BroadcastReceiver() {
                 organizerFile.writeText(if (newContent.isEmpty()) "" else newContent + "\n")
                 Log.d("AlarmReceiver", "Удалено из organizer.txt: $message")
             }
+
+            // Сообщаем MainViewModel, что файл изменился — он перечитает
+            // _organizerEntries, и циферблат на тарелке медузы сразу
+            // увидит, что активных напоминаний больше нет. Если процесс
+            // убит — instance == null, тогда при следующем запуске
+            // reloadOrganizer прочитает уже обновлённый файл.
+            MainViewModel.instance?.removeOrganizerEntry(timeMillis, message)
         } catch (e: Exception) {
             Log.e("AlarmReceiver", "Ошибка удаления из organizer.txt: ${e.message}")
+            // Даже при ошибке пробуем сообщить ViewModel —
+            // вдруг файл всё-таки обновился.
+            MainViewModel.instance?.removeOrganizerEntry(timeMillis, message)
         }
     }
 }
