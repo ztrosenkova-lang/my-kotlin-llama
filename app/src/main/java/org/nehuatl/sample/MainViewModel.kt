@@ -1629,6 +1629,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     private fun parseOrganizerText(text: String): List<AlarmEntry> {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+        val now = System.currentTimeMillis()
         return text.split("\n").mapNotNull { line ->
             val trimmed = line.trim()
             if (trimmed.isEmpty()) return@mapNotNull null
@@ -1638,6 +1639,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             val msg = trimmed.substring(sep + 1).trim()
             val millis = try { dateFormat.parse(timeStr)?.time } catch (e: Exception) { null }
             if (millis == null) return@mapNotNull null
+            // Прошедшие напоминания не считаем активными —
+            // иначе циферблат на тарелке медузы висит после срабатывания.
+            if (millis <= now) return@mapNotNull null
             AlarmEntry(millis, msg)
         }.sortedBy { it.timeMillis }
     }
@@ -1674,6 +1678,27 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка перезаписи organizer.txt: ${e.message}")
             appendSystemMessage("❌ Ошибка обновления органайзера")
+        }
+    }
+
+    /**
+     * Вызывается из AlarmReceiver после срабатывания будильника.
+     * AlarmReceiver уже удалил строку из organizer.txt — здесь только
+     * перечитываем файл и обновляем _organizerEntries, чтобы UI медузы
+     * (циферблат на тарелке) сразу увидел, что активных напоминаний
+     * больше нет.
+     */
+    fun removeOrganizerEntry(timeMillis: Long, text: String) {
+        try {
+            if (!organizerFile.exists()) {
+                _organizerEntries.value = emptyList()
+                return
+            }
+            val content = organizerFile.readText()
+            _organizerEntries.value = parseOrganizerText(content)
+            Log.d(TAG, "Organizer entries reloaded after alarm: ${_organizerEntries.value.size} active")
+        } catch (e: Exception) {
+            Log.e(TAG, "removeOrganizerEntry failed: ${e.message}")
         }
     }
 
