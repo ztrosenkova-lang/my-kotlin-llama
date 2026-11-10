@@ -458,11 +458,22 @@ fun ChatScreen(
     // ========== СООБЩАЕМ MAINVIEWMODEL О ВИДИМОСТИ CHATSCREEN ==========
     // Нужно, чтобы MainViewModel знал: писать ответ через печатную машинку
     // (ChatScreen активен) или сразу в _chatHistory (ChatScreen в фоне).
+    //
+    // isAppInForeground: при уходе Activity в фон снимаем робота/медузу
+    // с composition в ChatScreen — чтобы не было двойной отрисовки
+    // (ChatScreen + overlay). У медузы тяжёлый Canvas, два экземпляра
+    // одновременно = OOM / нативный краш. Робот тоже не должен
+    // рисоваться в фоне, если есть overlay.
+    var isAppInForeground by remember { mutableStateOf(true) }
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> viewModel.setChatScreenVisible(true)
+                Lifecycle.Event.ON_RESUME -> {
+                    viewModel.setChatScreenVisible(true)
+                    isAppInForeground = true
+                }
                 Lifecycle.Event.ON_PAUSE -> viewModel.setChatScreenVisible(false)
+                Lifecycle.Event.ON_STOP -> isAppInForeground = false
                 else -> {}
             }
         }
@@ -1507,7 +1518,7 @@ fun ChatScreen(
 
         // ===== ЕДИНЫЙ РОБОТ =====
         // Робот на орбите
-        if (robotOnOrbit && !robotIsFlyingHere && !robotIsFlyingHome) {
+        if (isAppInForeground && robotOnOrbit && !robotIsFlyingHere && !robotIsFlyingHome) {
             BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1554,7 +1565,7 @@ fun ChatScreen(
         }
 
         // Робот в полёте
-        if (robotIsFlyingHere || robotIsFlyingHome) {
+        if (isAppInForeground && (robotIsFlyingHere || robotIsFlyingHome)) {
             BoxWithConstraints(
                 modifier = Modifier.fillMaxSize()
             ) {
@@ -1638,7 +1649,7 @@ fun ChatScreen(
         }
 
                 // Робот на экране
-        if (robotIsLanded && !robotOnOrbit && !robotIsFlyingHome) {
+        if (isAppInForeground && robotIsLanded && !robotOnOrbit && !robotIsFlyingHome) {
             BoxWithConstraints(
                 modifier = Modifier.fillMaxSize()
             ) {
