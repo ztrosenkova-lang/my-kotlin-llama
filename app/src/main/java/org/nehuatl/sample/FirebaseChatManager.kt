@@ -221,18 +221,25 @@ object FirebaseChatManager {
     // ========== КАРТИНКИ ==========
 
     fun uploadImage(uri: Uri, onResult: (String?) -> Unit) {
-        val uid = getMyUid() ?: run { onResult(null); return }
-        val ref = storage.reference.child("chat_images/$uid/${System.currentTimeMillis()}.jpg")
-        ref.putFile(uri)
-            .addOnSuccessListener {
-                ref.downloadUrl
-                    .addOnSuccessListener { url -> onResult(url.toString()) }
-                    .addOnFailureListener { onResult(null) }
-            }
-            .addOnFailureListener {
-                Log.e(TAG, "uploadImage failed: ${it.message}")
-                onResult(null)
-            }
+        try {
+            val uid = getMyUid() ?: run { onResult(null); return }
+            val ref = storage.reference.child("chat_images/$uid/${System.currentTimeMillis()}.jpg")
+            ref.putFile(uri)
+                .addOnSuccessListener {
+                    ref.downloadUrl
+                        .addOnSuccessListener { url -> onResult(url.toString()) }
+                        .addOnFailureListener { onResult(null) }
+                }
+                .addOnFailureListener {
+                    Log.e(TAG, "uploadImage failed: ${it.message}")
+                    onResult(null)
+                }
+        } catch (e: Exception) {
+            // Storage может быть не настроен (Spark plan) — не крашим приложение,
+            // просто сообщение без картинки не отправится.
+            Log.e(TAG, "uploadImage exception: ${e.message}")
+            onResult(null)
+        }
     }
 
     // ========== ВНУТРЕННЕЕ ==========
