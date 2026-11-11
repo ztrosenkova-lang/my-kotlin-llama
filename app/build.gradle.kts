@@ -93,6 +93,15 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
     implementation(libs.okhttp)
+
+    // Firebase (BoM + Realtime Database + Auth + Storage)
+    implementation(platform("com.google.firebase:firebase-bom:35.1.0"))
+    implementation("com.google.firebase:firebase-database")
+    implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-storage")
+
+    // Coil для AsyncImage в MessengerScreen
+    implementation("io.coil-kt:coil-compose:2.7.0")
     implementation(libs.okhttp.logging.interceptor)
 
     implementation(files("libs/sherpa-onnx-1.13.6.aar"))
@@ -305,3 +314,5 @@ tasks.named("preBuild") {
     dependsOn("checkTtsModel")
     dependsOn("checkVisionModel")
 }
+
+apply(plugin = "com.google.gms.google-services")
