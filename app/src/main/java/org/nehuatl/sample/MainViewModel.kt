@@ -214,6 +214,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private val _showChatEditor = MutableStateFlow(false)
     val showChatEditor: StateFlow<Boolean> = _showChatEditor.asStateFlow()
 
+    private val _showMessenger = MutableStateFlow(false)
+    val showMessenger: StateFlow<Boolean> = _showMessenger.asStateFlow()
+    fun showMessenger() { _showMessenger.value = true }
+    fun hideMessenger() { _showMessenger.value = false }
+
             private val memoryFile: File by lazy {
         File(getApplication<Application>().filesDir, "memory.txt")
     }
@@ -3132,6 +3137,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 }
                 lowerText.contains("редактировать чат") -> {
                     showChatEditor()
+                    return
+                }
+                lowerText.trim() == "чат" -> {
+                    showMessenger()
                     return
                 }
                 lowerText.contains(REMEMBER_COMMAND) -> {
