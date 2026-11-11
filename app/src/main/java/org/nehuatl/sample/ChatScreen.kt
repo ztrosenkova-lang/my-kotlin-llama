@@ -194,7 +194,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 // Хочешь затянуть — ставь 1200–1500. Больше 1500 — уже раздражает.
 private const val THEME_ANIMATION_MS = 4500
 
-private data class AppColors(
+data class AppColors(
     val background: Color,
     val surfaceGray: Color,
     val borderGray: Color,
