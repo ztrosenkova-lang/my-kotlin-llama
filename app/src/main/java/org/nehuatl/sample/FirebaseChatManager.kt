@@ -261,4 +261,64 @@ object FirebaseChatManager {
         val timestamp = snapshot.child("timestamp").getValue(Long::class.java) ?: 0L
         return ChatMessageItem(id, senderId, senderName, text, imageUrl, timestamp)
     }
+
+    // ========== СПИСОК ЛИЧНЫХ ЧАТОВ ==========
+
+    data class ChatPreview(
+        val otherUid: String,
+        val otherName: String,
+        val lastMessage: String,
+        val timestamp: Long
+    )
+
+    fun listenMyChats(onChats: (List<ChatPreview>) -> Unit) {
+        val myUid = getMyUid() ?: return
+        database.child("user_chats").child(myUid).addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val list = mutableListOf<ChatPreview>()
+                snapshot.children.forEach { child ->
+                    val otherUid = child.key ?: return@forEach
+                    val lastMessage = child.child("lastMessage").getValue(String::class.java) ?: return@forEach
+                    val timestamp = child.child("timestamp").getValue(Long::class.java) ?: 0L
+                    val otherName = child.child("otherName").getValue(String::class.java) ?: otherUid
+                    list.add(ChatPreview(otherUid, otherName, lastMessage, timestamp))
+                }
+                onChats(list.sortedByDescending { it.timestamp })
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        })
+    }
+
+    // ========== ИНДИКАТОР «ПЕЧАТАЕТ...» ==========
+
+    fun setTyping(otherUid: String, typing: Boolean) {
+        val myUid = getMyUid() ?: return
+        val ref = database.child("user_typing").child(otherUid).child(myUid)
+        if (typing) {
+            ref.setValue(true)
+            ref.onDisconnect().removeValue()
+        } else {
+            ref.removeValue()
+        }
+    }
+
+    fun listenTyping(otherUid: String, onTyping: (Boolean) -> Unit): ValueEventListener {
+        val myUid = getMyUid() ?: return object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {}
+            override fun onCancelled(error: DatabaseError) {}
+        }
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                onTyping(snapshot.getValue(Boolean::class.java) ?: false)
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        }
+        database.child("user_typing").child(myUid).child(otherUid).addValueEventListener(listener)
+        return listener
+    }
+
+    fun removeTypingListener(otherUid: String, listener: ValueEventListener) {
+        val myUid = getMyUid() ?: return
+        database.child("user_typing").child(myUid).child(otherUid).removeEventListener(listener)
+    }
 }
