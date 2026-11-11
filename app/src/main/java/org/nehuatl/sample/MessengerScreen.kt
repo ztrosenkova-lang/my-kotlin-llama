@@ -33,6 +33,9 @@ import coil.compose.AsyncImage
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 private sealed class MessengerTab {
     object Chats : MessengerTab()
@@ -229,6 +232,12 @@ private fun ChatsList(
     onOpenPrivate: (String, String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var chats by remember { mutableStateOf<List<FirebaseChatManager.ChatPreview>>(emptyList()) }
+
+    LaunchedEffect(Unit) {
+        FirebaseChatManager.listenMyChats { list -> chats = list }
+    }
+
     LazyColumn(modifier = modifier.fillMaxWidth()) {
         item {
             Row(
@@ -250,15 +259,33 @@ private fun ChatsList(
                 Text("Общий чат", color = colors.text, fontSize = 14.sp)
             }
         }
-        // Личные чаты — из user_chats
-        // Для простоты: показываем всех пользователей, с кем есть переписка
-        item {
-            Text(
-                "Личные чаты появятся после первого сообщения",
-                color = colors.text.copy(alpha = 0.5f),
-                fontSize = 10.sp,
-                modifier = Modifier.padding(12.dp)
-            )
+        items(chats) { chat ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onOpenPrivate(chat.otherUid, chat.otherName) }
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(colors.borderGray, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(chat.otherName.take(1).uppercase(), color = colors.background, fontSize = 16.sp)
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(chat.otherName, color = colors.text, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        chat.lastMessage,
+                        color = colors.text.copy(alpha = 0.6f),
+                        fontSize = 11.sp,
+                        maxLines = 1
+                    )
+                }
+            }
         }
     }
 }
@@ -320,8 +347,11 @@ private fun ChatConversation(
     var messages by remember { mutableStateOf<List<ChatMessageItem>>(emptyList()) }
     var input by remember { mutableStateOf("") }
     var pendingImageUri by remember { mutableStateOf<Uri?>(null) }
+    var otherTyping by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val context = LocalContext.current
+    val typingJob = remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    val scope = rememberCoroutineScope()
 
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -338,6 +368,9 @@ private fun ChatConversation(
         } else {
             FirebaseChatManager.listenPrivateMessages(otherUid) { item ->
                 messages = messages + item
+            }
+            val listener = FirebaseChatManager.listenTyping(otherUid) { typing ->
+                otherTyping = typing
             }
         }
     }
@@ -356,7 +389,33 @@ private fun ChatConversation(
                 .fillMaxWidth()
                 .padding(8.dp)
         ) {
-            items(messages) { msg ->
+            itemsIndexed(messages) { index, msg ->
+                val currentDay = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(msg.timestamp))
+                val prevDay = if (index > 0) {
+                    SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(messages[index - 1].timestamp))
+                } else null
+                if (currentDay != prevDay) {
+                    val dayLabel = when (currentDay) {
+                        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) -> "Сегодня"
+                        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(System.currentTimeMillis() - 86400000L)) -> "Вчера"
+                        else -> SimpleDateFormat("d MMMM", Locale("ru")).format(Date(msg.timestamp))
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            dayLabel,
+                            color = colors.text.copy(alpha = 0.5f),
+                            fontSize = 10.sp,
+                            modifier = Modifier
+                                .background(colors.surfaceGray, RoundedCornerShape(10.dp))
+                                .padding(horizontal = 10.dp, vertical = 3.dp)
+                        )
+                    }
+                }
                 val isMine = msg.senderId == myUid
                 Row(
                     modifier = Modifier
@@ -398,6 +457,15 @@ private fun ChatConversation(
             }
         }
 
+        if (otherTyping && otherUid != "PUBLIC") {
+            Text(
+                "$otherName печатает...",
+                color = colors.text.copy(alpha = 0.6f),
+                fontSize = 10.sp,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+            )
+        }
+
         if (pendingImageUri != null) {
             Row(
                 modifier = Modifier
@@ -425,7 +493,18 @@ private fun ChatConversation(
             }
             OutlinedTextField(
                 value = input,
-                onValueChange = { input = it },
+                onValueChange = { newValue ->
+                    input = newValue
+                    if (otherUid != "PUBLIC") {
+                        // Печатает — ставим true, через 2 секунды без ввода — false
+                        typingJob.value?.cancel()
+                        FirebaseChatManager.setTyping(otherUid, true)
+                        typingJob.value = scope.launch {
+                            kotlinx.coroutines.delay(2000)
+                            FirebaseChatManager.setTyping(otherUid, false)
+                        }
+                    }
+                },
                 modifier = Modifier.weight(1f),
                 placeholder = { Text("Сообщение...", color = colors.text.copy(alpha = 0.5f), fontSize = 12.sp) },
                 maxLines = 3,
@@ -445,6 +524,7 @@ private fun ChatConversation(
                 if (text.isEmpty() && uri == null) return@IconButton
                 input = ""
                 pendingImageUri = null
+                if (otherUid != "PUBLIC") FirebaseChatManager.setTyping(otherUid, false)
                 if (uri != null) {
                     FirebaseChatManager.uploadImage(uri) { url ->
                         if (url != null) {
