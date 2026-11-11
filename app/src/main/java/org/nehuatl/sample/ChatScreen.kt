@@ -916,6 +916,16 @@ fun ChatScreen(
         )
     }
 
+    val showMessenger by viewModel.showMessenger.collectAsStateWithLifecycle(initialValue = false)
+    if (showMessenger) {
+        MessengerScreen(
+            viewModel = viewModel,
+            colors = colors,
+            isDarkTheme = isDarkTheme,
+            onClose = { viewModel.hideMessenger() }
+        )
+    }
+
                 if (showPdfPagePicker && pendingPdfUri != null) {
         AlertDialog(
             onDismissRequest = { showPdfPagePicker = false; pendingPdfUri = null },
