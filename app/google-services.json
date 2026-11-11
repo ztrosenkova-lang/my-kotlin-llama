@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "122661549982",
+    "project_id": "ii-drug",
+    "storage_bucket": "ii-drug.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:122661549982:android:036457c4d0a23ab28cc88f",
+        "android_client_info": {
+          "package_name": "org.nehuatl.sample"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA3pt_GwvWnuQiGJ9_oISdhpGOtjO2nwMY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
