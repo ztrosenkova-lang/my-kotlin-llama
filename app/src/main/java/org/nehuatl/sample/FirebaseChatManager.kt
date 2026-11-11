@@ -58,17 +58,44 @@ object FirebaseChatManager {
     // ========== ИМЯ ПОЛЬЗОВАТЕЛЯ ==========
 
     fun saveMyName(name: String, onDone: () -> Unit = {}) {
-        val uid = getMyUid() ?: return
-        database.child("users").child(uid).child("name").setValue(name)
-            .addOnSuccessListener { onDone() }
-            .addOnFailureListener { Log.e(TAG, "saveMyName failed: ${it.message}") }
+        val uid = getMyUid()
+        if (uid != null) {
+            database.child("users").child(uid).child("name").setValue(name)
+                .addOnSuccessListener { onDone() }
+                .addOnFailureListener { Log.e(TAG, "saveMyName failed: ${it.message}") }
+            return
+        }
+        // Анонимный вход ещё не завершился — ждём его, потом сохраняем
+        auth.signInAnonymously()
+            .addOnSuccessListener { result ->
+                val newUid = result.user?.uid ?: return@addOnSuccessListener
+                database.child("users").child(newUid).child("name").setValue(name)
+                    .addOnSuccessListener { onDone() }
+                    .addOnFailureListener { Log.e(TAG, "saveMyName failed: ${it.message}") }
+            }
+            .addOnFailureListener { Log.e(TAG, "saveMyName auth failed: ${it.message}") }
     }
 
     fun loadMyName(onLoaded: (String?) -> Unit) {
-        val uid = getMyUid() ?: run { onLoaded(null); return }
-        database.child("users").child(uid).child("name").get()
-            .addOnSuccessListener { snapshot ->
-                onLoaded(snapshot.getValue(String::class.java))
+        val uid = getMyUid()
+        if (uid != null) {
+            database.child("users").child(uid).child("name").get()
+                .addOnSuccessListener { snapshot ->
+                    onLoaded(snapshot.getValue(String::class.java))
+                }
+                .addOnFailureListener { onLoaded(null) }
+            return
+        }
+        // Анонимный вход ещё не завершился — ждём его, потом читаем имя
+        auth.signInAnonymously()
+            .addOnSuccessListener { result ->
+                val newUid = result.user?.uid
+                if (newUid == null) { onLoaded(null); return@addOnSuccessListener }
+                database.child("users").child(newUid).child("name").get()
+                    .addOnSuccessListener { snapshot ->
+                        onLoaded(snapshot.getValue(String::class.java))
+                    }
+                    .addOnFailureListener { onLoaded(null) }
             }
             .addOnFailureListener { onLoaded(null) }
     }
