@@ -40,66 +40,60 @@ object FirebaseChatManager {
     private var usersListener: ValueEventListener? = null
     private var privateListeners = mutableMapOf<String, ChildEventListener>()
 
+    private var authReady: com.google.android.gms.tasks.Task<com.google.firebase.auth.AuthResult>? = null
+
     fun init() {
         if (initialized) return
         auth = FirebaseAuth.getInstance()
         database = FirebaseDatabase.getInstance().reference
         storage = FirebaseStorage.getInstance()
+        initialized = true
+
         if (auth.currentUser == null) {
-            auth.signInAnonymously()
+            authReady = auth.signInAnonymously()
                 .addOnSuccessListener { Log.d(TAG, "Anonymous auth OK: ${it.user?.uid}") }
                 .addOnFailureListener { Log.e(TAG, "Auth failed: ${it.message}") }
         }
-        initialized = true
     }
 
     fun getMyUid(): String? = auth.currentUser?.uid
 
+    private fun waitForAuth(onReady: () -> Unit) {
+        val task = authReady
+        if (task == null || task.isComplete) {
+            onReady()
+            return
+        }
+        task.addOnCompleteListener { onReady() }
+    }
+
     // ========== ИМЯ ПОЛЬЗОВАТЕЛЯ ==========
 
     fun saveMyName(name: String, onDone: () -> Unit = {}) {
-        val uid = getMyUid()
-        if (uid != null) {
+        waitForAuth {
+            val uid = getMyUid()
+            if (uid == null) {
+                onDone()
+                return@waitForAuth
+            }
             database.child("users").child(uid).child("name").setValue(name)
                 .addOnSuccessListener { onDone() }
                 .addOnFailureListener { Log.e(TAG, "saveMyName failed: ${it.message}"); onDone() }
-            return
         }
-        auth.signInAnonymously()
-            .addOnSuccessListener { result ->
-                val newUid = result.user?.uid
-                if (newUid == null) {
-                    onDone()
-                    return@addOnSuccessListener
-                }
-                database.child("users").child(newUid).child("name").setValue(name)
-                    .addOnSuccessListener { onDone() }
-                    .addOnFailureListener { Log.e(TAG, "saveMyName failed: ${it.message}"); onDone() }
-            }
-            .addOnFailureListener { Log.e(TAG, "saveMyName auth failed: ${it.message}"); onDone() }
     }
     fun loadMyName(onLoaded: (String?) -> Unit) {
-        val uid = getMyUid()
-        if (uid != null) {
+        waitForAuth {
+            val uid = getMyUid()
+            if (uid == null) {
+                onLoaded(null)
+                return@waitForAuth
+            }
             database.child("users").child(uid).child("name").get()
                 .addOnSuccessListener { snapshot ->
                     onLoaded(snapshot.getValue(String::class.java))
                 }
                 .addOnFailureListener { onLoaded(null) }
-            return
         }
-        // Анонимный вход ещё не завершился — ждём его, потом читаем имя
-        auth.signInAnonymously()
-            .addOnSuccessListener { result ->
-                val newUid = result.user?.uid
-                if (newUid == null) { onLoaded(null); return@addOnSuccessListener }
-                database.child("users").child(newUid).child("name").get()
-                    .addOnSuccessListener { snapshot ->
-                        onLoaded(snapshot.getValue(String::class.java))
-                    }
-                    .addOnFailureListener { onLoaded(null) }
-            }
-            .addOnFailureListener { onLoaded(null) }
     }
 
     // ========== ОНЛАЙН / ОФЛАЙН ==========
