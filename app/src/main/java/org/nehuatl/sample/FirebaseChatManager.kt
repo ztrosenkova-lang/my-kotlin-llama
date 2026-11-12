@@ -62,20 +62,22 @@ object FirebaseChatManager {
         if (uid != null) {
             database.child("users").child(uid).child("name").setValue(name)
                 .addOnSuccessListener { onDone() }
-                .addOnFailureListener { Log.e(TAG, "saveMyName failed: ${it.message}") }
+                .addOnFailureListener { Log.e(TAG, "saveMyName failed: ${it.message}"); onDone() }
             return
         }
-        // Анонимный вход ещё не завершился — ждём его, потом сохраняем
         auth.signInAnonymously()
             .addOnSuccessListener { result ->
-                val newUid = result.user?.uid ?: return@addOnSuccessListener
+                val newUid = result.user?.uid
+                if (newUid == null) {
+                    onDone()
+                    return@addOnSuccessListener
+                }
                 database.child("users").child(newUid).child("name").setValue(name)
                     .addOnSuccessListener { onDone() }
-                    .addOnFailureListener { Log.e(TAG, "saveMyName failed: ${it.message}") }
+                    .addOnFailureListener { Log.e(TAG, "saveMyName failed: ${it.message}"); onDone() }
             }
-            .addOnFailureListener { Log.e(TAG, "saveMyName auth failed: ${it.message}") }
+            .addOnFailureListener { Log.e(TAG, "saveMyName auth failed: ${it.message}"); onDone() }
     }
-
     fun loadMyName(onLoaded: (String?) -> Unit) {
         val uid = getMyUid()
         if (uid != null) {
