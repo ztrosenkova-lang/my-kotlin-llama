@@ -45,10 +45,9 @@ object FirebaseChatManager {
     fun init() {
         if (initialized) return
         auth = FirebaseAuth.getInstance()
-database = FirebaseDatabase.getInstance("https://ii-drug-default-rtdb.europe-west1.firebasedatabase.app").reference
+        database = FirebaseDatabase.getInstance("https://ii-drug-default-rtdb.europe-west1.firebasedatabase.app").reference
         storage = FirebaseStorage.getInstance()
         initialized = true
-
         if (auth.currentUser == null) {
             authReady = auth.signInAnonymously()
                 .addOnSuccessListener { Log.d(TAG, "Anonymous auth OK: ${it.user?.uid}") }
@@ -185,20 +184,22 @@ database = FirebaseDatabase.getInstance("https://ii-drug-default-rtdb.europe-wes
             "imageUrl" to imageUrl,
             "timestamp" to ServerValue.TIMESTAMP
         )
-        // Дублируем в оба узла, чтобы каждый видел переписку у себя
-        database.updateChildren(mapOf(
-            "/user_messages/$myUid/$otherUid/$key" to msg,
-            "/user_messages/$otherUid/$myUid/$key" to msg,
-            "/user_chats/$myUid/$otherUid" to mapOf(
-                "lastMessage" to text,
-                "timestamp" to ServerValue.TIMESTAMP,
-                "otherName" to (otherUserNameCache ?: "")
-            ),
-            "/user_chats/$otherUid/$myUid" to mapOf(
-                "lastMessage" to text,
-                "timestamp" to ServerValue.TIMESTAMP,
-                "otherName" to (myNameCache ?: "Аноним")
-            )
+        // Пишем каждый узел отдельным setValue, а не одним updateChildren.
+        // Причина: updateChildren — атомарная операция. Если хотя бы один путь
+        // запрещён правилами, падает ВСЯ запись, и сообщение не уходит никуда.
+        // С отдельными setValue сообщение в user_messages/$myUid/$otherUid
+        // сохранится, даже если запись в чужой user_chats заблокирована.
+        database.child("user_messages").child(myUid).child(otherUid).child(key).setValue(msg)
+        database.child("user_messages").child(otherUid).child(myUid).child(key).setValue(msg)
+        database.child("user_chats").child(myUid).child(otherUid).setValue(mapOf(
+            "lastMessage" to text,
+            "timestamp" to ServerValue.TIMESTAMP,
+            "otherName" to (otherUserNameCache ?: "")
+        ))
+        database.child("user_chats").child(otherUid).child(myUid).setValue(mapOf(
+            "lastMessage" to text,
+            "timestamp" to ServerValue.TIMESTAMP,
+            "otherName" to (myNameCache ?: "Аноним")
         ))
     }
 
