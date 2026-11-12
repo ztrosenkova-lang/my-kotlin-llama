@@ -50,14 +50,19 @@ fun MessengerScreen(
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Сначала init(), потом ВСЁ остальное. Без этого loadMyName
-    // вызывает auth.currentUser на lateinit auth, который ещё не создан.
     var firebaseReady by remember { mutableStateOf(false) }
+    var initError by remember { mutableStateOf<String?>(null) }
+    var loadCalled by remember { mutableStateOf(false) }
+    var loadResult by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
-        FirebaseChatManager.init()
-        FirebaseChatManager.setOnline(true)
-        firebaseReady = true
+        try {
+            FirebaseChatManager.init()
+            FirebaseChatManager.setOnline(true)
+            firebaseReady = true
+        } catch (e: Exception) {
+            initError = "${e.javaClass.simpleName}: ${e.message}"
+        }
     }
     DisposableEffect(Unit) {
         onDispose {
@@ -72,7 +77,9 @@ fun MessengerScreen(
 
     LaunchedEffect(firebaseReady) {
         if (!firebaseReady) return@LaunchedEffect
+        loadCalled = true
         FirebaseChatManager.loadMyName { name ->
+            loadResult = name ?: "null"
             if (name.isNullOrBlank()) {
                 showNameDialog = true
             } else {
@@ -80,6 +87,24 @@ fun MessengerScreen(
                 FirebaseChatManager.cacheMyName(name)
             }
         }
+    }
+    if (!showNameDialog && myName == null) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "firebaseReady=$firebaseReady\n" +
+                        "initError=$initError\n" +
+                        "loadCalled=$loadCalled\n" +
+                        "loadResult=$loadResult\n" +
+                        "uid=${FirebaseChatManager.getMyUid() ?: "null"}",
+                color = colors.text,
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace
+            )
+        }
+        return
     }
 
     if (showNameDialog) {
