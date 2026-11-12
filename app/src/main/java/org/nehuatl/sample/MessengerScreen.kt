@@ -29,6 +29,11 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import coil.compose.AsyncImage
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -44,6 +49,25 @@ private sealed class MessengerTab {
 
 @Composable
 fun MessengerScreen(
+    viewModel: MainViewModel,
+    colors: AppColors,
+    isDarkTheme: Boolean,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Dialog(onDismissRequest = onClose) {
+        MessengerContent(
+            viewModel = viewModel,
+            colors = colors,
+            isDarkTheme = isDarkTheme,
+            onClose = onClose,
+            modifier = modifier
+        )
+    }
+}
+
+@Composable
+private fun MessengerContent(
     viewModel: MainViewModel,
     colors: AppColors,
     isDarkTheme: Boolean,
@@ -117,17 +141,32 @@ fun MessengerScreen(
     var openedChatUid by remember { mutableStateOf<String?>(null) }
     var openedChatName by remember { mutableStateOf<String?>(null) }
 
-    Box(
+    Card(
         modifier = modifier
-            .fillMaxSize()
-            .background(colors.background)
+            .fillMaxWidth(0.95f)
+            .fillMaxHeight(0.85f),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, colors.borderGray),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            colors.gradTop,
+                            colors.gradMid,
+                            colors.gradBottom
+                        )
+                    )
+                )
+        ) {
             // Шапка
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(colors.surfaceGray)
+                    .background(colors.surfaceGray.copy(alpha = 0.7f))
                     .padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
