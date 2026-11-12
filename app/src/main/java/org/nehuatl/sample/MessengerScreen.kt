@@ -75,16 +75,6 @@ fun MessengerScreen(
         }
     }
 
-    if (loading) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text("Загрузка...", color = colors.text, fontSize = 12.sp)
-        }
-        return
-    }
-
     if (showNameDialog) {
         AlertDialog(
             onDismissRequest = {},
