@@ -1847,15 +1847,16 @@ fun ChatScreen(
             }
            }// закрытие if (robotIsLanded ...)
 
-        if (showMessenger) {
-            MessengerScreen(
-                viewModel = viewModel,
-                colors = colors,
-                isDarkTheme = isDarkTheme,
-                onClose = { viewModel.hideMessenger() }
-            )
-        }
     }// закрытие главного Box
+
+    if (showMessenger) {
+        MessengerScreen(
+            viewModel = viewModel,
+            colors = colors,
+            isDarkTheme = isDarkTheme,
+            onClose = { viewModel.hideMessenger() }
+        )
+    }
     
     // Диалог разблокировки по команде «режим админа» — рисуется поверх чата
     if (showAdminUnlockDialog) {
