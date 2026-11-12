@@ -2,7 +2,8 @@
   "project_info": {
     "project_number": "122661549982",
     "project_id": "ii-drug",
-    "storage_bucket": "ii-drug.firebasestorage.app"
+    "storage_bucket": "ii-drug.firebasestorage.app",
+    "firebase_url": "https://ii-drug-default-rtdb.europe-west1.firebasedatabase.app"
   },
   "client": [
     {
