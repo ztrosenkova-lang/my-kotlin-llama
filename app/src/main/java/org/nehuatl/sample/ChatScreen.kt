@@ -331,6 +331,7 @@ fun ChatScreen(
     val isSmartMode by viewModel.isSmartMode.collectAsStateWithLifecycle(initialValue = false)
     val robotSkin by viewModel.robotSkin.collectAsStateWithLifecycle(initialValue = 1)
     val activeTranslationPrompt by viewModel.activeTranslationPrompt.collectAsStateWithLifecycle(initialValue = null)
+    val showMessenger by viewModel.showMessenger.collectAsStateWithLifecycle(initialValue = false)
 
        // Единый Transition для всех цветов темы — плавная одновременная смена
     val themeTransition = updateTransition(
@@ -612,8 +613,8 @@ fun ChatScreen(
         robotOnOrbit = false
     }
 }
-            LaunchedEffect(robotOnOrbit) {
-        if (robotOnOrbit) {
+            LaunchedEffect(robotOnOrbit, showMessenger) {
+        if (robotOnOrbit && !showMessenger) {
             while (true) {
                 robotOrbitAngle += 0.01f
                 delay(16)
@@ -916,15 +917,6 @@ fun ChatScreen(
         )
     }
 
-    val showMessenger by viewModel.showMessenger.collectAsStateWithLifecycle(initialValue = false)
-    if (showMessenger) {
-        MessengerScreen(
-            viewModel = viewModel,
-            colors = colors,
-            isDarkTheme = isDarkTheme,
-            onClose = { viewModel.hideMessenger() }
-        )
-    }
 
                 if (showPdfPagePicker && pendingPdfUri != null) {
         AlertDialog(
@@ -1854,6 +1846,15 @@ fun ChatScreen(
                 }
             }
            }// закрытие if (robotIsLanded ...)
+
+        if (showMessenger) {
+            MessengerScreen(
+                viewModel = viewModel,
+                colors = colors,
+                isDarkTheme = isDarkTheme,
+                onClose = { viewModel.hideMessenger() }
+            )
+        }
     }// закрытие главного Box
     
     // Диалог разблокировки по команде «режим админа» — рисуется поверх чата
