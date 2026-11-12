@@ -216,8 +216,73 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     private val _showMessenger = MutableStateFlow(false)
     val showMessenger: StateFlow<Boolean> = _showMessenger.asStateFlow()
-    fun showMessenger() { _showMessenger.value = true }
-    fun hideMessenger() { _showMessenger.value = false }
+    fun showMessenger() {
+        _showMessenger.value = true
+        notificationSuppressed = true
+        speechQueue.clear()
+    }
+    fun hideMessenger() {
+        _showMessenger.value = false
+        notificationSuppressed = false
+    }
+
+    @Volatile
+    private var notificationSuppressed = false
+
+    @Volatile
+    private var lastNotifiedTimestamp: Long = System.currentTimeMillis()
+
+    private val speechQueue = mutableListOf<String>()
+
+    private fun enqueueSpeech(text: String) {
+        synchronized(speechQueue) {
+            speechQueue.add(text)
+        }
+        trySpeakNextInQueue()
+    }
+
+    private fun trySpeakNextInQueue() {
+        if (notificationSuppressed) return
+        if (_isSpeaking.value || _isPreparingSpeech.value) return
+        val next = synchronized(speechQueue) {
+            if (speechQueue.isEmpty()) null else speechQueue.removeAt(0)
+        } ?: return
+        speakText(next)
+    }
+
+    private fun startSpeechQueueWatcher() {
+        scope.launch {
+            while (true) {
+                delay(500)
+                if (!notificationSuppressed &&
+                    !_isSpeaking.value &&
+                    !_isPreparingSpeech.value) {
+                    trySpeakNextInQueue()
+                }
+            }
+        }
+    }
+
+    private fun startChatNotificationListeners() {
+        FirebaseChatManager.listenAllPublicForNotify { item ->
+            if (notificationSuppressed) return@listenAllPublicForNotify
+            if (item.senderId == FirebaseChatManager.getMyUid()) return@listenAllPublicForNotify
+            if (item.timestamp <= lastNotifiedTimestamp) return@listenAllPublicForNotify
+            lastNotifiedTimestamp = item.timestamp
+            val msg = "📢 Новое сообщение в общем чате от ${item.senderName}"
+            appendSystemMessage(msg)
+            enqueueSpeech("Новое сообщение в общем чате от ${item.senderName}")
+        }
+        FirebaseChatManager.listenAllPrivateForNotify { item, _ ->
+            if (notificationSuppressed) return@listenAllPrivateForNotify
+            if (item.senderId == FirebaseChatManager.getMyUid()) return@listenAllPrivateForNotify
+            if (item.timestamp <= lastNotifiedTimestamp) return@listenAllPrivateForNotify
+            lastNotifiedTimestamp = item.timestamp
+            val msg = "💬 Новое личное сообщение от ${item.senderName}"
+            appendSystemMessage(msg)
+            enqueueSpeech("Новое личное сообщение от ${item.senderName}")
+        }
+    }
 
             private val memoryFile: File by lazy {
         File(getApplication<Application>().filesDir, "memory.txt")
@@ -857,6 +922,13 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
         val ttsStartIntent = Intent(getApplication<Application>(), TtsService::class.java)
         getApplication<Application>().startService(ttsStartIntent)
+
+        FirebaseChatManager.init()
+        scope.launch {
+            delay(1500)
+            startChatNotificationListeners()
+            startSpeechQueueWatcher()
+        }
 
         scope.launch {
             _cloudFlow.collect { event ->
@@ -4062,6 +4134,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     override fun onCleared() {
         super.onCleared()
         instance = null
+        FirebaseChatManager.removeNotifyListeners()
         _isTtsReady.value = false
         _isSpeaking.value = false
         _isModelLoaded.value = false
