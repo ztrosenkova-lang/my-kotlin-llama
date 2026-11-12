@@ -345,4 +345,59 @@ object FirebaseChatManager {
         val myUid = getMyUid() ?: return
         database.child("user_typing").child(myUid).child(otherUid).removeEventListener(listener)
     }
+
+    // ========== СЛУШАТЕЛИ ДЛЯ ОПОВЕЩЕНИЙ ==========
+
+    private var notifyPublicListener: ChildEventListener? = null
+    private var notifyPrivateListener: ChildEventListener? = null
+
+    fun listenAllPublicForNotify(onMessage: (ChatMessageItem) -> Unit): ChildEventListener {
+        val listener = object : ChildEventListener {
+            override fun onChildAdded(snapshot: DataSnapshot, previousChildName: String?) {
+                parseMessage(snapshot)?.let(onMessage)
+            }
+            override fun onChildChanged(snapshot: DataSnapshot, previousChildName: String?) {}
+            override fun onChildRemoved(snapshot: DataSnapshot) {}
+            override fun onChildMoved(snapshot: DataSnapshot, previousChildName: String?) {}
+            override fun onCancelled(error: DatabaseError) { Log.e(TAG, "notify public: ${error.message}") }
+        }
+        database.child("public_messages").orderByChild("timestamp").limitToLast(100)
+            .addChildEventListener(listener)
+        notifyPublicListener = listener
+        return listener
+    }
+
+    fun listenAllPrivateForNotify(onMessage: (ChatMessageItem, String) -> Unit): ChildEventListener {
+        val myUid = getMyUid() ?: return object : ChildEventListener {
+            override fun onChildAdded(snapshot: DataSnapshot, previousChildName: String?) {}
+            override fun onChildChanged(snapshot: DataSnapshot, previousChildName: String?) {}
+            override fun onChildRemoved(snapshot: DataSnapshot) {}
+            override fun onChildMoved(snapshot: DataSnapshot, previousChildName: String?) {}
+            override fun onCancelled(error: DatabaseError) {}
+        }
+        val listener = object : ChildEventListener {
+            override fun onChildAdded(snapshot: DataSnapshot, previousChildName: String?) {
+                val otherUid = snapshot.ref.parent?.parent?.key ?: return
+                parseMessage(snapshot)?.let { onMessage(it, otherUid) }
+            }
+            override fun onChildChanged(snapshot: DataSnapshot, previousChildName: String?) {}
+            override fun onChildRemoved(snapshot: DataSnapshot) {}
+            override fun onChildMoved(snapshot: DataSnapshot, previousChildName: String?) {}
+            override fun onCancelled(error: DatabaseError) { Log.e(TAG, "notify private: ${error.message}") }
+        }
+        database.child("user_messages").child(myUid)
+            .addChildEventListener(listener)
+        notifyPrivateListener = listener
+        return listener
+    }
+
+    fun removeNotifyListeners() {
+        notifyPublicListener?.let { database.child("public_messages").removeEventListener(it) }
+        notifyPublicListener = null
+        val myUid = getMyUid()
+        if (myUid != null) {
+            notifyPrivateListener?.let { database.child("user_messages").child(myUid).removeEventListener(it) }
+        }
+        notifyPrivateListener = null
+    }
 }
