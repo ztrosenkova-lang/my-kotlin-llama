@@ -50,18 +50,22 @@ fun MessengerScreen(
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var firebaseReady by remember { mutableStateOf(false) }
-    var initError by remember { mutableStateOf<String?>(null) }
-    var loadCalled by remember { mutableStateOf(false) }
-    var loadResult by remember { mutableStateOf<String?>(null) }
+    var myName by remember { mutableStateOf<String?>(null) }
+    var showNameDialog by remember { mutableStateOf(false) }
+    var nameInput by remember { mutableStateOf("") }
+    var loading by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
-        try {
-            FirebaseChatManager.init()
-            FirebaseChatManager.setOnline(true)
-            firebaseReady = true
-        } catch (e: Exception) {
-            initError = "${e.javaClass.simpleName}: ${e.message}"
+        FirebaseChatManager.init()
+        FirebaseChatManager.setOnline(true)
+        FirebaseChatManager.loadMyName { name ->
+            if (name.isNullOrBlank()) {
+                showNameDialog = true
+            } else {
+                myName = name
+                FirebaseChatManager.cacheMyName(name)
+            }
+            loading = false
         }
     }
     DisposableEffect(Unit) {
@@ -71,38 +75,12 @@ fun MessengerScreen(
         }
     }
 
-    var myName by remember { mutableStateOf<String?>(null) }
-    var showNameDialog by remember { mutableStateOf(false) }
-    var nameInput by remember { mutableStateOf("") }
-
-    LaunchedEffect(firebaseReady) {
-        if (!firebaseReady) return@LaunchedEffect
-        loadCalled = true
-        FirebaseChatManager.loadMyName { name ->
-            loadResult = name ?: "null"
-            if (name.isNullOrBlank()) {
-                showNameDialog = true
-            } else {
-                myName = name
-                FirebaseChatManager.cacheMyName(name)
-            }
-        }
-    }
-    if (!showNameDialog && myName == null) {
+    if (loading) {
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = "firebaseReady=$firebaseReady\n" +
-                        "initError=$initError\n" +
-                        "loadCalled=$loadCalled\n" +
-                        "loadResult=$loadResult\n" +
-                        "uid=${FirebaseChatManager.getMyUid() ?: "null"}",
-                color = colors.text,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace
-            )
+            Text("Загрузка...", color = colors.text, fontSize = 12.sp)
         }
         return
     }
