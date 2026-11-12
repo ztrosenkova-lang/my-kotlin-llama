@@ -50,9 +50,14 @@ fun MessengerScreen(
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Сначала init(), потом ВСЁ остальное. Без этого loadMyName
+    // вызывает auth.currentUser на lateinit auth, который ещё не создан.
+    var firebaseReady by remember { mutableStateOf(false) }
+
     LaunchedEffect(Unit) {
         FirebaseChatManager.init()
         FirebaseChatManager.setOnline(true)
+        firebaseReady = true
     }
     DisposableEffect(Unit) {
         onDispose {
@@ -65,7 +70,8 @@ fun MessengerScreen(
     var showNameDialog by remember { mutableStateOf(false) }
     var nameInput by remember { mutableStateOf("") }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(firebaseReady) {
+        if (!firebaseReady) return@LaunchedEffect
         FirebaseChatManager.loadMyName { name ->
             if (name.isNullOrBlank()) {
                 showNameDialog = true
