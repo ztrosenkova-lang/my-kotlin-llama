@@ -45,7 +45,7 @@ object FirebaseChatManager {
     fun init() {
         if (initialized) return
         auth = FirebaseAuth.getInstance()
-        database = FirebaseDatabase.getInstance().reference
+database = FirebaseDatabase.getInstance("https://ii-drug-default-rtdb.europe-west1.firebasedatabase.app").reference
         storage = FirebaseStorage.getInstance()
         initialized = true
 
