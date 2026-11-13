@@ -36,6 +36,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import coil.compose.AsyncImage
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.unit.Dp
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -46,6 +48,74 @@ import kotlinx.coroutines.launch
 private sealed class MessengerTab {
     object Chats : MessengerTab()
     object Users : MessengerTab()
+}
+
+// ========== АВТОГЕНЕРИРУЕМЫЙ АВАТАР ==========
+
+private val AVATAR_GRADIENTS = listOf(
+    listOf(Color(0xFF6A11CB), Color(0xFF2575FC)),
+    listOf(Color(0xFFFF512F), Color(0xFFF09819)),
+    listOf(Color(0xFF11998E), Color(0xFF38EF7D)),
+    listOf(Color(0xFFFC466B), Color(0xFF3F5EFB)),
+    listOf(Color(0xFFF7971E), Color(0xFFFFD200)),
+    listOf(Color(0xFF00C6FF), Color(0xFF0072FF)),
+    listOf(Color(0xFF8E2DE2), Color(0xFF4A00E0)),
+    listOf(Color(0xFFEE0979), Color(0xFFFF6A00)),
+    listOf(Color(0xFF43C6AC), Color(0xFF191654)),
+    listOf(Color(0xFFB24592), Color(0xFFF15F79))
+)
+
+private fun avatarGradientFor(uid: String): List<Color> {
+    val hash = uid.hashCode().let { if (it < 0) -it else it }
+    return AVATAR_GRADIENTS[hash % AVATAR_GRADIENTS.size]
+}
+
+private fun avatarInitialFor(name: String): String {
+    val trimmed = name.trim()
+    if (trimmed.isEmpty()) return "?"
+    return trimmed.take(1).uppercase()
+}
+
+@Composable
+private fun UserAvatar(
+    uid: String,
+    name: String,
+    size: Dp = 40.dp,
+    online: Boolean = false,
+    colors: AppColors
+) {
+    val gradient = avatarGradientFor(uid)
+    val initial = avatarInitialFor(name)
+    Box(
+        modifier = Modifier.size(size),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(size)
+                .background(
+                    brush = Brush.linearGradient(gradient),
+                    shape = CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = initial,
+                color = Color.White,
+                fontSize = (size.value * 0.42f).sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        if (online) {
+            Box(
+                modifier = Modifier
+                    .size(size * 0.28f)
+                    .align(Alignment.BottomEnd)
+                    .background(Color(0xFF4CAF50), CircleShape)
+                    .border(2.dp, colors.background, CircleShape)
+            )
+        }
+    }
 }
 
 @Composable
@@ -178,6 +248,13 @@ private fun MessengerContent(
                     }) {
                         Icon(Icons.Default.ArrowBack, "Назад", tint = colors.accent)
                     }
+                    UserAvatar(
+                        uid = openedChatUid ?: "",
+                        name = openedChatName ?: "",
+                        size = 28.dp,
+                        colors = colors
+                    )
+                    Spacer(Modifier.width(8.dp))
                     Text(
                         text = openedChatName ?: "Чат",
                         color = colors.text,
@@ -306,14 +383,12 @@ private fun ChatsList(
                     .padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .background(colors.borderGray, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(chat.otherName.take(1).uppercase(), color = colors.background, fontSize = 16.sp)
-                }
+                UserAvatar(
+                    uid = chat.otherUid,
+                    name = chat.otherName,
+                    size = 40.dp,
+                    colors = colors
+                )
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(chat.otherName, color = colors.text, fontSize = 14.sp, fontWeight = FontWeight.Bold)
@@ -353,14 +428,13 @@ private fun UsersList(
                     .padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .background(if (user.online) colors.green else colors.borderGray, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(user.name.take(1).uppercase(), color = colors.background, fontSize = 16.sp)
-                }
+                UserAvatar(
+                    uid = user.uid,
+                    name = user.name,
+                    size = 40.dp,
+                    online = user.online,
+                    colors = colors
+                )
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(user.name, color = colors.text, fontSize = 14.sp)
