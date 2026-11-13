@@ -102,6 +102,9 @@ class FloatingRobotService : LifecycleService() {
         Log.d(TAG, "Service created")
         isRunning = true
         MainViewModel.instance?.setFloatingRunning(true)
+        // Overlay активен — пользователь онлайн, даже если MainActivity в фоне
+        FirebaseChatManager.init()
+        FirebaseChatManager.setOnline(true)
 
     windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
@@ -345,7 +348,7 @@ class FloatingRobotService : LifecycleService() {
         return START_STICKY
     }
 
-        override fun onDestroy() {
+    override fun onDestroy() {
         super.onDestroy()
         gravitySensorListener?.let { sensorManager?.unregisterListener(it) }
         gravitySensorListener = null
@@ -355,6 +358,9 @@ class FloatingRobotService : LifecycleService() {
         voiceRecognizer = null
         isRunning = false
         MainViewModel.instance?.setFloatingRunning(false)
+        // Overlay закрылся — если MainActivity тоже в фоне, ставим офлайн.
+        // onDisconnect в setOnline подстрахует, если процесс убьют.
+        FirebaseChatManager.setOnline(false)
         Log.d(TAG, "Service destroyed")
     }
 
