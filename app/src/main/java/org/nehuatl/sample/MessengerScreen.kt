@@ -152,7 +152,6 @@ private fun MessengerContent(
 
     LaunchedEffect(Unit) {
         FirebaseChatManager.init()
-        FirebaseChatManager.setOnline(true)
         FirebaseChatManager.loadMyName { name ->
             if (name.isNullOrBlank()) {
                 showNameDialog = true
@@ -165,7 +164,6 @@ private fun MessengerContent(
     }
     DisposableEffect(Unit) {
         onDispose {
-            FirebaseChatManager.setOnline(false)
             FirebaseChatManager.removeAllListeners()
         }
     }
