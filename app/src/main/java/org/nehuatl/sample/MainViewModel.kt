@@ -924,10 +924,18 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         getApplication<Application>().startService(ttsStartIntent)
 
         FirebaseChatManager.init()
+        startSpeechQueueWatcher()
         scope.launch {
-            delay(1500)
-            startChatNotificationListeners()
-            startSpeechQueueWatcher()
+            var waited = 0
+            while (FirebaseChatManager.getMyUid() == null && waited < 15000) {
+                delay(300)
+                waited += 300
+            }
+            if (FirebaseChatManager.getMyUid() != null) {
+                startChatNotificationListeners()
+            } else {
+                Log.e(TAG, "Auth не завершился за 15с — оповещения не подписаны")
+            }
         }
 
         scope.launch {
