@@ -730,6 +730,10 @@ fun clearSelectedModelAndMmproj() {
                      override fun onResume() {
         super.onResume()
 
+        // Приложение на переднем плане — онлайн (независимо от мессенджера)
+        FirebaseChatManager.init()
+        FirebaseChatManager.setOnline(true)
+
         // Перечитываем органайзер — если будильник сработал в фоне,
         // запись уже удалена из файла, и часы на руке должны перестать пульсировать.
         appViewModel?.reloadOrganizer()
@@ -752,6 +756,13 @@ fun clearSelectedModelAndMmproj() {
 
     override fun onStop() {
         super.onStop()
+
+        // Приложение ушло в фон. Если overlay НЕ работает — ставим офлайн.
+        // Если overlay работает — остаёмся онлайн (сервис сам поставит офлайн
+        // в onDestroy, когда его остановят).
+        if (!isChangingConfigurations && !FloatingRobotService.isRunning) {
+            FirebaseChatManager.setOnline(false)
+        }
 
         // Приложение уходит в фон — показываем робота 2 обратно.
         // Проверяем isChangingConfigurations, чтобы не мигать overlay
