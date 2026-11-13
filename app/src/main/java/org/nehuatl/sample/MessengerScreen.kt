@@ -38,6 +38,13 @@ import androidx.compose.material3.CardDefaults
 import coil.compose.AsyncImage
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.ui.draw.clipToBounds
+import kotlin.math.PI
+import kotlin.math.sin
+import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -48,6 +55,91 @@ import kotlinx.coroutines.launch
 private sealed class MessengerTab {
     object Chats : MessengerTab()
     object Users : MessengerTab()
+}
+
+// ========== ФОН С ЧАСТИЦАМИ (звёзды/снежинки) ==========
+
+private data class ParticleSeed(
+    val xFraction: Float,   // 0..1 — горизонтальная позиция
+    val startYFraction: Float, // 0..1 — стартовая вертикальная позиция
+    val speed: Float,       // скорость падения (доля высоты в секунду)
+    val phase: Float,       // фаза мерцания (0..2π)
+    val sizeSp: Float       // размер символа
+)
+
+private val PARTICLE_SEEDS: List<ParticleSeed> = listOf(
+    ParticleSeed(0.08f, 0.10f, 0.025f, 0.0f, 10f),
+    ParticleSeed(0.17f, 0.55f, 0.018f, 1.3f, 8f),
+    ParticleSeed(0.26f, 0.30f, 0.030f, 2.7f, 11f),
+    ParticleSeed(0.34f, 0.75f, 0.022f, 4.1f, 9f),
+    ParticleSeed(0.43f, 0.05f, 0.027f, 5.2f, 12f),
+    ParticleSeed(0.52f, 0.45f, 0.020f, 0.8f, 8f),
+    ParticleSeed(0.61f, 0.85f, 0.033f, 2.2f, 10f),
+    ParticleSeed(0.70f, 0.20f, 0.024f, 3.9f, 9f),
+    ParticleSeed(0.78f, 0.65f, 0.019f, 5.7f, 11f),
+    ParticleSeed(0.86f, 0.40f, 0.028f, 1.1f, 8f),
+    ParticleSeed(0.93f, 0.90f, 0.021f, 4.6f, 10f),
+    ParticleSeed(0.12f, 0.80f, 0.026f, 3.3f, 9f),
+    ParticleSeed(0.47f, 0.25f, 0.017f, 2.9f, 8f),
+    ParticleSeed(0.67f, 0.10f, 0.031f, 0.4f, 12f),
+    ParticleSeed(0.90f, 0.60f, 0.023f, 5.0f, 10f)
+)
+
+@Composable
+private fun ParticleBackground(
+    isDarkTheme: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "particles")
+    val blinkPhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2f * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(6000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "blink_phase"
+    )
+
+    var fallProgress by remember { mutableStateOf(0f) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(150)
+            fallProgress += 0.006f
+            if (fallProgress >= 1f) fallProgress -= 1f
+        }
+    }
+
+    val particleColor = if (isDarkTheme) {
+        Color(0xFF80EFFF)
+    } else {
+        Color(0xFF64B5F6)
+    }
+
+    BoxWithConstraints(modifier = modifier) {
+        val w = constraints.maxWidth.toFloat()
+        val h = constraints.maxHeight.toFloat()
+        val density = LocalDensity.current
+
+        PARTICLE_SEEDS.forEach { seed ->
+            val yFraction = (seed.startYFraction + fallProgress * seed.speed * 40f) % 1f
+            val xPx = w * seed.xFraction
+            val yPx = h * yFraction
+            val alphaRaw = sin(blinkPhase + seed.phase)
+            val alpha = 0.15f + 0.55f * ((alphaRaw + 1f) * 0.5f)
+
+            Text(
+                text = "❄",
+                color = particleColor.copy(alpha = alpha),
+                fontSize = with(density) { seed.sizeSp.sp },
+                modifier = Modifier
+                    .offset(
+                        x = with(density) { xPx.toDp() },
+                        y = with(density) { yPx.toDp() }
+                    )
+            )
+        }
+    }
 }
 
 // ========== АВТОГЕНЕРИРУЕМЫЙ АВАТАР ==========
@@ -218,7 +310,7 @@ private fun MessengerContent(
         border = BorderStroke(1.dp, colors.borderGray),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
@@ -231,6 +323,15 @@ private fun MessengerContent(
                     )
                 )
         ) {
+            ParticleBackground(
+                isDarkTheme = isDarkTheme,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clipToBounds()
+            )
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
             // Шапка
             Row(
                 modifier = Modifier
@@ -323,6 +424,7 @@ private fun MessengerContent(
                 }
             }
         }
+    }
     }
 }
 
