@@ -102,12 +102,9 @@ class FloatingRobotService : LifecycleService() {
         Log.d(TAG, "Service created")
         isRunning = true
         MainViewModel.instance?.setFloatingRunning(true)
-        FirebaseChatManager.init()
-        FirebaseChatManager.setOnline(true)
         // Overlay активен — пользователь онлайн, даже если MainActivity в фоне
         FirebaseChatManager.init()
         FirebaseChatManager.setOnline(true)
-
     windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
     setupGravitySensor()
