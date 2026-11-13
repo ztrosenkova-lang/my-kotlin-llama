@@ -98,6 +98,10 @@ object FirebaseChatManager {
     // ========== ОНЛАЙН / ОФЛАЙН ==========
 
     fun setOnline(online: Boolean) {
+        waitForAuth { setOnlineInternal(online) }
+    }
+
+    private fun setOnlineInternal(online: Boolean) {
         val uid = getMyUid() ?: return
         val ref = database.child("users").child(uid)
         ref.child("online").setValue(online)
