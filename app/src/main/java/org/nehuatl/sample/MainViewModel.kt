@@ -1852,52 +1852,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-        // ========== ПОИСК ПО КНИГАМ (FTS5) ==========
 
-        private val bookDatabase by lazy {
-        BookDatabase.get(getApplication())
-    }
-
-    private val bookSearchEngine by lazy {
-        BookSearchEngine(File(getApplication<Application>().filesDir, "book_index"))
-    }
-    /**
-     * Индексирует все книги из filesDir/biblioteka/ в Room FTS5.
-     * Вызывается один раз при первом открытии библиотеки.
-     */
-       fun indexBooksIfNeeded() {
-        scope.launch(Dispatchers.IO) {
-            try {
-                val books = listBibliotekaBooks()
-                if (books.isEmpty()) return@launch
-
-                val triples = books.map { file ->
-                    val text = readBookText(file)
-                    Triple(file.nameWithoutExtension, text, file.absolutePath)
-                }
-                bookSearchEngine.clearIndex()
-                bookSearchEngine.indexBooks(triples)
-                Log.d(TAG, "Indexed ${books.size} books into Lucene")
-            } catch (e: Exception) {
-                Log.e(TAG, "indexBooksIfNeeded failed: ${e.message}")
-            }
-        }
-    }
-
-    /**
-     * Поиск по книгам через FTS5.
-     * Возвращает список пар (название книги, фрагмент с совпадением).
-     */
-       suspend fun searchBooks(query: String): List<Pair<String, String>> {
-        return try {
-            withContext(Dispatchers.IO) {
-                bookSearchEngine.search(query)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "searchBooks failed: ${e.message}")
-            emptyList()
-        }
-    }
     fun readBrain(): String {
         return try {
             if (brainFile.exists()) {
