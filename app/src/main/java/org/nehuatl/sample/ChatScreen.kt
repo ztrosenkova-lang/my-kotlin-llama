@@ -9267,9 +9267,6 @@ private fun BibliotekaDialog(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var books by remember { mutableStateOf<List<File>>(emptyList()) }
-    var searchQuery by remember { mutableStateOf("") }
-    var searchResults by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
-    var isSearching by remember { mutableStateOf(false) }
     var selectedBook by remember { mutableStateOf<File?>(null) }
     var selectedPdfFile by remember { mutableStateOf<File?>(null) }
     var bookSentences by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -9291,20 +9288,6 @@ private fun BibliotekaDialog(
 
     LaunchedEffect(Unit) {
         books = viewModel.listBibliotekaBooks()
-    }
-        LaunchedEffect(Unit) {
-        viewModel.indexBooksIfNeeded()
-    }
-
-    LaunchedEffect(searchQuery) {
-        if (searchQuery.isBlank()) {
-            searchResults = emptyList()
-            isSearching = false
-        } else {
-            isSearching = true
-            searchResults = viewModel.searchBooks(searchQuery)
-            isSearching = false
-        }
     }
 
     LaunchedEffect(selectedBook) {
@@ -9532,54 +9515,22 @@ private fun BibliotekaDialog(
                         text = {
                 Column(modifier = Modifier.fillMaxWidth()) {
                         if (selectedBook == null) {
-                        if (searchQuery.isNotBlank()) {
-                            if (isSearching) {
-                                CircularProgressIndicator(color = colors.accent, modifier = Modifier.size(24.dp))
-                            } else if (searchResults.isEmpty()) {
-                                Text("Ничего не найдено", color = colors.text.copy(alpha = 0.6f), fontSize = 12.sp)
-                            } else {
-                LazyColumn(modifier = Modifier.fillMaxWidth().height(400.dp)) {
-                                    items(searchResults) { (title, snippet) ->
-                                        Card(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(vertical = 4.dp)
-                                                .clickable {
-                                                    val file = books.find { it.nameWithoutExtension == title }
-                                                    if (file != null) {
-                                                        selectedBook = file
-                                                        selectedPdfFile = if (file.name.endsWith(".pdf", true)) file else null
-                                                    }
-                                                },
-                                            colors = CardDefaults.cardColors(containerColor = colors.surfaceGray),
-                                            shape = RoundedCornerShape(10.dp)
-                                        ) {
-                                            Column(modifier = Modifier.padding(10.dp)) {
-                                                Text(title, color = colors.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                                Text(snippet, color = colors.text, fontSize = 10.sp, maxLines = 3)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        } else {
-                            LazyColumn(modifier = Modifier.fillMaxWidth().height(400.dp)) {
-                                items(books) { file ->
-                                        Card(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 4.dp)
-                                            .clickable { selectedBook = file; selectedPdfFile = if (file.name.endsWith(".pdf", true)) file else null },
-                                        colors = CardDefaults.cardColors(containerColor = colors.surfaceGray),
-                                        shape = RoundedCornerShape(10.dp)
-                                    ) {
-                                        Text(
-                                            text = file.nameWithoutExtension,
-                                            color = colors.text,
-                                            fontSize = 13.sp,
-                                            modifier = Modifier.padding(12.dp)
-                                        )
-                                    }
+                        LazyColumn(modifier = Modifier.fillMaxWidth().height(400.dp)) {
+                            items(books) { file ->
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp)
+                                        .clickable { selectedBook = file; selectedPdfFile = if (file.name.endsWith(".pdf", true)) file else null },
+                                    colors = CardDefaults.cardColors(containerColor = colors.surfaceGray),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Text(
+                                        text = file.nameWithoutExtension,
+                                        color = colors.text,
+                                        fontSize = 13.sp,
+                                        modifier = Modifier.padding(12.dp)
+                                    )
                                 }
                             }
                         }
