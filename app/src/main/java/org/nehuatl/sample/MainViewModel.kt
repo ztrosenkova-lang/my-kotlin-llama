@@ -42,6 +42,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.nehuatl.llamacpp.LlamaHelper
@@ -230,10 +231,11 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     private var notificationSuppressed = false
 
     @Volatile
-    private var lastNotifiedTimestamp: Long = System.currentTimeMillis()
+    private var lastNotifiedPublicTimestamp: Long = 0L
+    @Volatile
+    private var lastNotifiedPrivateTimestamp: Long = 0L
 
     private val speechQueue = mutableListOf<String>()
-
     private fun enqueueSpeech(text: String) {
         synchronized(speechQueue) {
             speechQueue.add(text)
@@ -265,19 +267,21 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     private fun startChatNotificationListeners() {
         FirebaseChatManager.listenAllPublicForNotify { item ->
-            if (notificationSuppressed) return@listenAllPublicForNotify
             if (item.senderId == FirebaseChatManager.getMyUid()) return@listenAllPublicForNotify
-            if (item.timestamp <= lastNotifiedTimestamp) return@listenAllPublicForNotify
-            lastNotifiedTimestamp = item.timestamp
+            if (item.timestamp <= lastNotifiedPublicTimestamp) return@listenAllPublicForNotify
+            // Обновляем счётчик даже при notificationSuppressed,
+            // чтобы после закрытия мессенджера не было запоздалых уведомлений
+            lastNotifiedPublicTimestamp = item.timestamp
+            if (notificationSuppressed) return@listenAllPublicForNotify
             val msg = "📢 Новое сообщение в общем чате от ${item.senderName}"
             appendSystemMessage(msg)
             enqueueSpeech("Новое сообщение в общем чате от ${item.senderName}")
         }
-        FirebaseChatManager.listenAllPrivateForNotify { item, _ ->
-            if (notificationSuppressed) return@listenAllPrivateForNotify
-            if (item.senderId == FirebaseChatManager.getMyUid()) return@listenAllPrivateForNotify
-            if (item.timestamp <= lastNotifiedTimestamp) return@listenAllPrivateForNotify
-            lastNotifiedTimestamp = item.timestamp
+        FirebaseChatManager.listenAllPrivateForNotifyFixed { item, _ ->
+            if (item.senderId == FirebaseChatManager.getMyUid()) return@listenAllPrivateForNotifyFixed
+            if (item.timestamp <= lastNotifiedPrivateTimestamp) return@listenAllPrivateForNotifyFixed
+            lastNotifiedPrivateTimestamp = item.timestamp
+            if (notificationSuppressed) return@listenAllPrivateForNotifyFixed
             val msg = "💬 Новое личное сообщение от ${item.senderName}"
             appendSystemMessage(msg)
             enqueueSpeech("Новое личное сообщение от ${item.senderName}")
@@ -931,11 +935,22 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 delay(300)
                 waited += 300
             }
-            if (FirebaseChatManager.getMyUid() != null) {
-                startChatNotificationListeners()
-            } else {
+            if (FirebaseChatManager.getMyUid() == null) {
                 Log.e(TAG, "Auth не завершился за 15с — оповещения не подписаны")
+                return@launch
             }
+            val offset = withTimeoutOrNull(5000L) {
+                kotlinx.coroutines.suspendCancellableCoroutine<Long> { cont ->
+                    FirebaseChatManager.getServerTimeOffset { off ->
+                        if (cont.isActive) cont.resumeWith(Result.success(off))
+                    }
+                }
+            } ?: 0L
+            val serverNow = System.currentTimeMillis() + offset - 1000L
+            lastNotifiedPublicTimestamp = serverNow
+            lastNotifiedPrivateTimestamp = serverNow
+            Log.d(TAG, "serverNow (filter) = $serverNow, offset = $offset")
+            startChatNotificationListeners()
         }
 
         scope.launch {
