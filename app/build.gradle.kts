@@ -113,9 +113,6 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
 
-    implementation("org.gnit.lucene-kmp:lucene-kmp-core:10.2.0-alpha14")
-    implementation("org.gnit.lucene-kmp:lucene-kmp-queryparser:10.2.0-alpha14")
-
     implementation("io.github.grizzi91:bouquet:1.1.2")
     implementation("com.github.lion1988dev:PdfiumAndroid:1.9.4")
 
