@@ -395,13 +395,74 @@ object FirebaseChatManager {
         return listener
     }
 
+    private var notifyPrivateValueListener: ValueEventListener? = null
+    private val processedPrivateKeys = mutableSetOf<String>()
+
     fun removeNotifyListeners() {
         notifyPublicListener?.let { database.child("public_messages").removeEventListener(it) }
         notifyPublicListener = null
         val myUid = getMyUid()
         if (myUid != null) {
             notifyPrivateListener?.let { database.child("user_messages").child(myUid).removeEventListener(it) }
+            notifyPrivateValueListener?.let { database.child("user_messages").child(myUid).removeEventListener(it) }
         }
         notifyPrivateListener = null
+        notifyPrivateValueListener = null
+        processedPrivateKeys.clear()
+    }
+
+    // ========== СЕРВЕРНОЕ ВРЕМЯ ==========
+
+    fun getServerTimeOffset(callback: (Long) -> Unit) {
+        database.child(".info").child("serverTimeOffset").get()
+            .addOnSuccessListener { snapshot ->
+                val offset = snapshot.getValue(Long::class.java) ?: 0L
+                Log.d(TAG, "serverTimeOffset = $offset")
+                callback(offset)
+            }
+            .addOnFailureListener {
+                Log.e(TAG, "getServerTimeOffset failed: ${it.message}")
+                callback(0L)
+            }
+    }
+
+    // ========== ЛИЧНЫЕ СООБЩЕНИЯ ДЛЯ ОПОВЕЩЕНИЙ (исправленный) ==========
+    // ValueEventListener обходит всё дерево user_messages/$myUid.
+    // processedPrivateKeys защищает от повторного обхода уже обработанных
+    // сообщений при каждом onDataChange (иначе вся история обходится заново).
+    // Фильтрация по времени — в MainViewModel (по актуальному lastNotifiedPrivateTimestamp).
+
+    fun listenAllPrivateForNotifyFixed(
+        onMessage: (ChatMessageItem, String) -> Unit
+    ): ValueEventListener {
+        val myUid = getMyUid() ?: return object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {}
+            override fun onCancelled(error: DatabaseError) {}
+        }
+
+        // Отписываемся от старых слушателей ПЕРЕД подпиской на новый
+        notifyPrivateListener?.let { database.child("user_messages").child(myUid).removeEventListener(it) }
+        notifyPrivateListener = null
+        notifyPrivateValueListener?.let { database.child("user_messages").child(myUid).removeEventListener(it) }
+        notifyPrivateValueListener = null
+
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                snapshot.children.forEach { otherUidSnapshot ->
+                    val otherUid = otherUidSnapshot.key ?: return@forEach
+                    otherUidSnapshot.children.forEach { msgSnapshot ->
+                        val key = msgSnapshot.key ?: return@forEach
+                        if (processedPrivateKeys.contains(key)) return@forEach
+                        processedPrivateKeys.add(key)
+                        val item = parseMessage(msgSnapshot) ?: return@forEach
+                        onMessage(item, otherUid)
+                    }
+                }
+            }
+            override fun onCancelled(error: DatabaseError) { Log.e(TAG, "notify private: ${error.message}") }
+        }
+        notifyPrivateValueListener = listener
+        database.child("user_messages").child(myUid).addValueEventListener(listener)
+        return listener
     }
 }
