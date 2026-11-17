@@ -403,9 +403,6 @@ object FirebaseChatManager {
         return listener
     }
 
-    private var notifyPrivateValueListener: ValueEventListener? = null
-    private val processedPrivateKeys = mutableSetOf<String>()
-
         // ========== ЧТЕНИЕ ПРОПУЩЕННЫХ СООБЩЕНИЙ ==========
 
     fun fetchMissedPublic(sinceTimestamp: Long, onResult: (List<ChatMessageItem>) -> Unit) {
@@ -480,37 +477,4 @@ object FirebaseChatManager {
     // сообщений при каждом onDataChange (иначе вся история обходится заново).
     // Фильтрация по времени — в MainViewModel (по актуальному lastNotifiedPrivateTimestamp).
 
-    fun listenAllPrivateForNotifyFixed(
-        onMessage: (ChatMessageItem, String) -> Unit
-    ): ValueEventListener {
-        val myUid = getMyUid() ?: return object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {}
-            override fun onCancelled(error: DatabaseError) {}
-        }
-
-        // Отписываемся от старых слушателей ПЕРЕД подпиской на новый
-        notifyPrivateListener?.let { database.child("user_messages").child(myUid).removeEventListener(it) }
-        notifyPrivateListener = null
-        notifyPrivateValueListener?.let { database.child("user_messages").child(myUid).removeEventListener(it) }
-        notifyPrivateValueListener = null
-
-        val listener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                snapshot.children.forEach { otherUidSnapshot ->
-                    val otherUid = otherUidSnapshot.key ?: return@forEach
-                    otherUidSnapshot.children.forEach { msgSnapshot ->
-                        val key = msgSnapshot.key ?: return@forEach
-                        if (processedPrivateKeys.contains(key)) return@forEach
-                        processedPrivateKeys.add(key)
-                        val item = parseMessage(msgSnapshot) ?: return@forEach
-                        onMessage(item, otherUid)
-                    }
-                }
-            }
-            override fun onCancelled(error: DatabaseError) { Log.e(TAG, "notify private: ${error.message}") }
-        }
-        notifyPrivateValueListener = listener
-        database.child("user_messages").child(myUid).addValueEventListener(listener)
-        return listener
-    }
 }
