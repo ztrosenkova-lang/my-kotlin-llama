@@ -655,11 +655,12 @@ fun ChatScreen(
         }
     }
 
-       LaunchedEffect(isSpeaking) {
-        if (!isSpeaking) {
-            pendingTextPrinted = false
-        }
+LaunchedEffect(isSpeaking) {
+    if (!isSpeaking) {
+        pendingTextPrinted = false
+        // welcomeTextPrinted НЕ сбрасываем — приветствие печатается только один раз
     }
+}
 
     // Отслеживаем переход isThinking: true → false.
     // Когда модель закончила думать, крышка на голове робота ещё
