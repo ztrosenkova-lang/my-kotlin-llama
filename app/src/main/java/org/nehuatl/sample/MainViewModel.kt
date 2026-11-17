@@ -664,10 +664,6 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     val isAppLocked: StateFlow<Boolean> = _isAppLocked.asStateFlow()
     private var isUnlockedPermanently = false
     private val hardwareKeyAlias = "app_hardware_key"
-    private val prefs: android.content.SharedPreferences by lazy {
-        getApplication<Application>().getSharedPreferences("app_security", Context.MODE_PRIVATE)
-    }
-
     private val _isDeviceBound = MutableStateFlow(false)
     val isDeviceBound: StateFlow<Boolean> = _isDeviceBound.asStateFlow()
 
