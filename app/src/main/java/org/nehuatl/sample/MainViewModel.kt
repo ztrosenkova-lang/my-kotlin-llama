@@ -235,6 +235,10 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
     @Volatile
     private var lastNotifiedPrivateTimestamp: Long = 0L
 
+    private val prefs by lazy {
+        getApplication<Application>().getSharedPreferences("app_security", Context.MODE_PRIVATE)
+    }
+
     private val speechQueue = mutableListOf<String>()
     private fun enqueueSpeech(text: String) {
         synchronized(speechQueue) {
@@ -264,24 +268,64 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             }
         }
     }
+    private fun loadMissedMessages() {
+        val sincePublic = prefs.getLong("last_notified_public", 0L)
+        val sincePrivate = prefs.getLong("last_notified_private", 0L)
 
+        // 1. Приветствие — только если ещё не добавлено в этой сессии
+        // (приветствие добавляется в ChatScreen, но мы гарантируем порядок)
+        // Приветствие уже добавлено через LaunchedEffect(speakStartTrigger),
+        // поэтому здесь только пропущенные.
+
+        // 2. Пропущенные из общего чата
+        FirebaseChatManager.fetchMissedPublic(sincePublic) { publicList ->
+            if (publicList.isNotEmpty()) {
+                for (item in publicList) {
+                    if (item.senderId == FirebaseChatManager.getMyUid()) continue
+                    val msg = "📢 Новое сообщение в общем чате от ${item.senderName}"
+                    appendSystemMessage(msg)
+                    enqueueSpeech("Новое сообщение в общем чате от ${item.senderName}")
+                    if (item.timestamp > lastNotifiedPublicTimestamp) {
+                        lastNotifiedPublicTimestamp = item.timestamp
+                    }
+                }
+                prefs.edit().putLong("last_notified_public", lastNotifiedPublicTimestamp).apply()
+            }
+
+            // 3. Пропущенные из личных чатов (после общего)
+            FirebaseChatManager.fetchMissedPrivate(sincePrivate) { privateList ->
+                if (privateList.isNotEmpty()) {
+                    for ((item, _) in privateList) {
+                        if (item.senderId == FirebaseChatManager.getMyUid()) continue
+                        val msg = "💬 Новое личное сообщение от ${item.senderName}"
+                        appendSystemMessage(msg)
+                        enqueueSpeech("Новое личное сообщение от ${item.senderName}")
+                        if (item.timestamp > lastNotifiedPrivateTimestamp) {
+                            lastNotifiedPrivateTimestamp = item.timestamp
+                        }
+                    }
+                    prefs.edit().putLong("last_notified_private", lastNotifiedPrivateTimestamp).apply()
+                }
+            }
+        }
+    }
     private fun startChatNotificationListeners() {
         FirebaseChatManager.listenAllPublicForNotify { item ->
             if (item.senderId == FirebaseChatManager.getMyUid()) return@listenAllPublicForNotify
             if (item.timestamp <= lastNotifiedPublicTimestamp) return@listenAllPublicForNotify
-            // Обновляем счётчик даже при notificationSuppressed,
-            // чтобы после закрытия мессенджера не было запоздалых уведомлений
             lastNotifiedPublicTimestamp = item.timestamp
+            prefs.edit().putLong("last_notified_public", item.timestamp).apply()
             if (notificationSuppressed) return@listenAllPublicForNotify
             val msg = "📢 Новое сообщение в общем чате от ${item.senderName}"
             appendSystemMessage(msg)
             enqueueSpeech("Новое сообщение в общем чате от ${item.senderName}")
         }
-        FirebaseChatManager.listenAllPrivateForNotifyFixed { item, _ ->
-            if (item.senderId == FirebaseChatManager.getMyUid()) return@listenAllPrivateForNotifyFixed
-            if (item.timestamp <= lastNotifiedPrivateTimestamp) return@listenAllPrivateForNotifyFixed
+        FirebaseChatManager.listenAllPrivateForNotify { item, _ ->
+            if (item.senderId == FirebaseChatManager.getMyUid()) return@listenAllPrivateForNotify
+            if (item.timestamp <= lastNotifiedPrivateTimestamp) return@listenAllPrivateForNotify
             lastNotifiedPrivateTimestamp = item.timestamp
-            if (notificationSuppressed) return@listenAllPrivateForNotifyFixed
+            prefs.edit().putLong("last_notified_private", item.timestamp).apply()
+            if (notificationSuppressed) return@listenAllPrivateForNotify
             val msg = "💬 Новое личное сообщение от ${item.senderName}"
             appendSystemMessage(msg)
             enqueueSpeech("Новое личное сообщение от ${item.senderName}")
@@ -947,9 +991,27 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 }
             } ?: 0L
             val serverNow = System.currentTimeMillis() + offset - 1000L
-            lastNotifiedPublicTimestamp = serverNow
-            lastNotifiedPrivateTimestamp = serverNow
-            Log.d(TAG, "serverNow (filter) = $serverNow, offset = $offset")
+
+            // lastNotified — из SharedPreferences (переживает перезапуск)
+            val savedPublic = prefs.getLong("last_notified_public", 0L)
+            val savedPrivate = prefs.getLong("last_notified_private", 0L)
+
+            if (savedPublic > 0L) {
+                // Показываем пропущенные с момента последнего запуска
+                lastNotifiedPublicTimestamp = savedPublic
+                lastNotifiedPrivateTimestamp = savedPrivate
+                loadMissedMessages()
+            } else {
+                // Первый запуск — просто инициализируем
+                lastNotifiedPublicTimestamp = serverNow
+                lastNotifiedPrivateTimestamp = serverNow
+                prefs.edit()
+                    .putLong("last_notified_public", serverNow)
+                    .putLong("last_notified_private", serverNow)
+                    .apply()
+            }
+
+            Log.d(TAG, "lastNotifiedPublic=$lastNotifiedPublicTimestamp, lastNotifiedPrivate=$lastNotifiedPrivateTimestamp")
             startChatNotificationListeners()
         }
 
