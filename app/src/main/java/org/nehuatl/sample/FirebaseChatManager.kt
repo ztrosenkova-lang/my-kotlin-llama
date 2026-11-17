@@ -371,32 +371,80 @@ object FirebaseChatManager {
         return listener
     }
 
-    fun listenAllPrivateForNotify(onMessage: (ChatMessageItem, String) -> Unit): ChildEventListener {
-        val myUid = getMyUid() ?: return object : ChildEventListener {
-            override fun onChildAdded(snapshot: DataSnapshot, previousChildName: String?) {}
-            override fun onChildChanged(snapshot: DataSnapshot, previousChildName: String?) {}
-            override fun onChildRemoved(snapshot: DataSnapshot) {}
-            override fun onChildMoved(snapshot: DataSnapshot, previousChildName: String?) {}
+    private var notifyPrivateValueListener: ValueEventListener? = null
+    private val processedPrivateKeys = mutableSetOf<String>()
+
+    fun listenAllPrivateForNotify(onMessage: (ChatMessageItem, String) -> Unit): ValueEventListener {
+        val myUid = getMyUid() ?: return object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {}
             override fun onCancelled(error: DatabaseError) {}
         }
-        val listener = object : ChildEventListener {
-            override fun onChildAdded(snapshot: DataSnapshot, previousChildName: String?) {
-                val otherUid = snapshot.ref.parent?.parent?.key ?: return
-                parseMessage(snapshot)?.let { onMessage(it, otherUid) }
+        notifyPrivateListener?.let { database.child("user_messages").child(myUid).removeEventListener(it) }
+        notifyPrivateListener = null
+        notifyPrivateValueListener?.let { database.child("user_messages").child(myUid).removeEventListener(it) }
+        notifyPrivateValueListener = null
+
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                snapshot.children.forEach { otherUidSnapshot ->
+                    val otherUid = otherUidSnapshot.key ?: return@forEach
+                    otherUidSnapshot.children.forEach { msgSnapshot ->
+                        val key = msgSnapshot.key ?: return@forEach
+                        if (processedPrivateKeys.contains(key)) return@forEach
+                        processedPrivateKeys.add(key)
+                        parseMessage(msgSnapshot)?.let { onMessage(it, otherUid) }
+                    }
+                }
             }
-            override fun onChildChanged(snapshot: DataSnapshot, previousChildName: String?) {}
-            override fun onChildRemoved(snapshot: DataSnapshot) {}
-            override fun onChildMoved(snapshot: DataSnapshot, previousChildName: String?) {}
             override fun onCancelled(error: DatabaseError) { Log.e(TAG, "notify private: ${error.message}") }
         }
-        database.child("user_messages").child(myUid)
-            .addChildEventListener(listener)
-        notifyPrivateListener = listener
+        notifyPrivateValueListener = listener
+        database.child("user_messages").child(myUid).addValueEventListener(listener)
         return listener
     }
 
     private var notifyPrivateValueListener: ValueEventListener? = null
     private val processedPrivateKeys = mutableSetOf<String>()
+
+        // ========== ЧТЕНИЕ ПРОПУЩЕННЫХ СООБЩЕНИЙ ==========
+
+    fun fetchMissedPublic(sinceTimestamp: Long, onResult: (List<ChatMessageItem>) -> Unit) {
+        database.child("public_messages").orderByChild("timestamp").startAt(sinceTimestamp.toDouble())
+            .get()
+            .addOnSuccessListener { snapshot ->
+                val list = mutableListOf<ChatMessageItem>()
+                snapshot.children.forEach { child ->
+                    parseMessage(child)?.let { list.add(it) }
+                }
+                onResult(list)
+            }
+            .addOnFailureListener {
+                Log.e(TAG, "fetchMissedPublic failed: ${it.message}")
+                onResult(emptyList())
+            }
+    }
+
+    fun fetchMissedPrivate(sinceTimestamp: Long, onResult: (List<Pair<ChatMessageItem, String>>) -> Unit) {
+        val myUid = getMyUid() ?: run { onResult(emptyList()); return }
+        database.child("user_messages").child(myUid).get()
+            .addOnSuccessListener { snapshot ->
+                val list = mutableListOf<Pair<ChatMessageItem, String>>()
+                snapshot.children.forEach { otherUidSnapshot ->
+                    val otherUid = otherUidSnapshot.key ?: return@forEach
+                    otherUidSnapshot.children.forEach { msgSnapshot ->
+                        val item = parseMessage(msgSnapshot) ?: return@forEach
+                        if (item.timestamp > sinceTimestamp) {
+                            list.add(item to otherUid)
+                        }
+                    }
+                }
+                onResult(list.sortedBy { it.first.timestamp })
+            }
+            .addOnFailureListener {
+                Log.e(TAG, "fetchMissedPrivate failed: ${it.message}")
+                onResult(emptyList())
+            }
+    }
 
     fun removeNotifyListeners() {
         notifyPublicListener?.let { database.child("public_messages").removeEventListener(it) }
