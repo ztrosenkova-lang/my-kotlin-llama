@@ -661,13 +661,13 @@ class LlamaHelper(
                     "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n$prompt<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
                 }
             }
-            ModelFormat.MISTRAL -> {
-                if (!systemPrompt.isNullOrEmpty()) {
-                    "<s>[INST] $systemPrompt [/INST]</s>\n[INST] $prompt [/INST]"
-                } else {
-                    "<s>[INST] $prompt [/INST]"
-                }
-            }
+ModelFormat.MISTRAL -> {
+    if (!systemPrompt.isNullOrEmpty()) {
+        "<s>[INST] $systemPrompt\n\n$prompt [/INST]"
+    } else {
+        "<s>[INST] $prompt [/INST]"
+    }
+}
             ModelFormat.ZEPHYR -> {
                 if (!systemPrompt.isNullOrEmpty()) {
                     "<|system|>\n$systemPrompt</s>\n<|user|>\n$prompt</s>\n<|assistant|>\n"
@@ -675,13 +675,13 @@ class LlamaHelper(
                     "<|user|>\n$prompt</s>\n<|assistant|>\n"
                 }
             }
-            ModelFormat.GEMMA -> {
-                if (!systemPrompt.isNullOrEmpty()) {
-                    "<bos><start_of_turn>user\n$systemPrompt\n\n$prompt<end_of_turn>\n<start_of_turn>model\n"
-                } else {
-                    "<bos><start_of_turn>user\n$prompt<end_of_turn>\n<start_of_turn>model\n"
-                }
-            }
+ModelFormat.GEMMA -> {
+    if (!systemPrompt.isNullOrEmpty()) {
+        "<bos><start_of_turn>user\n$systemPrompt<end_of_turn>\n<start_of_turn>user\n$prompt<end_of_turn>\n<start_of_turn>model\n"
+    } else {
+        "<bos><start_of_turn>user\n$prompt<end_of_turn>\n<start_of_turn>model\n"
+    }
+}
             ModelFormat.PHI -> {
                 if (!systemPrompt.isNullOrEmpty()) {
                     "<|system|>\n$systemPrompt<|end|>\n<|user|>\n$prompt<|end|>\n<|assistant|>\n"
