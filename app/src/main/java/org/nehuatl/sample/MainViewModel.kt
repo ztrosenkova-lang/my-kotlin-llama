@@ -2768,41 +2768,26 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    private fun appendToCategory(text: String) {
-        try {
-            if (!memoryFile.exists()) {
-                memoryFile.createNewFile()
-            }
-
-            val category = determineCategory(text)
-            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
-            val timestamp = dateFormat.format(Date())
-
-            val existing = memoryFile.readText()
-            val lines = existing.split("\n").toMutableList()
-
-            val categoryIndex = lines.indexOfFirst { it.trim() == category }
-
-            if (categoryIndex == -1) {
-                lines.add("")
-                lines.add(category)
-                lines.add("[$timestamp] $text")
-            } else {
-                var insertIndex = categoryIndex + 1
-                while (insertIndex < lines.size && lines[insertIndex].isNotBlank() && !CATEGORIES.any { lines[insertIndex].trim().startsWith(it) }) {
-                    insertIndex++
-                }
-                lines.add(insertIndex, "[$timestamp] $text")
-            }
-
-            memoryFile.writeText(lines.joinToString("\n"))
-            memorySearchEngine.clearCache()
-            Log.d(TAG, "Записано в категорию $category: $text")
-        } catch (e: Exception) {
-            Log.e(TAG, "Ошибка записи в категорию: ${e.message}")
+private fun appendToCategory(text: String) {
+    try {
+        if (!memoryFile.exists()) {
+            memoryFile.createNewFile()
         }
-    }
 
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+        val timestamp = dateFormat.format(Date())
+
+        val existing = memoryFile.readText().trim()
+        val newLine = "[$timestamp] $text"
+        val newContent = if (existing.isEmpty()) newLine else existing + "\n" + newLine
+        memoryFile.writeText(newContent + "\n")
+
+        memorySearchEngine.clearCache()
+        Log.d(TAG, "Записано: $newLine")
+    } catch (e: Exception) {
+        Log.e(TAG, "Ошибка записи: ${e.message}")
+    }
+}
     fun saveToLongTermMemory(text: String) {
         appendToCategory(text)
         appendSystemMessage("🧠 Запомнено: $text")
@@ -4055,48 +4040,19 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         }
     }
 
-    fun overwriteLongTermMemory(newFullText: String) {
-        try {
-            if (!memoryFile.exists()) {
-                memoryFile.createNewFile()
-            }
-
-            val lines = newFullText
-                .split("\n")
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
-
-            val grouped = mutableMapOf<String, MutableList<String>>()
-
-            for (line in lines) {
-                val category = determineCategory(line)
-                if (!grouped.containsKey(category)) {
-                    grouped[category] = mutableListOf()
-                }
-                grouped[category]!!.add(line)
-            }
-
-            val output = StringBuilder()
-
-            for (category in CATEGORIES) {
-                val entries = grouped[category]
-                if (entries != null && entries.isNotEmpty()) {
-                    output.append(category).append("\n")
-                    for (entry in entries) {
-                        output.append(entry).append("\n")
-                    }
-                    output.append("\n")
-                }
-            }
-
-            memoryFile.writeText(output.toString().trim() + "\n")
-            memorySearchEngine.clearCache()
-            Log.d(TAG, "База знаний успешно обновлена и упорядочена")
-            appendSystemMessage("🧠 База знаний обновлена и упорядочена")
-        } catch (e: Exception) {
-            Log.e(TAG, "Ошибка перезаписи базы знаний: ${e.message}")
+fun overwriteLongTermMemory(newFullText: String) {
+    try {
+        if (!memoryFile.exists()) {
+            memoryFile.createNewFile()
         }
+        memoryFile.writeText(newFullText.trim() + "\n")
+        memorySearchEngine.clearCache()
+        Log.d(TAG, "База знаний сохранена как есть")
+        appendSystemMessage("🧠 База знаний сохранена")
+    } catch (e: Exception) {
+        Log.e(TAG, "Ошибка перезаписи базы знаний: ${e.message}")
     }
+}
 
     private fun saveBrain(text: String) {
         try {
