@@ -677,7 +677,7 @@ ModelFormat.MISTRAL -> {
             }
 ModelFormat.GEMMA -> {
     if (!systemPrompt.isNullOrEmpty()) {
-        "<bos><start_of_turn>user\n$systemPrompt<end_of_turn>\n<start_of_turn>user\n$prompt<end_of_turn>\n<start_of_turn>model\n"
+        "<bos><start_of_turn>user\n$systemPrompt\n\n$prompt<end_of_turn>\n<start_of_turn>model\n"
     } else {
         "<bos><start_of_turn>user\n$prompt<end_of_turn>\n<start_of_turn>model\n"
     }
