@@ -221,6 +221,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
         _showMessenger.value = true
         notificationSuppressed = true
         speechQueue.clear()
+        _hasUnreadMessages.value = false
     }
     fun hideMessenger() {
         _showMessenger.value = false
@@ -229,6 +230,9 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
 
     @Volatile
     private var notificationSuppressed = false
+
+    private val _hasUnreadMessages = MutableStateFlow(false)
+    val hasUnreadMessages: StateFlow<Boolean> = _hasUnreadMessages.asStateFlow()
 
     @Volatile
     private var lastNotifiedPublicTimestamp: Long = 0L
@@ -283,6 +287,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                 for (item in publicList) {
                     if (item.senderId == FirebaseChatManager.getMyUid()) continue
                     val msg = "📢 Новое сообщение в общем чате от ${item.senderName}"
+                    _hasUnreadMessages.value = true
                     appendSystemMessage(msg)
                     enqueueSpeech("Новое сообщение в общем чате от ${item.senderName}")
                     if (item.timestamp > lastNotifiedPublicTimestamp) {
@@ -298,6 +303,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
                     for ((item, _) in privateList) {
                         if (item.senderId == FirebaseChatManager.getMyUid()) continue
                         val msg = "💬 Новое личное сообщение от ${item.senderName}"
+                        _hasUnreadMessages.value = true
                         appendSystemMessage(msg)
                         enqueueSpeech("Новое личное сообщение от ${item.senderName}")
                         if (item.timestamp > lastNotifiedPrivateTimestamp) {
@@ -317,6 +323,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             prefs.edit().putLong("last_notified_public", item.timestamp).apply()
             if (notificationSuppressed) return@listenAllPublicForNotify
             val msg = "📢 Новое сообщение в общем чате от ${item.senderName}"
+            _hasUnreadMessages.value = true
             appendSystemMessage(msg)
             enqueueSpeech("Новое сообщение в общем чате от ${item.senderName}")
         }
@@ -327,6 +334,7 @@ class MainViewModel(application: Application, val contentResolver: ContentResolv
             prefs.edit().putLong("last_notified_private", item.timestamp).apply()
             if (notificationSuppressed) return@listenAllPrivateForNotify
             val msg = "💬 Новое личное сообщение от ${item.senderName}"
+            _hasUnreadMessages.value = true
             appendSystemMessage(msg)
             enqueueSpeech("Новое личное сообщение от ${item.senderName}")
         }
