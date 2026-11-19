@@ -39,6 +39,7 @@ fun RobotOverlayContent(
     val robotJumpSignal by viewModel.robotJumpSignal.collectAsStateWithLifecycle(initialValue = false)
     val overlayRobotScale by viewModel.overlayRobotScale.collectAsStateWithLifecycle(initialValue = 1.0f)
     val overlayGravityRotation by viewModel.overlayGravityRotation.collectAsStateWithLifecycle(initialValue = 0f)
+    val hasUnreadMessages by viewModel.hasUnreadMessages.collectAsStateWithLifecycle(initialValue = false)
 
     val isThinking = state is GenerationState.Generating ||
                      cloudState is CloudAIState.Generating
@@ -46,6 +47,11 @@ fun RobotOverlayContent(
     // overlayListening НЕ влияет — мимика покоя работает и во время прослушивания,
     // как и в чате (там isListening = false всегда).
     val isIdle = !isSpeaking && !isThinking
+
+    // Мерцание включается только если робот свободен и не слушает микрофон
+    val isNotificationGlow = hasUnreadMessages && isIdle && !isCompressing && 
+                             visionPhase == VisionPhase.IDLE && !isPreparingSpeech && 
+                             !overlayListening
                    Box(
         modifier = Modifier
             .width(290.dp * overlayRobotScale * 0.85f)
@@ -63,6 +69,7 @@ fun RobotOverlayContent(
             isThinking = isThinking,
             isIdle = isIdle,
             isListening = overlayListening,
+            isNotificationGlow = isNotificationGlow,
             shouldWave = waveSignal || robotGreetingSignal,
             isAiReady = isModelLoaded || (cloudState is CloudAIState.Ready),
             isSmartMode = isSmartMode,
