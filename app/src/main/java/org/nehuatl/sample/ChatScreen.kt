@@ -3270,8 +3270,9 @@ fun RobotSkin2(
         }
 
         // ===== ВНУТРЕННЕЕ СВЕЧЕНИЕ КУПОЛА ПРИ ПРОСЛУШИВАНИИ =====
-        if (isListening) {
-            val listenPulse = 0.5f + 0.5f * sin(pulse * 2.4f * glowSpeed)
+        if (isListening || isNotificationGlow) {
+            val glowSpeed: Float = if (isNotificationGlow && !isListening) 0.25f else 1f
+            val listenPulse = 0.5f + 0.5f * sin((pulse * 2.4f * glowSpeed)).toFloat()
             clipPath(domePath) {
                 drawCircle(
                     brush = Brush.radialGradient(
@@ -4626,9 +4627,9 @@ fun ThinkingRobotAnimation(
         // сине-неоновая электрическая дымка. Она рисуется ЗА роботом,
         // поэтому вызывается до отрисовки рук и тела.
         if (isListening || isNotificationGlow) {
-            val glowSpeed = if (isNotificationGlow && !isListening) 0.25f else 1f
-            val auraPulse = 0.5f + 0.5f * sin(pulse * 3f * glowSpeed)
-            val auraFast = 0.5f + 0.5f * sin(pulse * 7f * glowSpeed)
+            val glowSpeed: Float = if (isNotificationGlow && !isListening) 0.25f else 1f
+            val auraPulse = 0.5f + 0.5f * sin(pulse * 3f * glowSpeed).toFloat()
+            val auraFast = 0.5f + 0.5f * sin(pulse * 7f * glowSpeed).toFloat()
             val auraPhase = pulse * 2f * glowSpeed
 
             // Центр дымки — центр туловища робота
