@@ -1,0 +1,882 @@
+package org.nehuatl.sample
+
+import android.Manifest
+import android.app.AlertDialog
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.provider.Settings
+import android.util.Log
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import org.nehuatl.sample.ui.theme.KotlinLlamaCppTheme
+import java.security.MessageDigest
+import java.io.File
+
+class MainActivity : ComponentActivity() {
+
+    private var modelPath by mutableStateOf<String?>(null)
+    private var mmprojPath by mutableStateOf<String?>(null)
+    private var imagePath by mutableStateOf<String?>(null)
+    // Реальные имена файлов (для DownloadManager URI с числовым ID)
+    private var modelDisplayName by mutableStateOf<String?>(null)
+    private var mmprojDisplayName by mutableStateOf<String?>(null)
+    private var appViewModel: MainViewModel? = null
+
+        companion object {
+        private const val PREFS_NAME = "app_security"
+        private const val KEY_PASSWORD_HASH = "password_hash"
+        private const val TAG = "MainActivity"
+        private const val OVERLAY_PERMISSION_REQUEST_CODE = 2001
+        private const val KEY_OVERLAY_REQUESTED = "overlay_permission_requested"
+    }
+
+    private val prefs by lazy {
+        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+        private val modelPickerLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let {
+            contentResolver.takePersistableUriPermission(
+                it,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+            modelPath = it.toString()
+            modelDisplayName = getFileNameFromUri(contentResolver, it)
+        }
+    }
+
+        private val mmprojPickerLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let {
+            contentResolver.takePersistableUriPermission(
+                it,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+            mmprojPath = it.toString()
+            mmprojDisplayName = getFileNameFromUri(contentResolver, it)
+        }
+    }
+
+        private val imagePickerLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let {
+            contentResolver.takePersistableUriPermission(
+                it,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+            imagePath = it.toString()
+        }
+    }
+
+       
+
+        private val cameraLauncher = registerForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success && pendingCameraFile != null) {
+            imagePath = Uri.fromFile(pendingCameraFile).toString()
+        }
+    }
+
+        private var pendingCameraFile: File? = null
+
+        private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val audioGranted = permissions[Manifest.permission.RECORD_AUDIO] ?: false
+        if (!audioGranted) {
+            Log.w("MainActivity", "Разрешение на запись audio не получено")
+        }
+
+        val storageGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions[Manifest.permission.READ_MEDIA_IMAGES] ?: false
+        } else {
+            permissions[Manifest.permission.READ_EXTERNAL_STORAGE] ?: false
+        }
+        if (!storageGranted) {
+            Log.w("MainActivity", "Разрешение на чтение хранилища не получено")
+        }
+
+        // Проверяем уведомления
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val notifGranted = permissions[Manifest.permission.POST_NOTIFICATIONS] ?: false
+            if (!notifGranted) {
+                Log.w("MainActivity", "Разрешение на уведомления не получено")
+            }
+        }
+
+        // Runtime-диалог закрыт — теперь запрашиваем overlay
+        requestOverlayPermissionIfNeeded()
+    }
+
+    // ========== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ВИБРАЦИИ ==========
+    private fun vibrateButton() {
+        try {
+            val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator?.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(50)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Vibration failed", e)
+        }
+    }
+
+       // ========== ЧТЕНИЕ ИМЕНИ ФАЙЛА ИЗ URI ==========
+    private fun getFileNameFromUri(contentResolver: android.content.ContentResolver, uri: android.net.Uri): String {
+        var name = ""
+        try {
+            val cursor = contentResolver.query(uri, null, null, null, null)
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val index = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (index != -1) name = it.getString(index)
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "Ошибка чтения имени файла: ${e.message}")
+        }
+        if (name.isEmpty()) {
+            name = uri.lastPathSegment ?: ""
+        }
+        return name
+    }
+
+    // ========== ФУНКЦИИ РАБОТЫ С ПАРОЛЕМ ==========
+
+    private fun hashPassword(password: String): String {
+        val bytes = password.toByteArray()
+        val md = MessageDigest.getInstance("SHA-256")
+        val digest = md.digest(bytes)
+        return digest.joinToString("") { "%02x".format(it) }
+    }
+
+    private fun isPasswordSet(): Boolean {
+        return prefs.contains(KEY_PASSWORD_HASH)
+    }
+
+    private fun checkPassword(input: String): Boolean {
+        val storedHash = prefs.getString(KEY_PASSWORD_HASH, null) ?: return false
+        return hashPassword(input) == storedHash
+    }
+
+    private fun setPassword(password: String) {
+        prefs.edit().putString(KEY_PASSWORD_HASH, hashPassword(password)).apply()
+    }
+
+        private fun createStyledEditText(hintText: String): android.widget.EditText {
+        return android.widget.EditText(this).apply {
+            hint = hintText
+            // Используем обычный текст + PasswordTransformationMethod вместо
+            // TYPE_TEXT_VARIATION_PASSWORD. На Huawei первый вариант
+            // не отображает точки/звёздочки — это известная проблема.
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+            transformationMethod = android.text.method.PasswordTransformationMethod.getInstance()
+            gravity = android.view.Gravity.CENTER
+            setOnFocusChangeListener { _, hasFocus ->
+                if (hasFocus) {
+                    setHint("")
+                } else {
+                    if (text.isNullOrEmpty()) {
+                        setHint(hintText)
+                    }
+                }
+            }
+            val drawable = android.graphics.drawable.GradientDrawable().apply {
+                setColor(android.graphics.Color.parseColor("#FFFFF9DB"))
+                cornerRadius = 12.dpToPx().toFloat()
+                setStroke(1.dpToPx(), android.graphics.Color.parseColor("#FFCED4DA"))
+            }
+            background = drawable
+            setPadding(16.dpToPx(), 12.dpToPx(), 16.dpToPx(), 12.dpToPx())
+        }
+    }
+
+    // ========== ДИАЛОГ УСТАНОВКИ ПАРОЛЯ ==========
+    private fun showSetPasswordDialog() {
+        val dialogView = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(40, 20, 40, 20)
+        }
+
+        val titleView = android.widget.TextView(this).apply {
+            text = "🤖 Установка пароля"
+            textSize = 18f
+            setTextColor(android.graphics.Color.parseColor("#FF212529"))
+            gravity = android.view.Gravity.CENTER
+            textAlignment = android.view.View.TEXT_ALIGNMENT_CENTER
+            setPadding(0, 0, 0, 16)
+        }
+        dialogView.addView(titleView)
+
+        val messageView = android.widget.TextView(this).apply {
+            text = "Приложение будет защищено паролем. Введите пароль дважды для подтверждения."
+            textSize = 13f
+            setTextColor(android.graphics.Color.parseColor("#FF212529"))
+            gravity = android.view.Gravity.CENTER
+            textAlignment = android.view.View.TEXT_ALIGNMENT_CENTER
+            setPadding(0, 0, 0, 16)
+        }
+        dialogView.addView(messageView)
+
+        val passwordInput = createStyledEditText("Введите пароль")
+        val confirmInput = createStyledEditText("Подтвердите пароль")
+        dialogView.addView(passwordInput)
+        dialogView.addView(confirmInput)
+
+        val buttonContainer = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_HORIZONTAL
+            setPadding(0, 16, 0, 0)
+        }
+
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setCancelable(false)
+            .create()
+
+        val positiveButton = android.widget.Button(this).apply {
+            text = "Установить"
+            setBackgroundColor(android.graphics.Color.parseColor("#FF74C0FC"))
+            setTextColor(android.graphics.Color.parseColor("#FF212529"))
+            setPadding(16.dpToPx(), 8.dpToPx(), 16.dpToPx(), 8.dpToPx())
+            textSize = 12f
+            val drawable = android.graphics.drawable.GradientDrawable().apply {
+                setColor(android.graphics.Color.parseColor("#FF74C0FC"))
+                cornerRadius = 10.dpToPx().toFloat()
+            }
+            background = drawable
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(10.dpToPx(), 0, 10.dpToPx(), 0)
+            }
+            setOnTouchListener { _, _ ->
+                vibrateButton()
+                false
+            }
+            setOnClickListener {
+                val password = passwordInput.text.toString()
+                val confirm = confirmInput.text.toString()
+                if (password.isNotEmpty() && password == confirm) {
+                    setPassword(password)
+                    Log.d(TAG, "Пароль установлен успешно")
+                    dialog.dismiss()
+                    showPasswordDialog()
+                } else {
+                    Log.w(TAG, "Пароль не совпадает или пустой")
+                    android.widget.Toast.makeText(
+                        this@MainActivity,
+                        "Пароли не совпадают или пустые",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+        buttonContainer.addView(positiveButton)
+
+        val negativeButton = android.widget.Button(this).apply {
+            text = "Выйти"
+            setBackgroundColor(android.graphics.Color.parseColor("#FF74C0FC"))
+            setTextColor(android.graphics.Color.parseColor("#FF212529"))
+            setPadding(16.dpToPx(), 8.dpToPx(), 16.dpToPx(), 8.dpToPx())
+            textSize = 12f
+            val drawable = android.graphics.drawable.GradientDrawable().apply {
+                setColor(android.graphics.Color.parseColor("#FF74C0FC"))
+                cornerRadius = 10.dpToPx().toFloat()
+            }
+            background = drawable
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(10.dpToPx(), 0, 10.dpToPx(), 0)
+            }
+            setOnTouchListener { _, _ ->
+                vibrateButton()
+                false
+            }
+            setOnClickListener {
+                dialog.dismiss()
+                finishAffinity()
+            }
+        }
+        buttonContainer.addView(negativeButton)
+
+        dialogView.addView(buttonContainer)
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.show()
+
+        dialog.window?.decorView?.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        val rootView = dialog.window?.decorView?.findViewById<android.widget.FrameLayout>(android.R.id.content)
+
+        if (rootView != null) {
+            val background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(android.graphics.Color.parseColor("#FFF1F3F5"))
+                cornerRadius = 16.dpToPx().toFloat()
+            }
+            rootView.background = background
+
+            val params = rootView.layoutParams as? android.widget.FrameLayout.LayoutParams
+            params?.let {
+                val marginPx = 20.dpToPx()
+                it.setMargins(marginPx, marginPx, marginPx, marginPx)
+                rootView.layoutParams = it
+            }
+        }
+    }
+
+    // ========== ДИАЛОГ ВВОДА ПАРОЛЯ ==========
+    private fun showPasswordDialog() {
+        val dialogView = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(40, 20, 40, 20)
+        }
+
+        val titleView = android.widget.TextView(this).apply {
+            text = "🤖 Введите пароль"
+            textSize = 18f
+            setTextColor(android.graphics.Color.parseColor("#FF212529"))
+            gravity = android.view.Gravity.CENTER
+            textAlignment = android.view.View.TEXT_ALIGNMENT_CENTER
+            setPadding(0, 0, 0, 16)
+        }
+        dialogView.addView(titleView)
+
+        val messageView = android.widget.TextView(this).apply {
+            text = "Для доступа к приложению требуется пароль."
+            textSize = 13f
+            setTextColor(android.graphics.Color.parseColor("#FF212529"))
+            gravity = android.view.Gravity.CENTER
+            textAlignment = android.view.View.TEXT_ALIGNMENT_CENTER
+            setPadding(0, 0, 0, 16)
+        }
+        dialogView.addView(messageView)
+
+        val passwordInput = createStyledEditText("Введите пароль")
+        dialogView.addView(passwordInput)
+
+        val buttonContainer = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_HORIZONTAL
+            setPadding(0, 16, 0, 0)
+        }
+
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setCancelable(false)
+            .create()
+
+        val positiveButton = android.widget.Button(this).apply {
+            text = "Войти"
+            setBackgroundColor(android.graphics.Color.parseColor("#FF74C0FC"))
+            setTextColor(android.graphics.Color.parseColor("#FF212529"))
+            setPadding(16.dpToPx(), 8.dpToPx(), 16.dpToPx(), 8.dpToPx())
+            textSize = 12f
+            val drawable = android.graphics.drawable.GradientDrawable().apply {
+                setColor(android.graphics.Color.parseColor("#FF74C0FC"))
+                cornerRadius = 10.dpToPx().toFloat()
+            }
+            background = drawable
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(10.dpToPx(), 0, 10.dpToPx(), 0)
+            }
+            setOnTouchListener { _, _ ->
+                vibrateButton()
+                false
+            }
+            setOnClickListener {
+                val input = passwordInput.text.toString()
+                if (checkPassword(input)) {
+                    Log.d(TAG, "Пароль верный, вход разрешён")
+                    dialog.dismiss()
+                    showMainContent()
+                } else {
+                    Log.w(TAG, "Неверный пароль")
+                    android.widget.Toast.makeText(
+                        this@MainActivity,
+                        "Неверный пароль",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+        buttonContainer.addView(positiveButton)
+
+        val negativeButton = android.widget.Button(this).apply {
+            text = "Выйти"
+            setBackgroundColor(android.graphics.Color.parseColor("#FF74C0FC"))
+            setTextColor(android.graphics.Color.parseColor("#FF212529"))
+            setPadding(16.dpToPx(), 8.dpToPx(), 16.dpToPx(), 8.dpToPx())
+            textSize = 12f
+            val drawable = android.graphics.drawable.GradientDrawable().apply {
+                setColor(android.graphics.Color.parseColor("#FF74C0FC"))
+                cornerRadius = 10.dpToPx().toFloat()
+            }
+            background = drawable
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(10.dpToPx(), 0, 10.dpToPx(), 0)
+            }
+            setOnTouchListener { _, _ ->
+                vibrateButton()
+                false
+            }
+            setOnClickListener {
+                dialog.dismiss()
+                finishAffinity()
+            }
+        }
+        buttonContainer.addView(negativeButton)
+
+        dialogView.addView(buttonContainer)
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.show()
+
+        dialog.window?.decorView?.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        val rootView = dialog.window?.decorView?.findViewById<android.widget.FrameLayout>(android.R.id.content)
+
+        if (rootView != null) {
+            val background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(android.graphics.Color.parseColor("#FFF1F3F5"))
+                cornerRadius = 16.dpToPx().toFloat()
+            }
+            rootView.background = background
+
+            val params = rootView.layoutParams as? android.widget.FrameLayout.LayoutParams
+            params?.let {
+                val marginPx = 20.dpToPx()
+                it.setMargins(marginPx, marginPx, marginPx, marginPx)
+                rootView.layoutParams = it
+            }
+        }
+    }
+
+    // ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
+
+    private fun Int.dpToPx(): Int {
+        return (this * resources.displayMetrics.density).toInt()
+    }
+
+    // ========== ПРОВЕРКА РАЗРЕШЕНИЯ OVERLAY ==========
+
+    private fun hasOverlayPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Settings.canDrawOverlays(this)
+        } else {
+            true
+        }
+    }
+
+    private fun requestOverlayPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            try {
+                val intent = Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName")
+                )
+                startActivityForResult(intent, OVERLAY_PERMISSION_REQUEST_CODE)
+            } catch (e: Exception) {
+                Log.e(TAG, "Не удалось открыть настройки overlay: ${e.message}")
+                android.widget.Toast.makeText(
+                    this,
+                    "Откройте: Настройки → Приложения → Ваше приложение → Поверх других приложений",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+        override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+    super.onActivityResult(requestCode, resultCode, data)
+    if (requestCode == OVERLAY_PERMISSION_REQUEST_CODE) {
+        if (hasOverlayPermission()) {
+            Log.d(TAG, "Overlay permission granted")
+            android.widget.Toast.makeText(
+                this,
+                "✅ Разрешение получено. Теперь можно запустить робота.",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+            // Сервис НЕ запускаем — робот появится только по кнопке
+        } else {
+            Log.w(TAG, "Overlay permission denied")
+            android.widget.Toast.makeText(
+                this,
+                "⚠️ Без разрешения 'Поверх других приложений' робот не сможет отображаться",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+}
+
+    // ========== ЗАПУСК СЕРВИСА ==========
+
+    private fun startFloatingService() {
+    val intent = Intent(this, FloatingRobotService::class.java).apply {
+        action = FloatingRobotService.ACTION_START
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        startForegroundService(intent)
+    } else {
+        startService(intent)
+    }
+    Log.d(TAG, "FloatingRobotService started")
+}
+
+fun startFloatingWithPermissionCheck() {
+    // СНАЧАЛА проверяем разрешение overlay — это главное
+    if (!hasOverlayPermission()) {
+        Log.d(TAG, "Requesting overlay permission")
+        android.widget.Toast.makeText(
+            this,
+            "Дайте разрешение 'Поверх других приложений'",
+            android.widget.Toast.LENGTH_LONG
+        ).show()
+        requestOverlayPermission()
+        return
+    }
+
+    // Разрешение есть. Если сервис уже запущен — перезапускаем (не сворачиваем)
+    if (FloatingRobotService.isRunning) {
+        Log.d(TAG, "Service is running, restarting to recreate overlay")
+        val stopIntent = Intent(this, FloatingRobotService::class.java).apply {
+            action = FloatingRobotService.ACTION_STOP
+        }
+        startService(stopIntent)
+
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            startFloatingService()
+            android.widget.Toast.makeText(
+                this,
+                "🤖 Плавающий робот запущен",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+        }, 700)
+        return
+    }
+
+    // Сервис не запущен — обычный запуск + сворачиваем приложение
+    Log.d(TAG, "Starting FloatingRobotService")
+    startFloatingService()
+    android.widget.Toast.makeText(
+        this,
+        "🤖 Плавающий робот запущен",
+        android.widget.Toast.LENGTH_SHORT
+    ).show()
+
+    // Сворачиваем приложение в фон
+    moveTaskToBack(true)
+}
+
+/**
+ * Принудительный запуск робота 2 в overlay + сворачивание приложения.
+ * Отличие от startFloatingWithPermissionCheck: ВСЕГДА сворачивает приложение,
+ * даже если сервис уже запущен (перезапускает его).
+ * Используется при двойном тапе на робота 1.
+ */
+fun forceStartFloatingAndMinimize() {
+    // Разрешение overlay — обязательное условие
+    if (!hasOverlayPermission()) {
+        Log.d(TAG, "forceStart: requesting overlay permission")
+        android.widget.Toast.makeText(
+            this,
+            "Дайте разрешение 'Поверх других приложений'",
+            android.widget.Toast.LENGTH_LONG
+        ).show()
+        requestOverlayPermission()
+        return
+    }
+
+    // Если сервис уже запущен — останавливаем и через 700 мс запускаем заново
+    if (FloatingRobotService.isRunning) {
+        Log.d(TAG, "forceStart: service running, restarting")
+        val stopIntent = Intent(this, FloatingRobotService::class.java).apply {
+            action = FloatingRobotService.ACTION_STOP
+        }
+        startService(stopIntent)
+
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            startFloatingService()
+            android.widget.Toast.makeText(
+                this,
+                "🤖 Плавающий робот запущен",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+            // Всегда сворачиваем приложение
+            moveTaskToBack(true)
+        }, 700)
+        return
+    }
+
+    // Сервис не запущен — обычный запуск + всегда сворачиваем
+    Log.d(TAG, "forceStart: starting service")
+    startFloatingService()
+    android.widget.Toast.makeText(
+        this,
+        "🤖 Плавающий робот запущен",
+        android.widget.Toast.LENGTH_SHORT
+    ).show()
+    moveTaskToBack(true)
+}
+/**
+ * Сбрасывает выбранную модель и проектор.
+ * Вызывается при переключении в режим Neutral, чтобы в диалоге
+ * выбора модели поля были пустыми.
+ */
+fun clearSelectedModelAndMmproj() {
+    modelPath = null
+    mmprojPath = null
+    modelDisplayName = null
+    mmprojDisplayName = null
+    Log.d(TAG, "Selected model and mmproj cleared")
+}
+
+    // ========== ОСНОВНОЙ КОНТЕНТ ==========
+
+    private fun showMainContent() {
+        setContent {
+            KotlinLlamaCppTheme {
+                    val viewModel: MainViewModel by viewModels {
+                    object : ViewModelProvider.Factory {
+                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                            return MainViewModel(application, contentResolver) as T
+                        }
+                    }
+                }
+                appViewModel = viewModel
+                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                        ChatScreen(
+                        modifier = Modifier.padding(innerPadding),
+                        viewModel = viewModel,
+                        currentModelPath = modelPath,
+                        mmprojPath = mmprojPath,
+                        modelDisplayName = modelDisplayName,
+                        mmprojDisplayName = mmprojDisplayName,
+                        onPickModel = { modelPickerLauncher.launch(arrayOf("*/*")) },
+                        onPickMmproj = { mmprojPickerLauncher.launch(arrayOf("*/*")) },
+                        onPickImage = { imagePickerLauncher.launch(arrayOf("image/*")) },
+                        onTakePhoto = {
+                            val file = File(cacheDir, "camera_${System.currentTimeMillis()}.jpg")
+                            pendingCameraFile = file
+                            val uri = androidx.core.content.FileProvider.getUriForFile(
+                                this@MainActivity,
+                                "$packageName.fileprovider",
+                                file
+                            )
+                            cameraLauncher.launch(uri)
+                        },
+                        imagePath = imagePath,
+                        onImageUsed = { imagePath = null }
+                    )
+                }
+            }
+        }
+
+       
+    }
+
+    // ========== ЖИЗНЕННЫЙ ЦИКЛ ==========
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+
+        checkAndRequestAllPermissions()
+        startKeepAliveService()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val alarmManager = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+            if (!alarmManager.canScheduleExactAlarms()) {
+                Log.w("MainActivity", "Разрешение на точный будильник не предоставлено.")
+            }
+        }
+
+        checkPasswordAndProceed()
+    }
+
+                     override fun onResume() {
+        super.onResume()
+
+        // Приложение на переднем плане — онлайн (независимо от мессенджера)
+        FirebaseChatManager.init()
+        FirebaseChatManager.setOnline(true)
+
+        // Перечитываем органайзер — если будильник сработал в фоне,
+        // запись уже удалена из файла, и часы на руке должны перестать пульсировать.
+        appViewModel?.reloadOrganizer()
+
+        // Если приложение вышло на передний план — прячем робота 2 из overlay,
+        // чтобы на экране был только робот 1 внутри приложения.
+        // Сервис НЕ останавливаем — SpeechRecognizer и MainViewModel остаются живы.
+        if (FloatingRobotService.isRunning) {
+            try {
+                val hideIntent = Intent(this, FloatingRobotService::class.java).apply {
+                    action = FloatingRobotService.ACTION_HIDE
+                }
+                startService(hideIntent)
+                Log.d(TAG, "FloatingRobotService overlay hidden on app resume")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to hide FloatingRobotService on resume: ${e.message}")
+            }
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+
+        // Приложение ушло в фон. Если overlay НЕ работает — ставим офлайн.
+        // Если overlay работает — остаёмся онлайн (сервис сам поставит офлайн
+        // в onDestroy, когда его остановят).
+        if (!isChangingConfigurations && !FloatingRobotService.isRunning) {
+            FirebaseChatManager.setOnline(false)
+        }
+
+        // Приложение уходит в фон — показываем робота 2 обратно.
+        // Проверяем isChangingConfigurations, чтобы не мигать overlay
+        // при повороте экрана и других пересозданиях активити.
+        if (!isChangingConfigurations && FloatingRobotService.isRunning) {
+            try {
+                val showIntent = Intent(this, FloatingRobotService::class.java).apply {
+                    action = FloatingRobotService.ACTION_SHOW
+                }
+                startService(showIntent)
+                Log.d(TAG, "FloatingRobotService overlay shown on app stop")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to show FloatingRobotService on stop: ${e.message}")
+            }
+        }
+    }
+
+    private fun checkPasswordAndProceed() {
+        if (!isPasswordSet()) {
+            showSetPasswordDialog()
+        } else {
+            showPasswordDialog()
+        }
+    }
+
+    // ========== РАЗРЕШЕНИЯ ==========
+
+        private fun checkAndRequestAllPermissions() {
+        val permissions = mutableListOf(
+            Manifest.permission.RECORD_AUDIO
+        )
+
+        // НОВОЕ: уведомления для Android 13+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.READ_MEDIA_IMAGES)
+            permissions.add(Manifest.permission.READ_MEDIA_VIDEO)
+        } else {
+            permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+
+            val missingPermissions = permissions.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (missingPermissions.isNotEmpty()) {
+            // Runtime-разрешения — overlay запросим ПОСЛЕ закрытия этого диалога,
+            // в колбэке requestPermissionLauncher
+            requestPermissionLauncher.launch(missingPermissions.toTypedArray())
+        } else {
+            // Runtime-разрешения уже есть — сразу запрашиваем overlay
+            requestOverlayPermissionIfNeeded()
+        }
+    }
+
+    /**
+     * Запрашивает разрешение overlay один раз при первом запуске приложения.
+     * Если разрешение уже получено или уже запрашивалось — ничего не делает.
+     */
+        // ========== KEEP ALIVE SERVICE ==========
+    private fun startKeepAliveService() {
+        try {
+            val intent = Intent(this, KeepAliveService::class.java).apply {
+                action = KeepAliveService.ACTION_START
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+            Log.d(TAG, "KeepAliveService started")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start KeepAliveService: ${e.message}")
+        }
+    }
+
+    // ========== ЗАПРОС ОТКЛЮЧЕНИЯ ОПТИМИЗАЦИИ БАТАРЕИ ==========
+    private fun requestIgnoreBatteryOptimizations() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            try {
+                val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = android.net.Uri.parse("package:$packageName")
+                }
+                startActivity(intent)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to request battery optimization ignore: ${e.message}")
+            }
+        }
+    }
+
+    private fun requestOverlayPermissionIfNeeded() {
+        if (hasOverlayPermission()) {
+            Log.d(TAG, "Overlay permission already granted")
+            return
+        }
+
+        val alreadyRequested = prefs.getBoolean(KEY_OVERLAY_REQUESTED, false)
+        if (alreadyRequested) {
+            Log.d(TAG, "Overlay permission already requested before, skipping auto-request")
+            return
+        }
+
+        Log.d(TAG, "Requesting overlay permission for the first time")
+        prefs.edit().putBoolean(KEY_OVERLAY_REQUESTED, true).apply()
+
+        android.widget.Toast.makeText(
+            this,
+            "Разрешите 'Поверх других приложений' — это нужно для робота",
+            android.widget.Toast.LENGTH_LONG
+        ).show()
+
+        requestOverlayPermission()
+    }
+}
