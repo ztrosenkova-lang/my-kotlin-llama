@@ -4075,13 +4075,15 @@ fun overwriteLongTermMemory(newFullText: String) {
 
         val grouped = mutableMapOf<String, MutableList<String>>()
 
-        for (line in lines) {
-            val category = determineCategory(line)
-            if (!grouped.containsKey(category)) {
-                grouped[category] = mutableListOf()
-            }
-            grouped[category]!!.add(line)
-        }
+for (line in lines) {
+    // Пропускаем строки-заголовки категорий — иначе они дублируются
+    if (CATEGORIES.any { line == it }) continue
+    val category = determineCategory(line)
+    if (!grouped.containsKey(category)) {
+        grouped[category] = mutableListOf()
+    }
+    grouped[category]!!.add(line)
+}
 
         val output = StringBuilder()
 
