@@ -4062,50 +4062,77 @@ private fun appendToCategory(text: String) {
         }
     }
 
-fun overwriteLongTermMemory(newFullText: String) {
-    try {
-        if (!memoryFile.exists()) {
-            memoryFile.createNewFile()
-        }
-
-        val lines = newFullText
-            .split("\n")
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-
-        val grouped = mutableMapOf<String, MutableList<String>>()
-
-for (line in lines) {
-    // Пропускаем строки-заголовки категорий — иначе они дублируются
-    if (CATEGORIES.any { line == it }) continue
-    val category = determineCategory(line)
-    if (!grouped.containsKey(category)) {
-        grouped[category] = mutableListOf()
-    }
-    grouped[category]!!.add(line)
-}
-
-        val output = StringBuilder()
-
-        for (category in CATEGORIES) {
-            val entries = grouped[category]
-            if (entries != null && entries.isNotEmpty()) {
-                output.append(category).append("\n")
-                for (entry in entries) {
-                    output.append(entry).append("\n")
-                }
-                output.append("\n")
+    fun overwriteLongTermMemory(newFullText: String) {
+        try {
+            if (!memoryFile.exists()) {
+                memoryFile.createNewFile()
             }
-        }
 
-        memoryFile.writeText(output.toString().trim() + "\n")
-        memorySearchEngine.clearCache()
-        Log.d(TAG, "База знаний успешно обновлена и упорядочена")
-        appendSystemMessage("🧠 База знаний обновлена и упорядочена")
-    } catch (e: Exception) {
-        Log.e(TAG, "Ошибка перезаписи базы знаний: ${e.message}")
+            val oldText = memoryFile.readText()
+            val trimmedNew = newFullText.trim()
+
+            // Если новый текст начинается со старого — пользователь только добавил в конец.
+            // Тогда добавляем только новые строки через appendToCategory (как «запомни ...»).
+            // Иначе — пересобираем весь файл (старое поведение).
+            val oldTrimmed = oldText.trim()
+            val onlyAdded = oldTrimmed.isNotEmpty() && trimmedNew.startsWith(oldTrimmed)
+
+            if (onlyAdded) {
+                val addedPart = trimmedNew.removePrefix(oldTrimmed).trim()
+                if (addedPart.isNotEmpty()) {
+                    // Разбиваем добавленное на блоки по пустым строкам —
+                    // чтобы многострочная запись не разваливалась.
+                    val blocks = addedPart.split(Regex("\n\\s*\n"))
+                    for (block in blocks) {
+                        val cleanBlock = block.trim()
+                        if (cleanBlock.isEmpty()) continue
+                        if (CATEGORIES.any { cleanBlock == it }) continue
+                        appendToCategory(cleanBlock)
+                    }
+                }
+                memorySearchEngine.clearCache()
+                Log.d(TAG, "Добавлены только новые записи")
+                appendSystemMessage("🧠 База знаний обновлена (добавлены новые записи)")
+            } else {
+                // Пользователь изменил старые записи — пересобираем как раньше
+                val lines = newFullText
+                    .split("\n")
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+
+                val grouped = mutableMapOf<String, MutableList<String>>()
+
+                for (line in lines) {
+                    if (CATEGORIES.any { line == it }) continue
+                    val category = determineCategory(line)
+                    if (!grouped.containsKey(category)) {
+                        grouped[category] = mutableListOf()
+                    }
+                    grouped[category]!!.add(line)
+                }
+
+                val output = StringBuilder()
+
+                for (category in CATEGORIES) {
+                    val entries = grouped[category]
+                    if (entries != null && entries.isNotEmpty()) {
+                        output.append(category).append("\n")
+                        for (entry in entries) {
+                            output.append(entry).append("\n")
+                        }
+                        output.append("\n")
+                    }
+                }
+
+                memoryFile.writeText(output.toString().trim() + "\n")
+                memorySearchEngine.clearCache()
+                Log.d(TAG, "База знаний пересобрана")
+                appendSystemMessage("🧠 База знаний обновлена и упорядочена")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка перезаписи базы знаний: ${e.message}")
+        }
     }
-}
 
     private fun saveBrain(text: String) {
         try {
